@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.1)
-project(turbo_twig LANGUAGES C CXX)
+project(pebble LANGUAGES C CXX)
 
 # Set the default C++ standard to C++23
 set(PROJECT_NAME pebble)
@@ -38,6 +38,7 @@ include_directories(include)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${CMAKE_SOURCE_DIR}/dependencies/highway)
 include_directories(${CMAKE_SOURCE_DIR}/dependencies/glaze/include)
+include_directories(${CMAKE_SOURCE_DIR}/dependencies/liblmdb)
 
 # Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -63,6 +64,19 @@ set(HWY_BUILD_TESTS OFF)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/dependencies/spdlog)
 add_subdirectory(${CMAKE_SOURCE_DIR}/dependencies/highway)
+
+# liblmdb
+if (EXISTS "${CMAKE_SOURCE_DIR}/dependencies/liblmdb/mdb.c")
+    set(LMDB_SOURCE
+            "${CMAKE_SOURCE_DIR}/dependencies/liblmdb/mdb.c"
+            "${CMAKE_SOURCE_DIR}/dependencies/liblmdb/midl.c"
+            "${CMAKE_SOURCE_DIR}/dependencies/liblmdb/lmdb.h"
+            "${CMAKE_SOURCE_DIR}/dependencies/liblmdb/midl.h"
+    )
+    add_library(lmdb STATIC ${LMDB_SOURCE})
+    target_include_directories(lmdb PUBLIC "${CMAKE_SOURCE_DIR}/dependencies/liblmdb")
+    target_link_libraries(lmdb PUBLIC Threads::Threads)
+endif()
 
 find_package(Threads REQUIRED)
 
@@ -96,6 +110,9 @@ if (BUILD_EXECUTABLE)
             spdlog::spdlog_header_only
             hwy
     )
+    if (TARGET lmdb)
+        target_link_libraries(${PROJECT_NAME} PRIVATE lmdb)
+    endif()
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endif()
@@ -106,12 +123,15 @@ if (BUILD_TESTS)
             GLOB TEST_SOURCE
             "${CMAKE_SOURCE_DIR}/src/tests/*.cpp"
     )
-    add_executable(turbo_twig_tests ${TEST_SOURCE})
-    target_link_libraries(turbo_twig_tests PRIVATE
+    add_executable(pebble_tests ${TEST_SOURCE})
+    target_link_libraries(pebble_tests PRIVATE
             Catch2
             spdlog::spdlog_header_only
             hwy
     )
-    target_compile_definitions(turbo_twig_tests PRIVATE
+    if (TARGET lmdb)
+        target_link_libraries(pebble_tests PRIVATE lmdb)
+    endif()
+    target_compile_definitions(pebble_tests PRIVATE
         TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endif ()
