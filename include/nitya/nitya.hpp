@@ -177,6 +177,9 @@ namespace nitya {
         std::uint32_t payload_size{0};
         std::uint16_t version{k_nitya_format_version};
         std::uint16_t flags{0};
+        // Keeps the owning segment_file alive from reserve() through publish().
+        // Type-erased so reservation does not depend on StoragePolicy.
+        std::shared_ptr<void> segment_pin;
 
         [[nodiscard]] bool is_valid() const noexcept {
             return lsn != k_invalid_lsn && !buffer.empty();
@@ -744,6 +747,20 @@ namespace nitya {
                     return std::unexpected(LogError::SegmentFull);
                 }
                 const lsn_t next_seg_lsn = (seg_id + 1) * opts_.segment_size + k_segment_header_size;
+
+                // Zero-fill trailing gap bytes so recovery sees clean EndOfLog padding
+                // instead of stale mapped-file data. Must happen before tail_lsn_ advances.
+                {
+                    auto seg_res = storage_.get_or_create_segment(seg_id, seg_id * opts_.segment_size);
+                    if (seg_res) {
+                        auto seg_bytes = (*seg_res)->map.as_bytes();
+                        const std::size_t gap_start = current_lsn % opts_.segment_size;
+                        if (gap_start < seg_bytes.size()) {
+                            std::fill(seg_bytes.data() + gap_start, seg_bytes.data() + seg_bytes.size(), std::byte{0});
+                        }
+                    }
+                }
+
                 tail_lsn_.store(next_seg_lsn, std::memory_order_release);
 
                 // Seal the completed segment on disk and ensure metadata flush succeeds
@@ -1224,6 +1241,8 @@ namespace nitya {
         std::atomic<lsn_t> replicated_lsn_{k_segment_header_size};
 
         containers::static_vector<std::pair<lsn_t, lsn_t>, 1024> pending_publishes_;
+        // Front index for O(1) drain — elements at [pending_front_, size) are live.
+        std::size_t pending_front_{0};
 
         std::condition_variable flusher_cv_;
         std::mutex flusher_mutex_;
@@ -1333,13 +1352,19 @@ namespace nitya {
             return {};
         }
 
+        // Drain contiguous intervals from the pending ring whose start <= cur.
+        // O(1) per element: advances pending_front_ without shifting the array.
         void drain_pending_locked(lsn_t& cur) noexcept {
-            while (!pending_publishes_.empty() && pending_publishes_[0].first <= cur) {
-                cur = std::max(cur, pending_publishes_[0].second);
-                for (std::size_t i = 0; i < pending_publishes_.size() - 1; ++i) {
-                    pending_publishes_[i] = std::move(pending_publishes_[i + 1]);
-                }
-                pending_publishes_.pop_back();
+            while (pending_front_ < pending_publishes_.size() &&
+                   pending_publishes_[pending_front_].first <= cur) {
+                cur = std::max(cur, pending_publishes_[pending_front_].second);
+                ++pending_front_;
+            }
+            // Compact the array once all live elements have been drained to the front,
+            // keeping memory usage bounded and insertion indices correct.
+            if (pending_front_ == pending_publishes_.size()) {
+                pending_publishes_.clear();
+                pending_front_ = 0;
             }
         }
 
@@ -1368,12 +1393,25 @@ namespace nitya {
                 return {};
             }
 
+            // Compact dead head entries if the raw array is full but live count has room.
+            if (pending_publishes_.size() >= pending_publishes_.capacity() && pending_front_ > 0) {
+                // Shift live elements to front
+                std::size_t live = pending_publishes_.size() - pending_front_;
+                for (std::size_t i = 0; i < live; ++i) {
+                    pending_publishes_[i] = std::move(pending_publishes_[pending_front_ + i]);
+                }
+                for (std::size_t i = live; i < pending_publishes_.size(); ++i) {
+                    (void)pending_publishes_.pop_back();
+                }
+                pending_front_ = 0;
+            }
+
             if (pending_publishes_.size() >= pending_publishes_.capacity()) {
                 return std::unexpected(LogError::QueueFull);
             }
 
-            // Find insertion position by start LSN (strictly sorted since records are disjoint)
-            std::size_t idx = 0;
+            // Sorted insertion by start LSN among live elements [pending_front_, size).
+            std::size_t idx = pending_front_;
             while (idx < pending_publishes_.size() && pending_publishes_[idx].first < from) {
                 ++idx;
             }
@@ -1422,7 +1460,10 @@ namespace nitya {
                 .buffer = bytes.subspan(seg_offset, total_frame_size),
                 .payload_size = payload_bytes,
                 .version = version,
-                .flags = flags
+                .flags = flags,
+                // Pin the segment_file so its setu::mapping cannot be munmap'd
+                // by cache eviction between reserve() and publish().
+                .segment_pin = seg
             };
 
             tail_lsn_.store(start_lsn + total_frame_size, std::memory_order_release);
@@ -1585,6 +1626,18 @@ namespace nitya {
             auto stream = recover(k_segment_header_size, recovery_mode::stop_at_first_error);
             for (const auto& rec : stream) {
                 last_valid_end = rec.lsn + k_frame_overhead + rec.payload.size();
+            }
+
+            // Bug fix: if the WAL crashed after sealing segment N but before writing
+            // records to segment N+1, last_valid_end sits inside segment N while segment
+            // N+1 already exists on disk.  Subsequent appends must not overwrite sealed
+            // data, so advance the tail to the start of N+1's data area.
+            {
+                const std::uint64_t last_seg_id = last_valid_end / opts_.segment_size;
+                auto next_path = opts_.wal_dir / storage_.format_segment_name(last_seg_id + 1);
+                if (std::filesystem::exists(next_path)) {
+                    last_valid_end = (last_seg_id + 1) * opts_.segment_size + k_segment_header_size;
+                }
             }
 
             tail_lsn_.store(last_valid_end, std::memory_order_relaxed);
