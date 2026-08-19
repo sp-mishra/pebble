@@ -944,7 +944,7 @@ namespace nitya {
                 }
             }
 
-            // Follower path — progress-based loop checking flushed_lsn_, done, leadership retry, and flushed_lsn_.wait().
+            // Follower path — progress-based loop checking done, leadership retry, and flushed_lsn_.wait().
             for (;;) {
                 if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
                     return {};
@@ -955,12 +955,10 @@ namespace nitya {
                     if (err != LogError::Success) {
                         return std::unexpected(err);
                     }
-                    while (flushed_lsn_.load(std::memory_order_acquire) < target_lsn) {
-                        const auto c = flushed_lsn_.load(std::memory_order_acquire);
-                        if (c >= target_lsn) break;
-                        flushed_lsn_.wait(c, std::memory_order_acquire);
+                    if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
+                        return {};
                     }
-                    return {};
+                    return std::unexpected(LogError::InternalError);
                 }
 
                 // Try to promote to leader and drain queue (which will include our ticket).
@@ -972,10 +970,9 @@ namespace nitya {
                 }
 
                 const auto cur = flushed_lsn_.load(std::memory_order_acquire);
-                if (cur >= target_lsn) {
-                    return {};
+                if (cur < target_lsn && !done.load(std::memory_order_acquire)) {
+                    flushed_lsn_.wait(cur, std::memory_order_acquire);
                 }
-                flushed_lsn_.wait(cur, std::memory_order_acquire);
             }
         }
 
@@ -1306,54 +1303,70 @@ namespace nitya {
             const lsn_t target_lsn,
             std::atomic<bool>& done,
             std::atomic<LogError>& result_code) {
+            LogError overall_err = LogError::Success;
 
-            // Drain pending group commit tickets up to follower_tickets capacity
-            lsn_t max_ticket_lsn = target_lsn;
-            containers::static_vector<typename ConcurrencyPolicy::commit_ticket, 1024> follower_tickets;
+            for (;;) {
+                lsn_t max_ticket_lsn = target_lsn;
+                containers::static_vector<typename ConcurrencyPolicy::commit_ticket, 1024> follower_tickets;
 
-            while (follower_tickets.size() < follower_tickets.capacity()) {
-                auto t = concurrency_.dequeue_commit();
-                if (!t) break;
-                max_ticket_lsn = std::max(max_ticket_lsn, t->lsn);
-                (void)follower_tickets.push_back(*t);
-            }
+                while (follower_tickets.size() < follower_tickets.capacity()) {
+                    auto t = concurrency_.dequeue_commit();
+                    if (!t) break;
 
-            const lsn_t final_target_lsn = max_ticket_lsn;
-            const lsn_t current_flushed = flushed_lsn_.load(std::memory_order_relaxed);
-            LogError flush_err = LogError::Success;
+                    max_ticket_lsn = std::max(max_ticket_lsn, t->lsn);
+                    (void)follower_tickets.push_back(*t);
+                }
 
-            if (final_target_lsn > current_flushed) {
-                auto flush_res = flush_range_to_locked(current_flushed, final_target_lsn);
-                if (!flush_res) {
-                    flush_err = flush_res.error();
-                } else {
-                    flushed_lsn_.store(final_target_lsn, std::memory_order_release);
-                    flushed_lsn_.notify_all();
+                const lsn_t current_flushed = flushed_lsn_.load(std::memory_order_relaxed);
+                LogError flush_err = LogError::Success;
+
+                if (max_ticket_lsn > current_flushed) {
+                    auto flush_res = flush_range_to_locked(current_flushed, max_ticket_lsn);
+                    if (!flush_res) {
+                        flush_err = flush_res.error();
+                    }
+                    else {
+                        flushed_lsn_.store(max_ticket_lsn, std::memory_order_release);
+                        flushed_lsn_.notify_all();
+                    }
+                }
+
+                if (flush_err != LogError::Success) {
+                    overall_err = flush_err;
+                }
+
+                for (auto& t : follower_tickets) {
+                    if (t.done == &done) {
+                        continue;
+                    }
+
+                    if (t.result) {
+                        t.result->store(flush_err, std::memory_order_relaxed);
+                    }
+
+                    if (t.done) {
+                        t.done->store(true, std::memory_order_release);
+                        t.done->notify_one();
+                    }
+                }
+
+                // Wake followers not drained in this iteration but now covered by flushed watermark.
+                flushed_lsn_.notify_all();
+
+                if (follower_tickets.size() < follower_tickets.capacity() ||
+                    flush_err != LogError::Success) {
+                    break;
                 }
             }
 
-            // Notify own ticket
-            result_code.store(flush_err, std::memory_order_relaxed);
+            result_code.store(overall_err, std::memory_order_relaxed);
             done.store(true, std::memory_order_release);
             done.notify_one();
 
-            // Notify all followers drained in this batch
-            for (std::size_t i = 0; i < follower_tickets.size(); ++i) {
-                auto& t = follower_tickets[i];
-                if (t.done == &done) continue; // Already notified own ticket
-                if (t.result) t.result->store(flush_err, std::memory_order_relaxed);
-                if (t.done) {
-                    t.done->store(true, std::memory_order_release);
-                    t.done->notify_one();
-                }
+            if (overall_err != LogError::Success) {
+                return std::unexpected(overall_err);
             }
 
-            // Wake up any followers that were not drained but whose target is now durable
-            flushed_lsn_.notify_all();
-
-            if (flush_err != LogError::Success) {
-                return std::unexpected(flush_err);
-            }
             return {};
         }
 
@@ -1670,8 +1683,9 @@ namespace nitya {
             // If later empty allocated segments exist, advance to their data start.
             for (const auto& seg : segs) {
                 const lsn_t seg_data_start = seg.begin_lsn + k_segment_header_size;
-                if (seg_data_start > last_valid_end && seg.begin_lsn <= last_valid_end) {
+                if (seg_data_start > last_valid_end) {
                     last_valid_end = seg_data_start;
+                    break;
                 }
             }
 
