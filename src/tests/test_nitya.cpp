@@ -1205,14 +1205,24 @@ TEST_CASE("Nitya: Sustained concurrent group commit and follower promotion stres
     std::vector<std::thread> workers;
     workers.reserve(kThreads);
     std::atomic<std::size_t> completed_appends{0};
+    std::array<std::atomic<std::size_t>, 16> error_counts{};
+    for (auto& c : error_counts) {
+        c.store(0, std::memory_order_relaxed);
+    }
 
     for (int t = 0; t < kThreads; ++t) {
-        workers.emplace_back([&log, &completed_appends, t] {
+        workers.emplace_back([&log, &completed_appends, &error_counts, t] {
             for (int i = 0; i < kIters; ++i) {
                 std::string payload = "STRESS_DATA_T" + std::to_string(t) + "_I" + std::to_string(i);
                 auto res = log.append_sync(as_byte_span(payload));
                 if (res.has_value()) {
                     completed_appends.fetch_add(1, std::memory_order_relaxed);
+                }
+                else {
+                    const auto idx = static_cast<std::size_t>(res.error());
+                    if (idx < error_counts.size()) {
+                        error_counts[idx].fetch_add(1, std::memory_order_relaxed);
+                    }
                 }
             }
         });
@@ -1221,6 +1231,39 @@ TEST_CASE("Nitya: Sustained concurrent group commit and follower promotion stres
     for (auto& w : workers) {
         w.join();
     }
+
+    auto error_name = [](nitya::LogError e) -> const char* {
+        switch (e) {
+            case nitya::LogError::Success: return "Success";
+            case nitya::LogError::InvalidArg: return "InvalidArg";
+            case nitya::LogError::SegmentFull: return "SegmentFull";
+            case nitya::LogError::SegmentOpenFailed: return "SegmentOpenFailed";
+            case nitya::LogError::WriteFailed: return "WriteFailed";
+            case nitya::LogError::FlushFailed: return "FlushFailed";
+            case nitya::LogError::CorruptedHeader: return "CorruptedHeader";
+            case nitya::LogError::CorruptedPayload: return "CorruptedPayload";
+            case nitya::LogError::CorruptedTrailer: return "CorruptedTrailer";
+            case nitya::LogError::ChecksumMismatch: return "ChecksumMismatch";
+            case nitya::LogError::LsnMismatch: return "LsnMismatch";
+            case nitya::LogError::EndOfLog: return "EndOfLog";
+            case nitya::LogError::QueueFull: return "QueueFull";
+            case nitya::LogError::UnsupportedVersion: return "UnsupportedVersion";
+            case nitya::LogError::InternalError: return "InternalError";
+        }
+        return "Unknown";
+    };
+
+    std::size_t total_failures = 0;
+    std::string error_summary;
+    for (std::size_t i = 0; i < error_counts.size(); ++i) {
+        const auto count = error_counts[i].load(std::memory_order_relaxed);
+        if (count == 0) continue;
+        total_failures += count;
+        error_summary += std::string(error_name(static_cast<nitya::LogError>(i))) + "=" + std::to_string(count) + " ";
+    }
+
+    INFO("completed_appends=" << completed_appends.load() << " expected=" << (kThreads * kIters));
+    INFO("append_sync_failures=" << total_failures << " details=" << error_summary);
 
     CHECK(completed_appends.load() == kThreads * kIters);
     CHECK(log.flushed_lsn() == log.published_lsn());
