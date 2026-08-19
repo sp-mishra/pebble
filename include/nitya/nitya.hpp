@@ -1268,8 +1268,6 @@ namespace nitya {
         std::atomic<lsn_t> replicated_lsn_{k_segment_header_size};
 
         containers::static_vector<std::pair<lsn_t, lsn_t>, 1024> pending_publishes_;
-        // Front index for O(1) drain — elements at [pending_front_, size) are live.
-        std::size_t pending_front_{0};
 
         std::condition_variable flusher_cv_;
         std::mutex flusher_mutex_;
@@ -1379,19 +1377,20 @@ namespace nitya {
             return {};
         }
 
-        // Drain contiguous intervals from the pending ring whose start <= cur.
-        // O(1) per element: advances pending_front_ without shifting the array.
         void drain_pending_locked(lsn_t& cur) noexcept {
-            while (pending_front_ < pending_publishes_.size() &&
-                   pending_publishes_[pending_front_].first <= cur) {
-                cur = std::max(cur, pending_publishes_[pending_front_].second);
-                ++pending_front_;
+            std::size_t drained = 0;
+            while (drained < pending_publishes_.size() && pending_publishes_[drained].first <= cur) {
+                cur = std::max(cur, pending_publishes_[drained].second);
+                ++drained;
             }
-            // Compact the array once all live elements have been drained to the front,
-            // keeping memory usage bounded and insertion indices correct.
-            if (pending_front_ == pending_publishes_.size()) {
-                pending_publishes_.clear();
-                pending_front_ = 0;
+            if (drained > 0) {
+                const std::size_t remaining = pending_publishes_.size() - drained;
+                for (std::size_t i = 0; i < remaining; ++i) {
+                    pending_publishes_[i] = std::move(pending_publishes_[drained + i]);
+                }
+                while (pending_publishes_.size() > remaining) {
+                    pending_publishes_.pop_back();
+                }
             }
         }
 
@@ -1420,39 +1419,51 @@ namespace nitya {
                 return {};
             }
 
-            // Compact dead head entries if the raw array is full but live count has room.
-            if (pending_publishes_.size() >= pending_publishes_.capacity() && pending_front_ > 0) {
-                // Shift live elements to front
-                const std::size_t live = pending_publishes_.size() - pending_front_;
-                for (std::size_t i = 0; i < live; ++i) {
-                    pending_publishes_[i] = std::move(pending_publishes_[pending_front_ + i]);
+            // Check if it can merge with an existing interval in pending_publishes_
+            bool merged = false;
+            for (std::size_t i = 0; i < pending_publishes_.size(); ++i) {
+                auto& p = pending_publishes_[i];
+                if (from <= p.second && to >= p.first) {
+                    p.first = std::min(p.first, from);
+                    p.second = std::max(p.second, to);
+                    merged = true;
+                    // Merge any subsequent overlapping intervals
+                    while (i + 1 < pending_publishes_.size() && p.second >= pending_publishes_[i + 1].first) {
+                        p.second = std::max(p.second, pending_publishes_[i + 1].second);
+                        for (std::size_t j = i + 1; j + 1 < pending_publishes_.size(); ++j) {
+                            pending_publishes_[j] = std::move(pending_publishes_[j + 1]);
+                        }
+                        pending_publishes_.pop_back();
+                    }
+                    break;
                 }
-                while (pending_publishes_.size() > live) {
-                    pending_publishes_.pop_back();
+            }
+
+            if (!merged) {
+                if (pending_publishes_.size() >= pending_publishes_.capacity()) {
+                    return std::unexpected(LogError::QueueFull);
                 }
-                pending_front_ = 0;
-            }
 
-            if (pending_publishes_.size() >= pending_publishes_.capacity()) {
-                return std::unexpected(LogError::QueueFull);
-            }
+                // Sorted insertion by start LSN
+                std::size_t idx = 0;
+                while (idx < pending_publishes_.size() && pending_publishes_[idx].first < from) {
+                    ++idx;
+                }
 
-            // Sorted insertion by start LSN among live elements [pending_front_, size).
-            std::size_t idx = pending_front_;
-            while (idx < pending_publishes_.size() && pending_publishes_[idx].first < from) {
-                ++idx;
-            }
+                (void)pending_publishes_.push_back({from, to});
 
-            (void)pending_publishes_.push_back({from, to});
-
-            for (std::size_t i = pending_publishes_.size() - 1; i > idx; --i) {
-                pending_publishes_[i] = std::move(pending_publishes_[i - 1]);
+                for (std::size_t i = pending_publishes_.size() - 1; i > idx; --i) {
+                    pending_publishes_[i] = std::move(pending_publishes_[i - 1]);
+                }
+                pending_publishes_[idx] = {from, to};
             }
-            pending_publishes_[idx] = {from, to};
 
             drain_pending_locked(cur);
+            if (from <= cur) {
+                cur = std::max(cur, to);
+                drain_pending_locked(cur);
+            }
             published_lsn_.store(cur, std::memory_order_release);
-            // Only notify if published watermark advanced (i.e. interval was contiguous)
             if (cur != original_cur) published_lsn_.notify_all();
             return {};
         }
