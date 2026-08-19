@@ -506,6 +506,21 @@ namespace nitya {
                     return {};
                 }
             }
+
+            auto path = opts_.wal_dir / format_segment_name(seg_id);
+            if (!std::filesystem::exists(path)) {
+                return std::unexpected(LogError::SegmentOpenFailed);
+            }
+
+            auto map_res = setu::mapping<setu::read_write>::open_or_create(path, opts_.segment_size);
+            if (!map_res) {
+                return std::unexpected(LogError::SegmentOpenFailed);
+            }
+
+            auto res = map_res->flush_range(offset, length, mode);
+            if (!res) {
+                return std::unexpected(LogError::FlushFailed);
+            }
             return {};
         }
 
@@ -831,11 +846,25 @@ namespace nitya {
         }
 
         Result<void> wait_durable(lsn_t target_lsn) {
-            const lsn_t tail = tail_lsn_.load(std::memory_order_acquire);
-            if (target_lsn > tail) {
+            // Reject targets beyond the reserved ceiling — no publication can ever reach them.
+            if (target_lsn > tail_lsn_.load(std::memory_order_acquire)) {
                 return std::unexpected(LogError::InvalidArg);
             }
 
+            // Fast path: already durable.
+            if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
+                return {};
+            }
+
+            // Wait for the contiguous published watermark to cover target_lsn.
+            // When threads publish out-of-order, the watermark may temporarily lag.
+            lsn_t pub = published_lsn_.load(std::memory_order_acquire);
+            while (pub < target_lsn) {
+                published_lsn_.wait(pub, std::memory_order_acquire);
+                pub = published_lsn_.load(std::memory_order_acquire);
+            }
+
+            // Re-check: the flush may have already happened while we waited on published_lsn_.
             if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
                 return {};
             }
@@ -843,7 +872,9 @@ namespace nitya {
             auto telemetry = TelemetryPolicy::trace_flush();
             (void)telemetry;
 
-            // Enqueue ticket to concurrency group commit coordinator
+            // --- Ticket represents this thread's stake in the group commit. ---
+            // SAFETY: done/result_code must remain alive until the ticket is processed by
+            // a leader (done.load()==true) or this thread itself becomes the leader.
             std::atomic<bool> done{false};
             std::atomic<LogError> result_code{LogError::Success};
 
@@ -854,49 +885,57 @@ namespace nitya {
                 .result = &result_code
             };
 
-            // Attempt to enqueue ticket (retry briefly if queue is full under heavy concurrency)
+            // Enqueue ticket.  If the queue is momentarily full, try to become leader
+            // directly (without enqueuing) or yield and retry.
             while (!concurrency_.enqueue_commit(ticket)) {
                 if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
                     return {};
                 }
                 std::unique_lock direct_lk{flush_mutex_, std::defer_lock};
                 if (direct_lk.try_lock()) {
+                    // Became leader without a ticket in the queue — safe to return directly.
                     return execute_leader_flush(target_lsn, done, result_code);
                 }
                 std::this_thread::yield();
             }
 
-            // Attempt to become leader
-            std::unique_lock lk{flush_mutex_, std::defer_lock};
-            if (!lk.try_lock()) {
-                // Follower path: wait on durability state or retry leadership if not yet durable
-                for (;;) {
-                    if (done.load(std::memory_order_acquire)) {
-                        auto err = result_code.load(std::memory_order_relaxed);
-                        if (err != LogError::Success) {
-                            return std::unexpected(err);
-                        }
+            // Ticket is now in the queue.  From this point we MUST NOT return until
+            // either (a) done==true (leader signalled us) or (b) we become the leader
+            // and drain the queue ourselves (which will pop our own ticket).
 
-                        if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
-                            return {};
-                        }
-
-                        // Ticket completed but target not durable. Treat as internal inconsistency.
-                        return std::unexpected(LogError::InternalError);
-                    }
-
-                    std::unique_lock retry_lk{flush_mutex_, std::defer_lock};
-                    if (retry_lk.try_lock()) {
-                        return execute_leader_flush(target_lsn, done, result_code);
-                    }
-
-                    auto cur = flushed_lsn_.load(std::memory_order_acquire);
-                    flushed_lsn_.wait(cur, std::memory_order_acquire);
+            // Try to become leader immediately.
+            {
+                std::unique_lock lk{flush_mutex_, std::defer_lock};
+                if (lk.try_lock()) {
+                    return execute_leader_flush(target_lsn, done, result_code);
                 }
             }
 
-            // Leader path
-            return execute_leader_flush(target_lsn, done, result_code);
+            // Follower path — spin/wait until leader completes our ticket or we can promote.
+            for (;;) {
+                if (done.load(std::memory_order_acquire)) {
+                    const auto err = result_code.load(std::memory_order_relaxed);
+                    if (err != LogError::Success) {
+                        return std::unexpected(err);
+                    }
+                    if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
+                        return {};
+                    }
+                    // Ticket was completed by a leader but durability didn't advance —
+                    // this is an internal inconsistency.
+                    return std::unexpected(LogError::InternalError);
+                }
+
+                // Try to promote to leader and drain queue (which will include our ticket).
+                std::unique_lock retry_lk{flush_mutex_, std::defer_lock};
+                if (retry_lk.try_lock()) {
+                    return execute_leader_flush(target_lsn, done, result_code);
+                }
+
+                // Sleep until flushed_lsn_ advances (notified by the leader).
+                const auto cur = flushed_lsn_.load(std::memory_order_acquire);
+                flushed_lsn_.wait(cur, std::memory_order_acquire);
+            }
         }
 
         Result<void> sync() {
@@ -1309,10 +1348,13 @@ namespace nitya {
             std::unique_lock lk{publish_tracker_mutex_};
 
             lsn_t cur = published_lsn_.load(std::memory_order_relaxed);
+            const lsn_t original_cur = cur;
+
             if (from <= cur) {
                 cur = std::max(cur, to);
                 drain_pending_locked(cur);
                 published_lsn_.store(cur, std::memory_order_release);
+                if (cur != original_cur) published_lsn_.notify_all();
                 return {};
             }
 
@@ -1322,6 +1364,7 @@ namespace nitya {
                 cur = std::max(cur, to);
                 drain_pending_locked(cur);
                 published_lsn_.store(cur, std::memory_order_release);
+                if (cur != original_cur) published_lsn_.notify_all();
                 return {};
             }
 
@@ -1344,6 +1387,8 @@ namespace nitya {
 
             drain_pending_locked(cur);
             published_lsn_.store(cur, std::memory_order_release);
+            // Only notify if published watermark advanced (i.e. interval was contiguous)
+            if (cur != original_cur) published_lsn_.notify_all();
             return {};
         }
 
