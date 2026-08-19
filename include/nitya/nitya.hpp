@@ -918,14 +918,6 @@ namespace nitya {
                 .result = &result_code
             };
 
-            auto try_leader_flush = [&]() -> Result<void> {
-                auto res = execute_leader_flush(target_lsn, done, result_code);
-                if (!res && flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
-                    return {};
-                }
-                return res;
-            };
-
             // Enqueue ticket.  If the queue is momentarily full, try to become leader
             // directly (without enqueuing) or yield and retry.
             while (!concurrency_.enqueue_commit(ticket)) {
@@ -935,7 +927,7 @@ namespace nitya {
                 std::unique_lock direct_lk{flush_mutex_, std::defer_lock};
                 if (direct_lk.try_lock()) {
                     // Became leader without a ticket in the queue — safe to return directly.
-                    return try_leader_flush();
+                    return execute_leader_flush(target_lsn, done, result_code);
                 }
                 std::this_thread::yield();
             }
@@ -948,20 +940,13 @@ namespace nitya {
             {
                 std::unique_lock lk{flush_mutex_, std::defer_lock};
                 if (lk.try_lock()) {
-                    return try_leader_flush();
+                    return execute_leader_flush(target_lsn, done, result_code);
                 }
             }
 
             // Follower path — progress-based loop checking done, leadership retry, and flushed_lsn_.wait().
             for (;;) {
-                if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
-                    return {};
-                }
-
                 if (done.load(std::memory_order_acquire)) {
-                    if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
-                        return {};
-                    }
                     const auto err = result_code.load(std::memory_order_relaxed);
                     if (err != LogError::Success) {
                         return std::unexpected(err);
@@ -976,7 +961,7 @@ namespace nitya {
                 {
                     std::unique_lock retry_lk{flush_mutex_, std::defer_lock};
                     if (retry_lk.try_lock()) {
-                        return try_leader_flush();
+                        return execute_leader_flush(target_lsn, done, result_code);
                     }
                 }
 
