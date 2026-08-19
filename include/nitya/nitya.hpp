@@ -918,6 +918,14 @@ namespace nitya {
                 .result = &result_code
             };
 
+            auto try_leader_flush = [&]() -> Result<void> {
+                auto res = execute_leader_flush(target_lsn, done, result_code);
+                if (!res && flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
+                    return {};
+                }
+                return res;
+            };
+
             // Enqueue ticket.  If the queue is momentarily full, try to become leader
             // directly (without enqueuing) or yield and retry.
             while (!concurrency_.enqueue_commit(ticket)) {
@@ -927,7 +935,7 @@ namespace nitya {
                 std::unique_lock direct_lk{flush_mutex_, std::defer_lock};
                 if (direct_lk.try_lock()) {
                     // Became leader without a ticket in the queue — safe to return directly.
-                    return execute_leader_flush(target_lsn, done, result_code);
+                    return try_leader_flush();
                 }
                 std::this_thread::yield();
             }
@@ -940,7 +948,7 @@ namespace nitya {
             {
                 std::unique_lock lk{flush_mutex_, std::defer_lock};
                 if (lk.try_lock()) {
-                    return execute_leader_flush(target_lsn, done, result_code);
+                    return try_leader_flush();
                 }
             }
 
@@ -951,6 +959,9 @@ namespace nitya {
                 }
 
                 if (done.load(std::memory_order_acquire)) {
+                    if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
+                        return {};
+                    }
                     const auto err = result_code.load(std::memory_order_relaxed);
                     if (err != LogError::Success) {
                         return std::unexpected(err);
@@ -965,7 +976,7 @@ namespace nitya {
                 {
                     std::unique_lock retry_lk{flush_mutex_, std::defer_lock};
                     if (retry_lk.try_lock()) {
-                        return execute_leader_flush(target_lsn, done, result_code);
+                        return try_leader_flush();
                     }
                 }
 
@@ -1303,7 +1314,8 @@ namespace nitya {
             const lsn_t target_lsn,
             std::atomic<bool>& done,
             std::atomic<LogError>& result_code) {
-            LogError overall_err = LogError::Success;
+            LogError own_err = LogError::Success;
+            bool own_resolved = false;
 
             for (;;) {
                 lsn_t max_ticket_lsn = target_lsn;
@@ -1331,8 +1343,9 @@ namespace nitya {
                     }
                 }
 
-                if (flush_err != LogError::Success) {
-                    overall_err = flush_err;
+                if (!own_resolved && max_ticket_lsn >= target_lsn) {
+                    own_err = flush_err;
+                    own_resolved = true;
                 }
 
                 for (auto& t : follower_tickets) {
@@ -1359,12 +1372,16 @@ namespace nitya {
                 }
             }
 
-            result_code.store(overall_err, std::memory_order_relaxed);
+            if (!own_resolved) {
+                own_err = LogError::InternalError;
+            }
+
+            result_code.store(own_err, std::memory_order_relaxed);
             done.store(true, std::memory_order_release);
             done.notify_one();
 
-            if (overall_err != LogError::Success) {
-                return std::unexpected(overall_err);
+            if (own_err != LogError::Success) {
+                return std::unexpected(own_err);
             }
 
             return {};
