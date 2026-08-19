@@ -445,23 +445,44 @@ namespace nitya {
 
         Result<void> seal_segment(const std::uint64_t seg_id, const lsn_t sealed_lsn) {
             std::lock_guard lk{mutex_};
+
+            auto seal_mapped_header = [&](auto& mapping) -> Result<void> {
+                auto bytes = mapping.as_bytes();
+                if (bytes.size() < sizeof(segment_header)) {
+                    return std::unexpected(LogError::CorruptedHeader);
+                }
+
+                segment_header hdr;
+                std::memcpy(&hdr, bytes.data(), sizeof(hdr));
+                hdr.sealed_lsn = sealed_lsn;
+                hdr.flags |= k_segment_sealed;
+                hdr.header_crc = calculate_segment_header_crc(hdr);
+                std::memcpy(bytes.data(), &hdr, sizeof(hdr));
+
+                auto flush_res = mapping.flush_range(0, sizeof(segment_header), setu::flush_mode::sync);
+                if (!flush_res) {
+                    return std::unexpected(LogError::FlushFailed);
+                }
+                return {};
+            };
+
             for (auto& s : active_segments_) {
                 if (s->segment_id == seg_id) {
-                    auto bytes = s->map.as_bytes();
-                    if (bytes.size() >= sizeof(segment_header)) {
-                        segment_header hdr;
-                        std::memcpy(&hdr, bytes.data(), sizeof(hdr));
-                        hdr.sealed_lsn = sealed_lsn;
-                        hdr.flags |= k_segment_sealed;
-                        hdr.header_crc = calculate_segment_header_crc(hdr);
-                        std::memcpy(bytes.data(), &hdr, sizeof(hdr));
-                        auto flush_res = s->map.flush_range(0, sizeof(segment_header), setu::flush_mode::sync);
-                        if (!flush_res) return std::unexpected(LogError::FlushFailed);
-                    }
-                    return {};
+                    return seal_mapped_header(s->map);
                 }
             }
-            return {};
+
+            auto path = opts_.wal_dir / format_segment_name(seg_id);
+            if (!std::filesystem::exists(path)) {
+                return std::unexpected(LogError::SegmentOpenFailed);
+            }
+
+            auto map_res = setu::mapping<setu::read_write>::open_or_create(path, opts_.segment_size);
+            if (!map_res) {
+                return std::unexpected(LogError::SegmentOpenFailed);
+            }
+
+            return seal_mapped_header(*map_res);
         }
 
         Result<void> mark_archived(const std::uint64_t seg_id) {
@@ -833,6 +854,14 @@ namespace nitya {
             if (!append_res) return std::unexpected(append_res.error());
 
             const lsn_t record_end = *append_res + k_frame_overhead + payload.size();
+
+            // Wait until contiguous published watermark reaches our record_end before requesting durability
+            lsn_t pub = published_lsn_.load(std::memory_order_acquire);
+            while (pub < record_end) {
+                published_lsn_.wait(pub, std::memory_order_acquire);
+                pub = published_lsn_.load(std::memory_order_acquire);
+            }
+
             auto sync_res = wait_durable(record_end);
             if (!sync_res) return std::unexpected(sync_res.error());
 
@@ -863,25 +892,12 @@ namespace nitya {
         }
 
         Result<void> wait_durable(lsn_t target_lsn) {
-            // Reject targets beyond the reserved ceiling — no publication can ever reach them.
-            if (target_lsn > tail_lsn_.load(std::memory_order_acquire)) {
+            const lsn_t published = published_lsn_.load(std::memory_order_acquire);
+            if (target_lsn > published) {
                 return std::unexpected(LogError::InvalidArg);
             }
 
             // Fast path: already durable.
-            if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
-                return {};
-            }
-
-            // Wait for the contiguous published watermark to cover target_lsn.
-            // When threads publish out-of-order, the watermark may temporarily lag.
-            lsn_t pub = published_lsn_.load(std::memory_order_acquire);
-            while (pub < target_lsn) {
-                published_lsn_.wait(pub, std::memory_order_acquire);
-                pub = published_lsn_.load(std::memory_order_acquire);
-            }
-
-            // Re-check: the flush may have already happened while we waited on published_lsn_.
             if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
                 return {};
             }
@@ -928,35 +944,46 @@ namespace nitya {
                 }
             }
 
-            // Follower path — spin/wait until leader completes our ticket or we can promote.
+            // Follower path — progress-based loop checking flushed_lsn_, done, leadership retry, and flushed_lsn_.wait().
             for (;;) {
+                if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
+                    return {};
+                }
+
                 if (done.load(std::memory_order_acquire)) {
                     const auto err = result_code.load(std::memory_order_relaxed);
                     if (err != LogError::Success) {
                         return std::unexpected(err);
                     }
-                    if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
-                        return {};
+                    while (flushed_lsn_.load(std::memory_order_acquire) < target_lsn) {
+                        const auto c = flushed_lsn_.load(std::memory_order_acquire);
+                        if (c >= target_lsn) break;
+                        flushed_lsn_.wait(c, std::memory_order_acquire);
                     }
-                    // Ticket was completed by a leader but durability didn't advance —
-                    // this is an internal inconsistency.
-                    return std::unexpected(LogError::InternalError);
+                    return {};
                 }
 
                 // Try to promote to leader and drain queue (which will include our ticket).
-                std::unique_lock retry_lk{flush_mutex_, std::defer_lock};
-                if (retry_lk.try_lock()) {
-                    return execute_leader_flush(target_lsn, done, result_code);
+                {
+                    std::unique_lock retry_lk{flush_mutex_, std::defer_lock};
+                    if (retry_lk.try_lock()) {
+                        return execute_leader_flush(target_lsn, done, result_code);
+                    }
                 }
 
-                // Sleep until flushed_lsn_ advances (notified by the leader).
                 const auto cur = flushed_lsn_.load(std::memory_order_acquire);
+                if (cur >= target_lsn) {
+                    return {};
+                }
                 flushed_lsn_.wait(cur, std::memory_order_acquire);
             }
         }
 
         Result<void> sync() {
-            return wait_durable(published_lsn_.load(std::memory_order_acquire));
+            const lsn_t pub = published_lsn_.load(std::memory_order_acquire);
+            // Fast path: nothing to flush.
+            if (flushed_lsn_.load(std::memory_order_acquire) >= pub) return {};
+            return wait_durable(pub);
         }
 
         // ------------------------------------------------------------------------
@@ -1255,8 +1282,8 @@ namespace nitya {
                     std::unique_lock lk{flusher_mutex_};
                     flusher_cv_.wait_for(lk, opts_.group_commit_interval, [&] {
                         if (st.stop_requested() || stop_background_flusher_.load(std::memory_order_relaxed)) return true;
-                        lsn_t pub = published_lsn_.load(std::memory_order_relaxed);
-                        lsn_t flu = flushed_lsn_.load(std::memory_order_relaxed);
+                        lsn_t pub = published_lsn_.load(std::memory_order_acquire);
+                        lsn_t flu = flushed_lsn_.load(std::memory_order_acquire);
                         return pub > flu && (pub - flu >= opts_.group_commit_bytes);
                     });
                 }
@@ -1396,12 +1423,12 @@ namespace nitya {
             // Compact dead head entries if the raw array is full but live count has room.
             if (pending_publishes_.size() >= pending_publishes_.capacity() && pending_front_ > 0) {
                 // Shift live elements to front
-                std::size_t live = pending_publishes_.size() - pending_front_;
+                const std::size_t live = pending_publishes_.size() - pending_front_;
                 for (std::size_t i = 0; i < live; ++i) {
                     pending_publishes_[i] = std::move(pending_publishes_[pending_front_ + i]);
                 }
-                for (std::size_t i = live; i < pending_publishes_.size(); ++i) {
-                    (void)pending_publishes_.pop_back();
+                while (pending_publishes_.size() > live) {
+                    pending_publishes_.pop_back();
                 }
                 pending_front_ = 0;
             }
@@ -1622,21 +1649,18 @@ namespace nitya {
                 return;
             }
 
-            lsn_t last_valid_end = k_segment_header_size;
-            auto stream = recover(k_segment_header_size, recovery_mode::stop_at_first_error);
+            const lsn_t start_lsn = segs.front().begin_lsn + k_segment_header_size;
+            lsn_t last_valid_end = start_lsn;
+            auto stream = recover(start_lsn, recovery_mode::stop_at_first_error);
             for (const auto& rec : stream) {
                 last_valid_end = rec.lsn + k_frame_overhead + rec.payload.size();
             }
 
-            // Bug fix: if the WAL crashed after sealing segment N but before writing
-            // records to segment N+1, last_valid_end sits inside segment N while segment
-            // N+1 already exists on disk.  Subsequent appends must not overwrite sealed
-            // data, so advance the tail to the start of N+1's data area.
-            {
-                const std::uint64_t last_seg_id = last_valid_end / opts_.segment_size;
-                auto next_path = opts_.wal_dir / storage_.format_segment_name(last_seg_id + 1);
-                if (std::filesystem::exists(next_path)) {
-                    last_valid_end = (last_seg_id + 1) * opts_.segment_size + k_segment_header_size;
+            // If later empty allocated segments exist, advance to their data start.
+            for (const auto& seg : segs) {
+                const lsn_t seg_data_start = seg.begin_lsn + k_segment_header_size;
+                if (seg_data_start > last_valid_end && seg.begin_lsn <= last_valid_end) {
+                    last_valid_end = seg_data_start;
                 }
             }
 
