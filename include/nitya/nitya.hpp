@@ -75,7 +75,7 @@ namespace nitya {
     inline constexpr std::uint32_t k_nitya_seg_magic = 0x4E534547;    // "NSEG"
     inline constexpr std::uint16_t k_nitya_format_version = 1;
 
-    inline void atomic_max_lsn(std::atomic<lsn_t>& target, lsn_t value) noexcept {
+    inline void atomic_max_lsn(std::atomic<lsn_t>& target, const lsn_t value) noexcept {
         lsn_t cur = target.load(std::memory_order_relaxed);
         while (cur < value &&
                !target.compare_exchange_weak(
@@ -182,7 +182,7 @@ namespace nitya {
             return lsn != k_invalid_lsn && !buffer.empty();
         }
 
-        [[nodiscard]] std::span<std::byte> payload_buffer() noexcept {
+        [[nodiscard]] std::span<std::byte> payload_buffer() const noexcept {
             if (buffer.size() < k_frame_overhead) return {};
             return buffer.subspan(sizeof(frame_header), payload_size);
         }
@@ -218,7 +218,7 @@ namespace nitya {
     // ============================================================================
 
     namespace detail {
-        inline constexpr std::uint32_t crc32c_byte(std::uint32_t crc, std::uint8_t byte) noexcept {
+        inline constexpr std::uint32_t crc32c_byte(std::uint32_t crc, const std::uint8_t byte) noexcept {
             crc ^= byte;
             for (int i = 0; i < 8; ++i) {
                 crc = (crc >> 1) ^ (0x82F63B78u * (crc & 1));
@@ -226,7 +226,7 @@ namespace nitya {
             return crc;
         }
 
-        inline constexpr std::uint32_t calculate_crc32c_fallback(const std::byte* data, std::size_t len) noexcept {
+        constexpr std::uint32_t calculate_crc32c_fallback(const std::byte* data, const std::size_t len) noexcept {
             std::uint32_t crc = ~0u;
             for (std::size_t i = 0; i < len; ++i) {
                 crc = crc32c_byte(crc, static_cast<std::uint8_t>(data[i]));
@@ -236,7 +236,7 @@ namespace nitya {
     } // namespace detail
 
     struct default_framing {
-        static std::uint32_t calculate_checksum32(const std::byte* data, std::size_t len) noexcept {
+        static std::uint32_t calculate_checksum32(const std::byte* data, const std::size_t len) noexcept {
 #if !defined(NITYA_NO_GOOGLE_CRC32C)
             return crc32c::Crc32c(reinterpret_cast<const std::uint8_t*>(data), len);
 #else
@@ -244,11 +244,11 @@ namespace nitya {
 #endif
         }
 
-        static std::uint32_t calculate_crc32(const std::byte* data, std::size_t len) noexcept {
+        static std::uint32_t calculate_crc32(const std::byte* data, const std::size_t len) noexcept {
             return calculate_checksum32(data, len);
         }
 
-        static void encode(reservation& res, std::uint32_t payload_crc) noexcept {
+        static void encode(reservation& res, const std::uint32_t payload_crc) noexcept {
             assert(res.buffer.size() >= k_frame_overhead + res.payload_size);
 
             frame_header hdr;
@@ -273,7 +273,7 @@ namespace nitya {
             std::memcpy(res.buffer.data() + sizeof(frame_header) + res.payload_size, &trl, sizeof(frame_trailer));
         }
 
-        static Result<std::uint32_t> validate_header(const frame_header& hdr, lsn_t expected_lsn) noexcept {
+        static Result<std::uint32_t> validate_header(const frame_header& hdr, const lsn_t expected_lsn) noexcept {
             if (hdr.magic != k_nitya_magic) {
                 return std::unexpected(LogError::CorruptedHeader);
             }
@@ -295,9 +295,9 @@ namespace nitya {
         }
 
         static Result<void> validate_payload_and_trailer(
-            std::span<const std::byte> payload,
+            const std::span<const std::byte> payload,
             const frame_trailer& trl,
-            std::uint32_t expected_payload_crc) noexcept {
+            const std::uint32_t expected_payload_crc) noexcept {
             if (trl.size != payload.size()) {
                 return std::unexpected(LogError::CorruptedTrailer);
             }
@@ -352,8 +352,8 @@ namespace nitya {
 
         static Result<void> validate_segment_header(
             const segment_file& seg,
-            std::uint64_t expected_segment_id,
-            lsn_t expected_begin_lsn) {
+            const std::uint64_t expected_segment_id,
+            const lsn_t expected_begin_lsn) {
             auto bytes = seg.map.as_bytes();
             if (bytes.size() < sizeof(segment_header)) {
                 return std::unexpected(LogError::CorruptedHeader);
@@ -382,7 +382,7 @@ namespace nitya {
             return {};
         }
 
-        Result<std::shared_ptr<segment_file>> get_or_create_segment(std::uint64_t seg_id, lsn_t begin_lsn) {
+        Result<std::shared_ptr<segment_file>> get_or_create_segment(const std::uint64_t seg_id, const lsn_t begin_lsn) {
             std::lock_guard lk{mutex_};
             for (auto& s : active_segments_) {
                 if (s->segment_id == seg_id) return s;
@@ -440,7 +440,7 @@ namespace nitya {
             return seg;
         }
 
-        Result<void> seal_segment(std::uint64_t seg_id, lsn_t sealed_lsn) {
+        Result<void> seal_segment(const std::uint64_t seg_id, const lsn_t sealed_lsn) {
             std::lock_guard lk{mutex_};
             for (auto& s : active_segments_) {
                 if (s->segment_id == seg_id) {
@@ -461,7 +461,7 @@ namespace nitya {
             return {};
         }
 
-        Result<void> mark_archived(std::uint64_t seg_id) {
+        Result<void> mark_archived(const std::uint64_t seg_id) {
             std::lock_guard lk{mutex_};
             auto path = opts_.wal_dir / format_segment_name(seg_id);
             if (!std::filesystem::exists(path)) return std::unexpected(LogError::InvalidArg);
@@ -497,7 +497,7 @@ namespace nitya {
             return {};
         }
 
-        Result<void> flush_range(std::uint64_t seg_id, std::size_t offset, std::size_t length, setu::flush_mode mode) {
+        Result<void> flush_range(const std::uint64_t seg_id, const std::size_t offset, const std::size_t length, const setu::flush_mode mode) {
             std::lock_guard lk{mutex_};
             for (auto& s : active_segments_) {
                 if (s->segment_id == seg_id) {
@@ -523,10 +523,10 @@ namespace nitya {
 
     class smriti_memory {
     public:
-        explicit smriti_memory(std::size_t arena_size = 1024 * 1024)
+        explicit smriti_memory(const std::size_t arena_size = 1024 * 1024)
             : arena_{arena_size} {}
 
-        [[nodiscard]] void* allocate(std::size_t n, std::size_t a = alignof(std::max_align_t)) noexcept {
+        [[nodiscard]] void* allocate(const std::size_t n, const std::size_t a = alignof(std::max_align_t)) noexcept {
             return arena_.allocate(n, a);
         }
 
@@ -702,7 +702,7 @@ namespace nitya {
         // ------------------------------------------------------------------------
         // 1. Reserve Phase
         // ------------------------------------------------------------------------
-        [[nodiscard]] Result<reservation> reserve(std::uint32_t payload_bytes, std::uint16_t flags = 0, std::uint16_t version = k_nitya_format_version) {
+        [[nodiscard]] Result<reservation> reserve(const std::uint32_t payload_bytes, const std::uint16_t flags = 0, const std::uint16_t version = k_nitya_format_version) {
             auto telemetry = TelemetryPolicy::trace_reserve();
             (void)telemetry;
 
@@ -780,7 +780,7 @@ namespace nitya {
         // ------------------------------------------------------------------------
         // 3. Append Convenience (Reserve + Copy + Publish)
         // ------------------------------------------------------------------------
-        Result<lsn_t> append(std::span<const std::byte> payload, std::uint16_t flags = 0, std::uint16_t version = k_nitya_format_version) {
+        Result<lsn_t> append(const std::span<const std::byte> payload, const std::uint16_t flags = 0, const std::uint16_t version = k_nitya_format_version) {
             auto res_result = reserve(static_cast<std::uint32_t>(payload.size()), flags, version);
             if (!res_result) return std::unexpected(res_result.error());
 
@@ -796,7 +796,7 @@ namespace nitya {
             return res.lsn;
         }
 
-        Result<lsn_t> append_sync(std::span<const std::byte> payload, std::uint16_t flags = 0, std::uint16_t version = k_nitya_format_version) {
+        Result<lsn_t> append_sync(const std::span<const std::byte> payload, const std::uint16_t flags = 0, const std::uint16_t version = k_nitya_format_version) {
             auto append_res = append(payload, flags, version);
             if (!append_res) return std::unexpected(append_res.error());
 
@@ -810,7 +810,7 @@ namespace nitya {
         // ------------------------------------------------------------------------
         // 4. Physical Flushing & Group Commit Durability
         // ------------------------------------------------------------------------
-        Result<void> flush_to(lsn_t target_lsn) {
+        Result<void> flush_to(const lsn_t target_lsn) {
             const lsn_t published = published_lsn_.load(std::memory_order_acquire);
             if (target_lsn > published) {
                 return std::unexpected(LogError::InvalidArg);
@@ -831,8 +831,8 @@ namespace nitya {
         }
 
         Result<void> wait_durable(lsn_t target_lsn) {
-            const lsn_t published = published_lsn_.load(std::memory_order_acquire);
-            if (target_lsn > published) {
+            const lsn_t tail = tail_lsn_.load(std::memory_order_acquire);
+            if (target_lsn > tail) {
                 return std::unexpected(LogError::InvalidArg);
             }
 
@@ -854,8 +854,16 @@ namespace nitya {
                 .result = &result_code
             };
 
-            if (!concurrency_.enqueue_commit(ticket)) {
-                return std::unexpected(LogError::QueueFull);
+            // Attempt to enqueue ticket (retry briefly if queue is full under heavy concurrency)
+            while (!concurrency_.enqueue_commit(ticket)) {
+                if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
+                    return {};
+                }
+                std::unique_lock direct_lk{flush_mutex_, std::defer_lock};
+                if (direct_lk.try_lock()) {
+                    return execute_leader_flush(target_lsn, done, result_code);
+                }
+                std::this_thread::yield();
             }
 
             // Attempt to become leader
@@ -863,10 +871,6 @@ namespace nitya {
             if (!lk.try_lock()) {
                 // Follower path: wait on durability state or retry leadership if not yet durable
                 for (;;) {
-                    if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
-                        return {};
-                    }
-
                     if (done.load(std::memory_order_acquire)) {
                         auto err = result_code.load(std::memory_order_relaxed);
                         if (err != LogError::Success) {
@@ -909,7 +913,7 @@ namespace nitya {
             using value_type = wal_record;
             using difference_type = std::ptrdiff_t;
 
-            recovery_stream(wal& parent, lsn_t start_lsn, recovery_mode mode)
+            recovery_stream(wal& parent, lsn_t start_lsn, const recovery_mode mode)
                 : parent_{parent}, cursor_lsn_{start_lsn}, mode_{mode}, status_{} {
                 status_.last_valid_lsn = k_invalid_lsn;
                 status_.first_bad_lsn = k_invalid_lsn;
@@ -996,7 +1000,7 @@ namespace nitya {
         // ------------------------------------------------------------------------
         class replication_stream {
         public:
-            replication_stream(wal& parent, lsn_t start_lsn)
+            replication_stream(wal& parent, const lsn_t start_lsn)
                 : parent_{parent}, cursor_lsn_{start_lsn} {}
 
             std::optional<wal_record> next() {
@@ -1023,7 +1027,7 @@ namespace nitya {
         // 7. Retention & Archival Automation (EasyRules integration)
         // ------------------------------------------------------------------------
         void apply_retention_rules(
-            std::chrono::seconds max_segment_age,
+            const std::chrono::seconds max_segment_age,
             std::function<void(const segment_descriptor&)> on_archive = nullptr,
             std::function<void(const segment_descriptor&)> on_delete = nullptr) {
 
@@ -1083,7 +1087,7 @@ namespace nitya {
         [[nodiscard]] lsn_t replicated_lsn() const noexcept { return replicated_lsn_.load(std::memory_order_relaxed); }
         [[nodiscard]] const wal_options& options() const noexcept { return opts_; }
 
-        void set_replicated_lsn(lsn_t lsn) noexcept {
+        void set_replicated_lsn(const lsn_t lsn) noexcept {
             atomic_max_lsn(replicated_lsn_, lsn);
         }
 
@@ -1216,28 +1220,19 @@ namespace nitya {
 
         // Internal helper: assumes flush_mutex_ is held
         Result<void> execute_leader_flush(
-            lsn_t target_lsn,
+            const lsn_t target_lsn,
             std::atomic<bool>& done,
             std::atomic<LogError>& result_code) {
 
-            // Drain all pending group commit tickets into notification list
+            // Drain pending group commit tickets up to follower_tickets capacity
             lsn_t max_ticket_lsn = target_lsn;
             containers::static_vector<typename ConcurrencyPolicy::commit_ticket, 1024> follower_tickets;
-            LogError queue_err = LogError::Success;
 
-            while (auto t = concurrency_.dequeue_commit()) {
+            while (follower_tickets.size() < follower_tickets.capacity()) {
+                auto t = concurrency_.dequeue_commit();
+                if (!t) break;
                 max_ticket_lsn = std::max(max_ticket_lsn, t->lsn);
-                if (!follower_tickets.push_back(*t)) {
-                    if (t->result) {
-                        t->result->store(LogError::QueueFull, std::memory_order_relaxed);
-                    }
-                    if (t->done) {
-                        t->done->store(true, std::memory_order_release);
-                        t->done->notify_one();
-                    }
-                    queue_err = LogError::QueueFull;
-                    continue;
-                }
+                (void)follower_tickets.push_back(*t);
             }
 
             const lsn_t final_target_lsn = max_ticket_lsn;
@@ -1276,14 +1271,11 @@ namespace nitya {
             if (flush_err != LogError::Success) {
                 return std::unexpected(flush_err);
             }
-            if (queue_err != LogError::Success) {
-                return std::unexpected(queue_err);
-            }
             return {};
         }
 
         // Internal helper: assumes flush_mutex_ is held
-        Result<void> flush_range_to_locked(lsn_t from_lsn, lsn_t to_lsn) {
+        Result<void> flush_range_to_locked(const lsn_t from_lsn, const lsn_t to_lsn) {
             lsn_t flush_cur = from_lsn;
             while (flush_cur < to_lsn) {
                 const std::uint64_t seg_id = flush_cur / opts_.segment_size;
@@ -1303,33 +1295,12 @@ namespace nitya {
         }
 
         void drain_pending_locked(lsn_t& cur) noexcept {
-            bool advanced = true;
-            while (advanced && !pending_publishes_.empty()) {
-                advanced = false;
-                std::size_t read_idx = 0;
-                std::size_t write_idx = 0;
-                const std::size_t total = pending_publishes_.size();
-
-                while (read_idx < total) {
-                    if (pending_publishes_[read_idx].first <= cur) {
-                        if (pending_publishes_[read_idx].second > cur) {
-                            cur = pending_publishes_[read_idx].second;
-                            advanced = true;
-                        }
-                        ++read_idx;
-                    } else {
-                        break;
-                    }
+            while (!pending_publishes_.empty() && pending_publishes_[0].first <= cur) {
+                cur = std::max(cur, pending_publishes_[0].second);
+                for (std::size_t i = 0; i < pending_publishes_.size() - 1; ++i) {
+                    pending_publishes_[i] = std::move(pending_publishes_[i + 1]);
                 }
-
-                if (read_idx > 0) {
-                    while (read_idx < total) {
-                        pending_publishes_[write_idx++] = std::move(pending_publishes_[read_idx++]);
-                    }
-                    while (pending_publishes_.size() > write_idx) {
-                        pending_publishes_.pop_back();
-                    }
-                }
+                pending_publishes_.pop_back();
             }
         }
 
@@ -1345,41 +1316,48 @@ namespace nitya {
                 return {};
             }
 
-            auto it = std::lower_bound(
-                pending_publishes_.begin(),
-                pending_publishes_.end(),
-                std::make_pair(from, to),
-                [](const auto& a, const auto& b) {
-                    return a.first < b.first;
-                }
-            );
+            // Drain any contiguous intervals first
+            drain_pending_locked(cur);
+            if (from <= cur) {
+                cur = std::max(cur, to);
+                drain_pending_locked(cur);
+                published_lsn_.store(cur, std::memory_order_release);
+                return {};
+            }
 
-            std::size_t idx = static_cast<std::size_t>(
-                std::distance(pending_publishes_.begin(), it)
-            );
-
-            if (!pending_publishes_.push_back({from, to})) {
+            if (pending_publishes_.size() >= pending_publishes_.capacity()) {
                 return std::unexpected(LogError::QueueFull);
             }
+
+            // Find insertion position by start LSN (strictly sorted since records are disjoint)
+            std::size_t idx = 0;
+            while (idx < pending_publishes_.size() && pending_publishes_[idx].first < from) {
+                ++idx;
+            }
+
+            (void)pending_publishes_.push_back({from, to});
 
             for (std::size_t i = pending_publishes_.size() - 1; i > idx; --i) {
                 pending_publishes_[i] = std::move(pending_publishes_[i - 1]);
             }
             pending_publishes_[idx] = {from, to};
+
+            drain_pending_locked(cur);
+            published_lsn_.store(cur, std::memory_order_release);
             return {};
         }
 
-        Result<void> mark_gap_published(lsn_t from, lsn_t to) {
+        Result<void> mark_gap_published(const lsn_t from, const lsn_t to) {
             return mark_published_range(from, to);
         }
 
         // Must be called with reservation_mutex_ held
         Result<reservation> reserve_in_segment_locked(
-            lsn_t start_lsn,
-            std::uint32_t payload_bytes,
+            const lsn_t start_lsn,
+            const std::uint32_t payload_bytes,
             std::size_t total_frame_size,
-            std::uint16_t flags,
-            std::uint16_t version) {
+            const std::uint16_t flags,
+            const std::uint16_t version) {
 
             const std::uint64_t seg_id = start_lsn / opts_.segment_size;
             const std::size_t seg_offset = start_lsn % opts_.segment_size;
@@ -1409,9 +1387,9 @@ namespace nitya {
         std::optional<wal_record> read_record_at(
             lsn_t& cursor_lsn,
             recovery_status* status,
-            recovery_mode mode) {
+            const recovery_mode mode) {
 
-            auto record_err = [&](LogError err, lsn_t bad_lsn = k_invalid_lsn) {
+            auto record_err = [&](const LogError err, const lsn_t bad_lsn = k_invalid_lsn) {
                 if (status) {
                     status->error = err;
                     if (bad_lsn != k_invalid_lsn) status->first_bad_lsn = bad_lsn;

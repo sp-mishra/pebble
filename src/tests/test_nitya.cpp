@@ -1186,3 +1186,42 @@ TEST_CASE("Nitya: Follower retries leadership and completes durability without b
     CHECK(successful_syncs.load() == kThreads);
     CHECK(log.flushed_lsn() == log.published_lsn());
 }
+
+// ============================================================================
+// § 20 High-Contention Multi-Iteration Follower Promotion Stress Test
+// ============================================================================
+
+TEST_CASE("Nitya: Sustained concurrent group commit and follower promotion stress", "[nitya][stress]") {
+    TmpWalDir tmp;
+    nitya::wal_options opts{
+        .wal_dir = tmp.path,
+        .segment_size = 32 * 1024 * 1024
+    };
+
+    nitya::wal<> log{opts};
+
+    constexpr int kThreads = 16;
+    constexpr int kIters = 64;
+    std::vector<std::thread> workers;
+    workers.reserve(kThreads);
+    std::atomic<std::size_t> completed_appends{0};
+
+    for (int t = 0; t < kThreads; ++t) {
+        workers.emplace_back([&log, &completed_appends, t] {
+            for (int i = 0; i < kIters; ++i) {
+                std::string payload = "STRESS_DATA_T" + std::to_string(t) + "_I" + std::to_string(i);
+                auto res = log.append_sync(as_byte_span(payload));
+                if (res.has_value()) {
+                    completed_appends.fetch_add(1, std::memory_order_relaxed);
+                }
+            }
+        });
+    }
+
+    for (auto& w : workers) {
+        w.join();
+    }
+
+    CHECK(completed_appends.load() == kThreads * kIters);
+    CHECK(log.flushed_lsn() == log.published_lsn());
+}

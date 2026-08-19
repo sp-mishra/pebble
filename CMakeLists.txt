@@ -56,14 +56,21 @@ set(SPDLOG_BUILD_TESTS OFF)
 set(SPDLOG_BUILD_BENCH OFF)
 
 # highway
-set(HWY_TEST_STANDALONE OFF)
-set(HWY_ENABLE_EXAMPLES OFF)
-set(HWY_ENABLE_INSTALL OFF)
-set(HWY_ENABLE_TESTS OFF)
-set(HWY_BUILD_TESTS OFF)
+set(HWY_TEST_STANDALONE OFF CACHE BOOL "Disable use of googletest" FORCE)
+set(HWY_ENABLE_EXAMPLES OFF CACHE BOOL "Build examples" FORCE)
+set(HWY_ENABLE_INSTALL OFF CACHE BOOL "Install library" FORCE)
+set(HWY_ENABLE_TESTS OFF CACHE BOOL "Enable HWY tests" FORCE)
+set(HWY_BUILD_TESTS OFF CACHE BOOL "Build tests" FORCE)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/dependencies/spdlog)
 add_subdirectory(${CMAKE_SOURCE_DIR}/dependencies/highway)
+
+# crc32c
+set(CRC32C_BUILD_TESTS OFF CACHE BOOL "Build CRC32C's unit tests" FORCE)
+set(CRC32C_BUILD_BENCHMARKS OFF CACHE BOOL "Build CRC32C's benchmarks" FORCE)
+set(CRC32C_USE_GLOG OFF CACHE BOOL "Build CRC32C's tests with Google Logging" FORCE)
+set(CRC32C_INSTALL OFF CACHE BOOL "Install CRC32C's header and library" FORCE)
+add_subdirectory(${CMAKE_SOURCE_DIR}/dependencies/crc32c)
 
 # liblmdb
 if (EXISTS "${CMAKE_SOURCE_DIR}/dependencies/liblmdb/mdb.c")
@@ -109,6 +116,7 @@ if (BUILD_EXECUTABLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE
             spdlog::spdlog_header_only
             hwy
+            crc32c
     )
     if (TARGET lmdb)
         target_link_libraries(${PROJECT_NAME} PRIVATE lmdb)
@@ -128,6 +136,7 @@ if (BUILD_TESTS)
             Catch2
             spdlog::spdlog_header_only
             hwy
+            crc32c
     )
     if (TARGET lmdb)
         target_link_libraries(pebble_tests PRIVATE lmdb)
