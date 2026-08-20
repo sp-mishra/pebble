@@ -68,7 +68,9 @@ namespace tarka::native {
         void reset() {
             selects_.clear();
             stores_.clear();
+            array_pairs_.clear();
             instantiated_.clear();
+            extensionality_instantiated_.clear();
         }
 
     private:
@@ -77,6 +79,11 @@ namespace tarka::native {
                 selects_.push_back(t);
             } else if (t.op() == Op::Store) {
                 stores_.push_back(t);
+            } else if (t.op() == Op::Distinct || t.op() == Op::Eq) {
+                auto ch = t.children();
+                if (ch.size() == 2 && ch[0].sort().kind() == SortKind::Array) {
+                    array_pairs_.push_back({ch[0], ch[1]});
+                }
             }
             for (Term c : t.children()) {
                 collect_array_terms(c);
@@ -138,9 +145,49 @@ namespace tarka::native {
                         sat_->add_clause({lit_neg(l_idx_eq), l_val_eq});
                         sat_->add_clause({l_idx_eq, l_pass_eq});
 
-                        collect_array_terms(sel_orig);
+                        selects_.push_back(sel_orig);
                     }
                 }
+            }
+
+            // Extensionality: a != b => select(a, k) != select(b, k)
+            for (const auto& [a, b] : array_pairs_) {
+                const std::uint64_t pair_key = a.hash() ^ (b.hash() * 0x9e3779b97f4a7c15ULL);
+                if (extensionality_instantiated_.contains(pair_key)) continue;
+                extensionality_instantiated_.insert(pair_key);
+
+                if (!a.valid() || !a.sort().valid()) continue;
+                Context& ctx = a.ctx();
+
+                // Sort: Array(Index, Elem)
+                Sort arr_sort = a.sort();
+                auto sp = arr_sort.sort_params();
+                Sort idx_sort = (sp.size() >= 1) ? sp[0] : ctx.bv_sort(32);
+                Sort elem_sort = (sp.size() >= 2) ? sp[1] : ctx.bv_sort(32);
+
+                std::string k_name = "ext_diff_" + std::to_string(a.hash()) + "_" + std::to_string(b.hash());
+                Term k = ctx.make_symbol(k_name, idx_sort);
+
+                Term sel_a = ctx.make_term(Op::Select, elem_sort, std::vector<Term>{a, k});
+                Term sel_b = ctx.make_term(Op::Select, elem_sort, std::vector<Term>{b, k});
+
+                // (a == b) || (select(a, k) != select(b, k))
+                Term eq_ab = (a == b);
+                Term deq_sel = (sel_a != sel_b);
+
+                AtomId a_eq_ab = reg_->intern(eq_ab, AtomTheory::core);
+                AtomId a_deq_sel = reg_->intern(deq_sel, AtomTheory::core);
+
+                sat_->ensure_var(reg_->var_of(a_eq_ab));
+                sat_->ensure_var(reg_->var_of(a_deq_sel));
+
+                Lit l_eq_ab = make_lit(reg_->var_of(a_eq_ab), false);
+                Lit l_deq_sel = make_lit(reg_->var_of(a_deq_sel), false);
+
+                sat_->add_clause({l_eq_ab, l_deq_sel});
+
+                selects_.push_back(sel_a);
+                selects_.push_back(sel_b);
             }
         }
 
@@ -148,6 +195,8 @@ namespace tarka::native {
         cdcl_solver* sat_ = nullptr;
         std::vector<Term> selects_;
         std::vector<Term> stores_;
+        std::vector<std::pair<Term, Term>> array_pairs_;
         std::unordered_set<std::uint64_t> instantiated_;
+        std::unordered_set<std::uint64_t> extensionality_instantiated_;
     };
 } // namespace tarka::native

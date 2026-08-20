@@ -36,6 +36,7 @@
 #include "tarka/native/theory_uf.hpp"
 #include "tarka/native/model.hpp"
 #include "tarka/native/simplifier.hpp"
+#include "tarka/native/theory_quant.hpp"
 
 #include <cstdint>
 #include <expected>
@@ -56,6 +57,7 @@ namespace tarka::backend {
     using tarka::native::theory_bv;
     using tarka::native::theory_combination;
     using tarka::native::theory_dl;
+    using tarka::native::theory_quant;
     using namespace tarka::native;
 
     class native {
@@ -89,34 +91,39 @@ namespace tarka::backend {
         void assert_formula(Term t) { assertions_.push_back(simplifier::simplify(t)); }
 
         [[nodiscard]] std::expected<SatResult, SmtError> check_sat() {
-            return run({}, std::function<bool()>{});
+            return run({}, [] { return false; });
         }
 
         [[nodiscard]] std::expected<SatResult, SmtError>
-        check_sat_cancelable(Term t, std::stop_token tok) {
-            if (t.valid()) assert_formula(t);
-            return run({}, [tok] { return tok.stop_requested(); });
+        check_sat_cancelable(Term t, std::stop_token stop) {
+            push();
+            assert_formula(t);
+            auto r = run({}, [&stop] { return stop.stop_requested(); });
+            pop();
+            return r;
         }
 
         [[nodiscard]] std::expected<SatResult, SmtError>
-        check_sat_assuming(std::span<const Term> assumptions, const std::function<bool()>& stop = {}) {
-            return run(assumptions, stop);
+        check_sat_assuming(std::span<const Term> assumptions) {
+            return run(assumptions, [] { return false; });
         }
 
         [[nodiscard]] std::vector<Term> get_unsat_core() const {
-            std::vector<Term> core;
-            for (Lit l : sat_.unsat_core()) {
+            auto core_lits = sat_.unsat_core();
+            std::vector<Term> core_terms;
+            core_terms.reserve(core_lits.size());
+            for (Lit l : core_lits) {
                 const AtomId a = reg_.atom_of(lit_var(l));
                 if (a != kNullAtom) {
-                    core.push_back(reg_.atom(a).term);
+                    core_terms.push_back(reg_.atom(a).term);
                 }
             }
-            return core;
+            return core_terms;
         }
 
         [[nodiscard]] std::expected<SmtValue, SmtError> get_value(Term t) {
             if (!solved_) {
-                return std::unexpected(SmtError{SmtError::Kind::Internal, "no model: call check_sat first"});
+                return std::unexpected(SmtError{SmtError::Kind::Internal, "get_value called before check_sat returned Sat"});
             }
             model_builder mb(sat_, reg_);
             return mb.eval(t, theories_);
@@ -144,12 +151,9 @@ namespace tarka::backend {
         }
 
     private:
-        // Guard rejects constructs beyond quantifier-free supported theories
+        // Guard rejects constructs beyond supported theories
         [[nodiscard]] static std::expected<void, SmtError> guard(Term t) {
             switch (t.op()) {
-                case Op::Forall:
-                case Op::Exists:
-                    return std::unexpected(SmtError{SmtError::Kind::Unsupported, "native: quantifiers unsupported"});
                 case Op::Mul: {
                     // Reject nonlinear symbolic multiplication (constant * symbol is supported)
                     auto ch = t.children();
@@ -184,7 +188,18 @@ namespace tarka::backend {
             cnf_encoder enc(sat_, reg_);
             dpllt<combination_t> driver(sat_, reg_, theories_);
 
-            for (Term t : assertions_) enc.assert_formula(t);
+            theory_quant quant;
+            quant.attach(reg_);
+            quant.attach_sat(sat_);
+
+            for (Term t : assertions_) {
+                enc.assert_formula(t);
+                quant.register_term(t);
+            }
+            for (Term a : assumptions) {
+                quant.register_term(a);
+            }
+            quant.instantiate_all(enc);
 
             std::vector<Lit> assumption_lits;
             assumption_lits.reserve(assumptions.size());

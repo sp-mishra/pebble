@@ -642,5 +642,56 @@ TEST_CASE("tarka frontend: SMT-LIB2 Parser Script Execution", "[tarka][frontend]
     REQUIRE(*sat_res == SatResult::Sat);
 }
 
+TEST_CASE("tarka native: Array Extensionality Skolemization", "[tarka][native][array][ext]") {
+    Context ctx;
+    auto bv32 = ctx.bv_sort(32);
+    auto arr_sort = ctx.array_sort(bv32, bv32);
+
+    auto a = ctx.make_symbol("a", arr_sort);
+    auto b = ctx.make_symbol("b", arr_sort);
+    auto i = ctx.make_symbol("i", bv32);
+    auto v = ctx.make_symbol("v", bv32);
+
+    RouterEngine<backend::native> solver;
+
+    SECTION("Extensionality: a != b implies not identical on all reads") {
+        Term store_a = ctx.make_term(Op::Store, arr_sort, std::vector<Term>{a, i, v});
+        Term store_b = ctx.make_term(Op::Store, arr_sort, std::vector<Term>{b, i, v});
+        Term deq_arr = (a != b);
+
+        solver.assert_formula(deq_arr);
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Sat);
+    }
+}
+
+TEST_CASE("tarka native: Quantifier Instantiation (E-matching & Skolem)", "[tarka][native][quant]") {
+    Context ctx;
+    auto bv32 = ctx.bv_sort(32);
+    auto bool_sort = ctx.bool_sort();
+
+    auto x = ctx.make_symbol("x", bv32);
+    auto y = ctx.make_symbol("y", bv32);
+    auto c10 = ctx.make_value(10, bv32);
+    auto c20 = ctx.make_value(20, bv32);
+
+    RouterEngine<backend::native> solver;
+
+    SECTION("Universal quantifier: (forall x. x == 10) && (y == 20) is UNSAT") {
+        Term eq_x10 = (x == c10);
+        Term forall_t = ctx.make_term(Op::Forall, bool_sort, std::vector<Term>{x, eq_x10});
+
+        Term eq_y20 = (y == c20);
+        Term assertion = forall_t && eq_y20;
+
+        solver.assert_formula(assertion);
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Unsat);
+    }
+}
+
+
 
 
