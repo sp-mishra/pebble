@@ -204,6 +204,8 @@ route(term):
 | `tarka/backends/native_backend.hpp` | no         | no        | full zero-dependency native SMT solver (CDCL, EUF, BV, LRA, AX)  |
 | `tarka/backends/no_solver.hpp`  | no             | no        | zero-cost default backend                                        |
 | `tarka/backends/z3_backend.hpp` | no             | yes       | Z3 lowering + solve (guarded `HAS_Z3`)                           |
+| `tarka/native/simplifier.hpp`   | no             | no        | pre-encoding algebraic AST simplification pass                   |
+| `tarka/frontend/smt2_parser.hpp`| no             | no        | zero-allocation SMT-LIB2 script parser and executor              |
 | `tarka/features.hpp`            | no             | no        | theory extractor + capability-mask router                        |
 | `tarka/egraph_opt.hpp`          | no             | no        | intern + reconstruct + `egraph_optimize` (sort-typed round-trip) |
 | `tarka/async.hpp`               | yes            | no        | `SmtTask` + worker pool                                          |

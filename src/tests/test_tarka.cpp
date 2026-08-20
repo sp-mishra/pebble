@@ -18,9 +18,11 @@
 #include "tarka/tarka.hpp"
 #include "tarka/backends/native_backend.hpp"
 #include "tarka/features.hpp"
+#include "tarka/frontend/smt2_parser.hpp"
 
 using namespace tarka;
 using namespace tarka::backend;
+using namespace tarka::frontend;
 
 TEST_CASE("tarka: Term and Sort handle invariants", "[tarka][term]") {
     Context ctx;
@@ -617,5 +619,28 @@ TEST_CASE("tarka native: Assumption-Based Solving & Unsat Core", "[tarka][native
     auto core = solver.get_unsat_core();
     REQUIRE(!core.empty());
 }
+
+TEST_CASE("tarka frontend: SMT-LIB2 Parser Script Execution", "[tarka][frontend][smt2]") {
+    Context ctx;
+    RouterEngine<backend::native> solver;
+    smt2_parser parser(ctx, solver);
+
+    std::string_view smt2_script = R"(
+        (set-logic QF_BV)
+        (declare-const a (_ BitVec 32))
+        (declare-const b (_ BitVec 32))
+        (assert (= (bvadd a b) #x0000000A))
+        (assert (= a #x00000004))
+        (check-sat)
+    )";
+
+    auto parse_res = parser.parse_script(smt2_script);
+    REQUIRE(parse_res.has_value());
+
+    auto sat_res = parser.last_result();
+    REQUIRE(sat_res.has_value());
+    REQUIRE(*sat_res == SatResult::Sat);
+}
+
 
 

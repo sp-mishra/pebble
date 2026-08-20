@@ -20,6 +20,7 @@
 // =============================================================================
 
 #include "tarka/native/ids.hpp"
+#include "containers/associative/SparseSet.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -278,7 +279,7 @@ namespace tarka::native {
 
         std::vector<Lit> tmp_;
         std::vector<Lit> analyze_tmp_;
-        std::vector<bool> seen_;
+        sparseset::SparseSet<std::uint32_t> seen_set_;
 
         // ---- clause storage --------------------------------------------------
 
@@ -428,7 +429,8 @@ namespace tarka::native {
 
         void analyze_and_backjump(ClauseRef confl) {
             analyze_tmp_.clear();
-            seen_.assign(num_vars(), false);
+            seen_set_.reserve(num_vars() + 1);
+            seen_set_.clear();
             analyze_tmp_.push_back(kNullLit); // placeholder for asserting literal
 
             std::uint32_t path_count = 0;
@@ -441,10 +443,11 @@ namespace tarka::native {
                 for (Lit q : ls) {
                     if (p != kNullLit && lit_var(q) == lit_var(p)) continue; // skip resolved pivot
                     const Var v = lit_var(q);
-                    if (!seen_[var_index(v)] && level_[var_index(v)] > 0) {
-                        seen_[var_index(v)] = true;
+                    const std::uint32_t vi = var_index(v);
+                    if (!seen_set_.contains(vi) && level_[vi] > 0) {
+                        seen_set_.insert_or_update(vi);
                         bump_var(v);
-                        if (level_[var_index(v)] >= decision_level()) {
+                        if (level_[vi] >= decision_level()) {
                             ++path_count;
                         } else {
                             analyze_tmp_.push_back(q);
@@ -452,10 +455,10 @@ namespace tarka::native {
                     }
                 }
                 // pick next literal to resolve from the trail
-                while (idx > 0 && !seen_[var_index(lit_var(trail_[--idx]))]) {}
+                while (idx > 0 && !seen_set_.contains(var_index(lit_var(trail_[--idx])))) {}
                 p = trail_[idx];
                 reason = reason_[var_index(lit_var(p))];
-                seen_[var_index(lit_var(p))] = false;
+                (void)seen_set_.remove(var_index(lit_var(p)));
                 --path_count;
             } while (path_count > 0);
 
