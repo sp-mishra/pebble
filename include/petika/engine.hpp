@@ -21,7 +21,6 @@
 #include <vector>
 
 namespace petika {
-
     enum class StorageError : std::uint8_t {
         Success = 0,
         NotFound,
@@ -64,17 +63,16 @@ namespace petika {
         std::span<const std::byte> payload,
         EntryOp op
     ) {
-        // Core operations
-        { engine.put(key, val, lsn) } -> std::same_as<Result<void>>;
-        { engine.get(key) } -> std::same_as<Result<Value>>;
-        { engine.erase(key, lsn) } -> std::same_as<Result<void>>;
-        { engine.contains(key) } -> std::same_as<bool>;
-        { engine.size() } noexcept -> std::same_as<std::size_t>;
-        { engine.empty() } noexcept -> std::same_as<bool>;
-        { engine.clear(lsn) } -> std::same_as<Result<void>>;
+            // Core operations
+            { engine.put(key, val, lsn) } -> std::same_as<Result<void>>;
+            { engine.get(key) } -> std::same_as<Result<Value>>;
+            { engine.erase(key, lsn) } -> std::same_as<Result<void>>;
+            { engine.contains(key) } -> std::same_as<bool>;
+            { engine.size() } noexcept -> std::same_as<std::size_t>;
+            { engine.empty() } noexcept -> std::same_as<bool>;
+            { engine.clear(lsn) } -> std::same_as<Result<void>>;
 
-        // Log record replay for recovery
-        { engine.apply_log_record(op, key, val, lsn) } -> std::same_as<Result<void>>;
-    };
-
+            // Log record replay for recovery
+            { engine.apply_log_record(op, key, val, lsn) } -> std::same_as<Result<void>>;
+        };
 } // namespace petika

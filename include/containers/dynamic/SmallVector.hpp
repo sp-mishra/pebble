@@ -246,7 +246,7 @@ namespace containers::dynamic {
         template <std::input_iterator It>
         SmallVector(It first, It last, const Alloc& a = Alloc{})
             : inline_{}, data_{inline_ptr()}, cap_{kInlineCap}, alloc_{a} {
-            if constexpr (std::forward_iterator<It>) {
+            if constexpr (std::forward_iterator < It >) {
                 reserve(static_cast<size_type>(std::distance(first, last)));
             }
             for (; first != last; ++first) emplace_back(*first);

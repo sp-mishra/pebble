@@ -24,7 +24,6 @@
 #include <vector>
 
 namespace kosha::adapter {
-
     // ============================================================================
     // Extended error codes for Nitya WAL adapter operations.
     // ============================================================================
@@ -61,8 +60,7 @@ namespace kosha::adapter {
     template <
         typename CacheType,
         typename Serializer = NityaStringSerializer,
-        typename WalEngine = nitya::wal<>
-    >
+        typename WalEngine = nitya::wal<>>
         requires NityaSerializerFor<Serializer,
                                     typename CacheType::key_type,
                                     typename CacheType::value_type>
@@ -128,10 +126,12 @@ namespace kosha::adapter {
                 if (k_sv == target_k) {
                     if (op == OpType::Put) {
                         found_val = Serializer::deserialize_value(v_sv);
-                    } else if (op == OpType::Erase || op == OpType::Clear) {
+                    }
+                    else if (op == OpType::Erase || op == OpType::Clear) {
                         found_val = std::nullopt;
                     }
-                } else if (op == OpType::Clear) {
+                }
+                else if (op == OpType::Clear) {
                     found_val = std::nullopt;
                 }
             }
@@ -191,10 +191,12 @@ namespace kosha::adapter {
                     value_type v = Serializer::deserialize_value(v_sv);
                     (void)cache_.put(std::move(k), std::move(v));
                     ++loaded;
-                } else if (op == OpType::Erase) {
+                }
+                else if (op == OpType::Erase) {
                     key_type k = Serializer::deserialize_key(k_sv);
                     cache_.erase(k);
-                } else if (op == OpType::Clear) {
+                }
+                else if (op == OpType::Clear) {
                     cache_.clear();
                     loaded = 0;
                 }
@@ -270,8 +272,7 @@ namespace kosha::adapter {
 
     template <typename K, typename V, typename Ser = NityaStringSerializer>
     using NityaLRUCache = NityaAdapter<core::Cache<K, V, core::LRUPolicy<K>,
-                                                  core::FlatHashStorage<K, V>>, Ser>;
-
+                                                   core::FlatHashStorage<K, V>>, Ser>;
 } // namespace kosha::adapter
 
 #endif // __has_include("nitya/nitya.hpp")

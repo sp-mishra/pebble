@@ -21,7 +21,6 @@
 #include <utility>
 
 namespace kosha::adapter {
-
     enum class PetikaAdapterError : std::uint8_t {
         NotFound,
         BackendError,
@@ -120,5 +119,4 @@ namespace kosha::adapter {
                                          petika::Petika<petika::JournaledSkipEngine<K, V, petika::LexicalComparator>,
                                                         petika::BinarySerializer,
                                                         petika::LexicalComparator>>;
-
 } // namespace kosha::adapter

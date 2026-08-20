@@ -27,7 +27,6 @@
 #include <vector>
 
 namespace petika {
-
     template <
         typename Key,
         typename Value,
@@ -137,12 +136,12 @@ namespace petika {
         // ------------------------------------------------------------------------
         Result<void> apply_log_record(EntryOp op, const Key& key, const Value& val, nitya::lsn_t lsn) {
             switch (op) {
-                case EntryOp::Put:
-                    return put(key, val, lsn);
-                case EntryOp::Delete:
-                    return erase(key, lsn);
-                case EntryOp::Clear:
-                    return clear(lsn);
+            case EntryOp::Put:
+                return put(key, val, lsn);
+            case EntryOp::Delete:
+                return erase(key, lsn);
+            case EntryOp::Clear:
+                return clear(lsn);
             }
             return {};
         }
@@ -151,5 +150,4 @@ namespace petika {
         IndexType list_;
         mutable std::shared_mutex mutex_;
     };
-
 } // namespace petika

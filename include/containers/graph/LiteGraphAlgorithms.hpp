@@ -141,7 +141,7 @@ namespace litegraph {
         csr.targets_.resize(arc_count);
         csr.edge_ids_.resize(arc_count);
         csr.edge_data_.resize(arc_count);
-        if constexpr (std::is_arithmetic_v<EdgeT>) {
+        if constexpr (std::is_arithmetic_v < EdgeT >) {
             csr.edge_weights_enabled_ = true;
             csr.edge_weights_.resize(arc_count);
         }
@@ -162,7 +162,7 @@ namespace litegraph {
                 csr.targets_[pos] = NodeId{*compact_target};
                 csr.edge_ids_[pos] = eid;
                 csr.edge_data_[pos] = edge.data;
-                if constexpr (std::is_arithmetic_v<EdgeT>) {
+                if constexpr (std::is_arithmetic_v < EdgeT >) {
                     csr.edge_weights_[pos] = static_cast<double>(edge.data);
                 }
             }
@@ -424,10 +424,10 @@ namespace litegraph {
     };
 
     template <LiteGraphModel GraphT,
-        class Cost,
-        class WeightFn,
-        class Combine = std::plus<Cost>,
-        class Less = std::less<>>
+              class Cost,
+              class WeightFn,
+              class Combine = std::plus<Cost>,
+              class Less = std::less<>>
         requires std::invocable<WeightFn, const typename GraphT::edge_type&>
     DijkstraPathResult<Cost>
     dijkstra_path(const GraphT& g, NodeId source, WeightFn weight_fn,
@@ -492,8 +492,8 @@ namespace litegraph {
      * @return A pair containing a vector of distances (g-costs) from the source and a vector of predecessors to reconstruct the path.
      */
     template <LiteGraphModel GraphT,
-        std::invocable<const typename GraphT::edge_type&> WeightFn,
-        std::invocable<NodeId> HeuristicFn>
+              std::invocable<const typename GraphT::edge_type&> WeightFn,
+              std::invocable<NodeId> HeuristicFn>
     auto a_star_search(
         const GraphT& g,
         NodeId source,
@@ -815,7 +815,7 @@ namespace litegraph {
                     }
                 }
 
-                if constexpr (std::is_same_v<typename PatternGraph::directed_tag, Directed>) {
+                if constexpr (std::is_same_v < typename PatternGraph::directed_tag, Directed >) {
                     for (auto eid : g1.in_edges(p_id)) {
                         const auto& edge1 = g1.get_edge(eid);
                         if (const NodeId other1 = edge1.from; core_1[other1.value]) {
@@ -839,7 +839,7 @@ namespace litegraph {
                 for (auto e2id : g2.out_edges(t_id)) {
                     if (core_2[get_other_node(t_id, g2.get_edge(e2id)).value] == std::nullopt) term_t_out++;
                 }
-                if constexpr (std::is_same_v<typename TargetGraph::directed_tag, Directed>) {
+                if constexpr (std::is_same_v < typename TargetGraph::directed_tag, Directed >) {
                     for (auto e2id : g2.in_edges(t_id)) {
                         if (core_2[g2.get_edge(e2id).from.value] == std::nullopt) term_t_in++;
                     }
@@ -2013,12 +2013,12 @@ namespace litegraph {
 
     // Both graph parameters are already constrained with LiteGraphModel.
     template <LiteGraphModel Graph1, LiteGraphModel Graph2,
-        std::invocable<const typename Graph1::node_type&, const typename Graph2::node_type&> NodeSubstFn,
-        std::invocable<const typename Graph2::node_type&> NodeInsFn,
-        std::invocable<const typename Graph1::node_type&> NodeDelFn,
-        std::invocable<const typename Graph1::edge_type&, const typename Graph2::edge_type&> EdgeSubstFn,
-        std::invocable<const typename Graph2::edge_type&> EdgeInsFn,
-        std::invocable<const typename Graph1::edge_type&> EdgeDelFn>
+              std::invocable<const typename Graph1::node_type&, const typename Graph2::node_type&> NodeSubstFn,
+              std::invocable<const typename Graph2::node_type&> NodeInsFn,
+              std::invocable<const typename Graph1::node_type&> NodeDelFn,
+              std::invocable<const typename Graph1::edge_type&, const typename Graph2::edge_type&> EdgeSubstFn,
+              std::invocable<const typename Graph2::edge_type&> EdgeInsFn,
+              std::invocable<const typename Graph1::edge_type&> EdgeDelFn>
     double graph_edit_distance(
         const Graph1& g1,
         const Graph2& g2,
@@ -2456,7 +2456,7 @@ namespace litegraph {
 
         // Parallel shortest path computation using std::expected for error handling
         template <LiteGraphModel GraphT, typename ExecPolicy,
-            std::invocable<const typename GraphT::edge_type&> WeightFn>
+                  std::invocable<const typename GraphT::edge_type&> WeightFn>
             requires std::is_execution_policy_v<std::remove_cvref_t<ExecPolicy>>
         std::expected<std::pair<std::vector<double>, std::vector<std::optional<NodeId>>>, GraphError>
         parallel_dijkstra(ExecPolicy&& policy, const GraphT& g, NodeId source, WeightFn&& weight_fn) {

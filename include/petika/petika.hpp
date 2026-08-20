@@ -45,7 +45,6 @@
 #include <vector>
 
 namespace petika {
-
     // ============================================================================
     // Options & Configuration
     // ============================================================================
@@ -94,7 +93,8 @@ namespace petika {
                 if (m.op == EntryOp::Put) {
                     auto res = store_.put(m.key, m.value);
                     if (!res) return std::unexpected(res.error());
-                } else if (m.op == EntryOp::Delete) {
+                }
+                else if (m.op == EntryOp::Delete) {
                     auto res = store_.erase(m.key);
                     if (!res) return std::unexpected(res.error());
                 }
@@ -145,11 +145,10 @@ namespace petika {
     // ============================================================================
     template <
         typename Engine,
-        typename Serializer        = StringSerializer,
-        typename Comparator        = LexicalComparator,
-        typename DurabilityPolicy  = nitya::wal<>,
-        typename TelemetryPolicy   = nitya::nadi_telemetry
-    >
+        typename Serializer = StringSerializer,
+        typename Comparator = LexicalComparator,
+        typename DurabilityPolicy = nitya::wal<>,
+        typename TelemetryPolicy = nitya::nadi_telemetry>
     class Petika {
     public:
         using key_type = typename Engine::key_type;
@@ -305,7 +304,8 @@ namespace petika {
                 if (op == EntryOp::Put) {
                     key = Serializer::deserialize_key(k_sv);
                     val = Serializer::deserialize_value(v_sv);
-                } else if (op == EntryOp::Delete) {
+                }
+                else if (op == EntryOp::Delete) {
                     key = Serializer::deserialize_key(k_sv);
                 }
 
@@ -361,5 +361,4 @@ namespace petika {
     using StringSkipStore = Petika<JournaledSkipEngine<std::string, std::string, LexicalComparator>,
                                    StringSerializer,
                                    LexicalComparator>;
-
 } // namespace petika

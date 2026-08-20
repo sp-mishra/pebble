@@ -16,7 +16,6 @@
 #include <vector>
 
 namespace petika {
-
     // ============================================================================
     // § 1  Serializer Concept & Implementations
     // ============================================================================
@@ -86,7 +85,8 @@ namespace petika {
         static std::vector<std::byte> encode(EntryOp op, std::string_view k, std::string_view v) {
             const std::uint32_t k_len = static_cast<std::uint32_t>(k.size());
             const std::uint32_t v_len = static_cast<std::uint32_t>(v.size());
-            const std::size_t total = sizeof(std::uint8_t) + sizeof(std::uint32_t) + k_len + sizeof(std::uint32_t) + v_len;
+            const std::size_t total = sizeof(std::uint8_t) + sizeof(std::uint32_t) + k_len + sizeof(std::uint32_t) +
+                v_len;
 
             std::vector<std::byte> buf(total);
             std::byte* ptr = buf.data();
@@ -148,5 +148,4 @@ namespace petika {
             return a < b;
         }
     };
-
 } // namespace petika

@@ -637,8 +637,9 @@ namespace litegraph {
         // Memory-efficient batch operations
         template <std::ranges::input_range Range>
         void batch_add_nodes(Range&& node_data_range)
-            requires std::convertible_to<std::ranges::range_value_t<Range>, NodeT
-            > {
+                 requires std::convertible_to < std::ranges::range_value_t < Range >, NodeT
+        >
+ {
             const auto size_hint = std::ranges::size(node_data_range);
             nodes_.reserve(nodes_.size() + size_hint);
 

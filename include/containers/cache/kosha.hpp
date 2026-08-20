@@ -790,14 +790,15 @@ namespace kosha::core {
         using MapAlloc = detail::rebind_alloc_t<Alloc, std::pair<const Key, Value>>;
 
     public:
-        explicit NodeStorage(
-            std::size_t /* initial_cap */  =
-                16
-            ,
-            Hash h = {}, KeyEq e = {}, Alloc a = {}
+        explicit NodeStorage (
+            std::size_t /* initial_cap */ =
+        16
+        ,
+        Hash h = {}, KeyEq e = {}, Alloc a = {}
         )
-            :
-            map_{0, h, e, MapAlloc{a}} {}
+        :
+        map_ { 0, h, e, MapAlloc{a} }
+ {}
 
         Value* find(const auto& k) {
             auto it = map_.find(k);
@@ -929,12 +930,13 @@ namespace kosha::core {
         }
 
         template <std::ranges::input_range R>
-            requires std::convertible_to<std::ranges::range_value_t<R>
+            requires std::convertible_to < std::ranges::range_value_t < R >
 
 
-                                         ,
-                                         Key
-            >
+
+        ,
+        Key
+        >
         std::size_t erase_range(R&& keys) {
             std::size_t n = 0;
             for (const Key& k : keys) n += erase(k) ? 1 : 0;

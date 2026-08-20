@@ -36,7 +36,6 @@
 #include <utility>
 
 namespace containers {
-
     // ============================================================================
     // Concepts
     // ============================================================================
@@ -83,24 +82,23 @@ namespace containers {
         typename Compare = std::less<>,
         std::size_t MaxLevel = 16,
         typename Allocator = std::allocator<std::pair<const Key, Value>>,
-        typename PromotionPolicy = xorshift_promotion_policy<MaxLevel>
-    >
+        typename PromotionPolicy = xorshift_promotion_policy<MaxLevel>>
         requires PromotionPolicyConcept<PromotionPolicy> &&
-                 ComparatorConcept<Compare, Key>
+        ComparatorConcept<Compare, Key>
     class SkipList {
     public:
         // Standard container member types
-        using key_type        = Key;
-        using mapped_type     = Value;
-        using value_type      = std::pair<const Key, Value>;
-        using key_compare     = Compare;
-        using size_type       = std::size_t;
+        using key_type = Key;
+        using mapped_type = Value;
+        using value_type = std::pair<const Key, Value>;
+        using key_compare = Compare;
+        using size_type = std::size_t;
         using difference_type = std::ptrdiff_t;
-        using allocator_type  = Allocator;
-        using reference       = value_type&;
+        using allocator_type = Allocator;
+        using reference = value_type&;
         using const_reference = const value_type&;
-        using pointer         = typename std::allocator_traits<allocator_type>::pointer;
-        using const_pointer   = typename std::allocator_traits<allocator_type>::const_pointer;
+        using pointer = typename std::allocator_traits<allocator_type>::pointer;
+        using const_pointer = typename std::allocator_traits<allocator_type>::const_pointer;
 
         static_assert(MaxLevel > 0 && MaxLevel <= 64,
                       "SkipList MaxLevel must be in [1, 64]");
@@ -109,6 +107,7 @@ namespace containers {
         struct value_compare {
             key_compare comp;
             constexpr explicit value_compare(key_compare c) noexcept : comp{std::move(c)} {}
+
             [[nodiscard]] bool operator()(const value_type& a, const value_type& b) const {
                 return comp(a.first, b.first);
             }
@@ -128,9 +127,9 @@ namespace containers {
             constexpr explicit NodeBase(std::size_t lvl = 1) noexcept
                 : level(static_cast<std::uint8_t>(lvl)) {}
 
-            NodeBase(const NodeBase&)            = delete;
+            NodeBase(const NodeBase&) = delete;
             NodeBase& operator=(const NodeBase&) = delete;
-            NodeBase(NodeBase&&) noexcept        = default;
+            NodeBase(NodeBase&&) noexcept = default;
             NodeBase& operator=(NodeBase&&) noexcept = default;
             ~NodeBase() = default;
 
@@ -139,6 +138,7 @@ namespace containers {
                 return reinterpret_cast<NodeBase**>(
                     reinterpret_cast<std::byte*>(this) + sizeof(NodeBase));
             }
+
             [[nodiscard]] NodeBase* const* forward_ptrs() const noexcept {
                 return reinterpret_cast<NodeBase* const*>(
                     reinterpret_cast<const std::byte*>(this) + sizeof(NodeBase));
@@ -147,6 +147,7 @@ namespace containers {
             [[nodiscard]] NodeBase* get_forward(std::size_t idx) const noexcept {
                 return forward_ptrs()[idx];
             }
+
             void set_forward(std::size_t idx, NodeBase* n) noexcept {
                 forward_ptrs()[idx] = n;
             }
@@ -171,6 +172,7 @@ namespace containers {
             return reinterpret_cast<value_type*>(
                 reinterpret_cast<std::byte*>(base) + value_offset_for_level(base->level));
         }
+
         [[nodiscard]] static const value_type* get_value_ptr(const NodeBase* base) noexcept {
             return reinterpret_cast<const value_type*>(
                 reinterpret_cast<const std::byte*>(base) + value_offset_for_level(base->level));
@@ -196,7 +198,7 @@ namespace containers {
         // -----------------------------------------------------------------------
         // Rebound byte allocator for variable-sized raw allocations
         // -----------------------------------------------------------------------
-        using byte_allocator_type   = typename std::allocator_traits<allocator_type>::template rebind_alloc<std::byte>;
+        using byte_allocator_type = typename std::allocator_traits<allocator_type>::template rebind_alloc<std::byte>;
         using byte_allocator_traits = std::allocator_traits<byte_allocator_type>;
 
     public:
@@ -206,21 +208,22 @@ namespace containers {
         class iterator {
         public:
             using iterator_category = std::forward_iterator_tag;
-            using value_type        = SkipList::value_type;
-            using difference_type   = std::ptrdiff_t;
-            using pointer           = value_type*;
-            using reference         = value_type&;
+            using value_type = SkipList::value_type;
+            using difference_type = std::ptrdiff_t;
+            using pointer = value_type*;
+            using reference = value_type&;
 
             constexpr iterator() noexcept : node_{nullptr} {}
             constexpr explicit iterator(NodeBase* n) noexcept : node_{n} {}
 
-            [[nodiscard]] reference operator*()  const noexcept { return *get_value_ptr(node_); }
-            [[nodiscard]] pointer   operator->() const noexcept { return  get_value_ptr(node_); }
+            [[nodiscard]] reference operator*() const noexcept { return *get_value_ptr(node_); }
+            [[nodiscard]] pointer operator->() const noexcept { return get_value_ptr(node_); }
 
             iterator& operator++() noexcept {
                 if (node_) node_ = node_->get_forward(0);
                 return *this;
             }
+
             iterator operator++(int) noexcept {
                 iterator tmp = *this;
                 ++(*this);
@@ -238,22 +241,23 @@ namespace containers {
         class const_iterator {
         public:
             using iterator_category = std::forward_iterator_tag;
-            using value_type        = const SkipList::value_type;
-            using difference_type   = std::ptrdiff_t;
-            using pointer           = const value_type*;
-            using reference         = const value_type&;
+            using value_type = const SkipList::value_type;
+            using difference_type = std::ptrdiff_t;
+            using pointer = const value_type*;
+            using reference = const value_type&;
 
             constexpr const_iterator() noexcept : node_{nullptr} {}
             constexpr explicit const_iterator(const NodeBase* n) noexcept : node_{n} {}
             constexpr /* implicit */ const_iterator(iterator it) noexcept : node_{it.node()} {} // NOLINT
 
-            [[nodiscard]] reference operator*()  const noexcept { return *get_value_ptr(node_); }
-            [[nodiscard]] pointer   operator->() const noexcept { return  get_value_ptr(node_); }
+            [[nodiscard]] reference operator*() const noexcept { return *get_value_ptr(node_); }
+            [[nodiscard]] pointer operator->() const noexcept { return get_value_ptr(node_); }
 
             const_iterator& operator++() noexcept {
                 if (node_) node_ = node_->get_forward(0);
                 return *this;
             }
+
             const_iterator operator++(int) noexcept {
                 const_iterator tmp = *this;
                 ++(*this);
@@ -277,25 +281,23 @@ namespace containers {
             : SkipList(Compare{}, alloc, PromotionPolicy{}) {}
 
         explicit SkipList(
-            Compare          comp,
-            allocator_type   alloc            = allocator_type{},
-            PromotionPolicy  promotion_policy = PromotionPolicy{})
+            Compare comp,
+            allocator_type alloc = allocator_type{},
+            PromotionPolicy promotion_policy = PromotionPolicy{})
             : comp_{std::move(comp)}
-            , alloc_{std::move(alloc)}
-            , promotion_policy_{std::move(promotion_policy)}
-            , head_{}
-            , current_level_{1}
-            , size_{0}
-            , rng_state_{0x9E3779B97F4A7C15ULL}
-        {
+              , alloc_{std::move(alloc)}
+              , promotion_policy_{std::move(promotion_policy)}
+              , head_{}
+              , current_level_{1}
+              , size_{0}
+              , rng_state_{0x9E3779B97F4A7C15ULL} {
             head_.fill(nullptr);
         }
 
         // Initializer-list constructor
         SkipList(std::initializer_list<value_type> init,
                  const allocator_type& alloc = allocator_type{})
-            : SkipList(Compare{}, alloc, PromotionPolicy{})
-        {
+            : SkipList(Compare{}, alloc, PromotionPolicy{}) {
             for (const auto& kv : init) {
                 insert(kv);
             }
@@ -307,13 +309,12 @@ namespace containers {
 
         SkipList(SkipList&& other) noexcept
             : comp_{std::move(other.comp_)}
-            , alloc_{std::move(other.alloc_)}
-            , promotion_policy_{std::move(other.promotion_policy_)}
-            , head_{}
-            , current_level_{other.current_level_}
-            , size_{other.size_}
-            , rng_state_{other.rng_state_}
-        {
+              , alloc_{std::move(other.alloc_)}
+              , promotion_policy_{std::move(other.promotion_policy_)}
+              , head_{}
+              , current_level_{other.current_level_}
+              , size_{other.size_}
+              , rng_state_{other.rng_state_} {
             head_ = other.head_;
             other.head_.fill(nullptr);
             other.current_level_ = 1;
@@ -322,48 +323,46 @@ namespace containers {
 
         SkipList(const SkipList& other)
             : comp_{other.comp_}
-            , alloc_{byte_allocator_traits::select_on_container_copy_construction(other.alloc_)}
-            , promotion_policy_{other.promotion_policy_}
-            , head_{}
-            , current_level_{1}
-            , size_{0}
-            , rng_state_{other.rng_state_}
-        {
+              , alloc_{byte_allocator_traits::select_on_container_copy_construction(other.alloc_)}
+              , promotion_policy_{other.promotion_policy_}
+              , head_{}
+              , current_level_{1}
+              , size_{0}
+              , rng_state_{other.rng_state_} {
             head_.fill(nullptr);
             for (const auto& kv : other) { insert(kv); }
         }
 
         SkipList(const SkipList& other, const allocator_type& alloc)
             : comp_{other.comp_}
-            , alloc_{alloc}
-            , promotion_policy_{other.promotion_policy_}
-            , head_{}
-            , current_level_{1}
-            , size_{0}
-            , rng_state_{other.rng_state_}
-        {
+              , alloc_{alloc}
+              , promotion_policy_{other.promotion_policy_}
+              , head_{}
+              , current_level_{1}
+              , size_{0}
+              , rng_state_{other.rng_state_} {
             head_.fill(nullptr);
             for (const auto& kv : other) { insert(kv); }
         }
 
         SkipList(SkipList&& other, const allocator_type& alloc)
             : comp_{std::move(other.comp_)}
-            , alloc_{alloc}
-            , promotion_policy_{std::move(other.promotion_policy_)}
-            , head_{}
-            , current_level_{1}
-            , size_{0}
-            , rng_state_{other.rng_state_}
-        {
+              , alloc_{alloc}
+              , promotion_policy_{std::move(other.promotion_policy_)}
+              , head_{}
+              , current_level_{1}
+              , size_{0}
+              , rng_state_{other.rng_state_} {
             head_.fill(nullptr);
             if (alloc_ == other.alloc_) {
-                head_          = other.head_;
+                head_ = other.head_;
                 current_level_ = other.current_level_;
-                size_          = other.size_;
+                size_ = other.size_;
                 other.head_.fill(nullptr);
                 other.current_level_ = 1;
-                other.size_          = 0;
-            } else {
+                other.size_ = 0;
+            }
+            else {
                 for (auto&& kv : other) { insert(std::move(kv)); }
                 other.clear();
             }
@@ -387,33 +386,34 @@ namespace containers {
         // Move assignment
         SkipList& operator=(SkipList&& other) noexcept(
             byte_allocator_traits::propagate_on_container_move_assignment::value ||
-            byte_allocator_traits::is_always_equal::value)
-        {
+            byte_allocator_traits::is_always_equal::value) {
             if (this != &other) {
                 auto steal = [&]() noexcept {
                     clear();
-                    head_          = other.head_;
+                    head_ = other.head_;
                     current_level_ = other.current_level_;
-                    size_          = other.size_;
-                    rng_state_     = other.rng_state_;
-                    comp_          = std::move(other.comp_);
+                    size_ = other.size_;
+                    rng_state_ = other.rng_state_;
+                    comp_ = std::move(other.comp_);
                     promotion_policy_ = std::move(other.promotion_policy_);
                     other.head_.fill(nullptr);
                     other.current_level_ = 1;
-                    other.size_          = 0;
+                    other.size_ = 0;
                 };
 
                 if constexpr (byte_allocator_traits::propagate_on_container_move_assignment::value) {
                     clear();
                     alloc_ = std::move(other.alloc_);
                     steal();
-                } else if (alloc_ == other.alloc_) {
+                }
+                else if (alloc_ == other.alloc_) {
                     steal();
-                } else {
+                }
+                else {
                     clear();
-                    comp_             = std::move(other.comp_);
+                    comp_ = std::move(other.comp_);
                     promotion_policy_ = std::move(other.promotion_policy_);
-                    rng_state_        = other.rng_state_;
+                    rng_state_ = other.rng_state_;
                     for (auto&& kv : other) { insert(std::move(kv)); }
                     other.clear();
                 }
@@ -560,8 +560,7 @@ namespace containers {
         void swap(SkipList& other) noexcept(
             std::is_nothrow_swappable_v<Compare> &&
             byte_allocator_traits::is_always_equal::value &&
-            std::is_nothrow_swappable_v<PromotionPolicy>)
-        {
+            std::is_nothrow_swappable_v<PromotionPolicy>) {
             using std::swap;
             swap(comp_, other.comp_);
             if constexpr (byte_allocator_traits::propagate_on_container_swap::value) {
@@ -636,6 +635,7 @@ namespace containers {
         [[nodiscard]] iterator lower_bound(const Key& key) noexcept {
             return lower_bound_impl(key);
         }
+
         [[nodiscard]] const_iterator lower_bound(const Key& key) const noexcept {
             return lower_bound_impl(key);
         }
@@ -655,6 +655,7 @@ namespace containers {
         [[nodiscard]] iterator upper_bound(const Key& key) noexcept {
             return upper_bound_impl(key);
         }
+
         [[nodiscard]] const_iterator upper_bound(const Key& key) const noexcept {
             return upper_bound_impl(key);
         }
@@ -674,6 +675,7 @@ namespace containers {
         [[nodiscard]] std::pair<iterator, iterator> equal_range(const Key& key) noexcept {
             return {lower_bound(key), upper_bound(key)};
         }
+
         [[nodiscard]] std::pair<const_iterator, const_iterator> equal_range(const Key& key) const noexcept {
             return {lower_bound(key), upper_bound(key)};
         }
@@ -693,43 +695,43 @@ namespace containers {
         // -----------------------------------------------------------------------
         // Iterators & Capacity
         // -----------------------------------------------------------------------
-        [[nodiscard]] iterator       begin()  noexcept       { return iterator{head_[0]}; }
-        [[nodiscard]] iterator       end()    noexcept       { return iterator{nullptr}; }
-        [[nodiscard]] const_iterator begin()  const noexcept { return const_iterator{head_[0]}; }
-        [[nodiscard]] const_iterator end()    const noexcept { return const_iterator{nullptr}; }
+        [[nodiscard]] iterator begin() noexcept { return iterator{head_[0]}; }
+        [[nodiscard]] iterator end() noexcept { return iterator{nullptr}; }
+        [[nodiscard]] const_iterator begin() const noexcept { return const_iterator{head_[0]}; }
+        [[nodiscard]] const_iterator end() const noexcept { return const_iterator{nullptr}; }
         [[nodiscard]] const_iterator cbegin() const noexcept { return const_iterator{head_[0]}; }
-        [[nodiscard]] const_iterator cend()   const noexcept { return const_iterator{nullptr}; }
+        [[nodiscard]] const_iterator cend() const noexcept { return const_iterator{nullptr}; }
 
-        [[nodiscard]] size_type size()  const noexcept { return size_; }
-        [[nodiscard]] bool      empty() const noexcept { return size_ == 0; }
+        [[nodiscard]] size_type size() const noexcept { return size_; }
+        [[nodiscard]] bool empty() const noexcept { return size_ == 0; }
 
         /// Maximum number of elements supportable by the byte-rebound allocator.
         [[nodiscard]] size_type max_size() const noexcept {
             // Each element requires at least total_allocation_size(1) bytes through
             // the byte allocator. Use the allocator's own max_size as an upper bound.
             const size_type alloc_max = byte_allocator_traits::max_size(alloc_);
-            const size_type per_elem  = total_allocation_size(1);
+            const size_type per_elem = total_allocation_size(1);
             return alloc_max / per_elem;
         }
 
         // -----------------------------------------------------------------------
         // Observers
         // -----------------------------------------------------------------------
-        [[nodiscard]] key_compare   key_comp()   const noexcept { return comp_; }
-        [[nodiscard]] value_compare value_comp()  const noexcept { return value_compare{comp_}; }
+        [[nodiscard]] key_compare key_comp() const noexcept { return comp_; }
+        [[nodiscard]] value_compare value_comp() const noexcept { return value_compare{comp_}; }
         [[nodiscard]] allocator_type get_allocator() const noexcept { return allocator_type{alloc_}; }
 
     private:
         // -----------------------------------------------------------------------
         // Member data
         // -----------------------------------------------------------------------
-        Compare                            comp_;
-        byte_allocator_type                alloc_;
-        PromotionPolicy                    promotion_policy_;
-        std::array<NodeBase*, MaxLevel>    head_;   // Direct forward-pointer array; NO heap allocation on construction
-        std::size_t                        current_level_{1};
-        std::size_t                        size_{0};
-        std::uint64_t                      rng_state_{0x9E3779B97F4A7C15ULL};
+        Compare comp_;
+        byte_allocator_type alloc_;
+        PromotionPolicy promotion_policy_;
+        std::array<NodeBase*, MaxLevel> head_; // Direct forward-pointer array; NO heap allocation on construction
+        std::size_t current_level_{1};
+        std::size_t size_{0};
+        std::uint64_t rng_state_{0x9E3779B97F4A7C15ULL};
 
         // -----------------------------------------------------------------------
         // Internal helpers
@@ -740,8 +742,8 @@ namespace containers {
 
         template <typename K, typename V>
         [[nodiscard]] NodeBase* allocate_node(K&& key, V&& value, std::size_t lvl) {
-            const std::size_t bytes   = total_allocation_size(lvl);
-            std::byte*        raw_mem = byte_allocator_traits::allocate(alloc_, bytes);
+            const std::size_t bytes = total_allocation_size(lvl);
+            std::byte* raw_mem = byte_allocator_traits::allocate(alloc_, bytes);
 
             // Construct NodeBase via std::construct_at
             NodeBase* base = std::construct_at(reinterpret_cast<NodeBase*>(raw_mem), lvl);
@@ -769,7 +771,7 @@ namespace containers {
         }
 
         void deallocate_node(NodeBase* node) noexcept {
-            const std::size_t lvl   = node->level;
+            const std::size_t lvl = node->level;
             const std::size_t bytes = total_allocation_size(lvl);
 
             std::destroy_at(get_value_ptr(node));
@@ -833,7 +835,8 @@ namespace containers {
                 // predecessor->forward[i] = new_node
                 if (pred) {
                     pred->set_forward(i, new_node);
-                } else {
+                }
+                else {
                     head_[i] = new_node;
                 }
             }
@@ -885,13 +888,14 @@ namespace containers {
             }
 
             for (std::size_t i = 0; i < current_level_; ++i) {
-                NodeBase* pred      = update[i]; // null == head
+                NodeBase* pred = update[i]; // null == head
                 NodeBase* pred_next = pred ? pred->get_forward(i) : head_[i];
                 if (pred_next != victim) break;
                 NodeBase* victim_next = victim->get_forward(i);
                 if (pred) {
                     pred->set_forward(i, victim_next);
-                } else {
+                }
+                else {
                     head_[i] = victim_next;
                 }
             }
@@ -963,8 +967,7 @@ namespace containers {
               typename Allocator, typename PromotionPolicy>
     void swap(SkipList<Key, Value, Compare, MaxLevel, Allocator, PromotionPolicy>& a,
               SkipList<Key, Value, Compare, MaxLevel, Allocator, PromotionPolicy>& b)
-        noexcept(noexcept(a.swap(b)))
-    {
+        noexcept(noexcept(a.swap(b))) {
         a.swap(b);
     }
 
@@ -975,10 +978,9 @@ namespace containers {
         template <
             typename Key,
             typename Value,
-            typename Compare       = std::less<>,
-            std::size_t MaxLevel   = 16,
-            typename PromotionPolicy = xorshift_promotion_policy<MaxLevel>
-        >
+            typename Compare = std::less<>,
+            std::size_t MaxLevel = 16,
+            typename PromotionPolicy = xorshift_promotion_policy<MaxLevel>>
         using SkipList = containers::SkipList<
             Key,
             Value,
@@ -988,5 +990,4 @@ namespace containers {
             PromotionPolicy
         >;
     } // namespace pmr
-
 } // namespace containers

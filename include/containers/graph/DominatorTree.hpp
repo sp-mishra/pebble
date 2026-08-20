@@ -132,7 +132,7 @@ namespace litegraph {
         std::vector<NodeId> postorder;
         postorder.reserve(g.node_count());
 
-        std::function<void(NodeId)> dfs = [&](NodeId u) {
+        std::function < void(NodeId) > dfs = [&](NodeId u) {
             reachable[u.value] = true;
             for (const auto v : g.neighbors(u)) {
                 if (!reachable[v.value]) {
@@ -302,16 +302,16 @@ namespace litegraph {
             if (!dom_node) [[unlikely]] return result;
 
             // Collect all descendants
-            std::function<void(const typename NAryTree<NodeT>::TreeNode*)> collect_descendants =
+            std::function < void(const typename NAryTree<NodeT>::TreeNode *) > collect_descendants =
                 [&](const auto* node) {
-                if (node != dom_node) {
-                    // Don't include the dominator itself
-                    result.push_back(node->data);
-                }
-                for (const auto* child : node->children) {
-                    collect_descendants(child);
-                }
-            };
+                    if (node != dom_node) {
+                        // Don't include the dominator itself
+                        result.push_back(node->data);
+                    }
+                    for (const auto* child : node->children) {
+                        collect_descendants(child);
+                    }
+                };
 
             collect_descendants(dom_node);
             return result;

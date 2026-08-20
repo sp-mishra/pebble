@@ -678,7 +678,7 @@ namespace lg {
             }
             if (count_ < MaxCount) {
                 ++count_;
-                std::forward<Fn>(fn)();
+                std::forward < Fn > (fn)();
             }
         }
 

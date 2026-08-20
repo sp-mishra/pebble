@@ -715,7 +715,7 @@ namespace smriti {
         template <typename T>
         class OwnerHandle {
             T* ptr_{};
-            std::function<void(void *, std::size_t)> deleter_;
+            std::function<void(void*, std::size_t)> deleter_;
             std::size_t size_{};
 
         public:

@@ -1263,7 +1263,7 @@ private:
     map_recursive(const TreeNode* node, F&& func) const {
         if (!node) return nullptr;
 
-        auto new_node = std::make_unique<typename NAryTree<NewT, Metadata, Container>::TreeNode>(
+        auto new_node = std::make_unique < typename NAryTree<NewT, Metadata, Container>::TreeNode > (
             nullptr, node->node_id, node->metadata, func(node->data));
 
         for (const auto& child : node->children) {

@@ -276,14 +276,14 @@ namespace kosha::adapter {
             int rc = mdb_env_create(&env_);
             if (rc != MDB_SUCCESS)
                 throw std::runtime_error("LMDBAdapter: failed to create env: " +
-                                         std::string(mdb_strerror(rc)));
+                    std::string(mdb_strerror(rc)));
 
             if (opts_.map_size > 0) {
                 rc = mdb_env_set_mapsize(env_, opts_.map_size);
                 if (rc != MDB_SUCCESS) {
                     close_env();
                     throw std::runtime_error("LMDBAdapter: failed to set mapsize: " +
-                                             std::string(mdb_strerror(rc)));
+                        std::string(mdb_strerror(rc)));
                 }
             }
 
@@ -292,7 +292,7 @@ namespace kosha::adapter {
                 if (rc != MDB_SUCCESS) {
                     close_env();
                     throw std::runtime_error("LMDBAdapter: failed to set maxdbs: " +
-                                             std::string(mdb_strerror(rc)));
+                        std::string(mdb_strerror(rc)));
                 }
             }
 
@@ -301,7 +301,7 @@ namespace kosha::adapter {
                 if (rc != MDB_SUCCESS) {
                     close_env();
                     throw std::runtime_error("LMDBAdapter: failed to set maxreaders: " +
-                                             std::string(mdb_strerror(rc)));
+                        std::string(mdb_strerror(rc)));
                 }
             }
 
@@ -315,7 +315,7 @@ namespace kosha::adapter {
             if (rc != MDB_SUCCESS) {
                 close_env();
                 throw std::runtime_error("LMDBAdapter: failed to open env at " +
-                                         env_path_ + ": " + std::string(mdb_strerror(rc)));
+                    env_path_ + ": " + std::string(mdb_strerror(rc)));
             }
 
             // Open DBI
@@ -324,7 +324,7 @@ namespace kosha::adapter {
             if (rc != MDB_SUCCESS) {
                 close_env();
                 throw std::runtime_error("LMDBAdapter: failed to start init txn: " +
-                                         std::string(mdb_strerror(rc)));
+                    std::string(mdb_strerror(rc)));
             }
 
             const char* name = opts_.db_name.empty() ? nullptr : opts_.db_name.c_str();
@@ -333,14 +333,14 @@ namespace kosha::adapter {
                 mdb_txn_abort(txn);
                 close_env();
                 throw std::runtime_error("LMDBAdapter: failed to open dbi: " +
-                                         std::string(mdb_strerror(rc)));
+                    std::string(mdb_strerror(rc)));
             }
 
             rc = mdb_txn_commit(txn);
             if (rc != MDB_SUCCESS) {
                 close_env();
                 throw std::runtime_error("LMDBAdapter: failed to commit init txn: " +
-                                         std::string(mdb_strerror(rc)));
+                    std::string(mdb_strerror(rc)));
             }
         }
 
