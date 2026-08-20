@@ -165,3 +165,87 @@ TEST_CASE("containers::SkipList: transparent erase with string_view", "[containe
     CHECK_FALSE(list.erase(key));
 }
 
+TEST_CASE("containers::SkipList: PMR polymorphic allocator support", "[containers][skiplist][pmr]") {
+    std::array<std::byte, 64 * 1024> buffer{};
+    std::pmr::monotonic_buffer_resource pool{buffer.data(), buffer.size()};
+
+    containers::pmr::SkipList<int, std::string> list{&pool};
+    CHECK(list.empty());
+
+    for (int i = 1; i <= 100; ++i) {
+        list.insert_or_assign(i, "val_" + std::to_string(i));
+    }
+
+    CHECK(list.size() == 100);
+    CHECK(list.contains(50));
+    CHECK(list.at(50) == "val_50");
+
+    list.erase(50);
+    CHECK_FALSE(list.contains(50));
+    CHECK(list.size() == 99);
+}
+
+TEST_CASE("containers::SkipList: Differential property test against std::map", "[containers][skiplist][property]") {
+    containers::SkipList<int, int> skip;
+    std::map<int, int> stdmap;
+
+    std::uint64_t state = 0xDEADBEEFCAFE1234ULL;
+    auto next_rand = [&state](int limit) -> int {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        return static_cast<int>(state % static_cast<std::uint64_t>(limit));
+    };
+
+    constexpr int kOperations = 50000;
+    for (int op = 0; op < kOperations; ++op) {
+        int action = next_rand(4);
+        int k = next_rand(1000);
+        int v = next_rand(10000);
+
+        if (action == 0 || action == 1) {
+            // Insert / assign
+            auto [s_it, s_ok] = skip.insert_or_assign(k, v);
+            auto [m_it, m_ok] = stdmap.insert_or_assign(k, v);
+            REQUIRE(s_it->first == m_it->first);
+            REQUIRE(s_it->second == m_it->second);
+        } else if (action == 2) {
+            // Erase
+            bool s_erased = skip.erase(k);
+            bool m_erased = (stdmap.erase(k) > 0);
+            REQUIRE(s_erased == m_erased);
+        } else {
+            // Lookup & lower_bound
+            auto s_find = skip.find(k);
+            auto m_find = stdmap.find(k);
+            REQUIRE((s_find != skip.end()) == (m_find != stdmap.end()));
+            if (s_find != skip.end()) {
+                REQUIRE(s_find->second == m_find->second);
+            }
+
+            auto s_lb = skip.lower_bound(k);
+            auto m_lb = stdmap.lower_bound(k);
+            REQUIRE((s_lb != skip.end()) == (m_lb != stdmap.end()));
+            if (s_lb != skip.end()) {
+                REQUIRE(s_lb->first == m_lb->first);
+                REQUIRE(s_lb->second == m_lb->second);
+            }
+        }
+    }
+
+    REQUIRE(skip.size() == stdmap.size());
+
+    // Verify in-order full scan equivalence
+    auto s_it = skip.begin();
+    auto m_it = stdmap.begin();
+    while (s_it != skip.end() && m_it != stdmap.end()) {
+        REQUIRE(s_it->first == m_it->first);
+        REQUIRE(s_it->second == m_it->second);
+        ++s_it;
+        ++m_it;
+    }
+    REQUIRE(s_it == skip.end());
+    REQUIRE(m_it == stdmap.end());
+}
+
+
