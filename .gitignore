@@ -104,7 +104,7 @@ Temporary Items
 /build/
 /grokkml.egg-info/
 
-/dependencies/
+/dependencies*/
 .aider*
 /scratch/
 .cache/

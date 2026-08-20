@@ -30,6 +30,96 @@ set(CATCH_BUILD_FUZZERS OFF CACHE BOOL "disable building fuzzers" FORCE)
 message("CMAKE_SOURCE_DIR location: ${CMAKE_SOURCE_DIR}")
 include(FetchContent)
 include(ExternalProject)
+
+# ---------------------------------------------------------------------------
+# Dependency bootstrapping via fetch_deps.sh
+# ---------------------------------------------------------------------------
+# option: set -DDEPS_VERBOSE=OFF to silence dependency output during configure
+option(DEPS_VERBOSE "Show verbose dependency fetch output" ON)
+
+set(FETCH_SCRIPT "${CMAKE_SOURCE_DIR}/scripts/fetch_deps.sh")
+
+if (NOT EXISTS "${FETCH_SCRIPT}")
+    message(FATAL_ERROR
+        "Dependency fetch script not found: ${FETCH_SCRIPT}\n"
+        "Please ensure scripts/fetch_deps.sh is present in the repository."
+    )
+endif()
+
+if (DEPS_VERBOSE)
+    message(STATUS "[deps] ════════════════════════════════════════")
+    message(STATUS "[deps] Checking dependencies in: ${CMAKE_SOURCE_DIR}/dependencies")
+    message(STATUS "[deps] ════════════════════════════════════════")
+endif()
+
+# Map of library-key -> expected folder under dependencies/
+set(PEBBLE_DEP_FOLDERS
+    Catch2   "Catch2-3.9.0"
+    crc32c   "crc32c"
+    glaze    "glaze"
+    liblmdb  "liblmdb"
+    highway  "highway"
+    spdlog   "spdlog"
+)
+
+set(MISSING_DEPS "")
+list(LENGTH PEBBLE_DEP_FOLDERS _pair_count)
+math(EXPR _pair_last "${_pair_count} - 1")
+
+foreach(_idx RANGE 0 ${_pair_last} 2)
+    math(EXPR _fidx "${_idx} + 1")
+    list(GET PEBBLE_DEP_FOLDERS ${_idx}  _dep_key)
+    list(GET PEBBLE_DEP_FOLDERS ${_fidx} _dep_folder)
+    set(_dep_path "${CMAKE_SOURCE_DIR}/dependencies/${_dep_folder}")
+    if (EXISTS "${_dep_path}")
+        if (DEPS_VERBOSE)
+            message(STATUS "[deps]   OK       ${_dep_key} → ${_dep_path}")
+        endif()
+    else()
+        message(STATUS "[deps]   MISSING  ${_dep_key} → ${_dep_path}")
+        list(APPEND MISSING_DEPS "${_dep_key}")
+    endif()
+endforeach()
+
+if (MISSING_DEPS)
+    list(LENGTH MISSING_DEPS _missing_count)
+    message(STATUS "[deps] ────────────────────────────────────────")
+    message(STATUS "[deps] ${_missing_count} missing — invoking fetch_deps.sh")
+    message(STATUS "[deps] ────────────────────────────────────────")
+
+    # Build command — pass --quiet when DEPS_VERBOSE is OFF
+    set(_fetch_cmd bash "${FETCH_SCRIPT}")
+    if (NOT DEPS_VERBOSE)
+        list(APPEND _fetch_cmd "--quiet")
+    endif()
+    list(APPEND _fetch_cmd ${MISSING_DEPS})
+
+    execute_process(
+        COMMAND         ${_fetch_cmd}
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        RESULT_VARIABLE _fetch_result
+        OUTPUT_VARIABLE _fetch_stdout
+        ERROR_VARIABLE  _fetch_stderr
+        ECHO_OUTPUT_VARIABLE    # stream script output live to the configure log
+        ECHO_ERROR_VARIABLE     # stream script errors live to the configure log
+    )
+
+    if (NOT _fetch_result EQUAL 0)
+        message(FATAL_ERROR
+            "[deps] fetch_deps.sh exited with code ${_fetch_result}.\n"
+            "stdout:\n${_fetch_stdout}\n"
+            "stderr:\n${_fetch_stderr}"
+        )
+    endif()
+
+    message(STATUS "[deps] ════════════════════════════════════════")
+    message(STATUS "[deps] All missing dependencies fetched successfully.")
+    message(STATUS "[deps] ════════════════════════════════════════")
+else()
+    message(STATUS "[deps] ────────────────────────────────────────")
+    message(STATUS "[deps] All dependencies already present — no download needed.")
+    message(STATUS "[deps] ────────────────────────────────────────")
+endif()
 include_directories(/usr/local/include)
 include_directories(${HOME_INCLUDE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/dependencies)
