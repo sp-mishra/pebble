@@ -17,12 +17,14 @@
 
 #include "tarka/tarka.hpp"
 #include "tarka/backends/native_backend.hpp"
-#include "tarka/features.hpp"
 #include "tarka/frontend/smt2_parser.hpp"
+#include "tarka/frontend/smt2_printer.hpp"
+#include "tarka/native/model_validator.hpp"
 
 using namespace tarka;
 using namespace tarka::backend;
 using namespace tarka::frontend;
+using namespace tarka::native;
 
 TEST_CASE("tarka: Term and Sort handle invariants", "[tarka][term]") {
     Context ctx;
@@ -691,6 +693,66 @@ TEST_CASE("tarka native: Quantifier Instantiation (E-matching & Skolem)", "[tark
         REQUIRE(*res == SatResult::Unsat);
     }
 }
+
+TEST_CASE("tarka frontend: SMT-LIB2 Serializer (smt2_printer)", "[tarka][frontend][smt2][printer]") {
+    Context ctx;
+    auto bv32 = ctx.bv_sort(32);
+    auto a = ctx.make_symbol("a", bv32);
+    auto b = ctx.make_symbol("b", bv32);
+    auto c10 = ctx.make_value(10, bv32);
+
+    Term sum = ctx.make_term(Op::BvAdd, bv32, std::vector<Term>{a, b});
+    Term eq = (sum == c10);
+
+    std::string term_str = smt2_printer::to_string(eq);
+    REQUIRE(!term_str.empty());
+    REQUIRE(term_str.find("bvadd") != std::string::npos);
+
+    std::string script_str = smt2_printer::to_smt2_script(std::vector<Term>{eq}, "QF_BV");
+    REQUIRE(!script_str.empty());
+    REQUIRE(script_str.find("(set-logic QF_BV)") != std::string::npos);
+    REQUIRE(script_str.find("(declare-const a (_ BitVec 32))") != std::string::npos);
+    REQUIRE(script_str.find("(assert") != std::string::npos);
+    REQUIRE(script_str.find("(check-sat)") != std::string::npos);
+}
+
+TEST_CASE("tarka native: Model Formatter & Validator", "[tarka][native][model][validator]") {
+    Context ctx;
+    auto bv32 = ctx.bv_sort(32);
+    auto x = ctx.make_symbol("x", bv32);
+    auto y = ctx.make_symbol("y", bv32);
+    auto v5 = ctx.make_value(5, bv32);
+    auto v15 = ctx.make_value(15, bv32);
+
+    RouterEngine<backend::native> solver;
+
+    Term eq_x = (x == v5);
+    Term add_xy = ctx.make_term(Op::BvAdd, bv32, std::vector<Term>{x, y});
+    Term eq_sum = (add_xy == v15);
+
+    solver.assert_formula(eq_x && eq_sum);
+    auto res = solver.check_sat();
+    REQUIRE(res.has_value());
+    REQUIRE(*res == SatResult::Sat);
+
+    auto x_val = solver.get_value(x);
+    auto y_val = solver.get_value(y);
+    REQUIRE(x_val.has_value());
+    REQUIRE(y_val.has_value());
+
+    std::unordered_map<Term, SmtValue> model;
+    model[x] = *x_val;
+    model[y] = *y_val;
+
+    std::string formatted_model = model_validator::format_model(model);
+    REQUIRE(!formatted_model.empty());
+    REQUIRE(formatted_model.find("define-fun x") != std::string::npos);
+
+    auto valid_res = model_validator::validate(std::vector<Term>{eq_x, eq_sum}, model);
+    REQUIRE(valid_res.is_valid);
+    REQUIRE(valid_res.violated_assertions.empty());
+}
+
 
 
 

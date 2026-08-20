@@ -206,6 +206,9 @@ route(term):
 | `tarka/backends/z3_backend.hpp` | no             | yes       | Z3 lowering + solve (guarded `HAS_Z3`)                           |
 | `tarka/native/simplifier.hpp`   | no             | no        | pre-encoding algebraic AST simplification pass                   |
 | `tarka/frontend/smt2_parser.hpp`| no             | no        | zero-allocation SMT-LIB2 script parser and executor              |
+| `tarka/frontend/smt2_printer.hpp`| no            | no        | SMT-LIB2 term, sort, and benchmark script serializer             |
+| `tarka/native/model_validator.hpp`| no           | no        | SAT model formatter and independent assertion validator          |
+| `tarka/native/theory_quant.hpp` | no             | no        | quantifier instantiation (E-matching & Skolemization)            |
 | `tarka/features.hpp`            | no             | no        | theory extractor + capability-mask router                        |
 | `tarka/egraph_opt.hpp`          | no             | no        | intern + reconstruct + `egraph_optimize` (sort-typed round-trip) |
 | `tarka/async.hpp`               | yes            | no        | `SmtTask` + worker pool                                          |

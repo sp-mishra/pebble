@@ -709,4 +709,18 @@ namespace std {
             return static_cast<std::size_t>(t.hash_);
         }
     };
+
+    template <>
+    struct equal_to<tarka::Term> {
+        [[nodiscard]] constexpr bool operator()(const tarka::Term& a, const tarka::Term& b) const noexcept {
+            return a.ptr() == b.ptr();
+        }
+    };
+
+    template <>
+    struct equal_to<tarka::Sort> {
+        [[nodiscard]] constexpr bool operator()(const tarka::Sort& a, const tarka::Sort& b) const noexcept {
+            return a.ptr() == b.ptr();
+        }
+    };
 } // namespace std
