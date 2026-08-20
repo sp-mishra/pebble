@@ -549,3 +549,73 @@ TEST_CASE("tarka native: Integrated Theory Combination (QF_AUFBV)", "[tarka][nat
     }
 }
 
+TEST_CASE("tarka native: BitVector Division & Modulo (QF_BV)", "[tarka][native][bv][div]") {
+    Context ctx;
+    auto bv32 = ctx.bv_sort(32);
+
+    auto x = ctx.make_symbol("x", bv32);
+    auto v40 = ctx.make_value(40, bv32);
+    auto v6 = ctx.make_value(6, bv32);
+    auto v0 = ctx.make_value(0, bv32);
+
+    RouterEngine<backend::native> solver;
+
+    SECTION("Unsigned division: 40 / 6 == 6") {
+        auto q = ctx.make_term(Op::BvUdiv, bv32, std::vector<Term>{v40, v6});
+        auto expected = ctx.make_value(6, bv32);
+        Term neq = (q != expected);
+
+        solver.assert_formula(neq);
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Unsat);
+    }
+
+    SECTION("Unsigned modulo: 40 % 6 == 4") {
+        auto r = ctx.make_term(Op::BvUrem, bv32, std::vector<Term>{v40, v6});
+        auto expected = ctx.make_value(4, bv32);
+        Term neq = (r != expected);
+
+        solver.assert_formula(neq);
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Unsat);
+    }
+
+    SECTION("Division by zero: 40 / 0 == ~0") {
+        auto q = ctx.make_term(Op::BvUdiv, bv32, std::vector<Term>{v40, v0});
+        auto expected = ctx.make_value(0xFFFFFFFFULL, bv32);
+        Term neq = (q != expected);
+
+        solver.assert_formula(neq);
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Unsat);
+    }
+}
+
+TEST_CASE("tarka native: Assumption-Based Solving & Unsat Core", "[tarka][native][assumptions]") {
+    Context ctx;
+    auto bv32 = ctx.bv_sort(32);
+
+    auto x = ctx.make_symbol("x", bv32);
+    auto v1 = ctx.make_value(1, bv32);
+    auto v2 = ctx.make_value(2, bv32);
+    auto v3 = ctx.make_value(3, bv32);
+
+    RouterEngine<backend::native> solver;
+
+    Term a1 = (x == v1);
+    Term a2 = (x == v2);
+    Term a3 = (x != v3);
+
+    std::vector<Term> assumptions = {a1, a2, a3};
+    auto res = solver.check_sat_assuming(assumptions);
+    REQUIRE(res.has_value());
+    REQUIRE(*res == SatResult::Unsat);
+
+    auto core = solver.get_unsat_core();
+    REQUIRE(!core.empty());
+}
+
+

@@ -105,6 +105,7 @@ namespace tarka::native {
             const std::uint32_t vi = var_index(v);
             return vi < var_to_atom_.size() ? var_to_atom_[vi] : kNullAtom;
         }
+        [[nodiscard]] AtomId atom_of(Var v) const noexcept { return atom_of_var(v); }
 
         void reset() {
             by_hash_.clear();

@@ -92,6 +92,15 @@ namespace tarka {
         void pop(std::uint32_t n = 1) { active_backend().pop(n); }
         void reset() { active_backend().reset(); }
 
+        [[nodiscard]] std::expected<SatResult, SmtError>
+        check_sat_assuming(std::span<const Term> assumptions) {
+            return active_backend().check_sat_assuming(assumptions);
+        }
+
+        [[nodiscard]] std::vector<Term> get_unsat_core() const {
+            return active_backend().get_unsat_core();
+        }
+
         // Solve a formula: assert + check_sat in one call
         [[nodiscard]] std::expected<SatResult, SmtError> solve(Term t) {
             push();
@@ -112,6 +121,10 @@ namespace tarka {
         BackendTuple backends_;
 
         [[nodiscard]] auto& active_backend() noexcept {
+            return std::get < 0 > (backends_);
+        }
+
+        [[nodiscard]] const auto& active_backend() const noexcept {
             return std::get < 0 > (backends_);
         }
     };

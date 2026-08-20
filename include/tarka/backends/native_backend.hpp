@@ -35,6 +35,7 @@
 #include "tarka/native/theory_lra.hpp"
 #include "tarka/native/theory_uf.hpp"
 #include "tarka/native/model.hpp"
+#include "tarka/native/simplifier.hpp"
 
 #include <cstdint>
 #include <expected>
@@ -43,6 +44,7 @@
 #include <vector>
 
 namespace tarka::backend {
+    using namespace tarka::native;
     // Bring the native engine's types into scope for this facade.
     using tarka::native::atom_registry;
     using tarka::native::cdcl_solver;
@@ -54,14 +56,10 @@ namespace tarka::backend {
     using tarka::native::theory_bv;
     using tarka::native::theory_combination;
     using tarka::native::theory_dl;
-    using tarka::native::theory_lra;
-    using tarka::native::theory_uf;
+    using namespace tarka::native;
 
     class native {
     public:
-        using native_term_t = Term;
-        using native_sort_t = Sort;
-
         using combination_t = theory_combination<
             theory_uf,
             theory_bv,
@@ -69,6 +67,9 @@ namespace tarka::backend {
             theory_dl,
             theory_array
         >;
+
+        using native_term_t = Term;
+        using native_sort_t = Sort;
 
         native() = default;
 
@@ -85,16 +86,32 @@ namespace tarka::backend {
         [[nodiscard]] native_sort_t lower_sort(Sort s) noexcept { return s; }
         [[nodiscard]] native_term_t lower_term(Term t) noexcept { return t; }
 
-        void assert_formula(Term t) { assertions_.push_back(t); }
+        void assert_formula(Term t) { assertions_.push_back(simplifier::simplify(t)); }
 
         [[nodiscard]] std::expected<SatResult, SmtError> check_sat() {
-            return run(std::function<bool()>{});
+            return run({}, std::function<bool()>{});
         }
 
         [[nodiscard]] std::expected<SatResult, SmtError>
         check_sat_cancelable(Term t, std::stop_token tok) {
             if (t.valid()) assert_formula(t);
-            return run([tok] { return tok.stop_requested(); });
+            return run({}, [tok] { return tok.stop_requested(); });
+        }
+
+        [[nodiscard]] std::expected<SatResult, SmtError>
+        check_sat_assuming(std::span<const Term> assumptions, const std::function<bool()>& stop = {}) {
+            return run(assumptions, stop);
+        }
+
+        [[nodiscard]] std::vector<Term> get_unsat_core() const {
+            std::vector<Term> core;
+            for (Lit l : sat_.unsat_core()) {
+                const AtomId a = reg_.atom_of(lit_var(l));
+                if (a != kNullAtom) {
+                    core.push_back(reg_.atom(a).term);
+                }
+            }
+            return core;
         }
 
         [[nodiscard]] std::expected<SmtValue, SmtError> get_value(Term t) {
@@ -151,9 +168,13 @@ namespace tarka::backend {
             return {};
         }
 
-        [[nodiscard]] std::expected<SatResult, SmtError> run(const std::function<bool()>& stop) {
+        [[nodiscard]] std::expected<SatResult, SmtError> run(std::span<const Term> assumptions,
+                                                             const std::function<bool()>& stop) {
             for (Term t : assertions_) {
                 if (auto g = guard(t); !g) return std::unexpected(g.error());
+            }
+            for (Term a : assumptions) {
+                if (auto g = guard(a); !g) return std::unexpected(g.error());
             }
 
             sat_.reset();
@@ -164,9 +185,24 @@ namespace tarka::backend {
             dpllt<combination_t> driver(sat_, reg_, theories_);
 
             for (Term t : assertions_) enc.assert_formula(t);
+
+            std::vector<Lit> assumption_lits;
+            assumption_lits.reserve(assumptions.size());
+            for (Term a : assumptions) {
+                Term sa = simplifier::simplify(a);
+                AtomId aid = reg_.intern(sa, cnf_encoder::classify(sa));
+                sat_.ensure_var(reg_.var_of(aid));
+                assumption_lits.push_back(make_lit(reg_.var_of(aid), false));
+            }
+
             driver.register_all_atoms();
 
-            const LBool r = driver.solve(stop);
+            LBool r;
+            if (assumption_lits.empty()) {
+                r = driver.solve(stop);
+            } else {
+                r = sat_.solve_assuming(assumption_lits, stop);
+            }
             solved_ = (r == LBool::True);
 
             switch (r) {

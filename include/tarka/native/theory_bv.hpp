@@ -246,6 +246,26 @@ namespace tarka::native {
                     auto b = blast(t.children()[1]);
                     return blast_mul(a, b);
                 }
+                case Op::BvUdiv: {
+                    auto a = blast(t.children()[0]);
+                    auto b = blast(t.children()[1]);
+                    return blast_udiv(a, b);
+                }
+                case Op::BvSdiv: {
+                    auto a = blast(t.children()[0]);
+                    auto b = blast(t.children()[1]);
+                    return blast_sdiv(a, b);
+                }
+                case Op::BvUrem: {
+                    auto a = blast(t.children()[0]);
+                    auto b = blast(t.children()[1]);
+                    return blast_urem(a, b);
+                }
+                case Op::BvSrem: {
+                    auto a = blast(t.children()[0]);
+                    auto b = blast(t.children()[1]);
+                    return blast_srem(a, b);
+                }
                 case Op::BvShl: {
                     auto a = blast(t.children()[0]);
                     auto b = blast(t.children()[1]);
@@ -533,6 +553,71 @@ namespace tarka::native {
 
         Lit blast_sle(const std::vector<Lit>& a, const std::vector<Lit>& b) {
             return blast_or(blast_slt(a, b), blast_eq(a, b));
+        }
+
+        void blast_udiv_urem(const std::vector<Lit>& a, const std::vector<Lit>& b,
+                             std::vector<Lit>& q, std::vector<Lit>& r) {
+            const std::size_t n = a.size();
+            q.assign(n, const_lit(false));
+            r.assign(n, const_lit(false));
+            if (n == 0) return;
+
+            std::vector<Lit> rem(n, const_lit(false));
+            for (std::size_t i = n; i-- > 0;) {
+                for (std::size_t j = n - 1; j > 0; --j) rem[j] = rem[j - 1];
+                rem[0] = a[i];
+
+                auto sub = blast_sub(rem, b);
+                Lit ge = lit_neg(blast_ult(rem, b));
+
+                q[i] = ge;
+                rem = blast_ite(ge, sub, rem);
+            }
+
+            // SMT-LIB division-by-zero semantics: b == 0 => a / 0 = ~0, a % 0 = a
+            std::vector<Lit> zero(n, const_lit(false));
+            std::vector<Lit> ones(n, const_lit(true));
+            Lit b_is_zero = blast_eq(b, zero);
+
+            q = blast_ite(b_is_zero, ones, q);
+            r = blast_ite(b_is_zero, a, rem);
+        }
+
+        std::vector<Lit> blast_udiv(const std::vector<Lit>& a, const std::vector<Lit>& b) {
+            std::vector<Lit> q, r;
+            blast_udiv_urem(a, b, q, r);
+            return q;
+        }
+
+        std::vector<Lit> blast_urem(const std::vector<Lit>& a, const std::vector<Lit>& b) {
+            std::vector<Lit> q, r;
+            blast_udiv_urem(a, b, q, r);
+            return r;
+        }
+
+        std::vector<Lit> blast_sdiv(const std::vector<Lit>& a, const std::vector<Lit>& b) {
+            if (a.empty()) return {};
+            Lit sign_a = a.back();
+            Lit sign_b = b.back();
+
+            auto abs_a = blast_ite(sign_a, blast_neg(a), a);
+            auto abs_b = blast_ite(sign_b, blast_neg(b), b);
+
+            auto uq = blast_udiv(abs_a, abs_b);
+            Lit diff_sign = blast_xor(sign_a, sign_b);
+            return blast_ite(diff_sign, blast_neg(uq), uq);
+        }
+
+        std::vector<Lit> blast_srem(const std::vector<Lit>& a, const std::vector<Lit>& b) {
+            if (a.empty()) return {};
+            Lit sign_a = a.back();
+            Lit sign_b = b.back();
+
+            auto abs_a = blast_ite(sign_a, blast_neg(a), a);
+            auto abs_b = blast_ite(sign_b, blast_neg(b), b);
+
+            auto ur = blast_urem(abs_a, abs_b);
+            return blast_ite(sign_a, blast_neg(ur), ur);
         }
 
         atom_registry* reg_ = nullptr;

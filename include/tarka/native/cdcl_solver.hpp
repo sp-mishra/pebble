@@ -181,6 +181,42 @@ namespace tarka::native {
             }
         }
 
+        [[nodiscard]] LBool solve_assuming(std::span<const Lit> assumptions, const std::function<bool()>& stop = {}) {
+            if (unsat_) return LBool::False;
+            unsat_core_.clear();
+
+            for (Lit a : assumptions) {
+                if (value(a) == LBool::False) {
+                    unsat_core_.push_back(a);
+                    return LBool::False;
+                }
+                if (value(a) == LBool::Undef) {
+                    new_decision_level();
+                    if (!enqueue(a, kNullClause)) {
+                        unsat_core_.push_back(a);
+                        return LBool::False;
+                    }
+                    ClauseRef confl = propagate();
+                    if (confl != kNullClause) {
+                        unsat_core_.push_back(a);
+                        return LBool::False;
+                    }
+                }
+            }
+
+            const LBool res = solve(stop);
+            if (res == LBool::False && unsat_core_.empty()) {
+                for (Lit a : assumptions) {
+                    if (value(a) == LBool::True) unsat_core_.push_back(a);
+                }
+            }
+            return res;
+        }
+
+        [[nodiscard]] std::span<const Lit> unsat_core() const noexcept {
+            return unsat_core_;
+        }
+
         // ---------------------------------------------------------------------
         // Model queries
         // ---------------------------------------------------------------------
@@ -209,7 +245,7 @@ namespace tarka::native {
         void reset() {
             assign_.clear(); reason_.clear(); level_.clear(); activity_.clear();
             phase_.clear(); watches_.clear(); clauses_.clear(); lits_.clear();
-            trail_.clear(); trail_lim_.clear(); pending_theory_.clear();
+            trail_.clear(); trail_lim_.clear(); pending_theory_.clear(); unsat_core_.clear();
             qhead_ = 0; unsat_ = false; restart_count_ = 0; var_inc_ = 1.0;
         }
 
@@ -224,6 +260,7 @@ namespace tarka::native {
 
         std::vector<ClauseHeader> clauses_;
         std::vector<Lit> lits_; // flat clause literal arena
+        std::vector<Lit> unsat_core_;
 
         std::vector<Lit> trail_;
         std::vector<std::uint32_t> trail_lim_;
