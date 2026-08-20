@@ -289,8 +289,7 @@ namespace nitya {
 
             frame_header copy = hdr;
             copy.header_crc = 0;
-            std::uint32_t computed_crc = calculate_checksum32(reinterpret_cast<const std::byte*>(&copy), sizeof(copy));
-            if (computed_crc != hdr.header_crc) {
+            if (const std::uint32_t computed_crc = calculate_checksum32(reinterpret_cast<const std::byte*>(&copy), sizeof(copy)); computed_crc != hdr.header_crc) {
                 return std::unexpected(LogError::ChecksumMismatch);
             }
 
@@ -307,8 +306,7 @@ namespace nitya {
             if (trl.payload_crc != expected_payload_crc) {
                 return std::unexpected(LogError::ChecksumMismatch);
             }
-            std::uint32_t actual_crc = calculate_checksum32(payload.data(), payload.size());
-            if (actual_crc != expected_payload_crc) {
+            if (const std::uint32_t actual_crc = calculate_checksum32(payload.data(), payload.size()); actual_crc != expected_payload_crc) {
                 return std::unexpected(LogError::CorruptedPayload);
             }
             return {};
@@ -349,7 +347,7 @@ namespace nitya {
         setu_storage(setu_storage&&) = delete;
         setu_storage& operator=(setu_storage&&) = delete;
 
-        [[nodiscard]] std::string format_segment_name(std::uint64_t segment_id) const {
+        static std::string format_segment_name(std::uint64_t segment_id) {
             return std::format("{:010d}.log", segment_id);
         }
 
@@ -357,7 +355,7 @@ namespace nitya {
             const segment_file& seg,
             const std::uint64_t expected_segment_id,
             const lsn_t expected_begin_lsn) {
-            auto bytes = seg.map.as_bytes();
+            const auto bytes = seg.map.as_bytes();
             if (bytes.size() < sizeof(segment_header)) {
                 return std::unexpected(LogError::CorruptedHeader);
             }
@@ -377,8 +375,7 @@ namespace nitya {
                 return std::unexpected(LogError::LsnMismatch);
             }
 
-            const auto computed = calculate_segment_header_crc(hdr);
-            if (computed != hdr.header_crc) {
+            if (const auto computed = calculate_segment_header_crc(hdr); computed != hdr.header_crc) {
                 return std::unexpected(LogError::ChecksumMismatch);
             }
 
@@ -391,8 +388,8 @@ namespace nitya {
                 if (s->segment_id == seg_id) return s;
             }
 
-            auto path = opts_.wal_dir / format_segment_name(seg_id);
-            bool is_new = !std::filesystem::exists(path);
+            const auto path = opts_.wal_dir / format_segment_name(seg_id);
+            const bool is_new = !std::filesystem::exists(path);
             auto map_res = setu::mapping<setu::read_write>::open_or_create(path, opts_.segment_size);
             if (!map_res) {
                 return std::unexpected(LogError::SegmentOpenFailed);
@@ -423,16 +420,14 @@ namespace nitya {
                     shdr.header_crc = calculate_segment_header_crc(shdr);
 
                     std::memcpy(bytes.data(), &shdr, sizeof(segment_header));
-                    auto hdr_flush = seg->map.flush_range(0, sizeof(segment_header), setu::flush_mode::sync);
-                    if (!hdr_flush) {
+                    if (const auto hdr_flush = seg->map.flush_range(0, sizeof(segment_header), setu::flush_mode::sync); !hdr_flush) {
                         return std::unexpected(LogError::FlushFailed);
                     }
                 }
             }
 
             // Validate segment header for both new and existing segments
-            auto val_res = validate_segment_header(*seg, seg_id, begin_lsn);
-            if (!val_res) {
+            if (auto val_res = validate_segment_header(*seg, seg_id, begin_lsn); !val_res) {
                 return std::unexpected(val_res.error());
             }
 
@@ -466,13 +461,13 @@ namespace nitya {
                 return {};
             };
 
-            for (auto& s : active_segments_) {
+            for (const auto& s : active_segments_) {
                 if (s->segment_id == seg_id) {
                     return seal_mapped_header(s->map);
                 }
             }
 
-            auto path = opts_.wal_dir / format_segment_name(seg_id);
+            const auto path = opts_.wal_dir / format_segment_name(seg_id);
             if (!std::filesystem::exists(path)) {
                 return std::unexpected(LogError::SegmentOpenFailed);
             }
@@ -487,10 +482,10 @@ namespace nitya {
 
         Result<void> mark_archived(const std::uint64_t seg_id) {
             std::lock_guard lk{mutex_};
-            auto path = opts_.wal_dir / format_segment_name(seg_id);
+            const auto path = opts_.wal_dir / format_segment_name(seg_id);
             if (!std::filesystem::exists(path)) return std::unexpected(LogError::InvalidArg);
 
-            for (auto& s : active_segments_) {
+            for (const auto& s : active_segments_) {
                 if (s->segment_id == seg_id) {
                     auto bytes = s->map.as_bytes();
                     if (bytes.size() >= sizeof(segment_header)) {
@@ -499,8 +494,7 @@ namespace nitya {
                         hdr.flags |= k_segment_archived;
                         hdr.header_crc = calculate_segment_header_crc(hdr);
                         std::memcpy(bytes.data(), &hdr, sizeof(hdr));
-                        auto flush_res = s->map.flush_range(0, sizeof(segment_header), setu::flush_mode::sync);
-                        if (!flush_res) return std::unexpected(LogError::FlushFailed);
+                        if (const auto flush_res = s->map.flush_range(0, sizeof(segment_header), setu::flush_mode::sync); !flush_res) return std::unexpected(LogError::FlushFailed);
                     }
                     return {};
                 }
@@ -515,34 +509,31 @@ namespace nitya {
                 hdr.flags |= k_segment_archived;
                 hdr.header_crc = calculate_segment_header_crc(hdr);
                 std::memcpy(bytes.data(), &hdr, sizeof(hdr));
-                auto flush_res = map_res->flush_range(0, sizeof(segment_header), setu::flush_mode::sync);
-                if (!flush_res) return std::unexpected(LogError::FlushFailed);
+                if (const auto flush_res = map_res->flush_range(0, sizeof(segment_header), setu::flush_mode::sync); !flush_res) return std::unexpected(LogError::FlushFailed);
             }
             return {};
         }
 
         Result<void> flush_range(const std::uint64_t seg_id, const std::size_t offset, const std::size_t length, const setu::flush_mode mode) {
             std::lock_guard lk{mutex_};
-            for (auto& s : active_segments_) {
+            for (const auto& s : active_segments_) {
                 if (s->segment_id == seg_id) {
-                    auto res = s->map.flush_range(offset, length, mode);
-                    if (!res) return std::unexpected(LogError::FlushFailed);
+                    if (const auto res = s->map.flush_range(offset, length, mode); !res) return std::unexpected(LogError::FlushFailed);
                     return {};
                 }
             }
 
-            auto path = opts_.wal_dir / format_segment_name(seg_id);
+            const auto path = opts_.wal_dir / format_segment_name(seg_id);
             if (!std::filesystem::exists(path)) {
                 return std::unexpected(LogError::SegmentOpenFailed);
             }
 
-            auto map_res = setu::mapping<setu::read_write>::open_or_create(path, opts_.segment_size);
+            const auto map_res = setu::mapping<setu::read_write>::open_or_create(path, opts_.segment_size);
             if (!map_res) {
                 return std::unexpected(LogError::SegmentOpenFailed);
             }
 
-            auto res = map_res->flush_range(offset, length, mode);
-            if (!res) {
+            if (const auto res = map_res->flush_range(offset, length, mode); !res) {
                 return std::unexpected(LogError::FlushFailed);
             }
             return {};
@@ -582,12 +573,12 @@ namespace nitya {
     // ============================================================================
 
     struct sync_durability {
-        static constexpr setu::flush_mode flush_type = setu::flush_mode::sync;
+        static constexpr auto flush_type = setu::flush_mode::sync;
         static constexpr bool is_synchronous = true;
     };
 
     struct async_durability {
-        static constexpr setu::flush_mode flush_type = setu::flush_mode::async;
+        static constexpr auto flush_type = setu::flush_mode::async;
         static constexpr bool is_synchronous = false;
     };
 
@@ -710,7 +701,7 @@ namespace nitya {
     class wal {
     public:
         explicit wal(wal_options opts = {})
-            : opts_{opts}
+            : opts_{std::move(opts)}
               , storage_{opts_}
               , memory_{1024 * 1024}
               , concurrency_{}
@@ -790,8 +781,7 @@ namespace nitya {
 
                 // Mark the padding gap from current_lsn to next_seg_lsn as published
                 // so the contiguous published watermark is never stalled by rotation.
-                auto gap_res = mark_gap_published(current_lsn, next_seg_lsn);
-                if (!gap_res) return std::unexpected(gap_res.error());
+                if (auto gap_res = mark_gap_published(current_lsn, next_seg_lsn); !gap_res) return std::unexpected(gap_res.error());
 
                 return reserve_in_segment_locked(next_seg_lsn, payload_bytes, total_frame_size, flags, version);
             }
@@ -816,8 +806,7 @@ namespace nitya {
 
             const lsn_t record_end = res.lsn + res.buffer.size();
 
-            auto mark_res = mark_published_range(res.lsn, record_end);
-            if (!mark_res) return std::unexpected(mark_res.error());
+            if (auto mark_res = mark_published_range(res.lsn, record_end); !mark_res) return std::unexpected(mark_res.error());
 
             if (opts_.background_flush) {
                 flusher_cv_.notify_one();
@@ -843,8 +832,7 @@ namespace nitya {
                 std::memcpy(target.data(), payload.data(), payload.size());
             }
 
-            auto pub_res = publish(res);
-            if (!pub_res) return std::unexpected(pub_res.error());
+            if (auto pub_res = publish(res); !pub_res) return std::unexpected(pub_res.error());
 
             return res.lsn;
         }
@@ -862,8 +850,7 @@ namespace nitya {
                 pub = published_lsn_.load(std::memory_order_acquire);
             }
 
-            auto sync_res = wait_durable(record_end);
-            if (!sync_res) return std::unexpected(sync_res.error());
+            if (auto sync_res = wait_durable(record_end); !sync_res) return std::unexpected(sync_res.error());
 
             return *append_res;
         }
@@ -872,8 +859,7 @@ namespace nitya {
         // 4. Physical Flushing & Group Commit Durability
         // ------------------------------------------------------------------------
         Result<void> flush_to(const lsn_t target_lsn) {
-            const lsn_t published = published_lsn_.load(std::memory_order_acquire);
-            if (target_lsn > published) {
+            if (const lsn_t published = published_lsn_.load(std::memory_order_acquire); target_lsn > published) {
                 return std::unexpected(LogError::InvalidArg);
             }
 
@@ -883,8 +869,7 @@ namespace nitya {
                 return {};
             }
 
-            auto flush_res = flush_range_to_locked(current_flushed, target_lsn);
-            if (!flush_res) return flush_res;
+            if (auto flush_res = flush_range_to_locked(current_flushed, target_lsn); !flush_res) return flush_res;
 
             flushed_lsn_.store(target_lsn, std::memory_order_release);
             flushed_lsn_.notify_all();
@@ -892,8 +877,7 @@ namespace nitya {
         }
 
         Result<void> wait_durable(lsn_t target_lsn) {
-            const lsn_t published = published_lsn_.load(std::memory_order_acquire);
-            if (target_lsn > published) {
+            if (const lsn_t published = published_lsn_.load(std::memory_order_acquire); target_lsn > published) {
                 return std::unexpected(LogError::InvalidArg);
             }
 
@@ -947,8 +931,7 @@ namespace nitya {
             // Follower path — progress-based loop checking done, leadership retry, and flushed_lsn_.wait().
             for (;;) {
                 if (done.load(std::memory_order_acquire)) {
-                    const auto err = result_code.load(std::memory_order_relaxed);
-                    if (err != LogError::Success) {
+                    if (const auto err = result_code.load(std::memory_order_relaxed); err != LogError::Success) {
                         return std::unexpected(err);
                     }
                     if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
@@ -965,8 +948,7 @@ namespace nitya {
                     }
                 }
 
-                const auto cur = flushed_lsn_.load(std::memory_order_acquire);
-                if (cur < target_lsn && !done.load(std::memory_order_acquire)) {
+                if (const auto cur = flushed_lsn_.load(std::memory_order_acquire); cur < target_lsn && !done.load(std::memory_order_acquire)) {
                     flushed_lsn_.wait(cur, std::memory_order_acquire);
                 }
             }
@@ -1104,19 +1086,19 @@ namespace nitya {
         // ------------------------------------------------------------------------
         void apply_retention_rules(
             const std::chrono::seconds max_segment_age,
-            std::function<void(const segment_descriptor&)> on_archive = nullptr,
-            std::function<void(const segment_descriptor&)> on_delete = nullptr) {
+            const std::function<void(const segment_descriptor&)>& on_archive = nullptr,
+            const std::function<void(const segment_descriptor&)>& on_delete = nullptr) {
 
             easy_rules::EasyRuleEngine engine;
             engine.config.verbose = false;
 
             engine.when("SegmentRetention", [](const easy_rules::Facts& facts) {
-                auto age_sec = facts.get<int>("age_seconds").value_or(0);
-                auto max_age = facts.get<int>("max_age_seconds").value_or(0);
-                auto replicated = facts.get<bool>("is_replicated").value_or(false);
+                const auto age_sec = facts.get<int>("age_seconds").value_or(0);
+                const auto max_age = facts.get<int>("max_age_seconds").value_or(0);
+                const auto replicated = facts.get<bool>("is_replicated").value_or(false);
                 return replicated && (age_sec >= max_age);
             })
-            .then([&](easy_rules::ExecutionContext& ctx) {
+            .then([&](const easy_rules::ExecutionContext& ctx) {
                 if (on_delete) {
                     segment_descriptor desc;
                     desc.segment_id = static_cast<std::uint64_t>(ctx.facts.get<int>("segment_id").value_or(0));
@@ -1126,11 +1108,11 @@ namespace nitya {
             .with_description("Delete segments past age threshold and fully replicated");
 
             engine.when("SegmentArchival", [](const easy_rules::Facts& facts) {
-                auto replicated = facts.get<bool>("is_replicated").value_or(false);
-                auto archived = facts.get<bool>("is_archived").value_or(false);
+                const auto replicated = facts.get<bool>("is_replicated").value_or(false);
+                const auto archived = facts.get<bool>("is_archived").value_or(false);
                 return replicated && !archived;
             })
-            .then([&](easy_rules::ExecutionContext& ctx) {
+            .then([&](const easy_rules::ExecutionContext& ctx) {
                 if (on_archive) {
                     segment_descriptor desc;
                     desc.segment_id = static_cast<std::uint64_t>(ctx.facts.get<int>("segment_id").value_or(0));
@@ -1140,8 +1122,7 @@ namespace nitya {
             .with_description("Archive segments that are replicated");
 
             // Evaluate segments
-            auto segments = list_segments();
-            for (const auto& seg : segments) {
+            for (auto segments = list_segments(); const auto& seg : segments) {
                 easy_rules::ExecutionContext ctx;
                 auto age = std::chrono::duration_cast<std::chrono::seconds>(
                     std::chrono::system_clock::now() - seg.created_at).count();
@@ -1176,14 +1157,13 @@ namespace nitya {
         // Fixed-capacity admin listing; avoids dynamic segment list allocation.
         template <typename OutputIt>
         Result<void> list_segments(OutputIt out) const {
-            std::error_code ec;
             containers::static_vector<segment_descriptor, 1024> list;
 
-            for (const auto& entry : std::filesystem::directory_iterator(opts_.wal_dir, ec)) {
+            for (std::error_code ec; const auto& entry : std::filesystem::directory_iterator(opts_.wal_dir, ec)) {
                 if (entry.is_regular_file() && entry.path().extension() == ".log") {
                     std::string stem = entry.path().stem().string();
                     try {
-                        std::uint64_t seg_id = std::stoull(stem);
+                        const std::uint64_t seg_id = std::stoull(stem);
                         const lsn_t seg_begin_lsn = seg_id * opts_.segment_size;
 
                         segment_descriptor desc{
@@ -1197,8 +1177,7 @@ namespace nitya {
                         };
 
                         // Read and validate durable segment header to populate accurate metadata
-                        auto map_res = setu::mapping<setu::read_only>::open_existing(entry.path());
-                        if (map_res) {
+                        if (const auto map_res = setu::mapping<setu::read_only>::open_existing(entry.path())) {
                             auto bytes = map_res->as_bytes();
                             if (bytes.size() >= sizeof(segment_header)) {
                                 segment_header hdr;
@@ -1267,14 +1246,14 @@ namespace nitya {
         std::atomic<bool> stop_background_flusher_{false};
         std::jthread background_thread_;
 
-        void flusher_worker(std::stop_token st) {
+        void flusher_worker(const std::stop_token& st) {
             while (!st.stop_requested() && !stop_background_flusher_.load(std::memory_order_relaxed)) {
                 {
                     std::unique_lock lk{flusher_mutex_};
                     flusher_cv_.wait_for(lk, opts_.group_commit_interval, [&] {
                         if (st.stop_requested() || stop_background_flusher_.load(std::memory_order_relaxed)) return true;
-                        lsn_t pub = published_lsn_.load(std::memory_order_acquire);
-                        lsn_t flu = flushed_lsn_.load(std::memory_order_acquire);
+                        const lsn_t pub = published_lsn_.load(std::memory_order_acquire);
+                        const lsn_t flu = flushed_lsn_.load(std::memory_order_acquire);
                         return pub > flu && (pub - flu >= opts_.group_commit_bytes);
                     });
                 }
@@ -1299,7 +1278,7 @@ namespace nitya {
             const lsn_t target_lsn,
             std::atomic<bool>& done,
             std::atomic<LogError>& result_code) {
-            LogError own_err = LogError::Success;
+            auto own_err = LogError::Success;
             bool own_resolved = false;
 
             for (;;) {
@@ -1315,11 +1294,10 @@ namespace nitya {
                 }
 
                 const lsn_t current_flushed = flushed_lsn_.load(std::memory_order_relaxed);
-                LogError flush_err = LogError::Success;
+                auto flush_err = LogError::Success;
 
                 if (max_ticket_lsn > current_flushed) {
-                    auto flush_res = flush_range_to_locked(current_flushed, max_ticket_lsn);
-                    if (!flush_res) {
+                    if (auto flush_res = flush_range_to_locked(current_flushed, max_ticket_lsn); !flush_res) {
                         flush_err = flush_res.error();
                     }
                     else {
@@ -1437,14 +1415,13 @@ namespace nitya {
             // Check if it can merge with an existing interval in pending_publishes_
             bool merged = false;
             for (std::size_t i = 0; i < pending_publishes_.size(); ++i) {
-                auto& p = pending_publishes_[i];
-                if (from <= p.second && to >= p.first) {
-                    p.first = std::min(p.first, from);
-                    p.second = std::max(p.second, to);
+                if (auto& [fst, snd] = pending_publishes_[i]; from <= snd && to >= fst) {
+                    fst = std::min(fst, from);
+                    snd = std::max(snd, to);
                     merged = true;
                     // Merge any subsequent overlapping intervals
-                    while (i + 1 < pending_publishes_.size() && p.second >= pending_publishes_[i + 1].first) {
-                        p.second = std::max(p.second, pending_publishes_[i + 1].second);
+                    while (i + 1 < pending_publishes_.size() && snd >= pending_publishes_[i + 1].first) {
+                        snd = std::max(snd, pending_publishes_[i + 1].second);
                         for (std::size_t j = i + 1; j + 1 < pending_publishes_.size(); ++j) {
                             pending_publishes_[j] = std::move(pending_publishes_[j + 1]);
                         }
@@ -1555,8 +1532,7 @@ namespace nitya {
                     continue;
                 }
 
-                auto path = opts_.wal_dir / storage_.format_segment_name(seg_id);
-                if (!std::filesystem::exists(path)) {
+                if (auto path = opts_.wal_dir / storage_.format_segment_name(seg_id); !std::filesystem::exists(path)) {
                     record_err(LogError::EndOfLog);
                     return std::nullopt;
                 }
@@ -1579,9 +1555,8 @@ namespace nitya {
                 if (hdr.magic != k_nitya_magic) {
                     // Check if entire rest of segment is padding / zero
                     if (opts_.auto_rotate) {
-                        lsn_t next_seg_lsn = (seg_id + 1) * opts_.segment_size + k_segment_header_size;
-                        auto next_path = opts_.wal_dir / storage_.format_segment_name(seg_id + 1);
-                        if (std::filesystem::exists(next_path) && cursor_lsn < next_seg_lsn) {
+                        const lsn_t next_seg_lsn = (seg_id + 1) * opts_.segment_size + k_segment_header_size;
+                        if (auto next_path = opts_.wal_dir / storage_.format_segment_name(seg_id + 1); std::filesystem::exists(next_path) && cursor_lsn < next_seg_lsn) {
                             cursor_lsn = next_seg_lsn;
                             continue;
                         }
@@ -1620,7 +1595,7 @@ namespace nitya {
                 }
 
                 std::uint32_t payload_size = *val_res;
-                std::size_t total_size = k_frame_overhead + payload_size;
+                const std::size_t total_size = k_frame_overhead + payload_size;
                 if (seg_offset + total_size > bytes.size()) {
                     record_err(LogError::CorruptedTrailer, cursor_lsn);
                     if (mode == recovery_mode::salvage) {
@@ -1677,15 +1652,13 @@ namespace nitya {
 
             const lsn_t start_lsn = segs.front().begin_lsn + k_segment_header_size;
             lsn_t last_valid_end = start_lsn;
-            auto stream = recover(start_lsn, recovery_mode::stop_at_first_error);
-            for (const auto& rec : stream) {
+            for (auto stream = recover(start_lsn, recovery_mode::stop_at_first_error); const auto& rec : stream) {
                 last_valid_end = rec.lsn + k_frame_overhead + rec.payload.size();
             }
 
             // If later empty allocated segments exist, advance to their data start.
             for (const auto& seg : segs) {
-                const lsn_t seg_data_start = seg.begin_lsn + k_segment_header_size;
-                if (seg_data_start > last_valid_end) {
+                if (const lsn_t seg_data_start = seg.begin_lsn + k_segment_header_size; seg_data_start > last_valid_end) {
                     last_valid_end = seg_data_start;
                     break;
                 }
