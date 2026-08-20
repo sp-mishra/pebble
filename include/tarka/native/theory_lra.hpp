@@ -51,8 +51,14 @@ namespace tarka::native {
                 if (c != std::strong_ordering::equal) return c == std::strong_ordering::less;
                 return strict && !o.strict;
             }
+            [[nodiscard]] bool operator>(const bound_val& o) const {
+                return o < *this;
+            }
             [[nodiscard]] bool operator<=(const bound_val& o) const {
-                return *this < o || (!(*this < o) && !(o < *this));
+                return !(o < *this);
+            }
+            [[nodiscard]] bool operator>=(const bound_val& o) const {
+                return !(*this < o);
             }
         };
 
@@ -275,6 +281,11 @@ namespace tarka::native {
             return rat{};
         }
 
+        struct TableauRow {
+            std::uint32_t slack_var;
+            LinearRow row;
+        };
+
         void apply_bound(const LinearRow& row, AtomId atom, bool value) {
             if (row.terms.size() == 1) {
                 // Direct single variable bound: c * x <= b
@@ -301,7 +312,7 @@ namespace tarka::native {
                 auto& target = row.is_upper ? upper_bounds_[s] : lower_bounds_[s];
                 trail_.push_back(UndoBound{s, row.is_upper, target});
                 target = BoundRecord{row.bound, atom, value, level_};
-                tableau_.push_back(row);
+                tableau_.push_back(TableauRow{s, row});
             }
         }
 
@@ -311,14 +322,13 @@ namespace tarka::native {
         }
 
         bool simplex_solve() {
-            // Check direct single-variable bounds consistency
+            // 1. Check direct single-variable bounds consistency
             for (std::uint32_t v = 0; v < num_vars_; ++v) {
                 if (lower_bounds_[v] && upper_bounds_[v]) {
                     const auto& lb = lower_bounds_[v]->bound;
                     const auto& ub = upper_bounds_[v]->bound;
                     // Conflict if lb > ub or (lb == ub and strict)
                     if (ub < lb) {
-                        // Inconsistent bounds on variable v!
                         explanation_.clear();
                         if (lower_bounds_[v]->reason_atom != kNullAtom) {
                             explanation_.push_back(make_lit(reg_->var_of(lower_bounds_[v]->reason_atom),
@@ -338,6 +348,75 @@ namespace tarka::native {
                     assignment_[v] = upper_bounds_[v]->bound.val;
                 }
             }
+
+            // 2. Multi-row tableau evaluation & pivoting
+            for (const auto& tr : tableau_) {
+                const std::uint32_t s = tr.slack_var;
+                rat s_val{};
+                for (const auto& [v, c] : tr.row.terms) {
+                    s_val = s_val + c * assignment_[v];
+                }
+                assignment_[s] = s_val;
+
+                if (upper_bounds_[s] && bound_val{s_val, false} > upper_bounds_[s]->bound) {
+                    bool fixed = false;
+                    for (const auto& [v, c] : tr.row.terms) {
+                        if (c.sign() > 0 && (!lower_bounds_[v] || assignment_[v] > lower_bounds_[v]->bound.val)) {
+                            assignment_[v] = assignment_[v] - (s_val - upper_bounds_[s]->bound.val) / c;
+                            fixed = true;
+                            break;
+                        } else if (c.sign() < 0 && (!upper_bounds_[v] || assignment_[v] < upper_bounds_[v]->bound.val)) {
+                            assignment_[v] = assignment_[v] + (s_val - upper_bounds_[s]->bound.val) / (-c);
+                            fixed = true;
+                            break;
+                        }
+                    }
+                    if (!fixed) {
+                        explanation_.clear();
+                        if (upper_bounds_[s]->reason_atom != kNullAtom) {
+                            explanation_.push_back(make_lit(reg_->var_of(upper_bounds_[s]->reason_atom),
+                                                            /*negated=*/upper_bounds_[s]->reason_val));
+                        }
+                        for (const auto& [v, c] : tr.row.terms) {
+                            auto& b = (c.sign() > 0) ? lower_bounds_[v] : upper_bounds_[v];
+                            if (b && b->reason_atom != kNullAtom) {
+                                explanation_.push_back(make_lit(reg_->var_of(b->reason_atom), /*negated=*/b->reason_val));
+                            }
+                        }
+                        return false;
+                    }
+                }
+
+                if (lower_bounds_[s] && bound_val{s_val, false} < lower_bounds_[s]->bound) {
+                    bool fixed = false;
+                    for (const auto& [v, c] : tr.row.terms) {
+                        if (c.sign() > 0 && (!upper_bounds_[v] || assignment_[v] < upper_bounds_[v]->bound.val)) {
+                            assignment_[v] = assignment_[v] + (lower_bounds_[s]->bound.val - s_val) / c;
+                            fixed = true;
+                            break;
+                        } else if (c.sign() < 0 && (!lower_bounds_[v] || assignment_[v] > lower_bounds_[v]->bound.val)) {
+                            assignment_[v] = assignment_[v] - (lower_bounds_[s]->bound.val - s_val) / (-c);
+                            fixed = true;
+                            break;
+                        }
+                    }
+                    if (!fixed) {
+                        explanation_.clear();
+                        if (lower_bounds_[s]->reason_atom != kNullAtom) {
+                            explanation_.push_back(make_lit(reg_->var_of(lower_bounds_[s]->reason_atom),
+                                                            /*negated=*/lower_bounds_[s]->reason_val));
+                        }
+                        for (const auto& [v, c] : tr.row.terms) {
+                            auto& b = (c.sign() > 0) ? upper_bounds_[v] : lower_bounds_[v];
+                            if (b && b->reason_atom != kNullAtom) {
+                                explanation_.push_back(make_lit(reg_->var_of(b->reason_atom), /*negated=*/b->reason_val));
+                            }
+                        }
+                        return false;
+                    }
+                }
+            }
+
             return true;
         }
 
@@ -345,7 +424,7 @@ namespace tarka::native {
         std::unordered_map<std::uint32_t, DecodedConstraint> decoded_;
         std::unordered_map<std::uint64_t, std::uint32_t> term_to_var_;
         std::vector<Term> var_to_term_;
-        std::vector<LinearRow> tableau_;
+        std::vector<TableauRow> tableau_;
 
         std::vector<std::optional<BoundRecord>> lower_bounds_;
         std::vector<std::optional<BoundRecord>> upper_bounds_;

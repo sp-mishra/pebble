@@ -312,8 +312,21 @@ namespace tarka::native {
             return bits;
         }
 
+        [[nodiscard]] bool is_const(Lit l) const noexcept {
+            return const_var_valid_ && lit_var(l) == const_var_;
+        }
+
+        [[nodiscard]] bool const_bool(Lit l) const noexcept {
+            return !lit_sign(l);
+        }
+
         // Circuits
         Lit blast_and(Lit a, Lit b) {
+            if (is_const(a)) return const_bool(a) ? b : const_lit(false);
+            if (is_const(b)) return const_bool(b) ? a : const_lit(false);
+            if (a == b) return a;
+            if (a == lit_neg(b)) return const_lit(false);
+
             Lit r = new_lit();
             sat_->add_clause({lit_neg(r), a});
             sat_->add_clause({lit_neg(r), b});
@@ -322,6 +335,11 @@ namespace tarka::native {
         }
 
         Lit blast_or(Lit a, Lit b) {
+            if (is_const(a)) return const_bool(a) ? const_lit(true) : b;
+            if (is_const(b)) return const_bool(b) ? const_lit(true) : a;
+            if (a == b) return a;
+            if (a == lit_neg(b)) return const_lit(true);
+
             Lit r = new_lit();
             sat_->add_clause({lit_neg(a), r});
             sat_->add_clause({lit_neg(b), r});
@@ -330,6 +348,11 @@ namespace tarka::native {
         }
 
         Lit blast_xor(Lit a, Lit b) {
+            if (is_const(a)) return const_bool(a) ? lit_neg(b) : b;
+            if (is_const(b)) return const_bool(b) ? lit_neg(a) : a;
+            if (a == b) return const_lit(false);
+            if (a == lit_neg(b)) return const_lit(true);
+
             Lit r = new_lit();
             sat_->add_clause({lit_neg(r), a, b});
             sat_->add_clause({lit_neg(r), lit_neg(a), lit_neg(b)});
@@ -343,6 +366,9 @@ namespace tarka::native {
         }
 
         Lit blast_ite_bit(Lit c, Lit a, Lit b) {
+            if (is_const(c)) return const_bool(c) ? a : b;
+            if (a == b) return a;
+
             Lit r = new_lit();
             sat_->add_clause({lit_neg(c), lit_neg(r), a});
             sat_->add_clause({lit_neg(c), r, lit_neg(a)});
