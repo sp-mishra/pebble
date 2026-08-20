@@ -713,7 +713,7 @@ namespace nitya {
             init_tail_from_disk();
 
             if (opts_.background_flush) {
-                background_thread_ = std::jthread([this](std::stop_token st) {
+                background_thread_ = std::jthread([this](const std::stop_token& st) {
                     flusher_worker(st);
                 });
             }

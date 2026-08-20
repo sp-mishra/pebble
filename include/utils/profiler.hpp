@@ -326,8 +326,8 @@ namespace profiler {
 
         // Forwarding methods for convenience
         [[nodiscard]] auto median() const { return profile.median(); }
-        [[nodiscard]] auto percentile(double p) const { return profile.percentile(p); }
-        [[nodiscard]] auto histogram(size_t buckets = 10) const { return profile.histogram(buckets); }
+        [[nodiscard]] auto percentile(const double p) const { return profile.percentile(p); }
+        [[nodiscard]] auto histogram(const size_t buckets = 10) const { return profile.histogram(buckets); }
         [[nodiscard]] auto standard_deviation() const { return profile.standard_deviation(); }
         [[nodiscard]] auto variance() const { return profile.variance(); }
         [[nodiscard]] auto coefficient_of_variation() const { return profile.coefficient_of_variation(); }
@@ -346,11 +346,11 @@ namespace profiler {
         const size_t mid = scratch.size() / 2;
         std::ranges::nth_element(scratch, scratch.begin() + mid);
         if (scratch.size() % 2 == 1) return scratch[mid];
-        auto lower_it = std::max_element(scratch.begin(), scratch.begin() + mid);
+        const auto lower_it = std::max_element(scratch.begin(), scratch.begin() + mid);
         return (*lower_it + scratch[mid]) / 2;
     }
 
-    inline std::chrono::nanoseconds ProfileResult::percentile(double p) const {
+    inline std::chrono::nanoseconds ProfileResult::percentile(const double p) const {
         if (individual_runs.empty() || p < 0.0 || p > 100.0) return std::chrono::nanoseconds(0);
         const size_t n = individual_runs.size();
         const auto idx = static_cast<size_t>(std::round(p / 100.0 * (n - 1)));
@@ -362,7 +362,7 @@ namespace profiler {
         return scratch[idx];
     }
 
-    inline std::vector<size_t> ProfileResult::histogram(size_t buckets) const {
+    inline std::vector<size_t> ProfileResult::histogram(const size_t buckets) const {
         if (individual_runs.empty() || buckets == 0) return {};
         auto [min_it, max_it] = std::minmax_element(individual_runs.begin(),
                                                     individual_runs.end());
@@ -490,7 +490,7 @@ namespace profiler {
     }
 
     inline std::string ProfileResult::format(const TimeUnit unit) const {
-        auto convert = [](std::chrono::nanoseconds ns, TimeUnit u) -> double {
+        auto convert = [](const std::chrono::nanoseconds ns, const TimeUnit u) -> double {
             switch (u) {
             case TimeUnit::Nanoseconds: return static_cast<double>(ns.count());
             case TimeUnit::Microseconds: return static_cast<double>(ns.count()) / 1e3;
@@ -499,7 +499,7 @@ namespace profiler {
             }
             return static_cast<double>(ns.count());
         };
-        auto unit_str = [](TimeUnit u) -> const char* {
+        auto unit_str = [](const TimeUnit u) -> const char* {
             switch (u) {
             case TimeUnit::Nanoseconds: return "ns";
             case TimeUnit::Microseconds: return "us";
@@ -945,7 +945,7 @@ namespace profiler {
             const std::string footer(header.length(), '-');
 
             size_t total_exceptions = 0;
-            for (const auto& [msg, count] : result.unique_exceptions) total_exceptions += count;
+            for (const auto& count : result.unique_exceptions | std::views::values) total_exceptions += count;
 
             std::ostringstream oss;
             oss << header << "\n"

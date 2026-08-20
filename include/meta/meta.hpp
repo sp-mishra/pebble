@@ -523,9 +523,9 @@ namespace meta {
         consteval std::string_view type_name_raw() noexcept {
 #if defined(__clang__)
             // __PRETTY_FUNCTION__ = "std::string_view meta::detail::compiler::type_name_raw() [T = ...]"
-            std::string_view sv = __PRETTY_FUNCTION__;
-            const auto start = sv.find("T = ") + 4;
-            const auto end = sv.rfind(']');
+            constexpr std::string_view sv = __PRETTY_FUNCTION__;
+            constexpr auto start = sv.find("T = ") + 4;
+            constexpr auto end = sv.rfind(']');
             return sv.substr(start, end - start);
 #elif defined(__GNUC__)
             std::string_view sv = __PRETTY_FUNCTION__;
@@ -549,9 +549,9 @@ namespace meta {
             requires std::is_enum_v<decltype(V)>
         consteval std::string_view enum_name_raw() noexcept {
 #if defined(__clang__)
-            std::string_view sv = __PRETTY_FUNCTION__;
-            auto start = sv.find("V = ") + 4;
-            auto end = sv.rfind(']');
+            const std::string_view sv = __PRETTY_FUNCTION__;
+            const auto start = sv.find("V = ") + 4;
+            const auto end = sv.rfind(']');
             return sv.substr(start, end - start);
 #elif defined(__GNUC__)
             std::string_view sv = __PRETTY_FUNCTION__;
@@ -578,7 +578,7 @@ namespace meta {
             while (!raw.empty() && (raw.back() == ' ' || raw.back() == '\t'))
                 raw.remove_suffix(1);
 
-            auto pos = raw.rfind("::");
+            const auto pos = raw.rfind("::");
             if (pos != std::string_view::npos)
                 raw = raw.substr(pos + 2);
 
@@ -608,7 +608,7 @@ namespace meta {
             // cast-like/spelling artifact.
             bool has_digit = false;
             bool has_alpha = false;
-            for (char c : raw) {
+            for (const char c : raw) {
                 if (c >= '0' && c <= '9')
                     has_digit = true;
                 if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_')
@@ -1842,8 +1842,7 @@ namespace meta {
         std::size_t lo = 0, hi = entries.size();
         while (lo < hi) {
             const std::size_t mid = lo + (hi - lo) / 2;
-            const int midval = static_cast<int>(entries[mid].val);
-            if (midval < target)
+            if (const int midval = static_cast<int>(entries[mid].val); midval < target)
                 lo = mid + 1;
             else if (midval > target)
                 hi = mid;
@@ -2038,7 +2037,7 @@ namespace meta {
 
             template <typename S, std::size_t... I>
             static auto compute(std::index_sequence<I...>)
-                -> typename concat_seqs<slot<typename S::template element<I>>...>::type;
+                -> concat_seqs<slot<typename S::template element<I>>...>::type;
 
             using type = decltype(compute<Seq>(std::make_index_sequence<Seq::size>
                     {})
@@ -2817,7 +2816,7 @@ namespace meta {
     // ---------------------------------------------------------------------------
     consteval std::uint64_t fnv1a_hash(const std::string_view sv) noexcept {
         std::uint64_t hash = 14695981039346656037ULL;
-        for (char c : sv) {
+        for (const char c : sv) {
             hash ^= static_cast<std::uint64_t>(c);
             hash *= 1099511628211ULL;
         }
@@ -3077,10 +3076,10 @@ namespace meta {
 
         // wyhash64 — portable constexpr adaptation of the wyhash mixing step
         [[nodiscard]] constexpr std::uint64_t wyhash64(const std::string_view sv) noexcept {
-            constexpr std::uint64_t s0 = 0xa0761d6478bd642full;
-            constexpr std::uint64_t s1 = 0xe7037ed1a0b428dbull;
             std::uint64_t h = 0;
-            for (unsigned char c : sv) {
+            for (const unsigned char c : sv) {
+                constexpr std::uint64_t s1 = 0xe7037ed1a0b428dbull;
+                constexpr std::uint64_t s0 = 0xa0761d6478bd642full;
                 h ^= c;
                 // Multiply-xor mixing (Murmur-style, avoids __uint128_t)
                 h ^= (h << 33);
@@ -3109,9 +3108,9 @@ namespace meta {
         [[nodiscard]] constexpr std::uint64_t xxh3_64(const std::string_view sv) noexcept {
             constexpr std::uint64_t prime1 = 0x9e3779b185ebca87ull;
             constexpr std::uint64_t prime2 = 0xc2b2ae3d27d4eb4full;
-            constexpr std::uint64_t prime3 = 0x165667b19e3779f9ull;
             std::uint64_t h = prime1 ^ (sv.size() * prime2);
-            for (unsigned char c : sv) {
+            for (const unsigned char c : sv) {
+                constexpr std::uint64_t prime3 = 0x165667b19e3779f9ull;
                 h ^= static_cast<std::uint64_t>(c) * prime3;
                 h = (h << 17) | (h >> 47); // rotl64(h, 17)
                 h *= prime2;

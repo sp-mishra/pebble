@@ -55,10 +55,10 @@ namespace containers {
             return s;
         }
 
-        [[nodiscard]] static blob_address from_hex(std::string_view h) noexcept {
+        [[nodiscard]] static blob_address from_hex(const std::string_view h) noexcept {
             blob_address a;
             if (h.size() != 64) return a;
-            auto nibble = [](char c) -> std::uint8_t {
+            auto nibble = [](const char c) -> std::uint8_t {
                 if (c >= '0' && c <= '9') return static_cast<std::uint8_t>(c - '0');
                 if (c >= 'a' && c <= 'f') return static_cast<std::uint8_t>(c - 'a' + 10);
                 if (c >= 'A' && c <= 'F') return static_cast<std::uint8_t>(c - 'A' + 10);
@@ -143,7 +143,7 @@ namespace containers {
         // Atomicity: write to temp + rename (never exposes partial content).
         // -------------------------------------------------------------------------
         [[nodiscard]] std::expected<blob_address, store_error>
-        put(std::span<const std::uint8_t> bytes) {
+        put(const std::span<const std::uint8_t> bytes) const {
             const auto addr = compute_address(bytes);
             const auto dest = blob_path(addr);
 
@@ -203,7 +203,7 @@ namespace containers {
         }
 
         [[nodiscard]] std::expected<void, store_error>
-        erase(const blob_address& addr) {
+        erase(const blob_address& addr) const {
             std::error_code ec;
             std::filesystem::remove(blob_path(addr), ec);
             if (ec && ec != std::errc::no_such_file_or_directory)
@@ -217,7 +217,7 @@ namespace containers {
         std::vector<setu::mapping<setu::read_only>> mappings_;
 
         [[nodiscard]] static blob_address
-        compute_address(std::span<const std::uint8_t> bytes) noexcept {
+        compute_address(const std::span<const std::uint8_t> bytes) noexcept {
             const auto hash = containers::content_digest<containers::sha256_digest_policy>(bytes);
             blob_address addr;
             static_assert(hash.size() >= 32);

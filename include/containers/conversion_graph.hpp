@@ -35,10 +35,10 @@ namespace containers {
 
         // Add directed weighted edge. Multiple edges between same pair allowed.
         // Returns stable edge id (== index in internal edge table).
-        conversion_edge_id add_conversion(conversion_vertex from,
-                                          conversion_vertex to,
-                                          conversion_cost cost) {
-            auto id = static_cast<conversion_edge_id>(edges_.size());
+        conversion_edge_id add_conversion(const conversion_vertex from,
+                                          const conversion_vertex to,
+                                          const conversion_cost cost) {
+            const auto id = static_cast<conversion_edge_id>(edges_.size());
             edges_.push_back({from, to, cost, id});
             adj_[from].push_back(id);
             // ensure 'to' is known to vertex_count (lazy insert)
@@ -54,8 +54,7 @@ namespace containers {
             if (from == to)
                 return std::vector<conversion_edge_id>{};
 
-            auto it = adj_.find(from);
-            if (it == adj_.end())
+            if (auto it = adj_.find(from); it == adj_.end())
                 return std::nullopt;
 
             constexpr std::uint64_t kInf = std::numeric_limits<std::uint64_t>::max();
@@ -68,15 +67,14 @@ namespace containers {
 
             // min-heap: (cost, vertex) — tie-break by vertex id for determinism
             using Entry = std::pair<std::uint64_t, conversion_vertex>;
-            std::priority_queue<Entry, std::vector<Entry>, std::greater<Entry>> heap;
-            heap.push({0, from});
+            std::priority_queue<Entry, std::vector<Entry>, std::greater<>> heap;
+            heap.emplace(0, from);
 
             while (!heap.empty()) {
                 auto [d, u] = heap.top();
                 heap.pop();
 
-                auto dist_u = dist.find(u);
-                if (dist_u == dist.end() || d > dist_u->second)
+                if (auto dist_u = dist.find(u); dist_u == dist.end() || d > dist_u->second)
                     continue; // stale entry
 
                 if (u == to) {
@@ -113,7 +111,7 @@ namespace containers {
                     if (nd < dv) {
                         dv = nd;
                         prev_edge[e.to] = eid;
-                        heap.push({nd, e.to});
+                        heap.emplace(nd, e.to);
                     }
                 }
             }
@@ -125,13 +123,13 @@ namespace containers {
         [[nodiscard]] conversion_cost
         path_cost(const std::vector<conversion_edge_id>& path) const noexcept {
             std::uint64_t total = 0;
-            for (conversion_edge_id eid : path)
+            for (const conversion_edge_id eid : path)
                 total += static_cast<std::uint64_t>(edges_[eid].cost);
             constexpr std::uint64_t kMax = std::numeric_limits<conversion_cost>::max();
             return static_cast<conversion_cost>(total > kMax ? kMax : total);
         }
 
-        [[nodiscard]] const conversion_edge& edge(conversion_edge_id id) const noexcept {
+        [[nodiscard]] const conversion_edge& edge(const conversion_edge_id id) const noexcept {
             return edges_[id];
         }
 

@@ -56,6 +56,7 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 ### Graph & Tree Substrate
 * **LiteGraph** (`include/containers/graph/LiteGraph.hpp`) — Flat Structure-of-Arrays (SoA) graph with 30+ graph algorithms (Dijkstra, A*, Tarjan SCC, Brandes betweenness, Kruskal, Prim, PageRank, Edmonds-Karp max-flow, VF2 subgraph isomorphism) and Google Highway SIMD sweeps.
   * Documentation: [`docs/containers/LiteGraph.md`](docs/containers/LiteGraph.md)
+  * Tutorial: [`docs/tutorials/LiteGraph.md`](docs/tutorials/LiteGraph.md)
 * **DominatorTree** (`include/containers/graph/DominatorTree.hpp`) — Lengauer-Tarjan and Cooper-Harvey-Kennedy immediate dominator solvers over `LiteGraphModel`.
 * **egraph** (`include/containers/graph/egraph.hpp`) — Equality saturation engine: union-find (path-splitting) + Kosha hash-cons + egg-style rebuild + saturation and best-cost extraction.
   * Documentation: [`docs/containers/egraph.md`](docs/containers/egraph.md)

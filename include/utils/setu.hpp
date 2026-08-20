@@ -366,8 +366,7 @@ namespace setu {
 
             if (count > SIZE_MAX / element_size) return false;
 
-            const std::size_t total_size = count * element_size;
-            if (total_size > limit - offset) return false;
+            if (const std::size_t total_size = count * element_size; total_size > limit - offset) return false;
 
             return true;
         }
@@ -385,8 +384,7 @@ namespace setu {
                 return 0;
             }
 
-            constexpr std::size_t max_count = SIZE_MAX / sizeof(T);
-            if (count > max_count) {
+            if (constexpr std::size_t max_count = SIZE_MAX / sizeof(T); count > max_count) {
                 return std::nullopt;
             }
 
@@ -403,8 +401,7 @@ namespace setu {
                 return make_error_code(error_code::out_of_bounds);
             }
 
-            const void* target = base + offset;
-            if (!is_aligned_for_type<T>(target)) {
+            if (const void* target = base + offset; !is_aligned_for_type<T>(target)) {
                 return make_error_code(error_code::misaligned_access);
             }
 
@@ -426,8 +423,7 @@ namespace setu {
                 return {};
             }
 
-            const void* target = base + offset;
-            if (!is_aligned_for_type<T>(target)) {
+            if (const void* target = base + offset; !is_aligned_for_type<T>(target)) {
                 return make_error_code(error_code::misaligned_access);
             }
 
@@ -535,7 +531,7 @@ namespace setu {
                     break;
                 }
 
-                int fd = ::open(path.c_str(), flags, permissions);
+                const int fd = ::open(path.c_str(), flags, permissions);
                 if (fd < 0) {
                     if (errno == ENOENT) {
                         return std::unexpected(make_error_code(error_code::file_not_found));
@@ -1121,8 +1117,7 @@ namespace setu {
                 return std::unexpected(make_error_code(error_code::unsupported_operation));
             }
 
-            auto resize_result = detail::posix_backend::resize_file(file_handle_, new_size);
-            if (!resize_result) {
+            if (const auto resize_result = detail::posix_backend::resize_file(file_handle_, new_size); !resize_result) {
                 return std::unexpected(make_error_code(error_code::resize_failed));
             }
 
@@ -1553,7 +1548,7 @@ namespace setu {
             return writable_;
         }
 
-        [[nodiscard]] constexpr std::size_t size() const noexcept {
+        [[nodiscard]] static constexpr std::size_t size() noexcept {
             return PageSize;
         }
 
@@ -1785,7 +1780,7 @@ namespace setu {
     template <std::size_t PageSize>
     class page_range {
     public:
-        page_range(const region_view& region)
+        explicit page_range(const region_view& region)
             : region_(region)
               , count_(region.size() / PageSize) {}
 
@@ -1828,7 +1823,7 @@ namespace setu {
         constexpr explicit offset_ptr(const offset_type byte_offset) noexcept
             : offset_(byte_offset) {}
 
-        constexpr offset_ptr(std::nullptr_t) noexcept
+        explicit constexpr offset_ptr(std::nullptr_t) noexcept
             : offset_(null_sentinel) {}
 
         [[nodiscard]] constexpr bool is_null() const noexcept {
@@ -1950,7 +1945,7 @@ namespace setu {
         struct magic {
             std::array<std::byte, N> bytes;
 
-            constexpr magic(const char (&str)[N + 1]) noexcept {
+            explicit constexpr magic(const char (&str)[N + 1]) noexcept {
                 for (std::size_t i = 0; i < N; ++i) {
                     bytes[i] = static_cast<std::byte>(str[i]);
                 }

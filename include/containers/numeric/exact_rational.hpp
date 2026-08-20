@@ -18,7 +18,6 @@
 // =============================================================================
 
 #include <cstdint>
-#include <cstdlib>
 #include <compare>
 #include <optional>
 #include <string>

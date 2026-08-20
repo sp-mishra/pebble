@@ -35,7 +35,6 @@
 #include <algorithm>
 #include <array>
 #include <bit>
-#include <cstdint>
 #include <span>
 #include <string>
 #include <string_view>
@@ -52,13 +51,13 @@ namespace containers {
         // Scalar writes (always little-endian)
         // -------------------------------------------------------------------------
 
-        void write_u8(std::uint8_t v) {
+        void write_u8(const std::uint8_t v) {
             buf_.push_back(v);
         }
 
-        void write_u16(std::uint16_t v) {
+        void write_u16(const std::uint16_t v) {
             if constexpr (std::endian::native == std::endian::little) {
-                const std::uint8_t* p = reinterpret_cast<const std::uint8_t*>(&v);
+                const auto p = reinterpret_cast<const std::uint8_t*>(&v);
                 buf_.push_back(p[0]);
                 buf_.push_back(p[1]);
             }
@@ -68,27 +67,27 @@ namespace containers {
             }
         }
 
-        void write_u32(std::uint32_t v) {
+        void write_u32(const std::uint32_t v) {
             buf_.push_back(static_cast<std::uint8_t>(v & 0xFFu));
             buf_.push_back(static_cast<std::uint8_t>((v >> 8) & 0xFFu));
             buf_.push_back(static_cast<std::uint8_t>((v >> 16) & 0xFFu));
             buf_.push_back(static_cast<std::uint8_t>((v >> 24) & 0xFFu));
         }
 
-        void write_u64(std::uint64_t v) {
+        void write_u64(const std::uint64_t v) {
             for (int i = 0; i < 8; ++i)
                 buf_.push_back(static_cast<std::uint8_t>((v >> (8 * i)) & 0xFFu));
         }
 
-        void write_i32(std::int32_t v) {
+        void write_i32(const std::int32_t v) {
             write_u32(static_cast<std::uint32_t>(v));
         }
 
-        void write_i64(std::int64_t v) {
+        void write_i64(const std::int64_t v) {
             write_u64(static_cast<std::uint64_t>(v));
         }
 
-        void write_bool(bool v) {
+        void write_bool(const bool v) {
             write_u8(v ? 1u : 0u);
         }
 
@@ -112,7 +111,7 @@ namespace containers {
 
         // write_string_ref: emit the sorted index for the string interned at
         // insertion index idx. Must be called AFTER finalize_string_table().
-        void write_string_ref(std::uint32_t insertion_idx) {
+        void write_string_ref(const std::uint32_t insertion_idx) {
             write_u32(remap_[insertion_idx]);
         }
 
@@ -124,10 +123,10 @@ namespace containers {
             // Build sorted order via index sort
             sort_order_.resize(n);
             for (std::uint32_t i = 0; i < n; ++i) sort_order_[i] = i;
-            std::sort(sort_order_.begin(), sort_order_.end(),
-                      [this](std::uint32_t a, std::uint32_t b) {
-                          return strings_[a] < strings_[b];
-                      });
+            std::ranges::sort(sort_order_,
+                              [this](const std::uint32_t a, const std::uint32_t b) {
+                                  return strings_[a] < strings_[b];
+                              });
             // remap_[insertion_idx] = sorted_idx
             remap_.resize(n);
             for (std::uint32_t sorted = 0; sorted < n; ++sorted)
@@ -137,7 +136,7 @@ namespace containers {
             for (std::uint32_t sorted = 0; sorted < n; ++sorted) {
                 const std::string& s = strings_[sort_order_[sorted]];
                 write_u32(static_cast<std::uint32_t>(s.size()));
-                for (unsigned char c : s) write_u8(c);
+                for (const unsigned char c : s) write_u8(c);
             }
             finalized_ = true;
         }
@@ -186,7 +185,7 @@ namespace containers {
         static constexpr std::size_t digest_bytes = 32;
 
         [[nodiscard]] static std::array<std::uint8_t, digest_bytes>
-        compute(std::span<const std::uint8_t> data) noexcept {
+        compute(const std::span<const std::uint8_t> data) noexcept {
             std::array<std::uint8_t, digest_bytes> out{};
             const std::size_t n = std::min(data.size(), digest_bytes);
             for (std::size_t i = 0; i < n; ++i) out[i] = data[i];
@@ -224,7 +223,7 @@ namespace containers {
                 0x90befffau, 0xa4506cebu, 0xbef9a3f7u, 0xc67178f2u
             };
 
-            auto rotr = [](std::uint32_t x, int n) constexpr noexcept -> std::uint32_t {
+            auto rotr = [](const std::uint32_t x, const int n) constexpr noexcept -> std::uint32_t {
                 return (x >> n) | (x << (32 - n));
             };
 
@@ -285,7 +284,7 @@ namespace containers {
             }
 
             std::array<std::uint8_t, digest_bytes> out{};
-            auto store_be = [](std::uint32_t v, std::uint8_t* p) {
+            auto store_be = [](const std::uint32_t v, std::uint8_t* p) {
                 p[0] = static_cast<std::uint8_t>((v >> 24) & 0xFFu);
                 p[1] = static_cast<std::uint8_t>((v >> 16) & 0xFFu);
                 p[2] = static_cast<std::uint8_t>((v >> 8) & 0xFFu);

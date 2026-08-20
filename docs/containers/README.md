@@ -137,7 +137,7 @@ Concrete named algorithms per container, with the header they live in.
 
 | Container            | Doc                                              |
 |----------------------|--------------------------------------------------|
-| LiteGraph            | [LiteGraph.md](LiteGraph.md)                     |
+| LiteGraph            | [LiteGraph.md](LiteGraph.md) · [tutorial](../tutorials/LiteGraph.md) |
 | egraph               | [egraph.md](egraph.md)                           |
 | NAryTree             | [NAryTree.md](NAryTree.md)                       |
 | SmallVector          | [SmallVector.md](SmallVector.md)                 |

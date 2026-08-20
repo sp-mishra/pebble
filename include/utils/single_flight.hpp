@@ -124,8 +124,7 @@ namespace utils {
                             "compute_fn returned error"
                         });
 
-                    const bool ok = store_.publish(*computed, *token);
-                    if (!ok)
+                    if (const bool ok = store_.publish(*computed, *token); !ok)
                         return std::unexpected(single_flight_error{
                             single_flight_error_code::publish_failed,
                             "store publish failed"

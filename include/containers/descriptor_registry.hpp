@@ -22,9 +22,7 @@
 #include "containers/associative/slot_map.hpp"
 #include "containers/handle/generational_handle.hpp"
 
-#include <cassert>
 #include <concepts>
-#include <cstdint>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -82,7 +80,7 @@ namespace containers {
             const auto cat = d.category;
 
             // Overwrite if already present under this stable_id
-            if (auto it = id_to_handle_.find(id); it != id_to_handle_.end()) {
+            if (const auto it = id_to_handle_.find(id); it != id_to_handle_.end()) {
                 const descriptor_handle existing = it->second;
                 if (Desc* ptr = store_.find(existing)) *ptr = std::move(d);
                 name_to_handle_[nh] = existing;
@@ -90,12 +88,12 @@ namespace containers {
             }
 
             // Insert fresh
-            descriptor_handle h = store_.insert(std::move(d));
+            const descriptor_handle h = store_.insert(std::move(d));
             id_to_handle_[id] = h;
             name_to_handle_[nh] = h;
 
             // Category index: grow sparse set if needed
-            std::size_t cat_idx = cat_to_index(cat);
+            const std::size_t cat_idx = cat_to_index(cat);
             if (cat_idx >= cat_buckets_.size()) {
                 cat_buckets_.resize(cat_idx + 1);
             }
@@ -107,14 +105,14 @@ namespace containers {
         // -------------------------------------------------------------------------
         // find by stable_id
         // -------------------------------------------------------------------------
-        [[nodiscard]] const Desc* find(std::uint32_t id) const noexcept {
-            auto it = id_to_handle_.find(id);
+        [[nodiscard]] const Desc* find(const std::uint32_t id) const noexcept {
+            const auto it = id_to_handle_.find(id);
             if (it == id_to_handle_.end()) return nullptr;
             return store_.find(it->second);
         }
 
-        [[nodiscard]] Desc* find(std::uint32_t id) noexcept {
-            auto it = id_to_handle_.find(id);
+        [[nodiscard]] Desc* find(const std::uint32_t id) noexcept {
+            const auto it = id_to_handle_.find(id);
             if (it == id_to_handle_.end()) return nullptr;
             return store_.find(it->second);
         }
@@ -122,8 +120,8 @@ namespace containers {
         // -------------------------------------------------------------------------
         // find by name_hash
         // -------------------------------------------------------------------------
-        [[nodiscard]] const Desc* find_by_name(std::uint64_t name_hash) const noexcept {
-            auto it = name_to_handle_.find(name_hash);
+        [[nodiscard]] const Desc* find_by_name(const std::uint64_t name_hash) const noexcept {
+            const auto it = name_to_handle_.find(name_hash);
             if (it == name_to_handle_.end()) return nullptr;
             return store_.find(it->second);
         }
@@ -133,7 +131,7 @@ namespace containers {
         // -------------------------------------------------------------------------
         [[nodiscard]] std::vector<const Desc*> by_category(category_type cat) const {
             std::vector<const Desc*> result;
-            std::size_t idx = cat_to_index(cat);
+            const std::size_t idx = cat_to_index(cat);
             if (idx >= cat_buckets_.size()) return result;
             for (const descriptor_handle h : cat_buckets_[idx]) {
                 if (const Desc* p = store_.find(h)) result.push_back(p);
@@ -180,9 +178,9 @@ namespace containers {
     // FNV-1a name hash helper (same algorithm as Vākya's property_key)
     // ============================================================================
 
-    [[nodiscard]] constexpr std::uint64_t desc_name_hash(std::string_view s) noexcept {
+    [[nodiscard]] constexpr std::uint64_t desc_name_hash(const std::string_view s) noexcept {
         std::uint64_t h = 14695981039346656037ULL;
-        for (char c : s) {
+        for (const char c : s) {
             h ^= static_cast<std::uint64_t>(static_cast<unsigned char>(c));
             h *= 1099511628211ULL;
         }

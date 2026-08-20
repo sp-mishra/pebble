@@ -31,7 +31,7 @@ namespace containers {
         // ---- Capacity / size ------------------------------------------------
 
         [[nodiscard]] constexpr size_type size() const noexcept { return size_; }
-        [[nodiscard]] constexpr size_type capacity() const noexcept { return N; }
+        [[nodiscard]] static constexpr size_type capacity() noexcept { return N; }
         [[nodiscard]] constexpr bool empty() const noexcept { return size_ == 0; }
         [[nodiscard]] constexpr bool overflow() const noexcept { return overflow_; }
 
