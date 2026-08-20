@@ -314,3 +314,238 @@ TEST_CASE("tarka native: Incremental push/pop scoping", "[tarka][native][increme
     REQUIRE(r3.has_value());
     REQUIRE(*r3 == SatResult::Sat);
 }
+
+TEST_CASE("tarka native: BitVector Arithmetic & Bitwise Logic (QF_BV)", "[tarka][native][bv]") {
+    Context ctx;
+    auto bv32 = ctx.bv_sort(32);
+    auto bool_s = ctx.bool_sort();
+
+    auto x = ctx.make_symbol("x", bv32);
+    auto y = ctx.make_symbol("y", bv32);
+    auto z = ctx.make_symbol("z", bv32);
+
+    RouterEngine<backend::native> solver;
+
+    SECTION("Bitwise XOR identity: (x ^ x) != 0 is UNSAT") {
+        auto zero = ctx.make_value(0, bv32);
+        Term xor_xx = ctx.make_term(Op::BvXor, bv32, std::vector<Term>{x, x});
+        Term neq_zero = (xor_xx != zero);
+
+        solver.assert_formula(neq_zero);
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Unsat);
+    }
+
+    SECTION("De Morgan's law over BitVectors: ~(x & y) != (~x | ~y) is UNSAT") {
+        Term xy_and = ctx.make_term(Op::BvAnd, bv32, std::vector<Term>{x, y});
+        Term not_and = ctx.make_term(Op::BvNot, bv32, std::vector<Term>{xy_and});
+        Term not_x = ctx.make_term(Op::BvNot, bv32, std::vector<Term>{x});
+        Term not_y = ctx.make_term(Op::BvNot, bv32, std::vector<Term>{y});
+        Term or_not = ctx.make_term(Op::BvOr, bv32, std::vector<Term>{not_x, not_y});
+        Term neq = (not_and != or_not);
+
+        solver.assert_formula(neq);
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Unsat);
+    }
+
+    SECTION("Transitivity of signed less-than: x <s y && y <s z && z <s x is UNSAT") {
+        Term c1 = ctx.make_term(Op::BvSlt, bool_s, std::vector<Term>{x, y});
+        Term c2 = ctx.make_term(Op::BvSlt, bool_s, std::vector<Term>{y, z});
+        Term c3 = ctx.make_term(Op::BvSlt, bool_s, std::vector<Term>{z, x});
+
+        solver.assert_formula(c1 && c2 && c3);
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Unsat);
+    }
+
+    SECTION("Bit-masking satisfiable solution with model extraction") {
+        auto mask = ctx.make_value(0xFF, bv32);
+        auto target = ctx.make_value(0xAB, bv32);
+        Term x_masked = ctx.make_term(Op::BvAnd, bv32, std::vector<Term>{x, mask});
+        Term masked = (x_masked == target);
+
+        solver.assert_formula(masked);
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Sat);
+
+        auto val = solver.get_value(x);
+        REQUIRE(val.has_value());
+        REQUIRE(std::holds_alternative<bv_value>(*val));
+        auto bv = std::get<bv_value>(*val);
+        REQUIRE((bv.bits & 0xFF) == 0xAB);
+    }
+}
+
+TEST_CASE("tarka native: Multi-Argument EUF & Congruence Closure (QF_UF)", "[tarka][native][uf]") {
+    Context ctx;
+    auto u_sort = ctx.string_sort();
+    auto f_sort = ctx.function_sort(std::vector<Sort>{u_sort, u_sort}, u_sort);
+
+    auto f = ctx.make_symbol("f", f_sort);
+    auto x1 = ctx.make_symbol("x1", u_sort);
+    auto x2 = ctx.make_symbol("x2", u_sort);
+    auto y1 = ctx.make_symbol("y1", u_sort);
+    auto y2 = ctx.make_symbol("y2", u_sort);
+
+    RouterEngine<backend::native> solver;
+
+    SECTION("Multi-arg congruence: x1 == y1 && x2 == y2 => f(x1, x2) == f(y1, y2)") {
+        Term fx = ctx.make_term(Op::Apply, u_sort, std::vector<Term>{f, x1, x2});
+        Term fy = ctx.make_term(Op::Apply, u_sort, std::vector<Term>{f, y1, y2});
+
+        Term eq1 = (x1 == y1);
+        Term eq2 = (x2 == y2);
+        Term neq_f = (fx != fy);
+
+        solver.assert_formula(eq1 && eq2 && neq_f);
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Unsat);
+    }
+
+    SECTION("Functional permutation congruence chain") {
+        auto g_sort = ctx.function_sort(std::vector<Sort>{u_sort}, u_sort);
+        auto g = ctx.make_symbol("g", g_sort);
+        auto a = ctx.make_symbol("a", u_sort);
+
+        // g(g(g(a))) == a && g(g(g(g(g(a))))) == a && g(a) != a => UNSAT (gcd(3, 5) = 1)
+        Term g1 = ctx.make_term(Op::Apply, u_sort, std::vector<Term>{g, a});
+        Term g2 = ctx.make_term(Op::Apply, u_sort, std::vector<Term>{g, g1});
+        Term g3 = ctx.make_term(Op::Apply, u_sort, std::vector<Term>{g, g2});
+        Term g4 = ctx.make_term(Op::Apply, u_sort, std::vector<Term>{g, g3});
+        Term g5 = ctx.make_term(Op::Apply, u_sort, std::vector<Term>{g, g4});
+
+        Term c1 = (g3 == a);
+        Term c2 = (g5 == a);
+        Term c3 = (g1 != a);
+
+        solver.assert_formula(c1 && c2 && c3);
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Unsat);
+    }
+}
+
+TEST_CASE("tarka native: Linear Real Arithmetic Bounds & Feasibility (QF_LRA)", "[tarka][native][lra]") {
+    Context ctx;
+    auto r_sort = ctx.real_sort();
+
+    auto x = ctx.make_symbol("x", r_sort);
+    auto y = ctx.make_symbol("y", r_sort);
+
+    RouterEngine<backend::native> solver;
+
+    SECTION("Satisfiable 2D bounded box") {
+        auto v1 = ctx.make_real(1, 1, r_sort);
+        auto v5 = ctx.make_real(5, 1, r_sort);
+        auto v2 = ctx.make_real(2, 1, r_sort);
+        auto v6 = ctx.make_real(6, 1, r_sort);
+
+        Term bx1 = (x >= v1);
+        Term bx2 = (x <= v5);
+        Term by1 = (y >= v2);
+        Term by2 = (y <= v6);
+
+        solver.assert_formula(bx1 && bx2 && by1 && by2);
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Sat);
+
+        auto vx = solver.get_value(x);
+        auto vy = solver.get_value(y);
+        REQUIRE(vx.has_value());
+        REQUIRE(vy.has_value());
+    }
+
+    SECTION("Infeasible 1D interval: x >= 5.0 && x <= 3.0") {
+        auto v5 = ctx.make_real(5, 1, r_sort);
+        auto v3 = ctx.make_real(3, 1, r_sort);
+
+        Term b1 = (x >= v5);
+        Term b2 = (x <= v3);
+
+        solver.assert_formula(b1 && b2);
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Unsat);
+    }
+}
+
+TEST_CASE("tarka native: Array Multi-Store & Transitivity (QF_AX)", "[tarka][native][array]") {
+    Context ctx;
+    auto idx_sort = ctx.bv_sort(32);
+    auto elem_sort = ctx.bv_sort(32);
+    auto arr_sort = ctx.array_sort(idx_sort, elem_sort);
+
+    auto a = ctx.make_symbol("a", arr_sort);
+    auto i = ctx.make_symbol("i", idx_sort);
+    auto j = ctx.make_symbol("j", idx_sort);
+    auto v1 = ctx.make_value(100, elem_sort);
+    auto v2 = ctx.make_value(200, elem_sort);
+
+    RouterEngine<backend::native> solver;
+
+    SECTION("Sequential store overwrite: select(store(store(a, i, v1), i, v2), i) == v2") {
+        Term a1 = ctx.make_term(Op::Store, arr_sort, std::vector<Term>{a, i, v1});
+        Term a2 = ctx.make_term(Op::Store, arr_sort, std::vector<Term>{a1, i, v2});
+        Term sel = ctx.make_term(Op::Select, elem_sort, std::vector<Term>{a2, i});
+
+        Term neq = (sel != v2);
+        solver.assert_formula(neq);
+
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Unsat);
+    }
+
+    SECTION("Store commutativity at distinct indices") {
+        // i != j => select(store(store(a, i, v1), j, v2), i) == v1
+        Term a1 = ctx.make_term(Op::Store, arr_sort, std::vector<Term>{a, i, v1});
+        Term a2 = ctx.make_term(Op::Store, arr_sort, std::vector<Term>{a1, j, v2});
+        Term sel = ctx.make_term(Op::Select, elem_sort, std::vector<Term>{a2, i});
+
+        Term distinct_indices = (i != j);
+        Term not_equal_v1 = (sel != v1);
+
+        solver.assert_formula(distinct_indices && not_equal_v1);
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Unsat);
+    }
+}
+
+TEST_CASE("tarka native: Integrated Theory Combination (QF_AUFBV)", "[tarka][native][combination]") {
+    Context ctx;
+    auto bv32 = ctx.bv_sort(32);
+    auto arr_sort = ctx.array_sort(bv32, bv32);
+    auto f_sort = ctx.function_sort(std::vector<Sort>{bv32}, bv32);
+
+    auto f = ctx.make_symbol("f", f_sort);
+    auto a = ctx.make_symbol("a", arr_sort);
+    auto x = ctx.make_symbol("x", bv32);
+    auto y = ctx.make_symbol("y", bv32);
+    auto v = ctx.make_symbol("v", bv32);
+
+    RouterEngine<backend::native> solver;
+
+    SECTION("Combined Array + BV + UF: x == y => f(select(store(a, x, v), y)) == f(v)") {
+        Term stored = ctx.make_term(Op::Store, arr_sort, std::vector<Term>{a, x, v});
+        Term selected = ctx.make_term(Op::Select, bv32, std::vector<Term>{stored, y});
+        Term f_sel = ctx.make_term(Op::Apply, bv32, std::vector<Term>{f, selected});
+        Term f_v = ctx.make_term(Op::Apply, bv32, std::vector<Term>{f, v});
+
+        Term eq_xy = (x == y);
+        Term neq_f = (f_sel != f_v);
+
+        solver.assert_formula(eq_xy && neq_f);
+        auto res = solver.check_sat();
+        REQUIRE(res.has_value());
+        REQUIRE(*res == SatResult::Unsat);
+    }
+}
+

@@ -46,8 +46,10 @@ namespace tarka::native {
     struct ClauseHeader {
         std::uint32_t size;
         std::uint32_t offset; // start index in lits_ arena
-        bool learnt;
-        float activity;
+        bool learnt = false;
+        bool deleted = false;
+        std::uint16_t lbd = 0;
+        float activity = 0.0f;
     };
 
     // Result of a theory check at a propositional fixpoint.
@@ -153,6 +155,9 @@ namespace tarka::native {
                     if (decision_level() == 0) return LBool::False;
                     analyze_and_backjump(confl);
                     decay_activity();
+                    if (conflicts % 2000 == 0) {
+                        reduce_db();
+                    }
                     if (conflicts >= restart_limit) {
                         conflicts = 0;
                         restart_limit = luby(++restart_count_) * kRestartUnit;
@@ -240,16 +245,57 @@ namespace tarka::native {
 
         // ---- clause storage --------------------------------------------------
 
+        [[nodiscard]] std::uint32_t compute_lbd(const std::vector<Lit>& lits) const noexcept {
+            std::uint64_t seen_mask = 0;
+            std::uint32_t count = 0;
+            for (Lit l : lits) {
+                const std::uint32_t lv = level_[var_index(lit_var(l))];
+                if (lv < 64) {
+                    if (!(seen_mask & (1ULL << lv))) {
+                        seen_mask |= (1ULL << lv);
+                        ++count;
+                    }
+                } else {
+                    ++count;
+                }
+            }
+            return count == 0 ? 1 : count;
+        }
+
         [[nodiscard]] ClauseRef alloc_clause(const std::vector<Lit>& lits, bool learnt) {
             ClauseHeader h;
             h.size = static_cast<std::uint32_t>(lits.size());
             h.offset = static_cast<std::uint32_t>(lits_.size());
             h.learnt = learnt;
+            h.deleted = false;
+            h.lbd = learnt ? static_cast<std::uint16_t>(compute_lbd(lits)) : 0;
             h.activity = 0.0f;
             const ClauseRef cr{static_cast<std::uint32_t>(clauses_.size())};
             clauses_.push_back(h);
             lits_.insert(lits_.end(), lits.begin(), lits.end());
             return cr;
+        }
+
+        void reduce_db() {
+            std::vector<ClauseRef> candidates;
+            for (std::size_t ci = 0; ci < clauses_.size(); ++ci) {
+                const ClauseHeader& h = clauses_[ci];
+                if (!h.deleted && h.learnt && h.size > 2 && h.lbd > 2) {
+                    candidates.push_back(ClauseRef{static_cast<std::uint32_t>(ci)});
+                }
+            }
+            if (candidates.size() <= 100) return;
+            std::sort(candidates.begin(), candidates.end(), [&](ClauseRef a, ClauseRef b) {
+                return clauses_[clause_index(a)].activity < clauses_[clause_index(b)].activity;
+            });
+            const std::size_t remove_count = candidates.size() / 2;
+            for (std::size_t k = 0; k < remove_count; ++k) {
+                const ClauseRef cr = candidates[k];
+                const auto ls = clause_lits(cr);
+                const Var v = lit_var(ls[0]);
+                if (reason_[var_index(v)] == cr) continue;
+                clauses_[clause_index(cr)].deleted = true;
+            }
         }
 
         [[nodiscard]] std::span<Lit> clause_lits(ClauseRef cr) {
@@ -310,6 +356,7 @@ namespace tarka::native {
                 std::size_t i = 0, j = 0;
                 while (i < ws.size()) {
                     const ClauseRef cr = ws[i++];
+                    if (clauses_[clause_index(cr)].deleted) continue;
                     auto ls = clause_lits(cr);
                     // ensure ls[1] is the falsified watch
                     if (ls[0] == falsified) std::swap(ls[0], ls[1]);

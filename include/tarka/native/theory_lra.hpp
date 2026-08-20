@@ -291,6 +291,17 @@ namespace tarka::native {
                 auto& target = is_upper ? upper_bounds_[v] : lower_bounds_[v];
                 trail_.push_back(UndoBound{v, is_upper, target});
                 target = BoundRecord{b, atom, value, level_};
+            } else if (row.terms.size() > 1) {
+                // Multivariate bound: allocate slack variable and attach row bound
+                const std::uint32_t s = num_vars_++;
+                lower_bounds_.emplace_back();
+                upper_bounds_.emplace_back();
+                assignment_.push_back(rat{});
+
+                auto& target = row.is_upper ? upper_bounds_[s] : lower_bounds_[s];
+                trail_.push_back(UndoBound{s, row.is_upper, target});
+                target = BoundRecord{row.bound, atom, value, level_};
+                tableau_.push_back(row);
             }
         }
 
