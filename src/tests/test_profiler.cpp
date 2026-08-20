@@ -16,13 +16,15 @@ int fib(int x) {
     return fib(x - 1) + fib(x - 2);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] measure basic timing"
-    ,
-    "[profiler]"
-) {
+
+"[Profiler] measure basic timing"
+,
+"[profiler]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 5;
     config.label = "SleepTest";
@@ -39,13 +41,15 @@ TEST_CASE(
     REQUIRE(result.label == "SleepTest");
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] measure collects return values"
-    ,
-    "[profiler]"
-) {
+
+"[Profiler] measure collects return values"
+,
+"[profiler]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 3;
     config.label = "ReturnTest";
@@ -62,13 +66,15 @@ TEST_CASE(
     }
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] measure trims outliers"
-    ,
-    "[profiler]"
-) {
+
+"[Profiler] measure trims outliers"
+,
+"[profiler]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 30;
     config.trim_outliers_percentage = 10.0;
@@ -85,13 +91,15 @@ TEST_CASE(
     REQUIRE(result.individual_runs.size() == 24);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] format_result produces output"
-    ,
-    "[profiler]"
-) {
+
+"[Profiler] format_result produces output"
+,
+"[profiler]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 2;
     config.label = "FormatTest";
@@ -103,13 +111,15 @@ TEST_CASE(
     REQUIRE(formatted.find("Average Time") != std::string::npos);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] measure with exceptions"
-    ,
-    "[profiler]"
-) {
+
+"[Profiler] measure with exceptions"
+,
+"[profiler]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 5;
     config.label = "ExceptionTest";
@@ -127,13 +137,15 @@ TEST_CASE(
     REQUIRE(result.return_values.size() + result.profile.unique_exceptions["Even iteration"] == 5);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] measure with parallelism"
-    ,
-    "[profiler]"
-) {
+
+"[Profiler] measure with parallelism"
+,
+"[profiler]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 8;
     config.parallelism = 4;
@@ -149,13 +161,15 @@ TEST_CASE(
     REQUIRE(sum == 8);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] measure with warmup"
-    ,
-    "[profiler]"
-) {
+
+"[Profiler] measure with warmup"
+,
+"[profiler]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 3;
     config.warmup_iterations = 2;
@@ -170,13 +184,15 @@ TEST_CASE(
     REQUIRE(call_count == 5); // 2 warmup + 3 measured
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] measure with on_iteration callback"
-    ,
-    "[profiler]"
-) {
+
+"[Profiler] measure with on_iteration callback"
+,
+"[profiler]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 4;
     config.label = "CallbackTest";
@@ -195,13 +211,15 @@ TEST_CASE(
     REQUIRE(result.iterations_attempted == 4);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] measure with early stop from callback"
-    ,
-    "[profiler]"
-) {
+
+"[Profiler] measure with early stop from callback"
+,
+"[profiler]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 10;
     config.label = "EarlyStopTest";
@@ -220,13 +238,15 @@ TEST_CASE(
     REQUIRE(called <= 10);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] negative: zero iterations"
-    ,
-    "[profiler][negative]"
-) {
+
+"[Profiler] negative: zero iterations"
+,
+"[profiler][negative]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 0;
     config.label = "ZeroIters";
@@ -236,13 +256,15 @@ TEST_CASE(
     REQUIRE(result.individual_runs.empty());
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] negative: exception every iteration"
-    ,
-    "[profiler][negative]"
-) {
+
+"[Profiler] negative: exception every iteration"
+,
+"[profiler][negative]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 4;
     config.label = "AllFail";
@@ -253,13 +275,15 @@ TEST_CASE(
     REQUIRE(result.unique_exceptions["fail!"] == 4);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] negative: outlier trimming with too few runs"
-    ,
-    "[profiler][negative]"
-) {
+
+"[Profiler] negative: outlier trimming with too few runs"
+,
+"[profiler][negative]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 5;
     config.trim_outliers_percentage = 20.0;
@@ -269,13 +293,15 @@ TEST_CASE(
     REQUIRE(result.individual_runs.size() == 5);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] positive: histogram and CSV/JSON export"
-    ,
-    "[profiler][positive]"
-) {
+
+"[Profiler] positive: histogram and CSV/JSON export"
+,
+"[profiler][positive]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 20;
     auto result = profiler::measure(config, []() { std::this_thread::sleep_for(std::chrono::microseconds(10)); });
@@ -290,13 +316,15 @@ TEST_CASE(
     REQUIRE(payload.individual_runs_ns.size() == result.individual_runs.size());
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] positive: custom time unit formatting"
-    ,
-    "[profiler][positive]"
-) {
+
+"[Profiler] positive: custom time unit formatting"
+,
+"[profiler][positive]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 2;
     auto result = profiler::measure(config, []() { std::this_thread::sleep_for(std::chrono::microseconds(1)); });
@@ -308,13 +336,15 @@ TEST_CASE(
     REQUIRE(ns.find("ns") != std::string::npos);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] positive: progress callback"
-    ,
-    "[profiler][positive]"
-) {
+
+"[Profiler] positive: progress callback"
+,
+"[profiler][positive]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 10;
     int progress_called = 0;
@@ -328,13 +358,15 @@ TEST_CASE(
     REQUIRE(last_progress <= 1.0);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] negative: percentile out of bounds"
-    ,
-    "[profiler][negative]"
-) {
+
+"[Profiler] negative: percentile out of bounds"
+,
+"[profiler][negative]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 10;
     const auto result = profiler::measure(config, []() {});
@@ -342,13 +374,15 @@ TEST_CASE(
     REQUIRE(result.percentile(101.0) == std::chrono::nanoseconds(0));
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] positive: per-thread run statistics"
-    ,
-    "[profiler][positive]"
-) {
+
+"[Profiler] positive: per-thread run statistics"
+,
+"[profiler][positive]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 8;
     config.parallelism = 4;
@@ -359,13 +393,15 @@ TEST_CASE(
     REQUIRE(total == result.individual_runs.size());
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] enhanced: variance and coefficient of variation"
-    ,
-    "[profiler][enhanced]"
-) {
+
+"[Profiler] enhanced: variance and coefficient of variation"
+,
+"[profiler][enhanced]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 20;
     const auto result = profiler::measure(config, []() {
@@ -375,13 +411,15 @@ TEST_CASE(
     REQUIRE(result.coefficient_of_variation() >= 0);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] enhanced: confidence interval"
-    ,
-    "[profiler][enhanced]"
-) {
+
+"[Profiler] enhanced: confidence interval"
+,
+"[profiler][enhanced]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 30;
     auto result = profiler::measure(config, []() {
@@ -392,13 +430,15 @@ TEST_CASE(
     REQUIRE(upper >= result.average_duration);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] enhanced: bimodal detection"
-    ,
-    "[profiler][enhanced]"
-) {
+
+"[Profiler] enhanced: bimodal detection"
+,
+"[profiler][enhanced]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 50;
     const auto result = profiler::measure(config, []() {
@@ -415,13 +455,15 @@ TEST_CASE(
     (void)result.is_bimodal();
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] enhanced: Chrome trace export"
-    ,
-    "[profiler][enhanced]"
-) {
+
+"[Profiler] enhanced: Chrome trace export"
+,
+"[profiler][enhanced]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 5;
     config.label = "ChromeTraceTest";
@@ -431,13 +473,15 @@ TEST_CASE(
     REQUIRE(trace.find("ChromeTraceTest") != std::string::npos);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] comparison: compare two benchmarks"
-    ,
-    "[profiler][comparison]"
-) {
+
+"[Profiler] comparison: compare two benchmarks"
+,
+"[profiler][comparison]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 20;
 
@@ -461,13 +505,15 @@ TEST_CASE(
     REQUIRE(formatted.find("Comparison") != std::string::npos);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] scoped: RAII profiling"
-    ,
-    "[profiler][scoped]"
-) {
+
+"[Profiler] scoped: RAII profiling"
+,
+"[profiler][scoped]"
+)
+ {
     std::ostringstream oss;
     profiler::ProfileConfig config;
     config.logger = [&](std::string_view msg) { oss << msg; };
@@ -482,13 +528,15 @@ TEST_CASE(
     REQUIRE(output.find("Average Time") != std::string::npos);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] memory: track allocations (placeholder)"
-    ,
-    "[profiler][memory]"
-) {
+
+"[Profiler] memory: track allocations (placeholder)"
+,
+"[profiler][memory]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 5;
     config.track_memory = true;
@@ -507,13 +555,15 @@ TEST_CASE(
 
 // --- Edge Cases ---
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] edge: multiple parallelism values"
-    ,
-    "[profiler][edge]"
-) {
+
+"[Profiler] edge: multiple parallelism values"
+,
+"[profiler][edge]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 100;
 
@@ -538,13 +588,15 @@ TEST_CASE(
     REQUIRE(r4.parallelism_used <= std::thread::hardware_concurrency() * 4);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] edge: very large iteration counts"
-    ,
-    "[profiler][edge]"
-) {
+
+"[Profiler] edge: very large iteration counts"
+,
+"[profiler][edge]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 10000;
     config.parallelism = 4;
@@ -559,13 +611,15 @@ TEST_CASE(
     REQUIRE(result.individual_runs.size() == 10000);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] edge: mixed exception types"
-    ,
-    "[profiler][edge]"
-) {
+
+"[Profiler] edge: mixed exception types"
+,
+"[profiler][edge]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 9;
 
@@ -582,13 +636,15 @@ TEST_CASE(
     REQUIRE(result.profile.unique_exceptions.count("even number") == 1);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] edge: callback throws exception"
-    ,
-    "[profiler][edge]"
-) {
+
+"[Profiler] edge: callback throws exception"
+,
+"[profiler][edge]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 5;
 
@@ -614,13 +670,15 @@ TEST_CASE(
 
 // --- Statistical Methods ---
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] stats: standard_deviation correctness"
-    ,
-    "[profiler][stats]"
-) {
+
+"[Profiler] stats: standard_deviation correctness"
+,
+"[profiler][stats]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 5;
 
@@ -638,13 +696,15 @@ TEST_CASE(
     REQUIRE(stddev.count() > 0);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] stats: histogram with various bucket counts"
-    ,
-    "[profiler][stats]"
-) {
+
+"[Profiler] stats: histogram with various bucket counts"
+,
+"[profiler][stats]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 100;
 
@@ -666,13 +726,15 @@ TEST_CASE(
     REQUIRE(h100.size() == 100);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] stats: percentile edge cases"
-    ,
-    "[profiler][stats]"
-) {
+
+"[Profiler] stats: percentile edge cases"
+,
+"[profiler][stats]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 11;
 
@@ -688,13 +750,15 @@ TEST_CASE(
     REQUIRE(p50 <= p100);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] stats: median with even vs odd samples"
-    ,
-    "[profiler][stats]"
-) {
+
+"[Profiler] stats: median with even vs odd samples"
+,
+"[profiler][stats]"
+)
+ {
     profiler::ProfileConfig config;
 
     // Odd samples (5)
@@ -715,13 +779,15 @@ TEST_CASE(
     REQUIRE(median_even.count() >= 0); // Changed from > 0 to >= 0
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] stats: confidence_interval_95 correctness"
-    ,
-    "[profiler][stats]"
-) {
+
+"[Profiler] stats: confidence_interval_95 correctness"
+,
+"[profiler][stats]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 100;
 
@@ -739,13 +805,15 @@ TEST_CASE(
 
 // --- Configuration Validation ---
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] config: negative parallelism clamped to 1"
-    ,
-    "[profiler][config]"
-) {
+
+"[Profiler] config: negative parallelism clamped to 1"
+,
+"[profiler][config]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 10;
     config.parallelism = 0; // Invalid
@@ -754,13 +822,15 @@ TEST_CASE(
     REQUIRE(result.parallelism_used >= 1);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] config: huge parallelism capped"
-    ,
-    "[profiler][config]"
-) {
+
+"[Profiler] config: huge parallelism capped"
+,
+"[profiler][config]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 10;
     config.parallelism = 999999;
@@ -770,13 +840,15 @@ TEST_CASE(
     REQUIRE(result.parallelism_used <= hw * 4);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] config: negative trim percentage clamped"
-    ,
-    "[profiler][config]"
-) {
+
+"[Profiler] config: negative trim percentage clamped"
+,
+"[profiler][config]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 100;
     config.trim_outliers_percentage = -50.0;
@@ -786,13 +858,15 @@ TEST_CASE(
     REQUIRE_FALSE(result.outlier_info.has_value());
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] config: >100% trim percentage clamped"
-    ,
-    "[profiler][config]"
-) {
+
+"[Profiler] config: >100% trim percentage clamped"
+,
+"[profiler][config]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 100;
     config.trim_outliers_percentage = 150.0;
@@ -802,13 +876,15 @@ TEST_CASE(
     REQUIRE(result.individual_runs.size() > 0);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] config: very large warmup capped"
-    ,
-    "[profiler][config]"
-) {
+
+"[Profiler] config: very large warmup capped"
+,
+"[profiler][config]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 10;
     config.warmup_iterations = 10000000; // 10M, should cap to 1M
@@ -822,13 +898,15 @@ TEST_CASE(
 
 // --- Comparison Mode ---
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] compare: empty baseline vs non-empty candidate"
-    ,
-    "[profiler][compare]"
-) {
+
+"[Profiler] compare: empty baseline vs non-empty candidate"
+,
+"[profiler][compare]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 10;
 
@@ -845,13 +923,15 @@ TEST_CASE(
     REQUIRE(cmp.verdict == "No significant difference");
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] compare: identical distributions"
-    ,
-    "[profiler][compare]"
-) {
+
+"[Profiler] compare: identical distributions"
+,
+"[profiler][compare]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 50; // Increased for better statistics
 
@@ -870,13 +950,15 @@ TEST_CASE(
     REQUIRE(std::abs(cmp.speedup_factor - 1.0) < 0.5); // Within 50% (very generous for scheduling variance)
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] compare: significantly different distributions"
-    ,
-    "[profiler][compare]"
-) {
+
+"[Profiler] compare: significantly different distributions"
+,
+"[profiler][compare]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 50;
 
@@ -893,13 +975,15 @@ TEST_CASE(
     REQUIRE(cmp.speedup_factor < 1.0); // Candidate faster
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] compare: very small sample sizes"
-    ,
-    "[profiler][compare]"
-) {
+
+"[Profiler] compare: very small sample sizes"
+,
+"[profiler][compare]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 2;
 
@@ -913,13 +997,15 @@ TEST_CASE(
 
 // --- Export Functions ---
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] export: to_csv content validation"
-    ,
-    "[profiler][export]"
-) {
+
+"[Profiler] export: to_csv content validation"
+,
+"[profiler][export]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 3;
 
@@ -934,13 +1020,15 @@ TEST_CASE(
     REQUIRE(line_count == 4); // header + 3 data rows
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] export: to_json round-trip"
-    ,
-    "[profiler][export]"
-) {
+
+"[Profiler] export: to_json round-trip"
+,
+"[profiler][export]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 5;
     config.label = "RoundTripTest";
@@ -957,13 +1045,15 @@ TEST_CASE(
     REQUIRE(payload.individual_runs_ns.size() == 5);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] export: to_chrome_trace with empty runs"
-    ,
-    "[profiler][export]"
-) {
+
+"[Profiler] export: to_chrome_trace with empty runs"
+,
+"[profiler][export]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 0;
 
@@ -974,13 +1064,15 @@ TEST_CASE(
     REQUIRE(trace.find("traceEvents") != std::string::npos);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] export: format with all TimeUnit options"
-    ,
-    "[profiler][export]"
-) {
+
+"[Profiler] export: format with all TimeUnit options"
+,
+"[profiler][export]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 5;
 
@@ -1001,13 +1093,15 @@ TEST_CASE(
 
 // --- Concurrency ---
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] concurrency: race conditions in parallel execution"
-    ,
-    "[profiler][concurrency]"
-) {
+
+"[Profiler] concurrency: race conditions in parallel execution"
+,
+"[profiler][concurrency]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 1000;
     config.parallelism = 8;
@@ -1021,13 +1115,15 @@ TEST_CASE(
     REQUIRE(result.iterations_succeeded == 1000);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] concurrency: thread-safe exception collection"
-    ,
-    "[profiler][concurrency]"
-) {
+
+"[Profiler] concurrency: thread-safe exception collection"
+,
+"[profiler][concurrency]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 100;
     config.parallelism = 4;
@@ -1048,13 +1144,15 @@ TEST_CASE(
     REQUIRE(total_exceptions <= 11);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] concurrency: progress callback thread safety"
-    ,
-    "[profiler][concurrency]"
-) {
+
+"[Profiler] concurrency: progress callback thread safety"
+,
+"[profiler][concurrency]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 500;
     config.parallelism = 4;
@@ -1070,13 +1168,15 @@ TEST_CASE(
     REQUIRE(progress_calls.load() > 0);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] concurrency: early stop coordination"
-    ,
-    "[profiler][concurrency]"
-) {
+
+"[Profiler] concurrency: early stop coordination"
+,
+"[profiler][concurrency]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 1000;
     config.parallelism = 8;
@@ -1096,13 +1196,15 @@ TEST_CASE(
 
 // --- Performance Characteristics ---
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] perf: overhead measurement accuracy"
-    ,
-    "[profiler][perf]"
-) {
+
+"[Profiler] perf: overhead measurement accuracy"
+,
+"[profiler][perf]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 1000;
 
@@ -1113,13 +1215,15 @@ TEST_CASE(
     REQUIRE(result.average_duration < std::chrono::microseconds(1));
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] perf: warmup effectiveness"
-    ,
-    "[profiler][perf]"
-) {
+
+"[Profiler] perf: warmup effectiveness"
+,
+"[profiler][perf]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 100;
     config.warmup_iterations = 50;
@@ -1139,13 +1243,15 @@ TEST_CASE(
     REQUIRE(all_durations.size() == 100);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] perf: outlier trimming stability"
-    ,
-    "[profiler][perf]"
-) {
+
+"[Profiler] perf: outlier trimming stability"
+,
+"[profiler][perf]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 100;
     config.trim_outliers_percentage = 10.0;
@@ -1163,13 +1269,15 @@ TEST_CASE(
     REQUIRE(diff < tolerance);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] perf: parallelism speedup"
-    ,
-    "[profiler][perf]"
-) {
+
+"[Profiler] perf: parallelism speedup"
+,
+"[profiler][perf]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 100;
 
@@ -1196,13 +1304,15 @@ TEST_CASE(
 
 // --- Additional Edge Cases ---
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] edge: move-only return types"
-    ,
-    "[profiler][edge]"
-) {
+
+"[Profiler] edge: move-only return types"
+,
+"[profiler][edge]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 3;
 
@@ -1217,13 +1327,15 @@ TEST_CASE(
     }
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] edge: histogram with constant values"
-    ,
-    "[profiler][edge]"
-) {
+
+"[Profiler] edge: histogram with constant values"
+,
+"[profiler][edge]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 100; // Increased sample size
 
@@ -1241,13 +1353,15 @@ TEST_CASE(
     // At least 50% of samples should be in the dominant bucket for "constant" operations
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] format_result with zero iterations"
-    ,
-    "[profiler][edge]"
-) {
+
+"[Profiler] format_result with zero iterations"
+,
+"[profiler][edge]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 0;
     config.label = "EmptyProfile";
@@ -1261,13 +1375,15 @@ TEST_CASE(
 
 // --- TBB vs std::thread vs sequential: complex algorithm profiling ---
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] thread-based parallel_sort vs std::sort vs sequential"
-    ,
-    "[profiler][thread][sort]"
-) {
+
+"[Profiler] thread-based parallel_sort vs std::sort vs sequential"
+,
+"[profiler][thread][sort]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 3; // Reduce iterations for speed
     config.label = "SortTest";
@@ -1329,13 +1445,15 @@ TEST_CASE(
     REQUIRE(seq_result.profile.iterations_succeeded > 0);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] TBB parallel_for vs std::thread vs sequential (matrix multiply)"
-    ,
-    "[profiler][tbb][thread][matmul]"
-) {
+
+"[Profiler] TBB parallel_for vs std::thread vs sequential (matrix multiply)"
+,
+"[profiler][tbb][thread][matmul]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 3;
     config.label = "MatMulTest";
@@ -1410,13 +1528,15 @@ TEST_CASE(
     REQUIRE(thread_result.return_values[0] == Catch::Approx(N * 2.0));
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] thread-based parallel_reduce vs std::reduce vs std::accumulate (sum)"
-    ,
-    "[profiler][thread][reduce]"
-) {
+
+"[Profiler] thread-based parallel_reduce vs std::reduce vs std::accumulate (sum)"
+,
+"[profiler][thread][reduce]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 5;
     config.label = "ReduceTest";
@@ -1457,8 +1577,8 @@ TEST_CASE(
     auto par_result = profiler::measure(config, [&]() {
         return std::reduce(std::execution::par, data.begin(), data.end(), 0LL);
     });
-    std::cout << profiler::format_result(par_result.profile) << std::endl;
-    REQUIRE(par_result.profile.iterations_succeeded> 0);
+    std::cout<< profiler::format_result (par_result.profile) << std::endl;
+    REQUIRE (par_result.profile.iterations_succeeded> 0);
 #endif
 
     std::cout << profiler::format_result(tbb_result.profile) << std::endl;
@@ -1468,13 +1588,15 @@ TEST_CASE(
     REQUIRE(std_result.profile.iterations_succeeded > 0);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] thread-based parallel_for (complex math) vs std::for_each"
-    ,
-    "[profiler][thread][foreach][math]"
-) {
+
+"[Profiler] thread-based parallel_for (complex math) vs std::for_each"
+,
+"[profiler][thread][foreach][math]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 3;
     config.label = "ComplexMathTest";
@@ -1511,13 +1633,15 @@ TEST_CASE(
     REQUIRE(std_result.profile.iterations_succeeded == config.iterations);
 }
 
-TEST_CASE(
+TEST_CASE (
 
 
-    "[Profiler] std::async vs std::thread vs sequential (fibonacci)"
-    ,
-    "[profiler][thread][async][fib]"
-) {
+
+"[Profiler] std::async vs std::thread vs sequential (fibonacci)"
+,
+"[profiler][thread][async][fib]"
+)
+ {
     profiler::ProfileConfig config;
     config.iterations = 2;
     config.label = "FibTest";
@@ -1557,7 +1681,7 @@ TEST_CASE(
 #if __has_include(<mlx/mlx.h>)
 #include <mlx/mlx.h>
 
-TEST_CASE("[Profiler][MLX] MLX matrix multiply vs std::vector matmul", "[profiler][mlx][matmul]") {
+TEST_CASE ("[Profiler][MLX] MLX matrix multiply vs std::vector matmul", "[profiler][mlx][matmul]") {
     // Try-catch to skip test if MLX backend is not available
     try {
         profiler::ProfileConfig config;
@@ -1618,7 +1742,7 @@ TEST_CASE("[Profiler][MLX] MLX matrix multiply vs std::vector matmul", "[profile
     }
 }
 
-TEST_CASE("[Profiler][MLX] MLX elementwise add vs std::vector add", "[profiler][mlx][add]") {
+TEST_CASE ("[Profiler][MLX] MLX elementwise add vs std::vector add", "[profiler][mlx][add]") {
     try {
         profiler::ProfileConfig config;
         config.iterations = 3;

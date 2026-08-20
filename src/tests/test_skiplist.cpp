@@ -10,7 +10,12 @@
 #include <string_view>
 #include <vector>
 
-TEST_CASE("containers::SkipList: Basic insertion, search, and deletion", "[containers][skiplist]") {
+TEST_CASE (
+"containers::SkipList: Basic insertion, search, and deletion"
+,
+"[containers][skiplist]"
+)
+ {
     containers::SkipList<std::string, int> list;
     CHECK(list.empty());
     CHECK(list.size() == 0);
@@ -47,7 +52,12 @@ TEST_CASE("containers::SkipList: Basic insertion, search, and deletion", "[conta
     CHECK_FALSE(list.erase("banana"));
 }
 
-TEST_CASE("containers::SkipList: lower_bound and range iteration", "[containers][skiplist]") {
+TEST_CASE (
+"containers::SkipList: lower_bound and range iteration"
+,
+"[containers][skiplist]"
+)
+ {
     containers::SkipList<int, std::string> list;
 
     for (int i = 10; i <= 100; i += 10) {
@@ -62,7 +72,12 @@ TEST_CASE("containers::SkipList: lower_bound and range iteration", "[containers]
     REQUIRE(collected == std::vector<int>{30, 40, 50, 60, 70});
 }
 
-TEST_CASE("containers::SkipList: upper_bound, equal_range, and count", "[containers][skiplist]") {
+TEST_CASE (
+"containers::SkipList: upper_bound, equal_range, and count"
+,
+"[containers][skiplist]"
+)
+ {
     containers::SkipList<int, std::string> list;
 
     for (int i = 10; i <= 50; i += 10) {
@@ -83,7 +98,12 @@ TEST_CASE("containers::SkipList: upper_bound, equal_range, and count", "[contain
     CHECK(list.count(25) == 0);
 }
 
-TEST_CASE("containers::SkipList: map-like insertion APIs", "[containers][skiplist]") {
+TEST_CASE (
+"containers::SkipList: map-like insertion APIs"
+,
+"[containers][skiplist]"
+)
+ {
     containers::SkipList<std::string, int> list;
 
     auto [i1, ok1] = list.insert(std::pair<const std::string, int>{"alpha", 1});
@@ -100,7 +120,12 @@ TEST_CASE("containers::SkipList: map-like insertion APIs", "[containers][skiplis
     CHECK(i3->second == 2);
 }
 
-TEST_CASE("containers::SkipList: at and operator[]", "[containers][skiplist]") {
+TEST_CASE (
+"containers::SkipList: at and operator[]"
+,
+"[containers][skiplist]"
+)
+ {
     containers::SkipList<std::string, int> list;
 
     list["x"] = 10;
@@ -112,7 +137,12 @@ TEST_CASE("containers::SkipList: at and operator[]", "[containers][skiplist]") {
     CHECK_THROWS_AS(list.at("missing"), std::out_of_range);
 }
 
-TEST_CASE("containers::SkipList: erase by iterator and range", "[containers][skiplist]") {
+TEST_CASE (
+"containers::SkipList: erase by iterator and range"
+,
+"[containers][skiplist]"
+)
+ {
     containers::SkipList<int, int> list;
     for (int i = 1; i <= 6; ++i) {
         list.insert_or_assign(i, i * 10);
@@ -134,7 +164,12 @@ TEST_CASE("containers::SkipList: erase by iterator and range", "[containers][ski
     CHECK(list.contains(6));
 }
 
-TEST_CASE("containers::SkipList: copy constructor and assignment are deep", "[containers][skiplist]") {
+TEST_CASE (
+"containers::SkipList: copy constructor and assignment are deep"
+,
+"[containers][skiplist]"
+)
+ {
     containers::SkipList<std::string, int> a;
     a.insert_or_assign("a", 1);
     a.insert_or_assign("b", 2);
@@ -154,7 +189,12 @@ TEST_CASE("containers::SkipList: copy constructor and assignment are deep", "[co
     CHECK_FALSE(a.contains("d"));
 }
 
-TEST_CASE("containers::SkipList: transparent erase with string_view", "[containers][skiplist]") {
+TEST_CASE (
+"containers::SkipList: transparent erase with string_view"
+,
+"[containers][skiplist]"
+)
+ {
     containers::SkipList<std::string, int> list;
     list.insert_or_assign("alpha", 1);
     list.insert_or_assign("beta", 2);
@@ -165,7 +205,12 @@ TEST_CASE("containers::SkipList: transparent erase with string_view", "[containe
     CHECK_FALSE(list.erase(key));
 }
 
-TEST_CASE("containers::SkipList: PMR polymorphic allocator support", "[containers][skiplist][pmr]") {
+TEST_CASE (
+"containers::SkipList: PMR polymorphic allocator support"
+,
+"[containers][skiplist][pmr]"
+)
+ {
     std::array<std::byte, 64 * 1024> buffer{};
     std::pmr::monotonic_buffer_resource pool{buffer.data(), buffer.size()};
 
@@ -185,7 +230,12 @@ TEST_CASE("containers::SkipList: PMR polymorphic allocator support", "[container
     CHECK(list.size() == 99);
 }
 
-TEST_CASE("containers::SkipList: Differential property test against std::map", "[containers][skiplist][property]") {
+TEST_CASE (
+"containers::SkipList: Differential property test against std::map"
+,
+"[containers][skiplist][property]"
+)
+ {
     containers::SkipList<int, int> skip;
     std::map<int, int> stdmap;
 

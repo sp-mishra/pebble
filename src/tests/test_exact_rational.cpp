@@ -18,6 +18,7 @@ using i128 = containers::numeric::i128;
 
 TEST_CASE (
 
+
 "exact_rational: fast-path arithmetic and reduction"
 ,
 "[numeric][exact_rational]"
@@ -39,6 +40,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "exact_rational: overflow promotes to bignum exactly"
 ,
@@ -67,6 +69,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "exact_rational: demotion back to fast path"
 ,
 "[numeric][exact_rational]"
@@ -82,6 +85,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "exact_rational: comparison across representations"
 ,
@@ -99,6 +103,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "exact_rational: floor / ceil / conversions"
 ,

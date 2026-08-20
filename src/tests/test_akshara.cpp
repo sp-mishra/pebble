@@ -13,7 +13,12 @@
 // SECTION 1: fixed_string — construction, data, size, operators
 // ============================================================================
 
-TEST_CASE("fixed_string: construction and length", "[akshara][fixed_string]") {
+TEST_CASE (
+"fixed_string: construction and length"
+,
+"[akshara][fixed_string]"
+)
+ {
     static constexpr akshara::fixed_string s{"hello"};
     STATIC_REQUIRE(s.length == 5);
     STATIC_REQUIRE(s.size() == 5);
@@ -24,12 +29,22 @@ TEST_CASE("fixed_string: construction and length", "[akshara][fixed_string]") {
     STATIC_REQUIRE(empty.empty());
 }
 
-TEST_CASE("fixed_string: CTAD deduction", "[akshara][fixed_string]") {
+TEST_CASE (
+"fixed_string: CTAD deduction"
+,
+"[akshara][fixed_string]"
+)
+ {
     static constexpr akshara::fixed_string s{"world"};
     STATIC_REQUIRE(std::same_as<decltype(s), const akshara::fixed_string<6>>);
 }
 
-TEST_CASE("fixed_string: operator[]", "[akshara][fixed_string]") {
+TEST_CASE (
+"fixed_string: operator[]"
+,
+"[akshara][fixed_string]"
+)
+ {
     static constexpr akshara::fixed_string s{"abc"};
     STATIC_REQUIRE(s[0] == 'a');
     STATIC_REQUIRE(s[1] == 'b');
@@ -37,7 +52,12 @@ TEST_CASE("fixed_string: operator[]", "[akshara][fixed_string]") {
     STATIC_REQUIRE(s[3] == '\0');
 }
 
-TEST_CASE("fixed_string: view() and operator std::string_view", "[akshara][fixed_string]") {
+TEST_CASE (
+"fixed_string: view() and operator std::string_view"
+,
+"[akshara][fixed_string]"
+)
+ {
     static constexpr akshara::fixed_string s{"test"};
     STATIC_REQUIRE(s.view() == "test");
 
@@ -46,7 +66,12 @@ TEST_CASE("fixed_string: view() and operator std::string_view", "[akshara][fixed
     STATIC_REQUIRE(sv.size() == 4);
 }
 
-TEST_CASE("fixed_string: begin/end iterators", "[akshara][fixed_string]") {
+TEST_CASE (
+"fixed_string: begin/end iterators"
+,
+"[akshara][fixed_string]"
+)
+ {
     static constexpr akshara::fixed_string s{"hi"};
     STATIC_REQUIRE(s.end() - s.begin() == 2);
     STATIC_REQUIRE(*s.begin() == 'h');
@@ -54,7 +79,12 @@ TEST_CASE("fixed_string: begin/end iterators", "[akshara][fixed_string]") {
     STATIC_REQUIRE(s.cend() - s.cbegin() == 2);
 }
 
-TEST_CASE("fixed_string: ranges::equal", "[akshara][fixed_string]") {
+TEST_CASE (
+"fixed_string: ranges::equal"
+,
+"[akshara][fixed_string]"
+)
+ {
     static constexpr akshara::fixed_string a{"hello"};
     static constexpr akshara::fixed_string b{"hello"};
     static constexpr akshara::fixed_string c{"world"};
@@ -62,7 +92,12 @@ TEST_CASE("fixed_string: ranges::equal", "[akshara][fixed_string]") {
     STATIC_REQUIRE(!std::ranges::equal(a, c));
 }
 
-TEST_CASE("fixed_string: operator== and operator!=", "[akshara][fixed_string]") {
+TEST_CASE (
+"fixed_string: operator== and operator!="
+,
+"[akshara][fixed_string]"
+)
+ {
     static constexpr akshara::fixed_string a{"foo"};
     static constexpr akshara::fixed_string b{"foo"};
     static constexpr akshara::fixed_string c{"bar"};
@@ -70,7 +105,12 @@ TEST_CASE("fixed_string: operator== and operator!=", "[akshara][fixed_string]") 
     STATIC_REQUIRE(a != c);
 }
 
-TEST_CASE("fixed_string: operator<=>", "[akshara][fixed_string]") {
+TEST_CASE (
+"fixed_string: operator<=>"
+,
+"[akshara][fixed_string]"
+)
+ {
     static constexpr akshara::fixed_string a{"abc"};
     static constexpr akshara::fixed_string b{"abd"};
     static constexpr akshara::fixed_string c{"abc"};
@@ -79,7 +119,12 @@ TEST_CASE("fixed_string: operator<=>", "[akshara][fixed_string]") {
     STATIC_REQUIRE((a <=> c) == std::strong_ordering::equal);
 }
 
-TEST_CASE("fixed_string: operator+ concatenation", "[akshara][fixed_string]") {
+TEST_CASE (
+"fixed_string: operator+ concatenation"
+,
+"[akshara][fixed_string]"
+)
+ {
     static constexpr akshara::fixed_string a{"foo"};
     static constexpr akshara::fixed_string b{"bar"};
     static constexpr auto ab = a + b;
@@ -87,7 +132,12 @@ TEST_CASE("fixed_string: operator+ concatenation", "[akshara][fixed_string]") {
     STATIC_REQUIRE(ab.length == 6);
 }
 
-TEST_CASE("fixed_string: operator+ with char", "[akshara][fixed_string]") {
+TEST_CASE (
+"fixed_string: operator+ with char"
+,
+"[akshara][fixed_string]"
+)
+ {
     static constexpr akshara::fixed_string s{"ab"};
     static constexpr auto sc = s + 'c';
     STATIC_REQUIRE(sc == akshara::fixed_string{"abc"});
@@ -100,7 +150,12 @@ TEST_CASE("fixed_string: operator+ with char", "[akshara][fixed_string]") {
 // SECTION 2: char classifiers — detail::fs
 // ============================================================================
 
-TEST_CASE("detail::fs: is_upper / is_lower / is_alpha", "[akshara][classifiers]") {
+TEST_CASE (
+"detail::fs: is_upper / is_lower / is_alpha"
+,
+"[akshara][classifiers]"
+)
+ {
     using namespace akshara::detail::fs;
     STATIC_REQUIRE(is_upper('A'));
     STATIC_REQUIRE(is_upper('Z'));
@@ -117,7 +172,12 @@ TEST_CASE("detail::fs: is_upper / is_lower / is_alpha", "[akshara][classifiers]"
     STATIC_REQUIRE(!is_alpha('!'));
 }
 
-TEST_CASE("detail::fs: is_digit / is_alnum / is_hex", "[akshara][classifiers]") {
+TEST_CASE (
+"detail::fs: is_digit / is_alnum / is_hex"
+,
+"[akshara][classifiers]"
+)
+ {
     using namespace akshara::detail::fs;
     STATIC_REQUIRE(is_digit('0'));
     STATIC_REQUIRE(is_digit('9'));
@@ -134,7 +194,12 @@ TEST_CASE("detail::fs: is_digit / is_alnum / is_hex", "[akshara][classifiers]") 
     STATIC_REQUIRE(!is_hex('G'));
 }
 
-TEST_CASE("detail::fs: is_space", "[akshara][classifiers]") {
+TEST_CASE (
+"detail::fs: is_space"
+,
+"[akshara][classifiers]"
+)
+ {
     using namespace akshara::detail::fs;
     STATIC_REQUIRE(is_space(' '));
     STATIC_REQUIRE(is_space('\t'));
@@ -144,7 +209,12 @@ TEST_CASE("detail::fs: is_space", "[akshara][classifiers]") {
     STATIC_REQUIRE(!is_space('0'));
 }
 
-TEST_CASE("detail::fs: is_ident_start / is_ident_cont", "[akshara][classifiers]") {
+TEST_CASE (
+"detail::fs: is_ident_start / is_ident_cont"
+,
+"[akshara][classifiers]"
+)
+ {
     using namespace akshara::detail::fs;
     STATIC_REQUIRE(is_ident_start('_'));
     STATIC_REQUIRE(is_ident_start('A'));
@@ -158,7 +228,12 @@ TEST_CASE("detail::fs: is_ident_start / is_ident_cont", "[akshara][classifiers]"
     STATIC_REQUIRE(!is_ident_cont('-'));
 }
 
-TEST_CASE("detail::fs: is_print / is_punct", "[akshara][classifiers]") {
+TEST_CASE (
+"detail::fs: is_print / is_punct"
+,
+"[akshara][classifiers]"
+)
+ {
     using namespace akshara::detail::fs;
     STATIC_REQUIRE(is_print('A'));
     STATIC_REQUIRE(is_print('!'));
@@ -171,7 +246,12 @@ TEST_CASE("detail::fs: is_print / is_punct", "[akshara][classifiers]") {
     STATIC_REQUIRE(!is_punct('a'));
 }
 
-TEST_CASE("detail::fs: to_upper / to_lower", "[akshara][classifiers]") {
+TEST_CASE (
+"detail::fs: to_upper / to_lower"
+,
+"[akshara][classifiers]"
+)
+ {
     using namespace akshara::detail::fs;
     STATIC_REQUIRE(to_upper('a') == 'A');
     STATIC_REQUIRE(to_upper('Z') == 'Z');
@@ -186,7 +266,12 @@ TEST_CASE("detail::fs: to_upper / to_lower", "[akshara][classifiers]") {
 // SECTION 3: String algorithms
 // ============================================================================
 
-TEST_CASE("substr", "[akshara][algorithms]") {
+TEST_CASE (
+"substr"
+,
+"[akshara][algorithms]"
+)
+ {
     static constexpr akshara::fixed_string s{"hello world"};
     static constexpr auto h = akshara::substr<0, 5>(s);
     STATIC_REQUIRE(h == akshara::fixed_string{"hello"});
@@ -195,7 +280,12 @@ TEST_CASE("substr", "[akshara][algorithms]") {
     STATIC_REQUIRE(w == akshara::fixed_string{"world"});
 }
 
-TEST_CASE("find_char / rfind_char / contains_char", "[akshara][algorithms]") {
+TEST_CASE (
+"find_char / rfind_char / contains_char"
+,
+"[akshara][algorithms]"
+)
+ {
     static constexpr akshara::fixed_string s{"hello"};
     STATIC_REQUIRE(akshara::find_char(s, 'l') == 2);
     STATIC_REQUIRE(akshara::rfind_char(s, 'l') == 3);
@@ -204,7 +294,12 @@ TEST_CASE("find_char / rfind_char / contains_char", "[akshara][algorithms]") {
     STATIC_REQUIRE(!akshara::contains_char(s, 'z'));
 }
 
-TEST_CASE("find_substr", "[akshara][algorithms]") {
+TEST_CASE (
+"find_substr"
+,
+"[akshara][algorithms]"
+)
+ {
     static constexpr akshara::fixed_string hay{"hello world"};
     static constexpr akshara::fixed_string n1{"world"};
     static constexpr akshara::fixed_string n2{"xyz"};
@@ -212,7 +307,12 @@ TEST_CASE("find_substr", "[akshara][algorithms]") {
     STATIC_REQUIRE(akshara::find_substr(hay, n2) == std::string_view::npos);
 }
 
-TEST_CASE("starts_with / ends_with", "[akshara][algorithms]") {
+TEST_CASE (
+"starts_with / ends_with"
+,
+"[akshara][algorithms]"
+)
+ {
     static constexpr akshara::fixed_string s{"foobar"};
     static constexpr akshara::fixed_string pre{"foo"};
     static constexpr akshara::fixed_string suf{"bar"};
@@ -224,7 +324,12 @@ TEST_CASE("starts_with / ends_with", "[akshara][algorithms]") {
     STATIC_REQUIRE(!akshara::ends_with(s, no));
 }
 
-TEST_CASE("to_upper / to_lower", "[akshara][algorithms]") {
+TEST_CASE (
+"to_upper / to_lower"
+,
+"[akshara][algorithms]"
+)
+ {
     static constexpr akshara::fixed_string s{"Hello"};
     static constexpr auto up = akshara::to_upper(s);
     STATIC_REQUIRE(up == akshara::fixed_string{"HELLO"});
@@ -233,13 +338,23 @@ TEST_CASE("to_upper / to_lower", "[akshara][algorithms]") {
     STATIC_REQUIRE(lo == akshara::fixed_string{"hello"});
 }
 
-TEST_CASE("replace_char", "[akshara][algorithms]") {
+TEST_CASE (
+"replace_char"
+,
+"[akshara][algorithms]"
+)
+ {
     static constexpr akshara::fixed_string s{"foo_bar"};
     static constexpr auto r = akshara::replace_char(s, '_', '-');
     STATIC_REQUIRE(r == akshara::fixed_string{"foo-bar"});
 }
 
-TEST_CASE("repeat", "[akshara][algorithms]") {
+TEST_CASE (
+"repeat"
+,
+"[akshara][algorithms]"
+)
+ {
     static constexpr akshara::fixed_string unit{"ab"};
     static constexpr auto r3 = akshara::repeat<3>(unit);
     STATIC_REQUIRE(r3 == akshara::fixed_string{"ababab"});
@@ -248,7 +363,12 @@ TEST_CASE("repeat", "[akshara][algorithms]") {
     STATIC_REQUIRE(r1 == unit);
 }
 
-TEST_CASE("trim_view", "[akshara][algorithms]") {
+TEST_CASE (
+"trim_view"
+,
+"[akshara][algorithms]"
+)
+ {
     static constexpr akshara::fixed_string s{"  hello  "};
     constexpr auto tv = akshara::trim_view(s);
     STATIC_REQUIRE(tv == "hello");
@@ -258,7 +378,12 @@ TEST_CASE("trim_view", "[akshara][algorithms]") {
     STATIC_REQUIRE(empty.empty());
 }
 
-TEST_CASE("uint_to_str / str_to_uint", "[akshara][algorithms]") {
+TEST_CASE (
+"uint_to_str / str_to_uint"
+,
+"[akshara][algorithms]"
+)
+ {
     static constexpr auto s0 = akshara::uint_to_str<0>();
     static constexpr auto s42 = akshara::uint_to_str<42>();
     static constexpr auto s100 = akshara::uint_to_str<100>();
@@ -274,7 +399,12 @@ TEST_CASE("uint_to_str / str_to_uint", "[akshara][algorithms]") {
 // SECTION 4: ct_string_builder
 // ============================================================================
 
-TEST_CASE("ct_string_builder: push and append", "[akshara][builder]") {
+TEST_CASE (
+"ct_string_builder: push and append"
+,
+"[akshara][builder]"
+)
+ {
     static constexpr auto result = []() consteval {
         akshara::ct_string_builder<32> b;
         b.append(akshara::fixed_string{"hello"});
@@ -285,7 +415,12 @@ TEST_CASE("ct_string_builder: push and append", "[akshara][builder]") {
     STATIC_REQUIRE(result == akshara::fixed_string{"hello_world"});
 }
 
-TEST_CASE("ct_string_builder: size tracking", "[akshara][builder]") {
+TEST_CASE (
+"ct_string_builder: size tracking"
+,
+"[akshara][builder]"
+)
+ {
     static constexpr std::size_t sz = []() consteval {
         akshara::ct_string_builder<16> b;
         b.append(akshara::fixed_string{"abc"});
@@ -295,7 +430,12 @@ TEST_CASE("ct_string_builder: size tracking", "[akshara][builder]") {
     STATIC_REQUIRE(sz == 4);
 }
 
-TEST_CASE("ct_string_builder: string_view append", "[akshara][builder]") {
+TEST_CASE (
+"ct_string_builder: string_view append"
+,
+"[akshara][builder]"
+)
+ {
     static constexpr auto result = []() consteval {
         akshara::ct_string_builder<16> b;
         b.append(std::string_view{"xyz"});
@@ -308,7 +448,12 @@ TEST_CASE("ct_string_builder: string_view append", "[akshara][builder]") {
 // SECTION 5: KMP search
 // ============================================================================
 
-TEST_CASE("kmp_find: basic cases", "[akshara][kmp]") {
+TEST_CASE (
+"kmp_find: basic cases"
+,
+"[akshara][kmp]"
+)
+ {
     static constexpr akshara::fixed_string hay{"abcabcabc"};
     static constexpr akshara::fixed_string n1{"abc"};
     static constexpr akshara::fixed_string n2{"cab"};
@@ -318,7 +463,12 @@ TEST_CASE("kmp_find: basic cases", "[akshara][kmp]") {
     STATIC_REQUIRE(akshara::kmp_find(hay, n3) == std::string_view::npos);
 }
 
-TEST_CASE("kmp_find: edge cases — empty needle, needle longer than hay", "[akshara][kmp]") {
+TEST_CASE (
+"kmp_find: edge cases — empty needle, needle longer than hay"
+,
+"[akshara][kmp]"
+)
+ {
     static constexpr akshara::fixed_string hay{"hello"};
     static constexpr akshara::fixed_string empty{""};
     static constexpr akshara::fixed_string longer{"hello world"};
@@ -326,7 +476,12 @@ TEST_CASE("kmp_find: edge cases — empty needle, needle longer than hay", "[aks
     STATIC_REQUIRE(akshara::kmp_find(hay, longer) == std::string_view::npos);
 }
 
-TEST_CASE("kmp_count: non-overlapping occurrences", "[akshara][kmp]") {
+TEST_CASE (
+"kmp_count: non-overlapping occurrences"
+,
+"[akshara][kmp]"
+)
+ {
     static constexpr akshara::fixed_string hay{"abababab"};
     static constexpr akshara::fixed_string n{"ab"};
     STATIC_REQUIRE(akshara::kmp_count(hay, n) == 4);
@@ -335,7 +490,12 @@ TEST_CASE("kmp_count: non-overlapping occurrences", "[akshara][kmp]") {
     STATIC_REQUIRE(akshara::kmp_count(hay, n2) == 0);
 }
 
-TEST_CASE("kmp_count: single occurrence", "[akshara][kmp]") {
+TEST_CASE (
+"kmp_count: single occurrence"
+,
+"[akshara][kmp]"
+)
+ {
     static constexpr akshara::fixed_string hay{"hello world"};
     static constexpr akshara::fixed_string n{"world"};
     STATIC_REQUIRE(akshara::kmp_count(hay, n) == 1);
@@ -345,7 +505,12 @@ TEST_CASE("kmp_count: single occurrence", "[akshara][kmp]") {
 // SECTION 6: join
 // ============================================================================
 
-TEST_CASE("join: two fixed_strings with separator", "[akshara][join]") {
+TEST_CASE (
+"join: two fixed_strings with separator"
+,
+"[akshara][join]"
+)
+ {
     static constexpr akshara::fixed_string sep{"::"};
     static constexpr akshara::fixed_string a{"foo"};
     static constexpr akshara::fixed_string b{"bar"};
@@ -353,7 +518,12 @@ TEST_CASE("join: two fixed_strings with separator", "[akshara][join]") {
     STATIC_REQUIRE(r == akshara::fixed_string{"foo::bar"});
 }
 
-TEST_CASE("join: single-char separator", "[akshara][join]") {
+TEST_CASE (
+"join: single-char separator"
+,
+"[akshara][join]"
+)
+ {
     static constexpr akshara::fixed_string sep{"/"};
     static constexpr akshara::fixed_string a{"usr"};
     static constexpr akshara::fixed_string b{"lib"};
@@ -365,7 +535,12 @@ TEST_CASE("join: single-char separator", "[akshara][join]") {
 // SECTION 7: ct_char_set
 // ============================================================================
 
-TEST_CASE("ct_char_set: construction from fixed_string", "[akshara][char_set]") {
+TEST_CASE (
+"ct_char_set: construction from fixed_string"
+,
+"[akshara][char_set]"
+)
+ {
     static constexpr auto vowels = akshara::ct_char_set{akshara::fixed_string{"aeiou"}};
     STATIC_REQUIRE(vowels.contains('a'));
     STATIC_REQUIRE(vowels.contains('e'));
@@ -374,7 +549,12 @@ TEST_CASE("ct_char_set: construction from fixed_string", "[akshara][char_set]") 
     STATIC_REQUIRE(!vowels.contains('z'));
 }
 
-TEST_CASE("ct_char_set: factory functions", "[akshara][char_set]") {
+TEST_CASE (
+"ct_char_set: factory functions"
+,
+"[akshara][char_set]"
+)
+ {
     static constexpr auto d = akshara::cs_digits();
     STATIC_REQUIRE(d.contains('0'));
     STATIC_REQUIRE(d.contains('9'));
@@ -402,7 +582,12 @@ TEST_CASE("ct_char_set: factory functions", "[akshara][char_set]") {
     STATIC_REQUIRE(!ws.contains('a'));
 }
 
-TEST_CASE("ct_char_set: ident_start / ident_cont", "[akshara][char_set]") {
+TEST_CASE (
+"ct_char_set: ident_start / ident_cont"
+,
+"[akshara][char_set]"
+)
+ {
     static constexpr auto is = akshara::cs_ident_start();
     STATIC_REQUIRE(is.contains('_'));
     STATIC_REQUIRE(is.contains('A'));
@@ -418,7 +603,12 @@ TEST_CASE("ct_char_set: ident_start / ident_cont", "[akshara][char_set]") {
     STATIC_REQUIRE(!ic.contains(' '));
 }
 
-TEST_CASE("ct_char_set: bitwise union operator|", "[akshara][char_set]") {
+TEST_CASE (
+"ct_char_set: bitwise union operator|"
+,
+"[akshara][char_set]"
+)
+ {
     static constexpr auto d = akshara::cs_digits();
     static constexpr auto l = akshara::cs_lower();
     static constexpr auto dl = d | l;
@@ -427,7 +617,12 @@ TEST_CASE("ct_char_set: bitwise union operator|", "[akshara][char_set]") {
     STATIC_REQUIRE(!dl.contains('A'));
 }
 
-TEST_CASE("ct_char_set: bitwise intersection operator&", "[akshara][char_set]") {
+TEST_CASE (
+"ct_char_set: bitwise intersection operator&"
+,
+"[akshara][char_set]"
+)
+ {
     static constexpr auto al = akshara::cs_alnum();
     static constexpr auto lo = akshara::cs_lower();
     static constexpr auto res = al & lo;
@@ -436,7 +631,12 @@ TEST_CASE("ct_char_set: bitwise intersection operator&", "[akshara][char_set]") 
     STATIC_REQUIRE(!res.contains('5')); // digit not in lower
 }
 
-TEST_CASE("ct_char_set: bitwise xor operator^", "[akshara][char_set]") {
+TEST_CASE (
+"ct_char_set: bitwise xor operator^"
+,
+"[akshara][char_set]"
+)
+ {
     static constexpr auto al = akshara::cs_alpha();
     static constexpr auto lo = akshara::cs_lower();
     static constexpr auto up_only = al ^ lo; // alpha XOR lower = upper only
@@ -445,7 +645,12 @@ TEST_CASE("ct_char_set: bitwise xor operator^", "[akshara][char_set]") {
     STATIC_REQUIRE(!up_only.contains('a')); // in both alpha and lower → removed
 }
 
-TEST_CASE("ct_char_set: complement", "[akshara][char_set]") {
+TEST_CASE (
+"ct_char_set: complement"
+,
+"[akshara][char_set]"
+)
+ {
     static constexpr auto d = akshara::cs_digits();
     static constexpr auto nd = d.complement();
     STATIC_REQUIRE(!nd.contains('0'));
@@ -454,7 +659,12 @@ TEST_CASE("ct_char_set: complement", "[akshara][char_set]") {
     STATIC_REQUIRE(nd.contains(' '));
 }
 
-TEST_CASE("ct_char_set: add_range", "[akshara][char_set]") {
+TEST_CASE (
+"ct_char_set: add_range"
+,
+"[akshara][char_set]"
+)
+ {
     static constexpr auto s = []() consteval {
         akshara::ct_char_set cs;
         cs.add_range('a', 'f');
@@ -466,7 +676,12 @@ TEST_CASE("ct_char_set: add_range", "[akshara][char_set]") {
     STATIC_REQUIRE(!s.contains('A'));
 }
 
-TEST_CASE("ct_char_set: add single char", "[akshara][char_set]") {
+TEST_CASE (
+"ct_char_set: add single char"
+,
+"[akshara][char_set]"
+)
+ {
     static constexpr auto s = []() consteval {
         akshara::ct_char_set cs;
         cs.add('X');
@@ -478,7 +693,12 @@ TEST_CASE("ct_char_set: add single char", "[akshara][char_set]") {
     STATIC_REQUIRE(!s.contains('Y'));
 }
 
-TEST_CASE("ct_char_set: NTTP usability", "[akshara][char_set]") {
+TEST_CASE (
+"ct_char_set: NTTP usability"
+,
+"[akshara][char_set]"
+)
+ {
     static constexpr akshara::ct_char_set vowels{akshara::fixed_string{"aeiou"}};
     // ct_char_set is a structural type — usable as NTTP
     []<akshara::ct_char_set CS>() {
@@ -491,7 +711,12 @@ TEST_CASE("ct_char_set: NTTP usability", "[akshara][char_set]") {
 // SECTION 8: fnv1a64
 // ============================================================================
 
-TEST_CASE("fnv1a64: string_view overload", "[akshara][hash]") {
+TEST_CASE (
+"fnv1a64: string_view overload"
+,
+"[akshara][hash]"
+)
+ {
     constexpr auto h1 = akshara::fnv1a64(std::string_view{"hello"});
     constexpr auto h2 = akshara::fnv1a64(std::string_view{"hello"});
     constexpr auto h3 = akshara::fnv1a64(std::string_view{"world"});
@@ -500,18 +725,33 @@ TEST_CASE("fnv1a64: string_view overload", "[akshara][hash]") {
     STATIC_REQUIRE(h1 != 0);
 }
 
-TEST_CASE("fnv1a64: fixed_string overload", "[akshara][hash]") {
+TEST_CASE (
+"fnv1a64: fixed_string overload"
+,
+"[akshara][hash]"
+)
+ {
     static constexpr akshara::fixed_string s{"hello"};
     constexpr auto h = akshara::fnv1a64(s);
     STATIC_REQUIRE(h == akshara::fnv1a64(std::string_view{"hello"}));
 }
 
-TEST_CASE("fnv1a64: empty string", "[akshara][hash]") {
+TEST_CASE (
+"fnv1a64: empty string"
+,
+"[akshara][hash]"
+)
+ {
     constexpr auto h = akshara::fnv1a64(std::string_view{""});
     STATIC_REQUIRE(h != 0); // FNV offset basis, never zero
 }
 
-TEST_CASE("fnv1a64: distinct values for different strings", "[akshara][hash]") {
+TEST_CASE (
+"fnv1a64: distinct values for different strings"
+,
+"[akshara][hash]"
+)
+ {
     constexpr auto h_a = akshara::fnv1a64(std::string_view{"a"});
     constexpr auto h_b = akshara::fnv1a64(std::string_view{"b"});
     STATIC_REQUIRE(h_a != h_b);
@@ -521,33 +761,58 @@ TEST_CASE("fnv1a64: distinct values for different strings", "[akshara][hash]") {
 // SECTION 9: Padding
 // ============================================================================
 
-TEST_CASE("pad_right: basic usage", "[akshara][padding]") {
+TEST_CASE (
+"pad_right: basic usage"
+,
+"[akshara][padding]"
+)
+ {
     static constexpr akshara::fixed_string s{"hi"};
     static constexpr auto p = akshara::pad_right<8>(s);
     STATIC_REQUIRE(p.length == 8);
     STATIC_REQUIRE(p.view() == "hi      ");
 }
 
-TEST_CASE("pad_right: custom fill char", "[akshara][padding]") {
+TEST_CASE (
+"pad_right: custom fill char"
+,
+"[akshara][padding]"
+)
+ {
     static constexpr akshara::fixed_string s{"hi"};
     static constexpr auto p = akshara::pad_right<6>(s, '-');
     STATIC_REQUIRE(p.view() == "hi----");
 }
 
-TEST_CASE("pad_right: already at width", "[akshara][padding]") {
+TEST_CASE (
+"pad_right: already at width"
+,
+"[akshara][padding]"
+)
+ {
     static constexpr akshara::fixed_string s{"hi"};
     static constexpr auto p = akshara::pad_right<2>(s);
     STATIC_REQUIRE(p.view() == "hi");
 }
 
-TEST_CASE("pad_left: basic usage", "[akshara][padding]") {
+TEST_CASE (
+"pad_left: basic usage"
+,
+"[akshara][padding]"
+)
+ {
     static constexpr akshara::fixed_string s{"hi"};
     static constexpr auto p = akshara::pad_left<8>(s);
     STATIC_REQUIRE(p.length == 8);
     STATIC_REQUIRE(p.view() == "      hi");
 }
 
-TEST_CASE("pad_left: custom fill char", "[akshara][padding]") {
+TEST_CASE (
+"pad_left: custom fill char"
+,
+"[akshara][padding]"
+)
+ {
     static constexpr akshara::fixed_string s{"42"};
     static constexpr auto p = akshara::pad_left<5>(s, '0');
     STATIC_REQUIRE(p.view() == "00042");
@@ -557,33 +822,58 @@ TEST_CASE("pad_left: custom fill char", "[akshara][padding]") {
 // SECTION 10: intern_tag / intern_equal
 // ============================================================================
 
-TEST_CASE("intern_tag: same string same type", "[akshara][intern]") {
+TEST_CASE (
+"intern_tag: same string same type"
+,
+"[akshara][intern]"
+)
+ {
     using T1 = akshara::intern_tag<"hello">;
     using T2 = akshara::intern_tag<"hello">;
     STATIC_REQUIRE(std::is_same_v<T1, T2>);
 }
 
-TEST_CASE("intern_tag: different strings different types", "[akshara][intern]") {
+TEST_CASE (
+"intern_tag: different strings different types"
+,
+"[akshara][intern]"
+)
+ {
     using T1 = akshara::intern_tag<"hello">;
     using T2 = akshara::intern_tag<"world">;
     STATIC_REQUIRE(!std::is_same_v<T1, T2>);
 }
 
-TEST_CASE("intern_tag: str() / hash() / length()", "[akshara][intern]") {
+TEST_CASE (
+"intern_tag: str() / hash() / length()"
+,
+"[akshara][intern]"
+)
+ {
     using T = akshara::intern_tag<"hello">;
     STATIC_REQUIRE(T::str() == "hello");
     STATIC_REQUIRE(T::hash() == akshara::fnv1a64(std::string_view{"hello"}));
     STATIC_REQUIRE(T::length() == 5);
 }
 
-TEST_CASE("intern_tag: same_as()", "[akshara][intern]") {
+TEST_CASE (
+"intern_tag: same_as()"
+,
+"[akshara][intern]"
+)
+ {
     using T1 = akshara::intern_tag<"x">;
     using T2 = akshara::intern_tag<"y">;
     STATIC_REQUIRE(T1::same_as(T1{}));
     STATIC_REQUIRE(!T1::same_as(T2{}));
 }
 
-TEST_CASE("intern_equal variable template", "[akshara][intern]") {
+TEST_CASE (
+"intern_equal variable template"
+,
+"[akshara][intern]"
+)
+ {
     STATIC_REQUIRE(akshara::intern_equal<"hello", "hello">);
     STATIC_REQUIRE(!akshara::intern_equal<"hello", "world">);
 }
@@ -592,7 +882,12 @@ TEST_CASE("intern_equal variable template", "[akshara][intern]") {
 // SECTION 11: path
 // ============================================================================
 
-TEST_CASE("path::filename", "[akshara][path]") {
+TEST_CASE (
+"path::filename"
+,
+"[akshara][path]"
+)
+ {
     static constexpr akshara::fixed_string p1{"src/parser/tokenizer.cpp"};
     STATIC_REQUIRE(akshara::path::filename(p1) == "tokenizer.cpp");
 
@@ -603,7 +898,12 @@ TEST_CASE("path::filename", "[akshara][path]") {
     STATIC_REQUIRE(akshara::path::filename(p3) == "d.txt");
 }
 
-TEST_CASE("path::stem", "[akshara][path]") {
+TEST_CASE (
+"path::stem"
+,
+"[akshara][path]"
+)
+ {
     static constexpr akshara::fixed_string p1{"src/foo.cpp"};
     STATIC_REQUIRE(akshara::path::stem(p1) == "foo");
 
@@ -615,7 +915,12 @@ TEST_CASE("path::stem", "[akshara][path]") {
     STATIC_REQUIRE(akshara::path::stem(p3) == "Makefile");
 }
 
-TEST_CASE("path::extension", "[akshara][path]") {
+TEST_CASE (
+"path::extension"
+,
+"[akshara][path]"
+)
+ {
     static constexpr akshara::fixed_string p1{"foo.cpp"};
     STATIC_REQUIRE(akshara::path::extension(p1) == ".cpp");
 
@@ -626,7 +931,12 @@ TEST_CASE("path::extension", "[akshara][path]") {
     STATIC_REQUIRE(akshara::path::extension(p3) == "");
 }
 
-TEST_CASE("path::parent_path", "[akshara][path]") {
+TEST_CASE (
+"path::parent_path"
+,
+"[akshara][path]"
+)
+ {
     static constexpr akshara::fixed_string p1{"src/parser/tokenizer.cpp"};
     STATIC_REQUIRE(akshara::path::parent_path(p1) == "src/parser");
 
@@ -637,7 +947,12 @@ TEST_CASE("path::parent_path", "[akshara][path]") {
     STATIC_REQUIRE(akshara::path::parent_path(p3) == "a");
 }
 
-TEST_CASE("path::normalize: strip ./ prefix", "[akshara][path]") {
+TEST_CASE (
+"path::normalize: strip ./ prefix"
+,
+"[akshara][path]"
+)
+ {
     static constexpr akshara::fixed_string p1{"./src/foo.cpp"};
     STATIC_REQUIRE(akshara::path::normalize(p1) == "src/foo.cpp");
 
@@ -645,7 +960,12 @@ TEST_CASE("path::normalize: strip ./ prefix", "[akshara][path]") {
     STATIC_REQUIRE(akshara::path::normalize(p2) == "bar.hpp");
 }
 
-TEST_CASE("path::normalize: strip trailing /", "[akshara][path]") {
+TEST_CASE (
+"path::normalize: strip trailing /"
+,
+"[akshara][path]"
+)
+ {
     static constexpr akshara::fixed_string p1{"src/"};
     STATIC_REQUIRE(akshara::path::normalize(p1) == "src");
 
@@ -653,7 +973,12 @@ TEST_CASE("path::normalize: strip trailing /", "[akshara][path]") {
     STATIC_REQUIRE(akshara::path::normalize(p2) == "src/lib");
 }
 
-TEST_CASE("path::normalize: no-op on clean path", "[akshara][path]") {
+TEST_CASE (
+"path::normalize: no-op on clean path"
+,
+"[akshara][path]"
+)
+ {
     static constexpr akshara::fixed_string p{"src/foo.cpp"};
     STATIC_REQUIRE(akshara::path::normalize(p) == "src/foo.cpp");
 }
@@ -662,7 +987,12 @@ TEST_CASE("path::normalize: no-op on clean path", "[akshara][path]") {
 // Composite: NTTP string dispatch pattern
 // ============================================================================
 
-TEST_CASE("fixed_string as NTTP — dispatch via if constexpr", "[akshara][composite]") {
+TEST_CASE (
+"fixed_string as NTTP — dispatch via if constexpr"
+,
+"[akshara][composite]"
+)
+ {
     auto dispatch = []<akshara::fixed_string Tag>() -> std::string_view {
         if constexpr (akshara::intern_equal<Tag, "read">) return "read-path";
         if constexpr (akshara::intern_equal<Tag, "write">) return "write-path";
@@ -674,7 +1004,12 @@ TEST_CASE("fixed_string as NTTP — dispatch via if constexpr", "[akshara][compo
     CHECK(dispatch.operator()<"exec">() == "unknown");
 }
 
-TEST_CASE("ct_char_set as NTTP — lexer pattern", "[akshara][composite]") {
+TEST_CASE (
+"ct_char_set as NTTP — lexer pattern"
+,
+"[akshara][composite]"
+)
+ {
     static constexpr akshara::ct_char_set alpha_under =
         akshara::cs_alpha() | []() consteval {
             akshara::ct_char_set s;

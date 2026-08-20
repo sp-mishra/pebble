@@ -33,7 +33,12 @@ namespace {
 // § 1  JournaledSkipEngine Direct Tests
 // ============================================================================
 
-TEST_CASE("JournaledSkipEngine: Basic CRUD operations", "[petika][skip_engine]") {
+TEST_CASE (
+"JournaledSkipEngine: Basic CRUD operations"
+,
+"[petika][skip_engine]"
+)
+ {
     petika::JournaledSkipEngine<std::string, std::string> engine;
     CHECK(engine.empty());
     CHECK(engine.size() == 0);
@@ -61,7 +66,12 @@ TEST_CASE("JournaledSkipEngine: Basic CRUD operations", "[petika][skip_engine]")
     CHECK(engine.size() == 2);
 }
 
-TEST_CASE("JournaledSkipEngine: Ordered range scan", "[petika][skip_engine]") {
+TEST_CASE (
+"JournaledSkipEngine: Ordered range scan"
+,
+"[petika][skip_engine]"
+)
+ {
     petika::JournaledSkipEngine<int, std::string> engine;
 
     for (int i = 10; i <= 100; i += 10) {
@@ -80,7 +90,12 @@ TEST_CASE("JournaledSkipEngine: Ordered range scan", "[petika][skip_engine]") {
 // § 2  Petika Store (Durability + SkipEngine)
 // ============================================================================
 
-TEST_CASE("Petika: Put, Get, Contains and Clear with WAL persistence", "[petika][store]") {
+TEST_CASE (
+"Petika: Put, Get, Contains and Clear with WAL persistence"
+,
+"[petika][store]"
+)
+ {
     TmpPetikaDir tmp;
     petika::PetikaOptions opts{
         .db_dir = tmp.path,
@@ -110,7 +125,12 @@ TEST_CASE("Petika: Put, Get, Contains and Clear with WAL persistence", "[petika]
 // § 3  Crash Recovery from WAL
 // ============================================================================
 
-TEST_CASE("Petika: Automatic recovery from durable WAL log", "[petika][recovery]") {
+TEST_CASE (
+"Petika: Automatic recovery from durable WAL log"
+,
+"[petika][recovery]"
+)
+ {
     TmpPetikaDir tmp;
     constexpr int kRecords = 50;
 
@@ -160,7 +180,12 @@ TEST_CASE("Petika: Automatic recovery from durable WAL log", "[petika][recovery]
 // § 4  Transactions
 // ============================================================================
 
-TEST_CASE("Petika: Transaction commit and rollback", "[petika][transaction]") {
+TEST_CASE (
+"Petika: Transaction commit and rollback"
+,
+"[petika][transaction]"
+)
+ {
     TmpPetikaDir tmp;
     petika::PetikaOptions opts{.db_dir = tmp.path};
     petika::StringSkipStore db{opts};
@@ -196,7 +221,12 @@ TEST_CASE("Petika: Transaction commit and rollback", "[petika][transaction]") {
 // § 5  Snapshots
 // ============================================================================
 
-TEST_CASE("Petika: Snapshot isolation view", "[petika][snapshot]") {
+TEST_CASE (
+"Petika: Snapshot isolation view"
+,
+"[petika][snapshot]"
+)
+ {
     TmpPetikaDir tmp;
     petika::PetikaOptions opts{.db_dir = tmp.path};
     petika::StringSkipStore db{opts};
@@ -215,7 +245,12 @@ TEST_CASE("Petika: Snapshot isolation view", "[petika][snapshot]") {
 // § 6  Kosha Cache Adapter for Petika
 // ============================================================================
 
-TEST_CASE("PetikaAdapter for Kosha: Cache write-through and read-through", "[petika][kosha_adapter]") {
+TEST_CASE (
+"PetikaAdapter for Kosha: Cache write-through and read-through"
+,
+"[petika][kosha_adapter]"
+)
+ {
     TmpPetikaDir tmp;
     using StrCache = kosha::LRUCache<std::string, std::string>;
     kosha::adapter::PetikaAdapter<StrCache> adapter{tmp.path, StrCache{16}};

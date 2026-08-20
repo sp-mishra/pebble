@@ -1,6 +1,7 @@
 # Tutorial: Learn graphs by mapping Pebble Island
 
-You are the island cartographer. Each step adds one idea — nodes, edges, walks, shortest paths, schedules, rumors, storms, fame — until you have a real map and the algorithms that make it useful.
+You are the island cartographer. Each step adds one idea — nodes, edges, walks, shortest paths, schedules, rumors,
+storms, fame — until you have a real map and the algorithms that make it useful.
 
 Keep one file open. After each step, compile, print, then add the next block. C++23, include path `include/`.
 
@@ -25,9 +26,11 @@ int main() {
 }
 ```
 
-On some GCC setups `std::execution::par` needs the TBB library. If the linker complains, race with `std::execution::seq` first, then add `-ltbb`. Apple Clang usually just works.
+On some GCC setups `std::execution::par` needs the TBB library. If the linker complains, race with `std::execution::seq`
+first, then add `-ltbb`. Apple Clang usually just works.
 
-Need a function? Look it up in [`docs/containers/LiteGraph.md`](../containers/LiteGraph.md). Need a worked test? `src/tests/test_LiteGraph.cpp`.
+Need a function? Look it up in [`docs/containers/LiteGraph.md`](../containers/LiteGraph.md). Need a worked test?
+`src/tests/test_LiteGraph.cpp`.
 
 ---
 
@@ -39,7 +42,8 @@ A **graph** is places plus connections.
 - An **edge** is a connection (a ferry, a trail, “must happen before”).
 - **Directed** means one-way (`Harbor → Cove`). **Undirected** means you can walk either way.
 
-LiteGraph stores both as data you choose: strings for names, `int`/`double` for minutes or tickets. IDs are strong types (`NodeId`, `EdgeId`) so you cannot mix up a dock with a route.
+LiteGraph stores both as data you choose: strings for names, `int`/`double` for minutes or tickets. IDs are strong
+types (`NodeId`, `EdgeId`) so you cannot mix up a dock with a route.
 
 ---
 
@@ -77,11 +81,14 @@ litegraph::to_ascii(
 );
 ```
 
-`to_ascii` lives in `LiteGraphAlgorithms.hpp`. You should see Harbor pointing at Market and Cove, Market at Cove and Lighthouse, Cove at Lighthouse.
+`to_ascii` lives in `LiteGraphAlgorithms.hpp`. You should see Harbor pointing at Market and Cove, Market at Cove and
+Lighthouse, Cove at Lighthouse.
 
-**What you just learned:** `add_node` returns a `NodeId` you keep. `add_edge(from, to, data)` is always `from → to` on a directed graph. Counts are *active* nodes and edges.
+**What you just learned:** `add_node` returns a `NodeId` you keep. `add_edge(from, to, data)` is always `from → to` on a
+directed graph. Counts are *active* nodes and edges.
 
-**Try:** add `"Cliffs"` and a 7-minute ferry from Cove. Print again. Then undo it for the next steps, or keep it and adjust later answers.
+**Try:** add `"Cliffs"` and a 7-minute ferry from Cove. Print again. Then undo it for the next steps, or keep it and
+adjust later answers.
 
 ---
 
@@ -109,7 +116,8 @@ for (const auto eid : island.out_edges(harbor)) {
 }
 ```
 
-`neighbors` and `out_edges` are lazy views: cheap, but **do not add or remove** edges while you iterate them. If you must mutate, snapshot:
+`neighbors` and `out_edges` are lazy views: cheap, but **do not add or remove** edges while you iterate them. If you
+must mutate, snapshot:
 
 ```cpp
 const auto leaving = island.out_edge_ids(harbor);  // a real vector
@@ -124,7 +132,8 @@ for (const auto eid : island.in_edges(lighthouse)) {
 }
 ```
 
-**What you just learned:** degree is “how busy is this dock.” Outgoing vs incoming is the difference between leaving and arriving. Edge payload is `ferry.data` or `island.edge_data(eid)`.
+**What you just learned:** degree is “how busy is this dock.” Outgoing vs incoming is the difference between leaving and
+arriving. Edge payload is `ferry.data` or `island.edge_data(eid)`.
 
 **Try:** print every dock with `island.active_node_ids()` and its `out_degree`. Which dock is the busiest origin?
 
@@ -134,7 +143,8 @@ for (const auto eid : island.in_edges(lighthouse)) {
 
 **Goal:** two ways to *visit* every reachable place.
 
-A tourist at Harbor wants the **fewest ferry hops**, not the fewest minutes. That is breadth-first search: wave 0 = Harbor, wave 1 = everything one hop out, wave 2 = the next ring.
+A tourist at Harbor wants the **fewest ferry hops**, not the fewest minutes. That is breadth-first search: wave 0 =
+Harbor, wave 1 = everything one hop out, wave 2 = the next ring.
 
 ```cpp
 std::cout << "\nTourist (BFS, fewest hops):\n";
@@ -152,9 +162,11 @@ litegraph::dfs(island, harbor, [](litegraph::NodeId, const std::string& name) {
 });
 ```
 
-Compare the two printouts. BFS should hit Market and Cove before Lighthouse. DFS may dive Harbor → Market → Cove → Lighthouse before it ever lists the other Harbor ferry.
+Compare the two printouts. BFS should hit Market and Cove before Lighthouse. DFS may dive Harbor → Market → Cove →
+Lighthouse before it ever lists the other Harbor ferry.
 
-**What you just learned:** BFS = shortest *unweighted* path (hop count). DFS = “go deep, then backtrack.” Both take `(NodeId, const payload&)`. They only visit nodes **reachable from the start**.
+**What you just learned:** BFS = shortest *unweighted* path (hop count). DFS = “go deep, then backtrack.” Both take
+`(NodeId, const payload&)`. They only visit nodes **reachable from the start**.
 
 **Try:** start BFS at Cove. Who is missing? (Anyone who cannot be reached *from Cove* — Harbor and maybe Market.)
 
@@ -164,7 +176,8 @@ Compare the two printouts. BFS should hit Market and Cove before Lighthouse. DFS
 
 **Goal:** cheapest *weighted* path. Minutes matter now.
 
-The scenic Harbor → Market → Lighthouse ferry is 12 + 40 = 52 minutes. Harbor → Cove → Lighthouse is 20 + 15 = 35. Harbor → Market → Cove → Lighthouse is 12 + 8 + 15 = 35. Dijkstra finds the minimum.
+The scenic Harbor → Market → Lighthouse ferry is 12 + 40 = 52 minutes. Harbor → Cove → Lighthouse is 20 + 15 = 35.
+Harbor → Market → Cove → Lighthouse is 12 + 8 + 15 = 35. Dijkstra finds the minimum.
 
 ```cpp
 auto [minutes, came_from] = litegraph::dijkstra(
@@ -191,7 +204,8 @@ Notes that bite:
 
 - `minutes` is indexed by `nid.value` and sized to `node_capacity()`, not `node_count()`.
 - Unreachable docks stay at `+infinity`.
-- `reconstruct_path(target, pred)` is empty if the target is unreachable, **or if the target is the start** (the start has no predecessor).
+- `reconstruct_path(target, pred)` is empty if the target is unreachable, **or if the target is the start** (the start
+  has no predecessor).
 - Dijkstra needs **non-negative** weights. A “refund” edge of −5 minutes would be a job for `bellman_ford`.
 
 **Try:** change the Market → Lighthouse ferry from 40 to 10. Re-run. Does the courier now take the scenic line?
@@ -202,7 +216,8 @@ Notes that bite:
 
 **Goal:** directed edges as *dependencies*, not boats.
 
-The island festival is a graph of “this must finish before that.” That is a **DAG** (directed acyclic graph). Kahn’s topological sort lines up the work.
+The island festival is a graph of “this must finish before that.” That is a **DAG** (directed acyclic graph). Kahn’s
+topological sort lines up the work.
 
 Use a **new** graph so boats and schedules stay separate:
 
@@ -231,9 +246,11 @@ if (litegraph::has_cycle(fest)) {
 }
 ```
 
-You should see Unload before Stage before Sound before Open before Fireworks. Unload can also sit before Fireworks without being immediately before it.
+You should see Unload before Stage before Sound before Open before Fireworks. Unload can also sit before Fireworks
+without being immediately before it.
 
-Now the plot twist — a clerk adds “Fireworks must finish before we unload.” That is a **cycle**. Sort cannot pick a first task:
+Now the plot twist — a clerk adds “Fireworks must finish before we unload.” That is a **cycle**. Sort cannot pick a
+first task:
 
 ```cpp
 fest.add_edge(fireworks, unload);
@@ -245,9 +262,11 @@ auto stuck = litegraph::topological_sort(fest);
 std::cout << "Sorted steps: " << stuck.size() << " (empty means cycle)\n";
 ```
 
-`topological_sort` returns an **empty vector** when a cycle exists. Check `has_cycle` first, or check that `order.size() == fest.node_count()`.
+`topological_sort` returns an **empty vector** when a cycle exists. Check `has_cycle` first, or check that
+`order.size() == fest.node_count()`.
 
-**What you just learned:** the same `Graph` type models roads *or* “happens-before.” Cycles are illegal for schedules, normal for ferry loops.
+**What you just learned:** the same `Graph` type models roads *or* “happens-before.” Cycles are illegal for schedules,
+normal for ferry loops.
 
 **Try:** remove the clerk’s edge (`fest.remove_edge` — keep the `EdgeId` when you `add_edge`) and sort again.
 
@@ -274,7 +293,9 @@ for (const auto& group : clumps) {
 }
 ```
 
-A **strongly connected component** is a set of docks where you can sail from any member to any other (maybe via several hops) and back. After the night boat, Harbor, Market, Cove, and Lighthouse may collapse into one clump. Drop the night boat and they split again.
+A **strongly connected component** is a set of docks where you can sail from any member to any other (maybe via several
+hops) and back. After the night boat, Harbor, Market, Cove, and Lighthouse may collapse into one clump. Drop the night
+boat and they split again.
 
 **What you just learned:** “Can I get there?” is BFS. “Are we all in the same gossip circle?” is SCC. Directed-only.
 
@@ -286,7 +307,8 @@ A **strongly connected component** is a set of docks where you can sail from any
 
 **Goal:** remove a dock without rewriting the whole map, then pack memory.
 
-A storm wrecks Market. LiteGraph does not shuffle every ID on delete. It **marks** Market and its ferries inactive. Fast, a little messy.
+A storm wrecks Market. LiteGraph does not shuffle every ID on delete. It **marks** Market and its ferries inactive.
+Fast, a little messy.
 
 ```cpp
 std::cout << "\nBefore storm: nodes=" << island.node_count()
@@ -299,7 +321,8 @@ std::cout << "After storm (logical): nodes=" << island.node_count()
 std::cout << "Market still a valid id? " << island.valid_node(market) << "\n";
 ```
 
-`node_count()` dropped; `node_capacity()` did not. Harbor’s old `NodeId` is still Harbor. Market’s id is dead. `active_node_ids()` skips wrecks.
+`node_count()` dropped; `node_capacity()` did not. Harbor’s old `NodeId` is still Harbor. Market’s id is dead.
+`active_node_ids()` skips wrecks.
 
 When you want a packed map (no holes), compact. **Every old ID is then stale** — including Harbor’s.
 
@@ -319,11 +342,13 @@ std::cout << "Remapped Harbor index: " << harbor2.value << "\n";
 
 From here, use `harbor2` (and remapped Cove / Lighthouse). Do not call `island.node_data(harbor)`.
 
-**What you just learned:** delete is O(1) marking. Compact rebuilds storage and returns old→new maps. This is the physical vs logical split described in the reference.
+**What you just learned:** delete is O(1) marking. Compact rebuilds storage and returns old→new maps. This is the
+physical vs logical split described in the reference.
 
 **Try:** `island.get_stats()` and print `load_factor` before and after compact.
 
-Rebuild a clean island if you compacted — copy Step 1’s nodes and edges into a fresh `Graph` — before Step 8, so PageRank sees all four docks.
+Rebuild a clean island if you compacted — copy Step 1’s nodes and edges into a fresh `Graph` — before Step 8, so
+PageRank sees all four docks.
 
 ---
 
@@ -331,7 +356,8 @@ Rebuild a clean island if you compacted — copy Step 1’s nodes and edges into
 
 **Goal:** freeze the editable map into CSR and score influence.
 
-PageRank pretends a visitor randomly follows ferries (and sometimes teleports). Docks that many routes point at rank higher. The algorithm wants a packed, immutable snapshot: **CSR** (compressed sparse row).
+PageRank pretends a visitor randomly follows ferries (and sometimes teleports). Docks that many routes point at rank
+higher. The algorithm wants a packed, immutable snapshot: **CSR** (compressed sparse row).
 
 ```cpp
 // Fresh four-dock island from Step 1, including the night boat if you like.
@@ -352,7 +378,8 @@ for (std::size_t i = 0; i < csr.node_count(); ++i) {
 }
 ```
 
-CSR indices are `0 .. n-1`, not your original `NodeId`s if you ever left holes. Translate with `csr.compact_index(harbor)` and `csr.original_node_id(i)`.
+CSR indices are `0 .. n-1`, not your original `NodeId`s if you ever left holes. Translate with
+`csr.compact_index(harbor)` and `csr.original_node_id(i)`.
 
 Pretty picture for the wall of the cartography office:
 
@@ -361,7 +388,8 @@ litegraph::to_dot(island, std::cout);
 // save to island.dot and run:  dot -Tsvg island.dot -o island.svg
 ```
 
-**What you just learned:** mutable `Graph` is for editing; CSR is for bulk sweeps. PageRank answers “who is central?” not “who is closest?”
+**What you just learned:** mutable `Graph` is for editing; CSR is for bulk sweeps. PageRank answers “who is central?”
+not “who is closest?”
 
 **Try:** add a dozen ferries into Harbor only. Does Harbor’s rank jump?
 
@@ -373,7 +401,8 @@ Same library, new questions. Each is a small extra graph.
 
 ### Walking trails (undirected MST)
 
-Trails are two-way. A **minimum spanning tree** is the cheapest set of trails that still connects every lookout — no loops, minimum total length.
+Trails are two-way. A **minimum spanning tree** is the cheapest set of trails that still connects every lookout — no
+loops, minimum total length.
 
 ```cpp
 litegraph::WeightedUndirectedGraph trails;
@@ -399,7 +428,8 @@ Expect total **9** (b–c 3, c–d 2, a–b 4). `prim_mst` should pick the same 
 
 ### Ferry capacity (max flow)
 
-Treat edge data as **passengers per hour**. How many people can you push from Harbor to Lighthouse if every ferry is a pipe?
+Treat edge data as **passengers per hour**. How many people can you push from Harbor to Lighthouse if every ferry is a
+pipe?
 
 ```cpp
 double people = litegraph::edmonds_karp_max_flow(
@@ -427,9 +457,11 @@ Not always the fewest colors (that problem is hard), but fast and good enough fo
 
 **Goal:** generate a *huge* archipelago, print LiteGraph stats, and time the build.
 
-Four docks were a postcard. Festival week, visiting fleets need a full chart: thousands of docks, tens of thousands of ferries. `to_ascii` will drown you. `get_stats()` and the [profiler](../utils/profiler.md) will not.
+Four docks were a postcard. Festival week, visiting fleets need a full chart: thousands of docks, tens of thousands of
+ferries. `to_ascii` will drown you. `get_stats()` and the [profiler](../utils/profiler.md) will not.
 
-Each dock gets an `int` label and `double` minute-weights. `batch_add_nodes` plants every dock in one go; then we sprinkle random outbound ferries. Same seed ⇒ same map, so later races are fair.
+Each dock gets an `int` label and `double` minute-weights. `batch_add_nodes` plants every dock in one go; then we
+sprinkle random outbound ferries. Same seed ⇒ same map, so later races are fair.
 
 ```cpp
 using Archipelago = litegraph::Graph<int, double, litegraph::Directed>;
@@ -472,13 +504,18 @@ std::cout << "\nGrand Regatta chart\n"
           << "  ~bytes:        " << stats.memory_usage << "\n";
 ```
 
-`PROFILE_SCOPE` (from `utils/profiler.hpp`) prints when the block ends — one-shot construction time, not a full benchmark.
+`PROFILE_SCOPE` (from `utils/profiler.hpp`) prints when the block ends — one-shot construction time, not a full
+benchmark.
 
-Start at **4 000 docks × 6 ferries** (~24 k edges). If that is instant, bump to `12'000` and `8`. If it crawls, drop to `1'500`. The races below assume the graph is **read-only** after this: no `add_edge` / `remove_node` while threads are running.
+Start at **4 000 docks × 6 ferries** (~24 k edges). If that is instant, bump to `12'000` and `8`. If it crawls, drop to
+`1'500`. The races below assume the graph is **read-only** after this: no `add_edge` / `remove_node` while threads are
+running.
 
-**What you just learned:** `reserve_*` + `batch_add_nodes` avoid realloc storms. `GraphStats` is the island’s census: logical size vs allocated slots vs approximate RAM.
+**What you just learned:** `reserve_*` + `batch_add_nodes` avoid realloc storms. `GraphStats` is the island’s census:
+logical size vs allocated slots vs approximate RAM.
 
-**Try:** call `make_archipelago` twice with the same seed and check `ocean.edge_count()` matches. Change the seed; counts stay similar, paths will not.
+**Try:** call `make_archipelago` twice with the same seed and check `ocean.edge_count()` matches. Change the seed;
+counts stay similar, paths will not.
 
 ---
 
@@ -488,10 +525,10 @@ Start at **4 000 docks × 6 ferries** (~24 k edges). If that is instant, bum
 
 Imagine the cartography office on regatta morning.
 
-| Kind | What runs in parallel | LiteGraph / profiler |
-|------|------------------------|----------------------|
-| **One job, many clerks** | Work *inside* a single BFS / Dijkstra / count | `std::execution::par` + `litegraph::parallel::*` or `parallel_count_nodes_if` |
-| **Many jobs, many desks** | Independent repeats of the *same* query | `profiler::ProfileConfig::parallelism` |
+| Kind                      | What runs in parallel                         | LiteGraph / profiler                                                          |
+|---------------------------|-----------------------------------------------|-------------------------------------------------------------------------------|
+| **One job, many clerks**  | Work *inside* a single BFS / Dijkstra / count | `std::execution::par` + `litegraph::parallel::*` or `parallel_count_nodes_if` |
+| **Many jobs, many desks** | Independent repeats of the *same* query       | `profiler::ProfileConfig::parallelism`                                        |
 
 Mixing them without thinking is how you hire two crews to paint one dinghy.
 
@@ -512,11 +549,13 @@ std::cout << "Hub docks: serial=" << hubs_serial
           << "  parallel=" << hubs_par << "\n";
 ```
 
-The predicate for `parallel_count_nodes_if` sees the **internal `Node`** (`node.data`, already required to be active). Both counts must match.
+The predicate for `parallel_count_nodes_if` sees the **internal `Node`** (`node.data`, already required to be active).
+Both counts must match.
 
 ### Level-synchronous BFS
 
-`litegraph::parallel::parallel_bfs` visits one hop-ring at a time; visits on the **same** ring may run together. The visitor must be thread-safe — use an atomic, not `int++`.
+`litegraph::parallel::parallel_bfs` visits one hop-ring at a time; visits on the **same** ring may run together. The
+visitor must be thread-safe — use an atomic, not `int++`.
 
 ```cpp
 std::atomic<std::size_t> reached{0};
@@ -528,7 +567,8 @@ std::cout << "Docks reachable from 0: " << reached.load() << "\n";
 
 ### Many couriers at once (profiler threads)
 
-The profiler can fire the **same** read-only query on several threads. That measures *throughput* (queries per second), not “is Dijkstra itself parallel.” Keep `parallelism = 1` when you compare two algorithms fairly (next step).
+The profiler can fire the **same** read-only query on several threads. That measures *throughput* (queries per second),
+not “is Dijkstra itself parallel.” Keep `parallelism = 1` when you compare two algorithms fairly (next step).
 
 ```cpp
 profiler::ProfileConfig desks;
@@ -553,9 +593,11 @@ if (many.is_bimodal()) {
 
 CV under ~0.15 is a calm race. Much higher, and the stopwatch is racing the OS, not Dijkstra.
 
-**What you just learned:** `par` inside one algorithm can help *or* lose to thread overhead. Profiler `parallelism` answers “how many tourists can we route at once?” on a **shared, immutable** graph.
+**What you just learned:** `par` inside one algorithm can help *or* lose to thread overhead. Profiler `parallelism`
+answers “how many tourists can we route at once?” on a **shared, immutable** graph.
 
-**Try:** set `desks.parallelism = 1` and measure again. Throughput (iterations / total time) should drop. Wall time per iteration may *improve* (no cache fighting).
+**Try:** set `desks.parallelism = 1` and measure again. Throughput (iterations / total time) should drop. Wall time per
+iteration may *improve* (no cache fighting).
 
 ---
 
@@ -563,7 +605,8 @@ CV under ~0.15 is a calm race. Much higher, and the stopwatch is racing the OS, 
 
 **Goal:** same start and finish, three skippers, one scoreboard.
 
-Dock `0` is the harbor. Dock `n-1` is the far lighthouse. Everyone must report the **same** travel time or the race is void.
+Dock `0` is the harbor. Dock `n-1` is the far lighthouse. Everyone must report the **same** travel time or the race is
+void.
 
 ```cpp
 const litegraph::NodeId harbor{0};
@@ -588,7 +631,9 @@ std::cout << "\nSanity (minutes to far light)\n"
           << "  parallel Dijkstra:      " << par_dist[far.value] << "\n";
 ```
 
-Bidirectional search is two parties walking toward each other (forward on out-edges, backward on in-edges). It is still *one thread*, but often less work than flooding the whole ocean. Parallel Dijkstra parallelizes the *phases* of one search (`litegraph::parallel`). It returns `std::expected` — invalid source ⇒ `GraphError::InvalidNode`.
+Bidirectional search is two parties walking toward each other (forward on out-edges, backward on in-edges). It is still
+*one thread*, but often less work than flooding the whole ocean. Parallel Dijkstra parallelizes the *phases* of one
+search (`litegraph::parallel`). It returns `std::expected` — invalid source ⇒ `GraphError::InvalidNode`.
 
 Now time them. **One thread per measurement** so the comparison is algorithm vs algorithm, not “who hogged the cores.”
 
@@ -635,11 +680,16 @@ Read the scoreboard like a steward:
 - `p < 0.05` ⇒ the difference is probably real, not noise (Mann–Whitney).
 - Returning the distance from the lambda stops the compiler from deleting the race.
 
-On 4 k docks you may see bidirectional win and `par` *lose* to serial. That is the lesson: parallel min-finding has atomics and barriers; the island is not always big enough to pay for the crew. `seq` vs `par` on the *same* `parallel_dijkstra` isolates policy cost.
+On 4 k docks you may see bidirectional win and `par` *lose* to serial. That is the lesson: parallel min-finding has
+atomics and barriers; the island is not always big enough to pay for the crew. `seq` vs `par` on the *same*
+`parallel_dijkstra` isolates policy cost.
 
-**What you just learned:** correctness first (same minutes), then `measure` + `compare`. Two search frontiers ≠ two CPU threads. More threads ≠ automatically faster.
+**What you just learned:** correctness first (same minutes), then `measure` + `compare`. Two search frontiers ≠ two CPU
+threads. More threads ≠ automatically faster.
 
-**Try:** raise `n` to `12'000` and `out_deg` to `8`. Does `par` catch up? Time `litegraph::bfs` vs `parallel::parallel_bfs` the same way (count visits with an atomic). Export `t_serial.to_chrome_trace()` and open it in `chrome://tracing` if you like flame charts.
+**Try:** raise `n` to `12'000` and `out_deg` to `8`. Does `par` catch up? Time `litegraph::bfs` vs
+`parallel::parallel_bfs` the same way (count visits with an atomic). Export `t_serial.to_chrome_trace()` and open it in
+`chrome://tracing` if you like flame charts.
 
 ---
 
@@ -647,7 +697,7 @@ On 4 k docks you may see bidirectional win and `par` *lose* to serial. That is
 
 **Goal:** freeze CSR once, then race scalar PageRank against the Highway boundary.
 
-Fame on 4 k docks is a tight loop over ranks. That is SIMD country — *if* you compiled with Highway.
+Fame on 4 k docks is a tight loop over ranks. That is SIMD country — *if* you compiled with Highway.
 
 ```cpp
 const auto csr = litegraph::freeze_to_csr(ocean);
@@ -670,36 +720,40 @@ std::cout << profiler::format_result(t_hwy);
 std::cout << profiler::format_comparison(profiler::compare(t_pr, t_hwy));
 ```
 
-Without `-DLITEGRAPH_ENABLE_HIGHWAY`, `highway::pagerank` still compiles and should match scalar times (`enabled()` is false). With Highway on, expect the candidate to pull ahead on large CSR graphs — same ranks, fatter vector registers.
+Without `-DLITEGRAPH_ENABLE_HIGHWAY`, `highway::pagerank` still compiles and should match scalar times (`enabled()` is
+false). With Highway on, expect the candidate to pull ahead on large CSR graphs — same ranks, fatter vector registers.
 
 Sanity: run both once and check `ranks` are within `1e-8` (the Catch2 tests do this).
 
-**What you just learned:** CSR is the frozen racetrack; Highway is an optional engine. Profiler `compare` is how you prove an optimization, not a vibe.
+**What you just learned:** CSR is the frozen racetrack; Highway is an optional engine. Profiler `compare` is how you
+prove an optimization, not a vibe.
 
-**Try:** `cup("...").iterations = 20` is the minimum for outlier trim. For a serious gate, use 100+ iterations and fail CI if `compare(baseline, candidate).speedup_factor > 1.1` *and* `is_significant` (regression). See [`docs/utils/profiler.md`](../utils/profiler.md).
+**Try:** `cup("...").iterations = 20` is the minimum for outlier trim. For a serious gate, use 100+ iterations and fail
+CI if `compare(baseline, candidate).speedup_factor > 1.1` *and* `is_significant` (regression). See [
+`docs/utils/profiler.md`](../utils/profiler.md).
 
 ---
 
 ## You now know
 
-| Idea | Island story | LiteGraph |
-|------|----------------|-----------|
-| Node / edge | Dock / ferry | `add_node`, `add_edge` |
-| Directed | One-way ferry | `Directed` tag |
-| Degree | How busy a dock is | `out_degree` / `in_degree` |
-| BFS | Fewest hops | `bfs` |
-| DFS | Follow a chain | `dfs` |
-| Weighted shortest path | Fastest courier | `dijkstra` + `reconstruct_path` |
-| DAG / cycle | Festival order | `topological_sort`, `has_cycle` |
-| SCC | Rumor circles | `strongly_connected_components` |
-| Lazy delete | Storm | `remove_node`, then `compact` |
-| Centrality | Fame | `freeze_to_csr` + `pagerank` |
-| MST / flow | Trails / capacity | `kruskal_mst`, `edmonds_karp_max_flow` |
-| Stress map | Grand Regatta | `batch_add_nodes`, `reserve_*`, `get_stats` |
-| Parallel count / BFS | Census, hop rings | `parallel_count_nodes_if`, `parallel::parallel_bfs` |
+| Idea                   | Island story       | LiteGraph                                               |
+|------------------------|--------------------|---------------------------------------------------------|
+| Node / edge            | Dock / ferry       | `add_node`, `add_edge`                                  |
+| Directed               | One-way ferry      | `Directed` tag                                          |
+| Degree                 | How busy a dock is | `out_degree` / `in_degree`                              |
+| BFS                    | Fewest hops        | `bfs`                                                   |
+| DFS                    | Follow a chain     | `dfs`                                                   |
+| Weighted shortest path | Fastest courier    | `dijkstra` + `reconstruct_path`                         |
+| DAG / cycle            | Festival order     | `topological_sort`, `has_cycle`                         |
+| SCC                    | Rumor circles      | `strongly_connected_components`                         |
+| Lazy delete            | Storm              | `remove_node`, then `compact`                           |
+| Centrality             | Fame               | `freeze_to_csr` + `pagerank`                            |
+| MST / flow             | Trails / capacity  | `kruskal_mst`, `edmonds_karp_max_flow`                  |
+| Stress map             | Grand Regatta      | `batch_add_nodes`, `reserve_*`, `get_stats`             |
+| Parallel count / BFS   | Census, hop rings  | `parallel_count_nodes_if`, `parallel::parallel_bfs`     |
 | Parallel shortest path | Night-shift clerks | `parallel::parallel_dijkstra`, `bidirectional_dijkstra` |
-| Timed race | Courier Cup | `profiler::measure` + `compare` |
-| SIMD | Fame on CSR | `litegraph::highway::pagerank` |
+| Timed race             | Courier Cup        | `profiler::measure` + `compare`                         |
+| SIMD                   | Fame on CSR        | `litegraph::highway::pagerank`                          |
 
 ---
 
@@ -710,7 +764,8 @@ Sanity: run both once and check `ranks` are within `1e-8` (the Catch2 tests do t
 3. After `compact()`, remap every stored `NodeId` / `EdgeId`.
 4. `NodeId{i}` is explicit — no raw `size_t` where an id is required.
 5. Dijkstra: non-negative weights only. Negative: `bellman_ford`.
-6. `in_edges` / topological sort / SCC / max-flow / bidirectional Dijkstra need a **directed** graph. MST needs **undirected**.
+6. `in_edges` / topological sort / SCC / max-flow / bidirectional Dijkstra need a **directed** graph. MST needs *
+   *undirected**.
 7. Stress-test **read-only** graphs under `profiler` `parallelism` — do not `add`/`remove` from several threads.
 8. `parallel_bfs` visitors must be thread-safe (`std::atomic`, not `int++`).
 9. `std::execution::par` can be *slower* than serial on small maps; believe `compare`, not the function name.

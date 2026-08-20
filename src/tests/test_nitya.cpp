@@ -44,7 +44,12 @@ namespace {
 // § 1  Frame Layout & Encoding/Decoding
 // ============================================================================
 
-TEST_CASE("Nitya: Frame layout constants and sizes", "[nitya][framing]") {
+TEST_CASE (
+"Nitya: Frame layout constants and sizes"
+,
+"[nitya][framing]"
+)
+ {
     STATIC_REQUIRE(sizeof(nitya::segment_header) == 44);
     STATIC_REQUIRE(sizeof(nitya::frame_header) == 28);
     STATIC_REQUIRE(sizeof(nitya::frame_trailer) == 8);
@@ -53,7 +58,12 @@ TEST_CASE("Nitya: Frame layout constants and sizes", "[nitya][framing]") {
     REQUIRE(nitya::k_nitya_seg_magic == 0x4E534547);
 }
 
-TEST_CASE("Nitya: Default framing encode and validate", "[nitya][framing]") {
+TEST_CASE (
+"Nitya: Default framing encode and validate"
+,
+"[nitya][framing]"
+)
+ {
     std::string msg = "SAMPLE_RECORD_DATA_123456";
     std::uint32_t payload_len = static_cast<std::uint32_t>(msg.size());
     std::size_t total_len = nitya::k_frame_overhead + payload_len;
@@ -93,7 +103,12 @@ TEST_CASE("Nitya: Default framing encode and validate", "[nitya][framing]") {
 // § 2  Basic Reserve, Publish, Sync, Append
 // ============================================================================
 
-TEST_CASE("Nitya: Single record append and sync", "[nitya][append]") {
+TEST_CASE (
+"Nitya: Single record append and sync"
+,
+"[nitya][append]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -113,7 +128,12 @@ TEST_CASE("Nitya: Single record append and sync", "[nitya][append]") {
     CHECK(log.flushed_lsn() == log.tail_lsn());
 }
 
-TEST_CASE("Nitya: Multiple appends with sequential LSN offsets", "[nitya][append]") {
+TEST_CASE (
+"Nitya: Multiple appends with sequential LSN offsets"
+,
+"[nitya][append]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -144,7 +164,12 @@ TEST_CASE("Nitya: Multiple appends with sequential LSN offsets", "[nitya][append
 // § 3  Segment Rotation
 // ============================================================================
 
-TEST_CASE("Nitya: Auto-rotation across segment boundary", "[nitya][segment]") {
+TEST_CASE (
+"Nitya: Auto-rotation across segment boundary"
+,
+"[nitya][segment]"
+)
+ {
     TmpWalDir tmp;
     // Set a segment size (e.g. 256 bytes) to trigger rotation
     // Segment 0: 44 bytes header. First record: 36 overhead + 100 payload = 136 bytes.
@@ -183,7 +208,12 @@ TEST_CASE("Nitya: Auto-rotation across segment boundary", "[nitya][segment]") {
 // § 4  Recovery Engine
 // ============================================================================
 
-TEST_CASE("Nitya: Streaming recovery scans all committed records", "[nitya][recovery]") {
+TEST_CASE (
+"Nitya: Streaming recovery scans all committed records"
+,
+"[nitya][recovery]"
+)
+ {
     TmpWalDir tmp;
     constexpr std::size_t kSegSize = 512;
     std::vector<std::string> written_payloads;
@@ -233,7 +263,12 @@ TEST_CASE("Nitya: Streaming recovery scans all committed records", "[nitya][reco
 // § 5  Replication Stream Engine
 // ============================================================================
 
-TEST_CASE("Nitya: Replication subscriber streams updates", "[nitya][replication]") {
+TEST_CASE (
+"Nitya: Replication subscriber streams updates"
+,
+"[nitya][replication]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -262,7 +297,12 @@ TEST_CASE("Nitya: Replication subscriber streams updates", "[nitya][replication]
 // § 6  Concurrency & Multi-Threaded Appends
 // ============================================================================
 
-TEST_CASE("Nitya: Concurrent multi-threaded appends", "[nitya][concurrency]") {
+TEST_CASE (
+"Nitya: Concurrent multi-threaded appends"
+,
+"[nitya][concurrency]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -313,7 +353,12 @@ TEST_CASE("Nitya: Concurrent multi-threaded appends", "[nitya][concurrency]") {
 // § 7  EasyRules Administrative Retention & Archival
 // ============================================================================
 
-TEST_CASE("Nitya: EasyRules retention & archival triggers", "[nitya][rules]") {
+TEST_CASE (
+"Nitya: EasyRules retention & archival triggers"
+,
+"[nitya][rules]"
+)
+ {
     TmpWalDir tmp;
     constexpr std::size_t kSegSize = 256;
     nitya::wal_options opts{
@@ -351,7 +396,12 @@ TEST_CASE("Nitya: EasyRules retention & archival triggers", "[nitya][rules]") {
 // § 8  kosha::adapter::NityaAdapter Tests
 // ============================================================================
 
-TEST_CASE("NityaAdapter: basic put and get hit", "[nitya][adapter]") {
+TEST_CASE (
+"NityaAdapter: basic put and get hit"
+,
+"[nitya][adapter]"
+)
+ {
     TmpWalDir tmp;
     using StrCache = kosha::LRUCache<std::string, std::string>;
     kosha::adapter::NityaAdapter<StrCache> adapter{tmp.path, StrCache{16}};
@@ -362,7 +412,12 @@ TEST_CASE("NityaAdapter: basic put and get hit", "[nitya][adapter]") {
     CHECK(*val == "Alice");
 }
 
-TEST_CASE("NityaAdapter: read-through recovery after cache clear", "[nitya][adapter]") {
+TEST_CASE (
+"NityaAdapter: read-through recovery after cache clear"
+,
+"[nitya][adapter]"
+)
+ {
     TmpWalDir tmp;
     using StrCache = kosha::LRUCache<std::string, std::string>;
     kosha::adapter::NityaAdapter<StrCache> adapter{tmp.path, StrCache{16}};
@@ -385,7 +440,12 @@ TEST_CASE("NityaAdapter: read-through recovery after cache clear", "[nitya][adap
     CHECK(adapter.size() == 2);
 }
 
-TEST_CASE("NityaAdapter: erase records tombstone in WAL", "[nitya][adapter]") {
+TEST_CASE (
+"NityaAdapter: erase records tombstone in WAL"
+,
+"[nitya][adapter]"
+)
+ {
     TmpWalDir tmp;
     using StrCache = kosha::LRUCache<std::string, std::string>;
     kosha::adapter::NityaAdapter<StrCache> adapter{tmp.path, StrCache{16}};
@@ -399,7 +459,12 @@ TEST_CASE("NityaAdapter: erase records tombstone in WAL", "[nitya][adapter]") {
     CHECK(res.error() == kosha::adapter::NityaAdapterError::NotFound);
 }
 
-TEST_CASE("NityaAdapter: load_all warms in-memory cache", "[nitya][adapter]") {
+TEST_CASE (
+"NityaAdapter: load_all warms in-memory cache"
+,
+"[nitya][adapter]"
+)
+ {
     TmpWalDir tmp;
     using StrCache = kosha::LRUCache<std::string, std::string>;
 
@@ -425,7 +490,12 @@ TEST_CASE("NityaAdapter: load_all warms in-memory cache", "[nitya][adapter]") {
     }
 }
 
-TEST_CASE("Nitya: Append sync and recovery diagnostics", "[nitya][diagnostics]") {
+TEST_CASE (
+"Nitya: Append sync and recovery diagnostics"
+,
+"[nitya][diagnostics]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -464,7 +534,12 @@ TEST_CASE("Nitya: Append sync and recovery diagnostics", "[nitya][diagnostics]")
 // § 9  Advanced Durability & Group Commit Semantics
 // ============================================================================
 
-TEST_CASE("Nitya: wait_durable beyond published LSN fails with InvalidArg", "[nitya][durability]") {
+TEST_CASE (
+"Nitya: wait_durable beyond published LSN fails with InvalidArg"
+,
+"[nitya][durability]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -482,7 +557,12 @@ TEST_CASE("Nitya: wait_durable beyond published LSN fails with InvalidArg", "[ni
     CHECK(err.error() == nitya::LogError::InvalidArg);
 }
 
-TEST_CASE("Nitya: append vs append_sync vs sync durability watermarks", "[nitya][durability]") {
+TEST_CASE (
+"Nitya: append vs append_sync vs sync durability watermarks"
+,
+"[nitya][durability]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -506,7 +586,12 @@ TEST_CASE("Nitya: append vs append_sync vs sync durability watermarks", "[nitya]
     CHECK(log.flushed_lsn() == log.published_lsn());
 }
 
-TEST_CASE("Nitya: Zero-byte payload support", "[nitya][correctness]") {
+TEST_CASE (
+"Nitya: Zero-byte payload support"
+,
+"[nitya][correctness]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -527,7 +612,12 @@ TEST_CASE("Nitya: Zero-byte payload support", "[nitya][correctness]") {
     CHECK(count == 1);
 }
 
-TEST_CASE("Nitya: Reject payload larger than segment", "[nitya][correctness]") {
+TEST_CASE (
+"Nitya: Reject payload larger than segment"
+,
+"[nitya][correctness]"
+)
+ {
     TmpWalDir tmp;
     constexpr std::size_t kSegSize = 1024;
     nitya::wal_options opts{
@@ -542,7 +632,12 @@ TEST_CASE("Nitya: Reject payload larger than segment", "[nitya][correctness]") {
     CHECK(res.error() == nitya::LogError::InvalidArg);
 }
 
-TEST_CASE("Nitya: Record exact fit and auto-rotate off behavior", "[nitya][segment]") {
+TEST_CASE (
+"Nitya: Record exact fit and auto-rotate off behavior"
+,
+"[nitya][segment]"
+)
+ {
     TmpWalDir tmp;
     // Segment size: 100 bytes. Header is 44 bytes.
     // Remaining usable space in segment: 100 - 44 = 56 bytes.
@@ -571,7 +666,12 @@ TEST_CASE("Nitya: Record exact fit and auto-rotate off behavior", "[nitya][segme
 // § 10 Background Flusher
 // ============================================================================
 
-TEST_CASE("Nitya: Background flusher periodically commits published LSN", "[nitya][flusher]") {
+TEST_CASE (
+"Nitya: Background flusher periodically commits published LSN"
+,
+"[nitya][flusher]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -600,7 +700,12 @@ TEST_CASE("Nitya: Background flusher periodically commits published LSN", "[nity
 // § 11 Recovery Modes & Corruption Diagnostics
 // ============================================================================
 
-TEST_CASE("Nitya: Recovery modes and corruption handling", "[nitya][corruption]") {
+TEST_CASE (
+"Nitya: Recovery modes and corruption handling"
+,
+"[nitya][corruption]"
+)
+ {
     TmpWalDir tmp;
     constexpr std::size_t kSegSize = 4096;
 
@@ -678,7 +783,12 @@ TEST_CASE("Nitya: Recovery modes and corruption handling", "[nitya][corruption]"
 // § 12 Crash Simulation Scenarios
 // ============================================================================
 
-TEST_CASE("Nitya: Crash simulation after reservation before publication", "[nitya][crash]") {
+TEST_CASE (
+"Nitya: Crash simulation after reservation before publication"
+,
+"[nitya][crash]"
+)
+ {
     TmpWalDir tmp;
     constexpr std::size_t kSegSize = 4096;
 
@@ -718,7 +828,12 @@ TEST_CASE("Nitya: Crash simulation after reservation before publication", "[nity
     }
 }
 
-TEST_CASE("Nitya: Non-allocating list_segments iterator", "[nitya][admin]") {
+TEST_CASE (
+"Nitya: Non-allocating list_segments iterator"
+,
+"[nitya][admin]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -745,7 +860,12 @@ TEST_CASE("Nitya: Non-allocating list_segments iterator", "[nitya][admin]") {
 // § 13 Segment Header Validation & Corruption Tests
 // ============================================================================
 
-TEST_CASE("Nitya: Segment header write and validation on reopen", "[nitya][segment_header]") {
+TEST_CASE (
+"Nitya: Segment header write and validation on reopen"
+,
+"[nitya][segment_header]"
+)
+ {
     TmpWalDir tmp;
     constexpr std::size_t kSegSize = 1024 * 1024;
 
@@ -786,7 +906,12 @@ TEST_CASE("Nitya: Segment header write and validation on reopen", "[nitya][segme
     }
 }
 
-TEST_CASE("Nitya: Corrupted segment header is rejected", "[nitya][segment_header]") {
+TEST_CASE (
+"Nitya: Corrupted segment header is rejected"
+,
+"[nitya][segment_header]"
+)
+ {
     TmpWalDir tmp;
     constexpr std::size_t kSegSize = 1024 * 1024;
 
@@ -822,7 +947,12 @@ TEST_CASE("Nitya: Corrupted segment header is rejected", "[nitya][segment_header
     }
 }
 
-TEST_CASE("Nitya: First record does not overwrite segment header and recovery skips it", "[nitya][segment_header]") {
+TEST_CASE (
+"Nitya: First record does not overwrite segment header and recovery skips it"
+,
+"[nitya][segment_header]"
+)
+ {
     TmpWalDir tmp;
     constexpr std::size_t kSegSize = 1024 * 1024;
 
@@ -875,7 +1005,12 @@ TEST_CASE("Nitya: First record does not overwrite segment header and recovery sk
 // § 14 Version Validation & Record Flags Round-Trip
 // ============================================================================
 
-TEST_CASE("Nitya: Frame version validation and UnsupportedVersion error", "[nitya][version]") {
+TEST_CASE (
+"Nitya: Frame version validation and UnsupportedVersion error"
+,
+"[nitya][version]"
+)
+ {
     TmpWalDir tmp;
     std::string payload_str = "VERSIONED_DATA";
     std::size_t total_len = nitya::k_frame_overhead + payload_str.size();
@@ -901,7 +1036,12 @@ TEST_CASE("Nitya: Frame version validation and UnsupportedVersion error", "[nity
     CHECK(val_res.error() == nitya::LogError::UnsupportedVersion);
 }
 
-TEST_CASE("Nitya: Flags and version round-trip through append and recovery", "[nitya][flags]") {
+TEST_CASE (
+"Nitya: Flags and version round-trip through append and recovery"
+,
+"[nitya][flags]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -934,7 +1074,12 @@ TEST_CASE("Nitya: Flags and version round-trip through append and recovery", "[n
 // § 15 Segment Descriptor Metadata Population
 // ============================================================================
 
-TEST_CASE("Nitya: Segment descriptor populated from segment header metadata", "[nitya][descriptor]") {
+TEST_CASE (
+"Nitya: Segment descriptor populated from segment header metadata"
+,
+"[nitya][descriptor]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -966,7 +1111,12 @@ TEST_CASE("Nitya: Segment descriptor populated from segment header metadata", "[
 // § 16 Group Commit & Follower Atomic Wait Tests
 // ============================================================================
 
-TEST_CASE("Nitya: Concurrent group commit waiters receive completion without spinning forever", "[nitya][group_commit]") {
+TEST_CASE (
+"Nitya: Concurrent group commit waiters receive completion without spinning forever"
+,
+"[nitya][group_commit]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -1008,7 +1158,12 @@ TEST_CASE("Nitya: Concurrent group commit waiters receive completion without spi
 // § 17 Background Flusher Watermark and Clean Shutdown Tests
 // ============================================================================
 
-TEST_CASE("Nitya: Background flusher watermark flush and explicit shutdown join", "[nitya][flusher]") {
+TEST_CASE (
+"Nitya: Background flusher watermark flush and explicit shutdown join"
+,
+"[nitya][flusher]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -1060,7 +1215,12 @@ TEST_CASE("Nitya: Background flusher watermark flush and explicit shutdown join"
 // § 18 Segment Sealing & Archival Metadata Persistence
 // ============================================================================
 
-TEST_CASE("Nitya: Segment rotation seals previous segment with sealed_lsn and flags", "[nitya][seal]") {
+TEST_CASE (
+"Nitya: Segment rotation seals previous segment with sealed_lsn and flags"
+,
+"[nitya][seal]"
+)
+ {
     TmpWalDir tmp;
     constexpr std::size_t kSegSize = 256; // small segment to trigger rapid rotation
 
@@ -1098,7 +1258,12 @@ TEST_CASE("Nitya: Segment rotation seals previous segment with sealed_lsn and fl
     }
 }
 
-TEST_CASE("Nitya: Archival persistence and mark_segment_archived", "[nitya][archive]") {
+TEST_CASE (
+"Nitya: Archival persistence and mark_segment_archived"
+,
+"[nitya][archive]"
+)
+ {
     TmpWalDir tmp;
     constexpr std::size_t kSegSize = 1024 * 1024;
 
@@ -1131,7 +1296,12 @@ TEST_CASE("Nitya: Archival persistence and mark_segment_archived", "[nitya][arch
     }
 }
 
-TEST_CASE("Nitya: flush_to validates target_lsn <= published_lsn", "[nitya][flush_to]") {
+TEST_CASE (
+"Nitya: flush_to validates target_lsn <= published_lsn"
+,
+"[nitya][flush_to]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -1155,7 +1325,12 @@ TEST_CASE("Nitya: flush_to validates target_lsn <= published_lsn", "[nitya][flus
 // § 19 Follower Leadership Retry & Concurrent Durability Tests
 // ============================================================================
 
-TEST_CASE("Nitya: Follower retries leadership and completes durability without blocking forever", "[nitya][follower_retry]") {
+TEST_CASE (
+"Nitya: Follower retries leadership and completes durability without blocking forever"
+,
+"[nitya][follower_retry]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,
@@ -1191,7 +1366,12 @@ TEST_CASE("Nitya: Follower retries leadership and completes durability without b
 // § 20 High-Contention Multi-Iteration Follower Promotion Stress Test
 // ============================================================================
 
-TEST_CASE("Nitya: Sustained concurrent group commit and follower promotion stress", "[nitya][stress]") {
+TEST_CASE (
+"Nitya: Sustained concurrent group commit and follower promotion stress"
+,
+"[nitya][stress]"
+)
+ {
     TmpWalDir tmp;
     nitya::wal_options opts{
         .wal_dir = tmp.path,

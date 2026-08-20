@@ -135,16 +135,16 @@ Concrete named algorithms per container, with the header they live in.
 
 ## Detailed Docs
 
-| Container            | Doc                                              |
-|----------------------|--------------------------------------------------|
+| Container            | Doc                                                                  |
+|----------------------|----------------------------------------------------------------------|
 | LiteGraph            | [LiteGraph.md](LiteGraph.md) · [tutorial](../tutorials/LiteGraph.md) |
-| egraph               | [egraph.md](egraph.md)                           |
-| NAryTree             | [NAryTree.md](NAryTree.md)                       |
-| SmallVector          | [SmallVector.md](SmallVector.md)                 |
-| SparseSet            | [SparseSet.md](SparseSet.md)                     |
-| Lock-free containers | [lockfree_containers.md](lockfree_containers.md) |
-| InternPool           | [symbol/InternPool.md](symbol/InternPool.md)     |
-| SymbolTable          | [symbol/SymbolTable.md](symbol/SymbolTable.md)   |
+| egraph               | [egraph.md](egraph.md)                                               |
+| NAryTree             | [NAryTree.md](NAryTree.md)                                           |
+| SmallVector          | [SmallVector.md](SmallVector.md)                                     |
+| SparseSet            | [SparseSet.md](SparseSet.md)                                         |
+| Lock-free containers | [lockfree_containers.md](lockfree_containers.md)                     |
+| InternPool           | [symbol/InternPool.md](symbol/InternPool.md)                         |
+| SymbolTable          | [symbol/SymbolTable.md](symbol/SymbolTable.md)                       |
 
 Containers without a dedicated doc are indexed above with their algorithm and header; the header comment
 block is the authoritative reference for each.

@@ -34,7 +34,7 @@ namespace {
 // Tests
 // ============================================================================
 
-TEST_CASE("LMDBAdapter: put then get from cache", "[lmdb]") {
+TEST_CASE ("LMDBAdapter: put then get from cache", "[lmdb]") {
     TmpLMDB tmp;
     Adapter a{tmp.path, StrCache{16}};
 
@@ -44,7 +44,7 @@ TEST_CASE("LMDBAdapter: put then get from cache", "[lmdb]") {
     CHECK(*r == "val1");
 }
 
-TEST_CASE("LMDBAdapter: get after cache clear reads from LMDB", "[lmdb]") {
+TEST_CASE ("LMDBAdapter: get after cache clear reads from LMDB", "[lmdb]") {
     TmpLMDB tmp;
     Adapter a{tmp.path, StrCache{16}};
 
@@ -58,7 +58,7 @@ TEST_CASE("LMDBAdapter: get after cache clear reads from LMDB", "[lmdb]") {
     CHECK(a.size() == 1); // re-populated from LMDB
 }
 
-TEST_CASE("LMDBAdapter: erase removes from cache and LMDB", "[lmdb]") {
+TEST_CASE ("LMDBAdapter: erase removes from cache and LMDB", "[lmdb]") {
     TmpLMDB tmp;
     Adapter a{tmp.path, StrCache{16}};
 
@@ -71,7 +71,7 @@ TEST_CASE("LMDBAdapter: erase removes from cache and LMDB", "[lmdb]") {
     CHECK(r.error() == kosha::adapter::LMDBError::NotFound);
 }
 
-TEST_CASE("LMDBAdapter: load_all warms cache", "[lmdb]") {
+TEST_CASE ("LMDBAdapter: load_all warms cache", "[lmdb]") {
     TmpLMDB tmp;
 
     {
@@ -94,7 +94,7 @@ TEST_CASE("LMDBAdapter: load_all warms cache", "[lmdb]") {
     }
 }
 
-TEST_CASE("LMDBAdapter: persistence across instances", "[lmdb]") {
+TEST_CASE ("LMDBAdapter: persistence across instances", "[lmdb]") {
     TmpLMDB tmp;
 
     {
@@ -108,7 +108,7 @@ TEST_CASE("LMDBAdapter: persistence across instances", "[lmdb]") {
     CHECK(*r == "persist_val");
 }
 
-TEST_CASE("LMDBAdapter: LRU eviction still works with persistence", "[lmdb]") {
+TEST_CASE ("LMDBAdapter: LRU eviction still works with persistence", "[lmdb]") {
     TmpLMDB tmp;
     Adapter a{tmp.path, StrCache{3}}; // cap=3
 
@@ -127,7 +127,7 @@ TEST_CASE("LMDBAdapter: LRU eviction still works with persistence", "[lmdb]") {
     CHECK(db_hits == 5);
 }
 
-TEST_CASE("LMDBAdapter: clear_all empties both cache and LMDB", "[lmdb]") {
+TEST_CASE ("LMDBAdapter: clear_all empties both cache and LMDB", "[lmdb]") {
     TmpLMDB tmp;
     Adapter a{tmp.path, StrCache{8}};
 
@@ -140,7 +140,7 @@ TEST_CASE("LMDBAdapter: clear_all empties both cache and LMDB", "[lmdb]") {
     CHECK_FALSE(a.get("k2").has_value());
 }
 
-TEST_CASE("LMDBAdapter: custom serializer support", "[lmdb]") {
+TEST_CASE ("LMDBAdapter: custom serializer support", "[lmdb]") {
     struct IntSerializer {
         static std::string serialize_key(int k) { return std::to_string(k); }
         static std::string serialize_value(int v) { return std::to_string(v); }

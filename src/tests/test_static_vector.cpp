@@ -85,6 +85,7 @@ sizeof
 
 TEST_CASE (
 
+
 "static_vector: runtime usage"
 ,
 "[containers][static_vector]"

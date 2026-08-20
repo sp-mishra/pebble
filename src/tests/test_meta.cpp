@@ -4404,6 +4404,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "fixed_string: spaceship comparison"
 ,
 "[meta][fixed_string][section16]"
@@ -4419,6 +4420,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "fixed_string: inequality operator"
 ,
 "[meta][fixed_string][section16]"
@@ -4431,6 +4433,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "fixed_string: concat with char"
 ,
@@ -4446,6 +4449,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "fixed_string: substr"
 ,
 "[meta][fixed_string][section16]"
@@ -4460,6 +4464,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "fixed_string: find_char / rfind_char"
 ,
 "[meta][fixed_string][section16]"
@@ -4473,6 +4478,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "fixed_string: contains_char"
 ,
 "[meta][fixed_string][section16]"
@@ -4484,6 +4490,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "fixed_string: find_substr"
 ,
@@ -4499,6 +4506,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "fixed_string: starts_with / ends_with"
 ,
 "[meta][fixed_string][section16]"
@@ -4512,6 +4520,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "fixed_string: to_upper / to_lower"
 ,
@@ -4527,6 +4536,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "fixed_string: replace_char"
 ,
 "[meta][fixed_string][section16]"
@@ -4538,6 +4548,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "fixed_string: repeat"
 ,
@@ -4551,6 +4562,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "fixed_string: trim_view"
 ,
 "[meta][fixed_string][section16]"
@@ -4562,6 +4574,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "fixed_string: uint_to_str / str_to_uint"
 ,
@@ -4576,6 +4589,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "fixed_string: ct_string_builder"
 ,
@@ -4597,6 +4611,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "kmp_find: substring search"
 ,
 "[meta][section15][section16]"
@@ -4611,6 +4626,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "kmp_count: non-overlapping count"
 ,
 "[meta][section15][section16]"
@@ -4622,6 +4638,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "split_by_char: basic split"
 ,
@@ -4636,6 +4653,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "ct_char_set: contains and operators"
 ,
@@ -4653,6 +4671,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "fnv1a64: compile-time hash"
 ,
 "[meta][section15][section16]"
@@ -4668,6 +4687,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "pad_right / pad_left"
 ,
 "[meta][section15][section16]"
@@ -4681,6 +4701,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "intern_tag: type-level string identity"
 ,
@@ -4701,6 +4722,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "ct::lit: exact match"
 ,
 "[ct_parser][section16]"
@@ -4720,6 +4742,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "ct::char_if: digit parser"
 ,
 "[ct_parser][section16]"
@@ -4737,6 +4760,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "ct::identifier: basic identifier parse"
 ,
 "[ct_parser][section16]"
@@ -4749,6 +4773,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "ct::decimal: decimal integer"
 ,
@@ -4763,6 +4788,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "ct::skip_ws: skip whitespace"
 ,
 "[ct_parser][section16]"
@@ -4775,6 +4801,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "ct::optional: opt parser"
 ,
@@ -4800,6 +4827,7 @@ namespace test_helpers {
 
 TEST_CASE (
 
+
 "ct::take_while: run until condition fails"
 ,
 "[ct_parser][section16]"
@@ -4813,6 +4841,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "ct::many: collect multiple matches"
 ,
@@ -4828,6 +4857,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "ct::keyword_table: compile-time keyword lookup"
 ,
 "[ct_parser][section16]"
@@ -4842,6 +4872,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "ct::char_in_set: set-based char match"
 ,
@@ -4864,6 +4895,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "fixed_string STL/ranges compliance"
 ,
@@ -4900,6 +4932,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "ct_char_set bitset redesign"
 ,
@@ -4947,6 +4980,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "meta::config feature detection"
 ,
 "[meta][section17]"
@@ -4964,6 +4998,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "reflection caches: reflection_v, type_name_v, schema_hash_v"
 ,
@@ -4988,6 +5023,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "Sequence member aliases: empty_seq, front, back, contains_type"
 ,
@@ -5017,6 +5053,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "take_seq_t / drop_seq_t / reverse_seq_t free aliases"
 ,
 "[meta][section17]"
@@ -5040,6 +5077,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "reflection_traits<T>"
 ,
@@ -5074,6 +5112,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "type_id_v / field_id / schema_id_v"
 ,
 "[meta][section17]"
@@ -5096,6 +5135,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "meta::hash — wyhash64 and xxh3_64"
 ,
@@ -5121,6 +5161,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "akshara::path compile-time path operations"
 ,
@@ -5148,6 +5189,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "reflection backend abstraction"
 ,

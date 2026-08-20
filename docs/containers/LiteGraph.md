@@ -1,6 +1,7 @@
 # `LiteGraph` — Lightweight, High-Performance Graph Container
 
-> **Tutorial:** [`docs/tutorials/LiteGraph.md`](../tutorials/LiteGraph.md) — island map, then Grand Regatta stress-test, parallel algorithms, and profiler races.
+> **Tutorial:** [`docs/tutorials/LiteGraph.md`](../tutorials/LiteGraph.md) — island map, then Grand Regatta stress-test,
+> parallel algorithms, and profiler races.
 >
 > **Headers:**
 > - `include/containers/graph/LiteGraph.hpp` — Core graph data structure
