@@ -1,15 +1,39 @@
 cmake_minimum_required(VERSION 4.1)
 project(pebble LANGUAGES C CXX)
 
-# Set the default C++ standard to C++23
+# Set the default C++ standard to C++26
 set(PROJECT_NAME pebble)
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_C_STANDARD 23) # Requires C11 standard
-set(CMAKE_CXX_STANDARD_REQUIRED ON)  # optional, ensure standard is supported
-set(CMAKE_CXX_EXTENSIONS OFF)  # optional, keep compiler extensions off
+# Set the default C standard
+set(CMAKE_C_STANDARD 23)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
+
+# ---------------------------------------------------------------------------
+# C++26 configuration
+# We check if the compiler supports -std=c++26 or -std=c++2c directly.
+# We keep CMAKE_CXX_STANDARD at 23 for CMake internal targets / try_compile
+# so CMake doesn't error out looking for an "AppleClang CXX26" dialect entry,
+# while injecting the C++26 flag into compile options.
+# ---------------------------------------------------------------------------
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag("-std=c++26" _pebble_have_cxx26)
+if(NOT _pebble_have_cxx26)
+    check_cxx_compiler_flag("-std=c++2c" _pebble_have_cxx2c)
+endif()
+
+if(_pebble_have_cxx26)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-std=c++26>)
+    message(STATUS "[pebble] C++26 enabled: using -std=c++26")
+elseif(_pebble_have_cxx2c)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-std=c++2c>)
+    message(STATUS "[pebble] C++26 enabled: using -std=c++2c")
+else()
+    set(CMAKE_CXX_STANDARD 23)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_EXTENSIONS OFF)
+    message(STATUS "[pebble] Compiler does not support C++26 — falling back to C++23")
+endif()
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(BUILD_EXECUTABLE ON)
@@ -17,8 +41,27 @@ set(BUILD_EXEMAIN "exemain")
 set(BUILD_SHARED_LIBS OFF)
 set(BUILD_SHARED OFF)
 
-option(BUILD_TESTS "Build and run tests" ON)
-option(BUILD_APP "Build the application" OFF)
+# ---------------------------------------------------------------------------
+# Top-level detection
+# When pebble is consumed via add_subdirectory() by another CMake project,
+# CMAKE_CURRENT_SOURCE_DIR != CMAKE_SOURCE_DIR.  We use this to flip the
+# default for BUILD_TESTS so that a parent project never accidentally builds
+# our test targets.  The parent can still opt-in with -DPEBBLE_BUILD_TESTS=ON.
+# ---------------------------------------------------------------------------
+if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    set(PEBBLE_IS_TOP_LEVEL ON)
+else()
+    set(PEBBLE_IS_TOP_LEVEL OFF)
+endif()
+
+option(BUILD_TESTS "Build pebble's tests (auto-disabled when used as a subdirectory)" ${PEBBLE_IS_TOP_LEVEL})
+option(BUILD_APP   "Build the application" OFF)
+
+if (PEBBLE_IS_TOP_LEVEL)
+    message(STATUS "[pebble] Top-level build — BUILD_TESTS default: ${BUILD_TESTS}")
+else()
+    message(STATUS "[pebble] Subdirectory build — BUILD_TESTS default: ${BUILD_TESTS} (tests suppressed)")
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 

@@ -1,9 +1,10 @@
 #pragma once
 // ============================================================================
-// meta.hpp — C++23 Reflection & Compile-Time Metaprogramming System
+// meta.hpp — Reflection & Compile-Time Metaprogramming System (C++23 / C++26)
 // ============================================================================
 // Single-header library for zero-overhead reflection, structural introspection,
-// and compile-time computation. No macros. No virtual dispatch. No RTTI.
+// compile-time computation, method reflection, and SoA layout transforms.
+// No macros. No virtual dispatch. No RTTI.
 //
 // String & character utilities live in <meta/akshara.hpp> (namespace akshara).
 // Compatibility aliases are provided in namespace meta for existing consumers.
@@ -16,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <format>
 #include <source_location>
 #include <string_view>
 #include <tuple>
@@ -81,6 +83,34 @@ namespace meta {
 #else
         false;
 #endif
+        // C++26 Pack Indexing (P2662R3)
+        inline constexpr bool has_pack_indexing =
+#if defined(__cpp_pack_indexing) && __cpp_pack_indexing >= 202311L
+            true;
+#else
+        false;
+#endif
+        // C++26 User-generated static_assert messages (P2741R3)
+        inline constexpr bool has_user_generated_static_assert =
+#if defined(__cpp_static_assert) && __cpp_static_assert >= 202306L
+            true;
+#else
+        false;
+#endif
+        // C++26 Placeholder variables (P2169R4)
+        inline constexpr bool has_placeholder_variables =
+#if defined(__cpp_placeholder_variables) && __cpp_placeholder_variables >= 202306L
+            true;
+#else
+        false;
+#endif
+        // C++26 Standard Reflection (P2996)
+        inline constexpr bool has_reflection =
+#if defined(__cpp_impl_reflection)
+            true;
+#else
+        false;
+#endif
     } // namespace config
 
     // ============================================================================
@@ -140,6 +170,12 @@ namespace meta {
     using akshara::pad_left;
     using akshara::intern_tag;
     using akshara::intern_equal;
+    using akshara::concat_str;
+    using akshara::format_static_error;
+
+    inline namespace literals {
+        using namespace akshara::literals;
+    }
 
     namespace detail::fs {
         using akshara::detail::fs::is_upper;
@@ -164,8 +200,14 @@ namespace meta {
     struct TypeList {
         static constexpr std::size_t size = sizeof...(Ts);
 
+#if defined(__cpp_pack_indexing) && __cpp_pack_indexing >= 202311L
+        template <std::size_t I>
+            requires(I < size)
+        using element = Ts...[I];
+#else
         template <std::size_t I>
         using element = std::tuple_element_t<I, std::tuple<Ts...>>;
+#endif
 
         template <typename T>
         static consteval bool contains() noexcept {
@@ -195,9 +237,15 @@ namespace meta {
     struct Sequence {
         static constexpr std::size_t size = sizeof...(Descriptors);
 
+#if defined(__cpp_pack_indexing) && __cpp_pack_indexing >= 202311L
+        template <std::size_t I>
+            requires(I < size)
+        using element = Descriptors...[I];
+#else
         template <std::size_t I>
             requires(I < size)
         using element = std::tuple_element_t<I, std::tuple<Descriptors...>>;
+#endif
 
         using as_type_list = TypeList<Descriptors...>;
 
@@ -391,10 +439,15 @@ namespace meta {
         static constexpr std::size_t size = sizeof...(Vs);
 
         template <std::size_t I>
+            requires(I < size)
         static consteval auto get() noexcept {
+#if defined(__cpp_pack_indexing) && __cpp_pack_indexing >= 202311L
+            return Vs...[I];
+#else
             constexpr auto arr =
                 std::array{static_cast<std::common_type_t<decltype(Vs)...>>(Vs)...};
             return arr[I];
+#endif
         }
     };
 
@@ -1546,7 +1599,94 @@ namespace meta {
     };
 
     // ---------------------------------------------------------------------------
-    // 5.2 field() — factory for MemberFieldDescriptor
+    // 5.1b Compile-Time Attributes & Annotations
+    // ---------------------------------------------------------------------------
+    template <fixed_string Key, typename Value = void>
+    struct attribute {
+        static constexpr auto key = Key;
+        using value_type = Value;
+    };
+
+    template <typename T, std::size_t Index, auto Ptr, fixed_string Name, typename... Attributes>
+    struct AnnotatedMemberFieldDescriptor : MemberFieldDescriptor<T, Index, Ptr, Name> {
+        using attributes = TypeList<Attributes...>;
+
+        template <fixed_string AttrKey>
+        static consteval bool has_attribute() noexcept {
+            return ((Attributes::key == AttrKey) || ...);
+        }
+    };
+
+    // ---------------------------------------------------------------------------
+    // 5.1c MethodDescriptor — member function / method introspection
+    // ---------------------------------------------------------------------------
+    namespace detail {
+        template <typename>
+        struct member_function_traits;
+
+        template <typename R, typename C, typename... Args>
+        struct member_function_traits<R(C::*)(Args...)> {
+            using owner_type = C;
+            using return_type = R;
+            using param_types = TypeList<Args...>;
+            static constexpr std::size_t arity = sizeof...(Args);
+            static constexpr bool is_const = false;
+            static constexpr bool is_noexcept = false;
+        };
+
+        template <typename R, typename C, typename... Args>
+        struct member_function_traits<R(C::*)(Args...) const> {
+            using owner_type = C;
+            using return_type = R;
+            using param_types = TypeList<Args...>;
+            static constexpr std::size_t arity = sizeof...(Args);
+            static constexpr bool is_const = true;
+            static constexpr bool is_noexcept = false;
+        };
+
+        template <typename R, typename C, typename... Args>
+        struct member_function_traits<R(C::*)(Args...) noexcept> {
+            using owner_type = C;
+            using return_type = R;
+            using param_types = TypeList<Args...>;
+            static constexpr std::size_t arity = sizeof...(Args);
+            static constexpr bool is_const = false;
+            static constexpr bool is_noexcept = true;
+        };
+
+        template <typename R, typename C, typename... Args>
+        struct member_function_traits<R(C::*)(Args...) const noexcept> {
+            using owner_type = C;
+            using return_type = R;
+            using param_types = TypeList<Args...>;
+            static constexpr std::size_t arity = sizeof...(Args);
+            static constexpr bool is_const = true;
+            static constexpr bool is_noexcept = true;
+        };
+    } // namespace detail
+
+    template <typename T, std::size_t Index, auto FnPtr, fixed_string Name>
+    struct MethodDescriptor {
+        using traits = detail::member_function_traits<decltype(FnPtr)>;
+        using owner_type = typename traits::owner_type;
+        using return_type = typename traits::return_type;
+        using param_types = typename traits::param_types;
+
+        static consteval std::size_t index() noexcept { return Index; }
+        static consteval std::string_view name() noexcept { return Name.view(); }
+        static consteval auto method_ptr() noexcept { return FnPtr; }
+        static consteval std::size_t arity() noexcept { return traits::arity; }
+        static consteval bool is_const() noexcept { return traits::is_const; }
+        static consteval bool is_noexcept() noexcept { return traits::is_noexcept; }
+
+        template <typename O, typename... Args>
+        static constexpr decltype(auto) invoke(O&& obj, Args&&... args) {
+            return (std::forward<O>(obj).*FnPtr)(std::forward<Args>(args)...);
+        }
+    };
+
+    // ---------------------------------------------------------------------------
+    // 5.2 field() / method() / annotated_field() factories
     // ---------------------------------------------------------------------------
     namespace detail {
         // Extract class type from pointer-to-member type
@@ -1566,6 +1706,18 @@ namespace meta {
     consteval auto field() {
         using owner = detail::member_pointer_class_t<decltype(Ptr)>;
         return MemberFieldDescriptor<owner, Index, Ptr, Name>{};
+    }
+
+    template <std::size_t Index, auto Ptr, fixed_string Name, typename... Attributes>
+    consteval auto annotated_field(Attributes...) {
+        using owner = detail::member_pointer_class_t<decltype(Ptr)>;
+        return AnnotatedMemberFieldDescriptor<owner, Index, Ptr, Name, Attributes...>{};
+    }
+
+    template <std::size_t Index, auto FnPtr, fixed_string Name>
+    consteval auto method() {
+        using owner = typename detail::member_function_traits<decltype(FnPtr)>::owner_type;
+        return MethodDescriptor<owner, Index, FnPtr, Name>{};
     }
 
     // ---------------------------------------------------------------------------
@@ -3187,4 +3339,63 @@ namespace meta {
                           "meta::reflect_with: unknown backend. Use aggregate_backend or adl_backend.");
         }
     }
+
+    // ============================================================================
+    //  SECTION 20: STRUCTURE-OF-ARRAYS (SoA) TRANSFORMS
+    // ============================================================================
+    // Compile-time conversion of Array-of-Structures (AoS) to Structure-of-Arrays (SoA)
+    // for cache-optimal, SIMD-friendly vector operations.
+
+    template <typename T, std::size_t Capacity>
+        requires Reflectable<T>
+    struct soa_storage {
+        using Seq = reflect_t<T>;
+        static constexpr std::size_t field_count = Seq::size;
+        static constexpr std::size_t capacity = Capacity;
+
+        std::size_t count = 0;
+
+        // Tuple of std::array<FieldType, Capacity> for each reflected field
+        template <typename D>
+        using array_for_desc = std::array<typename D::value_type, Capacity>;
+
+        template <typename... Ds>
+        static auto make_columns_tuple(Sequence<Ds...>)
+            -> std::tuple<array_for_desc<Ds>...>;
+
+        using columns_type = decltype(make_columns_tuple(Seq{}));
+        columns_type columns{};
+
+        /// Get a specific column array by field index
+        template <std::size_t FieldIdx>
+            requires(FieldIdx < field_count)
+        [[nodiscard]] constexpr auto& column() noexcept {
+            return std::get<FieldIdx>(columns);
+        }
+
+        template <std::size_t FieldIdx>
+            requires(FieldIdx < field_count)
+        [[nodiscard]] constexpr const auto& column() const noexcept {
+            return std::get<FieldIdx>(columns);
+        }
+
+        /// Append a single struct instance into the SoA buffer
+        constexpr void push_back(const T& obj) {
+            const std::size_t idx = count++;
+            [&]<std::size_t... I>(std::index_sequence<I...>) {
+                ((std::get<I>(columns)[idx] = Seq::template element<I>::get(obj)), ...);
+            }(std::make_index_sequence<field_count>{});
+        }
+
+        /// Retrieve an element by reconstructing the original struct T
+        [[nodiscard]] constexpr T get(std::size_t idx) const {
+            return [&]<std::size_t... I>(std::index_sequence<I...>) {
+                return T{std::get<I>(columns)[idx]...};
+            }(std::make_index_sequence<field_count>{});
+        }
+
+        [[nodiscard]] constexpr std::size_t size() const noexcept { return count; }
+        [[nodiscard]] constexpr bool empty() const noexcept { return count == 0; }
+    };
 } // namespace meta
+

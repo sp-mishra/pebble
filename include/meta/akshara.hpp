@@ -1,17 +1,18 @@
 #pragma once
 // ============================================================================
-// akshara.hpp — Compile-Time String Library
+// akshara.hpp — Compile-Time String Library (C++23 / C++26)
 // ============================================================================
 // "Akshara" (Sanskrit: अक्षर) — letter, character, syllable; that which
-// does not perish. A zero-overhead, header-only C++23 compile-time string
-// library built for language tools, parsers, and metaprogramming.
+// does not perish. A zero-overhead, header-only compile-time string
+// library built for language tools, parsers, diagnostics, and metaprogramming.
 //
 // Provides:
 //   fixed_string<N>       — NTTP-capable null-terminated string literal type
+//   ""_fs                 — User-defined literal operator (akshara::literals)
 //   ct_string_builder<C>  — compile-time mutable string buffer
 //   String algorithms     — substr, find, rfind, contains, starts/ends_with,
 //                           to_upper/lower, replace_char, repeat, trim_view,
-//                           uint_to_str, str_to_uint
+//                           uint_to_str, str_to_uint, concat
 //   KMP algorithms        — kmp_find, kmp_count (O(N+M))
 //   join                  — join two fixed_strings with separator
 //   ct_char_set           — 128-bit compile-time ASCII character set
@@ -20,6 +21,8 @@
 //   fnv1a64               — consteval FNV-1a 64-bit hash
 //   pad_right / pad_left  — compile-time string padding to fixed width
 //   intern_tag<S>         — type-level string identity for O(1) equality
+//   format_static_error   — C++26 rich compile-time diagnostic string generator
+//   std::formatter        — std::format / std::print interop for fixed_string
 //
 // No macros. No virtual dispatch. No heap. No runtime cost.
 // ============================================================================
@@ -28,6 +31,7 @@
 #include <compare>
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <string_view>
 
 namespace akshara {
@@ -473,14 +477,14 @@ namespace akshara {
         std::uint64_t low = 0; // bits  0–63
         std::uint64_t high = 0; // bits 64–127
 
-        consteval ct_char_set() noexcept = default;
+        constexpr ct_char_set() noexcept = default;
 
-        consteval ct_char_set(const std::uint64_t l, const std::uint64_t h) noexcept
+        constexpr ct_char_set(const std::uint64_t l, const std::uint64_t h) noexcept
             : low(l), high(h) {}
 
         // Construct from fixed_string of member characters
         template <std::size_t N>
-        consteval explicit ct_char_set(const fixed_string<N>& chars) noexcept {
+        constexpr explicit ct_char_set(const fixed_string<N>& chars) noexcept {
             for (std::size_t i = 0; i < chars.length; ++i) {
                 if (const unsigned idx = static_cast<unsigned char>(chars.data[i]) & 0x7Fu; idx < 64)
                     low |= (
@@ -489,29 +493,29 @@ namespace akshara {
             }
         }
 
-        [[nodiscard]] consteval bool contains(const char c) const noexcept {
+        [[nodiscard]] constexpr bool contains(const char c) const noexcept {
             if (const unsigned idx = static_cast<unsigned char>(c) & 0x7Fu; idx < 64) return (low >> idx) & 1u;
             else return (high >> (idx - 64)) & 1u;
         }
 
-        [[nodiscard]] consteval ct_char_set operator|(const ct_char_set& o) const noexcept {
+        [[nodiscard]] constexpr ct_char_set operator|(const ct_char_set& o) const noexcept {
             return {low | o.low, high | o.high};
         }
 
-        [[nodiscard]] consteval ct_char_set operator&(const ct_char_set& o) const noexcept {
+        [[nodiscard]] constexpr ct_char_set operator&(const ct_char_set& o) const noexcept {
             return {low & o.low, high & o.high};
         }
 
-        [[nodiscard]] consteval ct_char_set operator^(const ct_char_set& o) const noexcept {
+        [[nodiscard]] constexpr ct_char_set operator^(const ct_char_set& o) const noexcept {
             return {low ^ o.low, high ^ o.high};
         }
 
-        [[nodiscard]] consteval ct_char_set complement() const noexcept {
+        [[nodiscard]] constexpr ct_char_set complement() const noexcept {
             // Only invert bits 0–127; bits outside ASCII stay zero.
             return {~low, ~high & 0xFFFF'FFFF'FFFF'FFFFull};
         }
 
-        consteval void add_range(const char lo, const char hi) noexcept {
+        constexpr void add_range(const char lo, const char hi) noexcept {
             for (int c = static_cast<unsigned char>(lo);
                  c <= static_cast<unsigned char>(hi); ++c) {
                 if (const unsigned idx = static_cast<unsigned>(c) & 0x7Fu; idx < 64) low |= (std::uint64_t{1} << idx);
@@ -519,52 +523,52 @@ namespace akshara {
             }
         }
 
-        consteval void add(const char c) noexcept {
+        constexpr void add(const char c) noexcept {
             if (const unsigned idx = static_cast<unsigned char>(c) & 0x7Fu; idx < 64) low |= (std::uint64_t{1} << idx);
             else high |= (std::uint64_t{1} << (idx - 64));
         }
     };
 
     // Predefined char set factories
-    [[nodiscard]] consteval ct_char_set cs_digits() noexcept {
+    [[nodiscard]] constexpr ct_char_set cs_digits() noexcept {
         ct_char_set s;
         s.add_range('0', '9');
         return s;
     }
 
-    [[nodiscard]] consteval ct_char_set cs_upper() noexcept {
+    [[nodiscard]] constexpr ct_char_set cs_upper() noexcept {
         ct_char_set s;
         s.add_range('A', 'Z');
         return s;
     }
 
-    [[nodiscard]] consteval ct_char_set cs_lower() noexcept {
+    [[nodiscard]] constexpr ct_char_set cs_lower() noexcept {
         ct_char_set s;
         s.add_range('a', 'z');
         return s;
     }
 
-    [[nodiscard]] consteval ct_char_set cs_alpha() noexcept { return cs_upper() | cs_lower(); }
-    [[nodiscard]] consteval ct_char_set cs_alnum() noexcept { return cs_alpha() | cs_digits(); }
+    [[nodiscard]] constexpr ct_char_set cs_alpha() noexcept { return cs_upper() | cs_lower(); }
+    [[nodiscard]] constexpr ct_char_set cs_alnum() noexcept { return cs_alpha() | cs_digits(); }
 
-    [[nodiscard]] consteval ct_char_set cs_whitespace() noexcept {
+    [[nodiscard]] constexpr ct_char_set cs_whitespace() noexcept {
         ct_char_set s;
         for (const char c : {' ', '\t', '\n', '\r', '\f', '\v'})
             s.add(c);
         return s;
     }
 
-    [[nodiscard]] consteval ct_char_set cs_hex() noexcept {
+    [[nodiscard]] constexpr ct_char_set cs_hex() noexcept {
         return cs_digits() | ct_char_set{fixed_string{"abcdefABCDEF"}};
     }
 
-    [[nodiscard]] consteval ct_char_set cs_ident_start() noexcept {
+    [[nodiscard]] constexpr ct_char_set cs_ident_start() noexcept {
         ct_char_set s = cs_alpha();
         s.add('_');
         return s;
     }
 
-    [[nodiscard]] consteval ct_char_set cs_ident_cont() noexcept {
+    [[nodiscard]] constexpr ct_char_set cs_ident_cont() noexcept {
         ct_char_set s = cs_alnum();
         s.add('_');
         return s;
@@ -693,4 +697,97 @@ namespace akshara {
             return sv;
         }
     } // namespace path
+
+    // =========================================================================
+    //  SECTION 12: Variadic Concat & Diagnostic String Formatters
+    // =========================================================================
+
+    /// Variadic compile-time string concatenation
+    template <std::size_t N>
+    [[nodiscard]] consteval auto concat_str(const fixed_string<N>& s) noexcept {
+        return s;
+    }
+
+    template <std::size_t N1, std::size_t N2, std::size_t... Ns>
+    [[nodiscard]] consteval auto concat_str(const fixed_string<N1>& s1,
+                                            const fixed_string<N2>& s2,
+                                            const fixed_string<Ns>&... rest) noexcept {
+        return concat_str(s1 + s2, rest...);
+    }
+
+    template <std::size_t N, std::size_t... Ns>
+    [[nodiscard]] consteval auto concat(const fixed_string<N>& s,
+                                        const fixed_string<Ns>&... rest) noexcept {
+        return concat_str(s, rest...);
+    }
+
+    /// Compile-time diagnostic formatter for static assertions (C++26 rich static_assert)
+    template <fixed_string... Parts>
+    struct static_error_message {
+        static constexpr auto value = concat_str(Parts...);
+        static constexpr const char* data = value.data;
+    };
+
+    template <fixed_string... Parts>
+    inline constexpr auto format_static_error = concat_str(Parts...);
+
+    // =========================================================================
+    //  SECTION 13: literals — User-defined literal operator (""_fs)
+    // =========================================================================
+
+    inline namespace literals {
+        template <fixed_string S>
+        [[nodiscard]] consteval auto operator""_fs() noexcept {
+            return S;
+        }
+    } // namespace literals
+
+    // =========================================================================
+    //  SECTION 14: Pattern & Character Matcher
+    // =========================================================================
+
+    struct matcher {
+        /// Checks if a string contains only characters from the allowed charset
+        template <std::size_t N>
+        [[nodiscard]] static consteval bool matches_all(const fixed_string<N>& str,
+                                                        ct_char_set allowed) noexcept {
+            for (std::size_t i = 0; i < str.length; ++i) {
+                if (!allowed.contains(str.data[i])) return false;
+            }
+            return true;
+        }
+
+        /// Checks if a string view contains only characters from the allowed charset
+        [[nodiscard]] static constexpr bool matches_all(std::string_view sv,
+                                                        ct_char_set allowed) noexcept {
+            for (char c : sv) {
+                if (!allowed.contains(c)) return false;
+            }
+            return true;
+        }
+
+        /// Checks if an identifier is a valid C++ identifier name
+        template <std::size_t N>
+        [[nodiscard]] static consteval bool is_valid_c_identifier(const fixed_string<N>& str) noexcept {
+            if constexpr (str.length == 0) return false;
+            if (!cs_ident_start().contains(str.data[0])) return false;
+            for (std::size_t i = 1; i < str.length; ++i) {
+                if (!cs_ident_cont().contains(str.data[i])) return false;
+            }
+            return true;
+        }
+    };
 } // namespace akshara
+
+// =========================================================================
+// std::formatter specialization for akshara::fixed_string
+// Enables std::format("{}", "text"_fs) and std::print
+// =========================================================================
+template <std::size_t N, typename CharT>
+struct std::formatter<akshara::fixed_string<N>, CharT> : std::formatter<std::basic_string_view<CharT>, CharT> {
+    template <typename FormatContext>
+    auto format(const akshara::fixed_string<N>& str, FormatContext& ctx) const {
+        return std::formatter<std::basic_string_view<CharT>, CharT>::format(
+            std::basic_string_view<CharT>{str.data, str.length}, ctx);
+    }
+};

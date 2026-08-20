@@ -112,6 +112,8 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 
 ## 6. Utilities & Algorithms
 
+* **Tarka** (`include/tarka/`) — Zero-overhead multi-solver SMT substrate and native DPLL(T) solver (CDCL, EUF congruence closure, QF_BV bit-blasting, Simplex LRA/LIA, QF_AX arrays, and Z3 bridge).
+  * Documentation: [`docs/tarka/tarka.md`](docs/tarka/tarka.md)
 * **SingleFlight** (`include/utils/single_flight.hpp`) — Duplicate function execution suppressor / coalescer for concurrent workloads.
 * **Profiler & Logging** (`include/utils/profiler.hpp`, `include/utils/log.hpp`) — Structured, low-latency logging and micro-benchmarking profilers.
   * Documentation: [`docs/utils/profiler.md`](docs/utils/profiler.md), [`docs/utils/log.md`](docs/utils/log.md)
