@@ -89,6 +89,7 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 * **static_vector** (`include/containers/static/static_vector.hpp`) — Fixed-capacity inline vector that never touches the heap.
 * **Tensor & Tensor EDSL** (`include/containers/tensor/tensor.hpp`, `include/containers/tensor/tensor_edsl.hpp`) — High-performance policy-based multidimensional tensor engine with lazy expression templates (*deducing this*), C++23 multidimensional indexing, Google Highway SIMD, Apple Silicon MLX GPU acceleration, and Sūtra/Vākya-inspired symbolic EDSL with `_p`/`_t` parameter literals.
   * Documentation: [`docs/containers/tensor.md`](docs/containers/tensor.md)
+  * Comprehensive Zero-to-Hero Tutorial: [`docs/tutorials/tensor.md`](docs/tutorials/tensor.md)
 * **Math Vectors & Game Graphics Primitives** (`include/containers/numeric/math_vector.hpp`) — Stack-allocated, zero-heap, `constexpr`-enabled linear algebra primitives (`vec2`, `vec3`, `vec4`, `quat`, `mat4`), ray optics (`reflect`, `refract`), camera view (`look_at`), projection (`perspective`), and quaternion slerp built on `static_tensor`.
   * Documentation: [`docs/containers/math_vector.md`](docs/containers/math_vector.md)
 
@@ -107,13 +108,16 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 
 * **Meta / Concepts** (`include/meta/meta.hpp`) — Comprehensive compile-time type introspection, reflection traits, type lists, and concept constraints.
   * Documentation: [`docs/meta/meta.md`](docs/meta/meta.md)
+  * Tutorial: [`docs/tutorials/meta.md`](docs/tutorials/meta.md)
 * **Akshara** (`include/meta/akshara.hpp`) — Modern compile-time tokenization, AST generation, and grammar-directed parser combinator engine.
   * Documentation: [`docs/meta/akshara.md`](docs/meta/akshara.md)
 * **ExactRational** (`include/meta/exact_rational.hpp`) — Arbitrary precision compile-time rational numbers.
 * **Vākya** (`include/vakya/`) — Header-only structural-expression EDSL with pattern matching, properties, type reasoning, and optional Tarka-backed verification. Its core has no Lithe dependency.
   * Documentation: [`docs/vakya/vakya.md`](docs/vakya/vakya.md)
+  * Comprehensive Zero-to-Hero Tutorial: [`docs/tutorials/vakya.md`](docs/tutorials/vakya.md)
 * **Generic Language + Samasa** (`include/languages/generic/`, `include/languages/samasa/`) — Reusable language substrate (diagnostics, CST, IR, modules, semantics) and compile-time grammar/parser framework.
   * Documentation: [`docs/languages/generic.md`](docs/languages/generic.md), [`docs/languages/samasa/samasa.md`](docs/languages/samasa/samasa.md)
+  * Comprehensive Zero-to-Hero Tutorial: [`docs/tutorials/samasa.md`](docs/tutorials/samasa.md)
 
 ---
 

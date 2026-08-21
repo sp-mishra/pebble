@@ -56,6 +56,8 @@ endif()
 
 option(BUILD_TESTS "Build pebble's tests (auto-disabled when used as a subdirectory)" ${PEBBLE_IS_TOP_LEVEL})
 option(BUILD_APP   "Build the application" OFF)
+option(PEBBLE_ENABLE_PRAVAHA_EXTERNAL_ADAPTER_TESTS
+       "Build Pravaha tests requiring downstream Lithe, Vulkan, or Sutra headers" OFF)
 
 if (PEBBLE_IS_TOP_LEVEL)
     message(STATUS "[pebble] Top-level build — BUILD_TESTS default: ${BUILD_TESTS}")
@@ -354,6 +356,22 @@ endif()
 
 find_package(Threads REQUIRED)
 
+# Pravaha is a header-only orchestration and heterogeneous-compute component.
+# Lithe remains downstream: its runtime and Vulkan bridges are discovered by
+# their own headers and compile to an unavailable surface when absent.
+add_library(pebble_pravaha INTERFACE)
+add_library(pebble::pravaha ALIAS pebble_pravaha)
+target_include_directories(pebble_pravaha INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+# Pravaha's public API is C++23.  The top-level project independently enables
+# C++26 on Apple toolchains that support it, so consumers retain that upgrade.
+target_compile_features(pebble_pravaha INTERFACE cxx_std_23)
+target_link_libraries(pebble_pravaha INTERFACE Threads::Threads hwy)
+if (HAS_METAL_CPP)
+    target_link_libraries(pebble_pravaha INTERFACE
+        ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK} ${QUARTZCORE_FRAMEWORK})
+endif()
+
 link_directories(/usr/local/lib)
 link_directories(${HOME_LIB_DIR})
 
@@ -399,11 +417,16 @@ if (BUILD_TESTS)
             GLOB_RECURSE TEST_SOURCE
             "${CMAKE_SOURCE_DIR}/src/tests/*.cpp"
     )
+    if (NOT PEBBLE_ENABLE_PRAVAHA_EXTERNAL_ADAPTER_TESTS)
+        # These suites exercise downstream Lithe preset/Vulkan APIs or the
+        # Turbo Twig Sutra adapter; neither belongs to Pebble's core graph.
+        list(FILTER TEST_SOURCE EXCLUDE REGEX ".*/src/tests/pravaha/(test_npravaha_.*|test_pravaha_ext)\\.cpp$")
+    endif()
     add_executable(pebble_tests ${TEST_SOURCE})
     target_link_libraries(pebble_tests PRIVATE
             Catch2
+            pebble::pravaha
             spdlog::spdlog_header_only
-            hwy
             crc32c
     )
     if (TARGET lmdb)
