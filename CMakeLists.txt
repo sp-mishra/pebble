@@ -384,6 +384,13 @@ target_include_directories(pebble_akruti INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_compile_features(pebble_akruti INTERFACE cxx_std_23)
 
+add_library(pebble_prakriti INTERFACE)
+add_library(pebble::prakriti ALIAS pebble_prakriti)
+target_include_directories(pebble_prakriti INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_compile_features(pebble_prakriti INTERFACE cxx_std_23)
+target_link_libraries(pebble_prakriti INTERFACE pebble::akruti hwy)
+
 
 # Medha is a header-only transactional-memory component.  Its core keeps
 # dependencies limited to Pebble containers; integrations remain opt-in.

@@ -105,6 +105,11 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
   * Advanced fracture pipeline (**Khanda** in `akruti/khanda.hpp`) with Voronoi partitioning, ear-clipping triangulation, convex decomposition, Poisson-disk sampling with impact densification, and exact polar moment of inertia.
   * Bulk scene orchestrator (`akruti/scene/`) backed by SoA batches, dynamic `AABBTree` BVH, and optional `pravaha` task graph execution.
   * Documentation: [`docs/akruti/akruti.md`](docs/akruti/akruti.md)
+* **Prakriti** (`include/prakriti/`) — Unified material-state 2D continuum simulator and physics engine.
+   * Hybrid particle-field Lagrangian continuum dynamics combining Extended Position-Based Dynamics (XPBD) mechanics, Position-Based Fluids (PBF), graph-Laplacian explicit heat diffusion with latent-heat phase transitions, strain-driven plasticity and fracture with `containers::union_find` island tracking, and `akruti` SDF obstacle contact and XPBD kinematic joints.
+   * Features 3 interchangeable `ComputeBackend` execution tiers: `ScalarBackend` (zero-dep reference), `HighwayBackend` (Google Highway SIMD), and `PravahaBackend` (multi-core task graph chunking).
+   * Documentation: [`docs/prakriti/prakriti.md`](docs/prakriti/prakriti.md)
+
 
 
 ---

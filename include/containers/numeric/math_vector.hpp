@@ -44,6 +44,64 @@ namespace pebble::math {
     // 2. Vector Arithmetic & Geometric Functions
     // ========================================================================
 
+    // Vector Addition (a + b)
+    template<typename T, size_t N>
+    constexpr ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>
+    operator+(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &a,
+              const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &b) noexcept {
+        ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> res;
+        for (size_t i = 0; i < N; ++i) res[i] = a[i] + b[i];
+        return res;
+    }
+
+    // Vector Subtraction (a - b)
+    template<typename T, size_t N>
+    constexpr ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>
+    operator-(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &a,
+              const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &b) noexcept {
+        ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> res;
+        for (size_t i = 0; i < N; ++i) res[i] = a[i] - b[i];
+        return res;
+    }
+
+    // Vector Negation (-v)
+    template<typename T, size_t N>
+    constexpr ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>
+    operator-(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &v) noexcept {
+        ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> res;
+        for (size_t i = 0; i < N; ++i) res[i] = -v[i];
+        return res;
+    }
+
+    // Vector * Scalar
+    template<typename T, size_t N, typename S>
+        requires std::is_arithmetic_v<S>
+    constexpr ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>
+    operator*(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &v, S s) noexcept {
+        ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> res;
+        for (size_t i = 0; i < N; ++i) res[i] = static_cast<T>(v[i] * s);
+        return res;
+    }
+
+    // Scalar * Vector
+    template<typename T, size_t N, typename S>
+        requires std::is_arithmetic_v<S>
+    constexpr ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>
+    operator*(S s, const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &v) noexcept {
+        return v * s;
+    }
+
+    // Vector / Scalar
+    template<typename T, size_t N, typename S>
+        requires std::is_arithmetic_v<S>
+    constexpr ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>
+    operator/(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &v, S s) noexcept {
+        ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> res;
+        for (size_t i = 0; i < N; ++i) res[i] = static_cast<T>(v[i] / s);
+        return res;
+    }
+
+
     // 2D Vector Cross Product (Scalar z-component)
     template<typename T>
     constexpr T cross(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, 2> &a,

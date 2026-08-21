@@ -29,7 +29,6 @@
 #include "utils/setu.hpp"
 #include "mem/smriti.hpp"
 #include "mem/arena.hpp"
-#include "containers/lockfree/MPMCQueue.hpp"
 #include "observability/nadi.hpp"
 #include "rules/easy_rules.hpp"
 #include "containers/static/static_vector.hpp"
@@ -46,6 +45,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstring>
+#include <deque>
 #include <expected>
 #include <filesystem>
 #include <format>
@@ -60,8 +60,6 @@
 #include <string_view>
 #include <thread>
 #include <vector>
-
-#include "pravaha/pravaha.hpp"
 
 namespace nitya {
     // ============================================================================
@@ -118,6 +116,28 @@ namespace nitya {
         std::size_t records_recovered{0};
         std::size_t bytes_recovered{0};
         std::uint64_t segment_id{0};
+    };
+
+    struct durability_health {
+        LogError last_error{LogError::Success};
+        lsn_t last_error_lsn{k_invalid_lsn};
+
+        [[nodiscard]] bool healthy() const noexcept { return last_error == LogError::Success; }
+    };
+
+    struct wal_metrics {
+        std::uint64_t records_published{0};
+        std::uint64_t bytes_published{0};
+        std::uint64_t flush_operations{0};
+        std::uint64_t flush_failures{0};
+        std::uint64_t group_commit_waiters{0};
+        std::uint64_t replication_records{0};
+        std::uint64_t replication_bytes{0};
+    };
+
+    struct replication_checkpoint {
+        std::string replica_id;
+        lsn_t acknowledged_lsn{0};
     };
 
     // ============================================================================
@@ -608,7 +628,7 @@ namespace nitya {
     };
 
     // ============================================================================
-    // § 9  Concurrency Policy (Lockfree MPMC Queue for Group Commit)
+    // § 9  Concurrency Policy (Bounded ticket queue for Group Commit)
     // ============================================================================
 
     template <std::size_t QueueCapacity = 1024>
@@ -631,16 +651,26 @@ namespace nitya {
 
         group_commit_concurrency() = default;
 
-        bool enqueue_commit(commit_ticket t) noexcept {
-            return queue_.try_push(t);
+        bool enqueue_commit(commit_ticket t) {
+            std::lock_guard lock{mutex_};
+            if (queue_.size() == QueueCapacity) return false;
+            queue_.push_back(std::move(t));
+            return true;
         }
 
-        std::optional<commit_ticket> dequeue_commit() noexcept {
-            return queue_.try_pop();
+        std::optional<commit_ticket> dequeue_commit() {
+            std::lock_guard lock{mutex_};
+            if (queue_.empty()) return std::nullopt;
+            auto ticket = std::move(queue_.front());
+            queue_.pop_front();
+            return ticket;
         }
+
+        static constexpr std::size_t capacity() noexcept { return QueueCapacity; }
 
     private:
-        lockfree::MPMCQueue<commit_ticket, QueueCapacity> queue_;
+        std::mutex mutex_;
+        std::deque<commit_ticket> queue_;
     };
 
     // ============================================================================
@@ -681,8 +711,10 @@ namespace nitya {
 
     template <typename C>
     concept ConcurrencyPolicyLike = requires(C& c, typename C::commit_ticket ticket) {
+        typename C::commit_completion;
         { c.enqueue_commit(ticket) } -> std::same_as<bool>;
         { c.dequeue_commit() } -> std::same_as<std::optional<typename C::commit_ticket>>;
+        { C::capacity() } -> std::convertible_to<std::size_t>;
     };
 
     template <typename D>
@@ -710,7 +742,9 @@ namespace nitya {
         ConcurrencyPolicyLike ConcurrencyPolicy = group_commit_concurrency<1024>,
         FramingPolicyLike FramingPolicy = default_framing,
         DurabilityPolicyLike DurabilityPolicy = sync_durability,
-        TelemetryPolicyLike TelemetryPolicy = nadi_telemetry>
+        TelemetryPolicyLike TelemetryPolicy = nadi_telemetry,
+        std::size_t PublishTrackerCapacity = 1024>
+        requires (PublishTrackerCapacity > 0)
     class wal {
     public:
         explicit wal(wal_options opts = {})
@@ -824,6 +858,9 @@ namespace nitya {
             if (auto mark_res = mark_published_range(res.lsn, record_end); !mark_res) return std::unexpected(
                 mark_res.error());
 
+            records_published_.fetch_add(1, std::memory_order_relaxed);
+            bytes_published_.fetch_add(res.payload_size, std::memory_order_relaxed);
+
             if (opts_.background_flush) {
                 flusher_cv_.notify_one();
             }
@@ -887,14 +924,22 @@ namespace nitya {
                 return {};
             }
 
-            if (auto flush_res = flush_range_to_locked(current_flushed, target_lsn); !flush_res) return flush_res;
+            if (auto flush_res = flush_range_to_locked(current_flushed, target_lsn); !flush_res) {
+                record_durability_error(flush_res.error(), target_lsn);
+                return flush_res;
+            }
 
             flushed_lsn_.store(target_lsn, std::memory_order_release);
             flushed_lsn_.notify_all();
+            flush_operations_.fetch_add(1, std::memory_order_relaxed);
             return {};
         }
 
         Result<void> wait_durable(lsn_t target_lsn) {
+            if (const auto error = last_durability_error_.load(std::memory_order_acquire);
+                error != LogError::Success) {
+                return std::unexpected(error);
+            }
             if (const lsn_t published = published_lsn_.load(std::memory_order_acquire); target_lsn > published) {
                 return std::unexpected(LogError::InvalidArg);
             }
@@ -906,79 +951,35 @@ namespace nitya {
 
             auto telemetry = TelemetryPolicy::trace_flush();
             (void)telemetry;
+            group_commit_waiters_.fetch_add(1, std::memory_order_relaxed);
 
-            // The queue may retain a ticket after this caller observes that its
-            // target LSN is durable.  Shared ownership prevents that deferred
-            // drain from touching per-call stack storage.
-            auto completion = std::make_shared<typename ConcurrencyPolicy::commit_completion>();
+            // Durability is inherently serialized by the storage device.  The
+            // first waiter owns one bounded critical section and flushes the
+            // current published watermark, completing every concurrent waiter
+            // already covered by it without lock-free ticket hand-off/liveness
+            // hazards. The append path remains lock-free with respect to this
+            // mutex.
+            std::unique_lock lock{flush_mutex_};
+            if (flushed_lsn_.load(std::memory_order_relaxed) >= target_lsn) return {};
 
-            typename ConcurrencyPolicy::commit_ticket ticket{
-                .lsn = target_lsn,
-                .total_bytes = 0,
-                .completion = completion
-            };
-
-            // Enqueue ticket.  If the queue is momentarily full, try to become leader
-            // directly (without enqueuing) or yield and retry.
-            while (!concurrency_.enqueue_commit(ticket)) {
-                if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
-                    return {};
-                }
-                std::unique_lock direct_lk{flush_mutex_, std::defer_lock};
-                if (direct_lk.try_lock()) {
-                    // Became leader without a ticket in the queue — safe to return directly.
-                    return execute_leader_flush(target_lsn, completion);
-                }
-                std::this_thread::yield();
+            const lsn_t batch_end = published_lsn_.load(std::memory_order_acquire);
+            if (batch_end < target_lsn) return std::unexpected(LogError::InvalidArg);
+            const lsn_t current = flushed_lsn_.load(std::memory_order_relaxed);
+            if (auto flushed = flush_range_to_locked(current, batch_end); !flushed) {
+                record_durability_error(flushed.error(), batch_end);
+                return flushed;
             }
-
-            // The ticket is now queued. A later leader may drain it, but the
-            // caller may also complete as soon as the durable watermark covers
-            // its target; `completion` then remains owned by the queue.
-
-            // Try to become leader immediately.
-            {
-                std::unique_lock lk{flush_mutex_, std::defer_lock};
-                if (lk.try_lock()) {
-                    return execute_leader_flush(target_lsn, completion);
-                }
-            }
-
-            // Follower path.  The flushed watermark is the durability contract;
-            // personal ticket completion is only needed to propagate a leader's
-            // error.  Once the watermark covers this LSN, return immediately --
-            // the shared completion state keeps any deferred queue entry safe.
-            for (;;) {
-                if (completion->done.load(std::memory_order_acquire)) {
-                    if (const auto err = completion->result.load(std::memory_order_relaxed);
-                        err != LogError::Success) {
-                        return std::unexpected(err);
-                    }
-                    return flushed_lsn_.load(std::memory_order_acquire) >= target_lsn
-                        ? Result<void>{}
-                        : std::unexpected(LogError::InternalError);
-                }
-
-                if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
-                    return {};
-                }
-
-                // Try to promote to leader and drain queue (which will include our ticket).
-                {
-                    std::unique_lock retry_lk{flush_mutex_, std::defer_lock};
-                    if (retry_lk.try_lock()) {
-                        return execute_leader_flush(target_lsn, completion);
-                    }
-                }
-
-                if (const auto cur = flushed_lsn_.load(std::memory_order_acquire);
-                    cur < target_lsn && !completion->done.load(std::memory_order_acquire)) {
-                    flushed_lsn_.wait(cur, std::memory_order_acquire);
-                }
-            }
+            flushed_lsn_.store(batch_end, std::memory_order_release);
+            flushed_lsn_.notify_all();
+            flush_operations_.fetch_add(1, std::memory_order_relaxed);
+            return {};
         }
 
         Result<void> sync() {
+            if (const auto error = last_durability_error_.load(std::memory_order_acquire);
+                error != LogError::Success) {
+                return std::unexpected(error);
+            }
             const lsn_t pub = published_lsn_.load(std::memory_order_acquire);
             // Fast path: nothing to flush.
             if (flushed_lsn_.load(std::memory_order_acquire) >= pub) return {};
@@ -1083,102 +1084,54 @@ namespace nitya {
             return recovery_stream{*this, start_lsn, mode};
         }
 
-        // Multi-segment parallel recovery using Pravaha task runners
-        template <typename PravahaRunnerT, typename RecordCallback>
-        recovery_status recover_async(
-            PravahaRunnerT& runner,
-            RecordCallback&& on_record,
-            lsn_t start_lsn = 0,
-            recovery_mode mode = recovery_mode::stop_at_first_error
-        ) {
-            auto segments = list_segments();
-            recovery_status total_status{};
-
-            if (segments.empty()) {
-                return total_status;
-            }
-
-            // Filter segments starting at or after start_lsn
-            std::vector<segment_descriptor> target_segs;
-            for (const auto& seg : segments) {
-                if (seg.end_lsn > start_lsn) {
-                    target_segs.push_back(seg);
-                }
-            }
-
-            if (target_segs.empty()) {
-                return total_status;
-            }
-
-            // Parallel verification per segment
-            std::vector<std::vector<wal_record>> segment_records(target_segs.size());
-            std::vector<recovery_status> segment_statuses(target_segs.size());
-
-            for (std::size_t i = 0; i < target_segs.size(); ++i) {
-                const auto& seg = target_segs[i];
-                auto* recs = &segment_records[i];
-                auto* stat = &segment_statuses[i];
-
-                lsn_t seg_start = std::max(start_lsn, seg.begin_lsn + k_segment_header_size);
-
-                auto task_fn = [this, seg_start, seg, mode, recs, stat]() {
-                    lsn_t cur = seg_start;
-                    while (cur < seg.end_lsn) {
-                        auto rec = read_record_at(cur, stat, mode);
-                        if (!rec) break;
-                        recs->push_back(std::move(*rec));
-                    }
-                };
-                (void)runner.submit(::pravaha::task("nitya_recover_seg", std::move(task_fn)));
-            }
-            runner.backend_ref().drain();
-
-            // Assemble ordered records and update total status
-            for (std::size_t i = 0; i < target_segs.size(); ++i) {
-                for (auto& r : segment_records[i]) {
-                    on_record(r);
-                    total_status.records_recovered++;
-                    total_status.bytes_recovered += (k_frame_overhead + r.payload.size());
-                    total_status.last_valid_lsn = r.lsn;
-                }
-                if (segment_statuses[i].error != LogError::Success && segment_statuses[i].error != LogError::EndOfLog) {
-                    total_status.error = segment_statuses[i].error;
-                    total_status.first_bad_lsn = segment_statuses[i].first_bad_lsn;
-                    if (mode == recovery_mode::strict || mode == recovery_mode::stop_at_first_error) {
-                        break;
-                    }
-                }
-            }
-
-            return total_status;
-        }
-
         // ------------------------------------------------------------------------
         // 6. Replication Stream Subscription
         // ------------------------------------------------------------------------
         class replication_stream {
         public:
-            replication_stream(wal& parent, const lsn_t start_lsn)
-                : parent_{parent}, cursor_lsn_{start_lsn} {}
+            replication_stream(wal& parent, std::string replica_id, const lsn_t start_lsn)
+                : parent_{parent}, replica_id_{std::move(replica_id)}, cursor_lsn_{start_lsn} {}
 
             std::optional<wal_record> next() {
                 recovery_status st;
                 auto rec = parent_.read_record_at(cursor_lsn_, &st, recovery_mode::stop_at_first_error);
                 if (rec) {
-                    parent_.set_replicated_lsn(rec->lsn + k_frame_overhead + rec->payload.size());
+                    cursor_lsn_ = rec->lsn + k_frame_overhead + rec->payload.size();
+                    parent_.replication_records_.fetch_add(1, std::memory_order_relaxed);
+                    parent_.replication_bytes_.fetch_add(rec->payload.size(), std::memory_order_relaxed);
                 }
                 return rec;
             }
 
+            [[nodiscard]] lsn_t next_lsn() const noexcept { return cursor_lsn_; }
+
+            [[nodiscard]] replication_checkpoint checkpoint() const {
+                return {.replica_id = replica_id_, .acknowledged_lsn = acknowledged_lsn_};
+            }
+
+            Result<void> acknowledge(const lsn_t durable_lsn) noexcept {
+                if (durable_lsn > cursor_lsn_) return std::unexpected(LogError::InvalidArg);
+                if (durable_lsn < acknowledged_lsn_) return std::unexpected(LogError::InvalidArg);
+                acknowledged_lsn_ = durable_lsn;
+                parent_.set_replicated_lsn(durable_lsn);
+                return {};
+            }
+
         private:
             wal& parent_;
+            std::string replica_id_;
             lsn_t cursor_lsn_;
+            lsn_t acknowledged_lsn_{k_segment_header_size};
         };
 
-        [[nodiscard]] replication_stream subscribe(lsn_t from_lsn = 0) {
+        [[nodiscard]] replication_stream subscribe(std::string replica_id = {}, lsn_t from_lsn = 0) {
             auto telemetry = TelemetryPolicy::trace_replication();
             (void)telemetry;
-            return replication_stream{*this, from_lsn};
+            return replication_stream{*this, std::move(replica_id), from_lsn};
+        }
+
+        [[nodiscard]] replication_stream subscribe(const lsn_t from_lsn) {
+            return subscribe({}, from_lsn);
         }
 
         // ------------------------------------------------------------------------
@@ -1236,64 +1189,6 @@ namespace nitya {
             }
         }
 
-        // Asynchronous / parallel segment retention evaluations using Pravaha task DAGs
-        template <typename PravahaRunnerT>
-        void apply_retention_rules_async(
-            PravahaRunnerT& runner,
-            const std::chrono::seconds max_segment_age,
-            const std::function<void(const segment_descriptor&)>& on_archive = nullptr,
-            const std::function<void(const segment_descriptor&)>& on_delete = nullptr) {
-            auto segments = list_segments();
-            if (segments.empty()) return;
-
-            for (const auto& seg : segments) {
-                auto seg_cmd = [this, seg, max_segment_age, on_archive, on_delete]() {
-                    easy_rules::EasyRuleEngine engine;
-                    engine.config.verbose = false;
-
-                    engine.when("SegmentRetention", [](const easy_rules::Facts& facts) {
-                              const auto age_sec = facts.get<int>("age_seconds").value_or(0);
-                              const auto max_age = facts.get<int>("max_age_seconds").value_or(0);
-                              const auto replicated = facts.get<bool>("is_replicated").value_or(false);
-                              return replicated && (age_sec >= max_age);
-                          })
-                          .then([&](const easy_rules::ExecutionContext& ctx) {
-                              if (on_delete) {
-                                  segment_descriptor desc;
-                                  desc.segment_id = static_cast<std::uint64_t>(ctx.facts.get<int>("segment_id").value_or(0));
-                                  on_delete(desc);
-                              }
-                          });
-
-                    engine.when("SegmentArchival", [](const easy_rules::Facts& facts) {
-                              const auto replicated = facts.get<bool>("is_replicated").value_or(false);
-                              const auto archived = facts.get<bool>("is_archived").value_or(false);
-                              return replicated && !archived;
-                          })
-                          .then([&](const easy_rules::ExecutionContext& ctx) {
-                              if (on_archive) {
-                                  segment_descriptor desc;
-                                  desc.segment_id = static_cast<std::uint64_t>(ctx.facts.get<int>("segment_id").value_or(0));
-                                  on_archive(desc);
-                              }
-                          });
-
-                    easy_rules::ExecutionContext ctx;
-                    auto age = std::chrono::duration_cast<std::chrono::seconds>(
-                        std::chrono::system_clock::now() - seg.created_at).count();
-                    ctx.facts.set("segment_id", static_cast<int>(seg.segment_id));
-                    ctx.facts.set("age_seconds", static_cast<int>(age));
-                    ctx.facts.set("max_age_seconds", static_cast<int>(max_segment_age.count()));
-                    ctx.facts.set("is_replicated", seg.end_lsn <= replicated_lsn_.load(std::memory_order_relaxed));
-                    ctx.facts.set("is_archived", seg.is_archived);
-
-                    engine.run(ctx);
-                };
-
-                (void)runner.submit(pravaha::task("nitya_segment_retention_" + std::to_string(seg.segment_id), std::move(seg_cmd)));
-            }
-        }
-
         // ------------------------------------------------------------------------
         // 8. Watermarks & Metadata
         // ------------------------------------------------------------------------
@@ -1301,6 +1196,25 @@ namespace nitya {
         [[nodiscard]] lsn_t flushed_lsn() const noexcept { return flushed_lsn_.load(std::memory_order_relaxed); }
         [[nodiscard]] lsn_t replicated_lsn() const noexcept { return replicated_lsn_.load(std::memory_order_relaxed); }
         [[nodiscard]] const wal_options& options() const noexcept { return opts_; }
+
+        [[nodiscard]] durability_health health() const noexcept {
+            return {
+                .last_error = last_durability_error_.load(std::memory_order_acquire),
+                .last_error_lsn = last_durability_error_lsn_.load(std::memory_order_acquire)
+            };
+        }
+
+        [[nodiscard]] wal_metrics metrics() const noexcept {
+            return {
+                .records_published = records_published_.load(std::memory_order_relaxed),
+                .bytes_published = bytes_published_.load(std::memory_order_relaxed),
+                .flush_operations = flush_operations_.load(std::memory_order_relaxed),
+                .flush_failures = flush_failures_.load(std::memory_order_relaxed),
+                .group_commit_waiters = group_commit_waiters_.load(std::memory_order_relaxed),
+                .replication_records = replication_records_.load(std::memory_order_relaxed),
+                .replication_bytes = replication_bytes_.load(std::memory_order_relaxed)
+            };
+        }
 
         void set_replicated_lsn(const lsn_t lsn) noexcept {
             atomic_max_lsn(replicated_lsn_, lsn);
@@ -1400,8 +1314,18 @@ namespace nitya {
         std::atomic<lsn_t> published_lsn_{k_segment_header_size};
         std::atomic<lsn_t> flushed_lsn_{k_segment_header_size};
         std::atomic<lsn_t> replicated_lsn_{k_segment_header_size};
+        std::atomic<LogError> last_durability_error_{LogError::Success};
+        std::atomic<lsn_t> last_durability_error_lsn_{k_invalid_lsn};
 
-        containers::static_vector<std::pair<lsn_t, lsn_t>, 1024> pending_publishes_;
+        std::atomic<std::uint64_t> records_published_{0};
+        std::atomic<std::uint64_t> bytes_published_{0};
+        std::atomic<std::uint64_t> flush_operations_{0};
+        std::atomic<std::uint64_t> flush_failures_{0};
+        std::atomic<std::uint64_t> group_commit_waiters_{0};
+        std::atomic<std::uint64_t> replication_records_{0};
+        std::atomic<std::uint64_t> replication_bytes_{0};
+
+        containers::static_vector<std::pair<lsn_t, lsn_t>, PublishTrackerCapacity> pending_publishes_;
 
         std::condition_variable flusher_cv_;
         std::mutex flusher_mutex_;
@@ -1445,7 +1369,7 @@ namespace nitya {
 
             for (;;) {
                 lsn_t max_ticket_lsn = target_lsn;
-                containers::static_vector<typename ConcurrencyPolicy::commit_ticket, 1024> follower_tickets;
+                containers::static_vector<typename ConcurrencyPolicy::commit_ticket, ConcurrencyPolicy::capacity()> follower_tickets;
 
                 while (follower_tickets.size() < follower_tickets.capacity()) {
                     auto t = concurrency_.dequeue_commit();
@@ -1461,10 +1385,12 @@ namespace nitya {
                 if (max_ticket_lsn > current_flushed) {
                     if (auto flush_res = flush_range_to_locked(current_flushed, max_ticket_lsn); !flush_res) {
                         flush_err = flush_res.error();
+                        record_durability_error(flush_err, max_ticket_lsn);
                     }
                     else {
                         flushed_lsn_.store(max_ticket_lsn, std::memory_order_release);
                         flushed_lsn_.notify_all();
+                        flush_operations_.fetch_add(1, std::memory_order_relaxed);
                     }
                 }
 
@@ -1527,6 +1453,16 @@ namespace nitya {
                 flush_cur = flush_to_in_seg;
             }
             return {};
+        }
+
+        void record_durability_error(const LogError error, const lsn_t lsn) noexcept {
+            if (error == LogError::Success) return;
+            LogError expected = LogError::Success;
+            if (last_durability_error_.compare_exchange_strong(
+                    expected, error, std::memory_order_release, std::memory_order_relaxed)) {
+                last_durability_error_lsn_.store(lsn, std::memory_order_release);
+            }
+            flush_failures_.fetch_add(1, std::memory_order_relaxed);
         }
 
         void drain_pending_locked(lsn_t& cur) noexcept {

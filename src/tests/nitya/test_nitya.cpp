@@ -38,6 +38,36 @@ namespace {
     std::string_view as_str_view(std::span<const std::byte> b) {
         return {reinterpret_cast<const char*>(b.data()), b.size()};
     }
+
+    class failing_flush_storage {
+    public:
+        explicit failing_flush_storage(nitya::wal_options options) : inner_{std::move(options)} {}
+
+        static std::string format_segment_name(const std::uint64_t segment_id) {
+            return nitya::setu_storage::format_segment_name(segment_id);
+        }
+
+        auto get_or_create_segment(const std::uint64_t segment_id, const nitya::lsn_t begin_lsn) {
+            return inner_.get_or_create_segment(segment_id, begin_lsn);
+        }
+
+        nitya::Result<void> seal_segment(const std::uint64_t segment_id, const nitya::lsn_t sealed_lsn) {
+            return inner_.seal_segment(segment_id, sealed_lsn);
+        }
+
+        nitya::Result<void> flush_range(
+            const std::uint64_t,
+            const std::size_t,
+            const std::size_t,
+            const setu::flush_mode) {
+            return std::unexpected(nitya::LogError::FlushFailed);
+        }
+
+        [[nodiscard]] const nitya::wal_options& options() const noexcept { return inner_.options(); }
+
+    private:
+        nitya::setu_storage inner_;
+    };
 } // anonymous namespace
 
 // ============================================================================
@@ -282,7 +312,7 @@ TEST_CASE (
     }
     REQUIRE(log.sync().has_value());
 
-    auto stream = log.subscribe(0);
+    auto stream = log.subscribe("replica-a", 0);
     int count = 0;
     while (auto rec = stream.next()) {
         std::string expected = "REP_" + std::to_string(count);
@@ -290,7 +320,48 @@ TEST_CASE (
         ++count;
     }
     CHECK(count == 5);
+    CHECK(stream.next_lsn() == log.tail_lsn());
+    REQUIRE(stream.acknowledge(stream.next_lsn()).has_value());
+    const auto checkpoint = stream.checkpoint();
+    CHECK(checkpoint.replica_id == "replica-a");
+    CHECK(checkpoint.acknowledged_lsn == log.tail_lsn());
     CHECK(log.replicated_lsn() == log.tail_lsn());
+
+    const auto metrics = log.metrics();
+    CHECK(metrics.records_published == 5);
+    CHECK(metrics.replication_records == 5);
+    CHECK(metrics.replication_bytes == 25);
+    CHECK(log.health().healthy());
+}
+
+TEST_CASE (
+"Nitya: Durability failure becomes sticky and observable"
+,
+"[nitya][durability][fault_injection]"
+)
+ {
+    TmpWalDir tmp;
+    nitya::wal_options opts{
+        .wal_dir = tmp.path,
+        .segment_size = 1024 * 1024
+    };
+
+    nitya::wal<failing_flush_storage> log{opts};
+    const std::string payload{"injected flush failure"};
+    auto appended = log.append(as_byte_span(payload));
+    REQUIRE(appended.has_value());
+    const auto end = *appended + nitya::k_frame_overhead + payload.size();
+
+    auto durable = log.wait_durable(end);
+    REQUIRE_FALSE(durable.has_value());
+    CHECK(durable.error() == nitya::LogError::FlushFailed);
+    CHECK(log.health().last_error == nitya::LogError::FlushFailed);
+    CHECK(log.health().last_error_lsn == end);
+    CHECK(log.metrics().flush_failures >= 1);
+
+    auto later = log.sync();
+    REQUIRE_FALSE(later.has_value());
+    CHECK(later.error() == nitya::LogError::FlushFailed);
 }
 
 // ============================================================================

@@ -32,7 +32,7 @@ using lsn_t = uint64_t;
 - **`published_lsn`**: Maximum contiguous byte offset where frames (payload + header + trailer) are completely written
   and valid.
 - **`flushed_lsn`**: Maximum byte offset committed durably to non-volatile storage via `Setu` (`msync`).
-- **`replicated_lsn`**: Maximum byte offset confirmed processed by downstream replicas or CDC subscribers.
+- **`replicated_lsn`**: Maximum byte offset explicitly acknowledged as durable by downstream replicas or CDC subscribers.
 
 Direct O(1) segment and offset translation:
 
@@ -48,18 +48,19 @@ Direct O(1) segment and offset translation:
 - **`append_sync(payload)`**: Reserves, publishes, and blocks until the record is durably flushed to disk.
 - **`sync()`**: Blocks until all currently published records up to `published_lsn` are durably flushed.
 - **`wait_durable(target_lsn)`**: Enqueues into the group commit coordinator and waits until
-  `flushed_lsn >= target_lsn`. Fails with `LogError::InvalidArg` if `target_lsn > published_lsn`.
+  `flushed_lsn >= target_lsn`. Fails with `LogError::InvalidArg` if `target_lsn > published_lsn`, or with the
+  sticky durability error after a failed flush.
 - **`flush_to(target_lsn)`**: Low-level durability primitive; validates `target_lsn <= published_lsn` and directly
   flushes segment ranges under `flush_mutex_`. Preferred public API is `wait_durable` or `sync`.
 
 ### 3. Leader / Follower Group Commit
 
-`wait_durable()` leverages lock-free MPMC queue ticketing:
+`wait_durable()` uses a short durability mutex rather than a spinning ticket protocol:
 
-- When multiple threads request durability concurrently, one thread acquires the flush leader role.
-- The leader drains all queued tickets, computes `max(target_lsn)`, performs a single batched `msync` across affected
-  segments, and propagates the result (`LogError::Success` or `LogError::FlushFailed`) to all waiting followers.
-- If the MPMC queue is full, `enqueue_commit()` returns `LogError::QueueFull`.
+- The first waiter flushes the current contiguous `published_lsn` watermark in one batched `msync`.
+- Concurrent waiters covered by that watermark return after acquiring the mutex and observing `flushed_lsn`.
+- This is intentionally I/O-serialized: it guarantees progress and avoids a lock-free hand-off becoming the liveness
+  dependency of the durability path.
 
 ### 4. Background Flusher
 
@@ -68,6 +69,10 @@ When `opts.background_flush = true`, an asynchronous worker flushes pending writ
 - `group_commit_interval` (time threshold)
 - `group_commit_bytes` (watermark gap threshold)
 - Explicit `sync()` calls or shutdown.
+
+Failures are never silently converted into successful durability. `health()` exposes the first sticky background or
+leader-flush error and its target LSN; `metrics()` exposes publish, group-commit, flush, and replication counters for
+Nadi/exporter integration.
 
 ---
 
@@ -144,6 +149,9 @@ All pluggable policies are constrained with C++20/23 concepts:
 - **`DurabilityPolicyLike`**: Synchronous or asynchronous flush mode (`sync_durability`, `async_durability`).
 - **`TelemetryPolicyLike`**: Compile-time zero-overhead NADI trace scopes (`nadi_telemetry`).
 
+The publish tracker capacity is a `wal` template parameter (`PublishTrackerCapacity`, default 1024); group-drain
+capacity derives from the selected `ConcurrencyPolicy` instead of an unrelated fixed constant.
+
 ---
 
 ## Usage Examples
@@ -184,16 +192,35 @@ auto st = recovery.status();
 std::cout << "Recovered " << st.records_recovered << " records, " << st.bytes_recovered << " bytes.\n";
 ```
 
-### 3. Pravaha Asynchronous Maintenance & Retention
+### 3. Replication acknowledgement
+
+Reading a record is not an acknowledgement. A subscriber advances its private cursor on `next()` and only moves the
+WAL-wide retention watermark after the receiver has made the data durable:
+
+```cpp
+auto stream = log.subscribe(0);
+while (auto record = stream.next()) {
+    // send and persist *record at the replica
+}
+if (auto ack = stream.acknowledge(stream.next_lsn()); !ack) {
+    // never acknowledge beyond the delivered cursor
+}
+```
+
+### 4. Optional Pravaha maintenance adapter
+
+Pravaha is intentionally optional. The durability hot path does not depend on a scheduler; include the adapter only
+for recovery or retention maintenance:
 
 ```cpp
 #include "pravaha/pravaha.hpp"
+#include "nitya/adapters/pravaha.hpp"
 
 pravaha::Runner<pravaha::JThreadBackend> runner;
 
 // Evaluate segment retention & archival policies in parallel task graphs
-log.apply_retention_rules_async(
-    runner,
+auto retention = nitya::pravaha_adapter::apply_retention_rules_async(
+    log, runner,
     std::chrono::seconds(86400),
     [](const nitya::segment_descriptor& seg) {
         std::cout << "Archiving segment " << seg.segment_id << "\n";
@@ -202,5 +229,4 @@ log.apply_retention_rules_async(
         std::cout << "Deleting expired segment " << seg.segment_id << "\n";
     }
 );
-runner.backend_ref().drain();
 ```

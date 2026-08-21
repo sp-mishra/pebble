@@ -708,6 +708,52 @@ namespace ts {
             return data_[get_flat_index({static_cast<size_t>(indices)...})];
         }
 
+        // --- StaticTensor Equality ---
+        friend constexpr bool operator==(const StaticTensor &a, const StaticTensor &b) noexcept {
+            return a.data_ == b.data_;
+        }
+
+        // --- StaticTensor Element-wise Vector Arithmetic (Direct return of StaticTensor, no dynamic allocation) ---
+        friend constexpr StaticTensor operator+(const StaticTensor &a, const StaticTensor &b) noexcept {
+            StaticTensor res;
+            for (size_t i = 0; i < Size; ++i) res.data_[i] = a.data_[i] + b.data_[i];
+            return res;
+        }
+
+        friend constexpr StaticTensor operator-(const StaticTensor &a, const StaticTensor &b) noexcept {
+            StaticTensor res;
+            for (size_t i = 0; i < Size; ++i) res.data_[i] = a.data_[i] - b.data_[i];
+            return res;
+        }
+
+        friend constexpr StaticTensor operator-(const StaticTensor &v) noexcept {
+            StaticTensor res;
+            for (size_t i = 0; i < Size; ++i) res.data_[i] = -v.data_[i];
+            return res;
+        }
+
+        template<typename S>
+            requires std::is_arithmetic_v<S>
+        friend constexpr StaticTensor operator*(const StaticTensor &v, S s) noexcept {
+            StaticTensor res;
+            for (size_t i = 0; i < Size; ++i) res.data_[i] = static_cast<T>(v.data_[i] * s);
+            return res;
+        }
+
+        template<typename S>
+            requires std::is_arithmetic_v<S>
+        friend constexpr StaticTensor operator*(S s, const StaticTensor &v) noexcept {
+            return v * s;
+        }
+
+        template<typename S>
+            requires std::is_arithmetic_v<S>
+        friend constexpr StaticTensor operator/(const StaticTensor &v, S s) noexcept {
+            StaticTensor res;
+            for (size_t i = 0; i < Size; ++i) res.data_[i] = static_cast<T>(v.data_[i] / s);
+            return res;
+        }
+
     private:
         storage_type data_;
         static constexpr std::array<size_t, Rank> shape_ = {Dims...};

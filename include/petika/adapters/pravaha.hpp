@@ -14,6 +14,7 @@
 #define PEBBLE_PETIKA_ADAPTERS_PRAVAHA_HPP
 
 #include "petika/petika.hpp"
+#include "nitya/adapters/pravaha.hpp"
 #include <pravaha/pravaha.hpp>
 #include <chrono>
 #include <concepts>
@@ -70,7 +71,7 @@ namespace petika::adapters::pravaha {
             auto future = promise->get_future();
 
             auto task_fn = [this, max_segment_age, on_archive, on_delete, promise]() {
-                store_->wal().apply_retention_rules_async(*runner_, max_segment_age, on_archive, on_delete);
+                store_->wal().apply_retention_rules(max_segment_age, on_archive, on_delete);
                 promise->set_value();
             };
 

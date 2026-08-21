@@ -1,5 +1,6 @@
 #include <catch_amalgamated.hpp>
 #include <nitya/nitya.hpp>
+#include <nitya/adapters/pravaha.hpp>
 #include <pravaha/pravaha.hpp>
 #include <filesystem>
 #include <vector>
@@ -38,14 +39,15 @@ TEST_CASE("Nitya: Multi-Segment Parallel Recovery", "[nitya][recovery][pravaha]"
         std::vector<std::string> recovered_payloads;
         std::mutex mtx;
 
-        auto status = log.recover_async(runner, [&](const wal_record& rec) {
+        auto recovered = nitya::pravaha_adapter::recover_async(log, runner, [&](const wal_record& rec) {
             std::string s(reinterpret_cast<const char*>(rec.payload.data()), rec.payload.size());
             std::lock_guard lock(mtx);
             recovered_payloads.push_back(s);
         });
 
-        REQUIRE(status.error == LogError::Success);
-        REQUIRE(status.records_recovered == 20);
+        REQUIRE(recovered.has_value());
+        REQUIRE(recovered->error == LogError::Success);
+        REQUIRE(recovered->records_recovered == 20);
         REQUIRE(recovered_payloads.size() == 20);
 
         for (std::size_t i = 0; i < written_payloads.size(); ++i) {
