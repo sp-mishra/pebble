@@ -89,6 +89,8 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 * **static_vector** (`include/containers/static/static_vector.hpp`) — Fixed-capacity inline vector that never touches the heap.
 * **Tensor & Tensor EDSL** (`include/containers/tensor/tensor.hpp`, `include/containers/tensor/tensor_edsl.hpp`) — High-performance policy-based multidimensional tensor engine with lazy expression templates (*deducing this*), C++23 multidimensional indexing, Google Highway SIMD, Apple Silicon MLX GPU acceleration, and Sūtra/Vākya-inspired symbolic EDSL with `_p`/`_t` parameter literals.
   * Documentation: [`docs/containers/tensor.md`](docs/containers/tensor.md)
+* **Math Vectors & Game Graphics Primitives** (`include/containers/numeric/math_vector.hpp`) — Stack-allocated, zero-heap, `constexpr`-enabled linear algebra primitives (`vec2`, `vec3`, `vec4`, `quat`, `mat4`), ray optics (`reflect`, `refract`), camera view (`look_at`), projection (`perspective`), and quaternion slerp built on `static_tensor`.
+  * Documentation: [`docs/containers/math_vector.md`](docs/containers/math_vector.md)
 
 ---
 

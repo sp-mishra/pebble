@@ -149,12 +149,24 @@ namespace pebble::math {
 
     // Angle between two vectors (in radians)
     template<typename T, size_t N>
-    inline auto angle(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &a,
-                      const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &b) noexcept {
+    inline double angle(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &a,
+                        const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &b) noexcept {
         auto denom = std::sqrt(length_sq(a) * length_sq(b));
-        if (denom <= static_cast<decltype(denom)>(0)) return static_cast<decltype(denom)>(0);
+        if (denom <= static_cast<decltype(denom)>(0)) return 0.0;
         auto cos_theta = std::clamp(static_cast<double>(dot(a, b)) / denom, -1.0, 1.0);
         return std::acos(cos_theta);
+    }
+
+    // Reflection vector: I - 2.0 * dot(N, I) * N
+    template<size_t N>
+    inline auto reflect(const ts::static_tensor<float, ts::default_storage_policy, ts::default_computation_policy, N> &I,
+                        const ts::static_tensor<float, ts::default_storage_policy, ts::default_computation_policy, N> &Nvec) noexcept {
+        float d = dot(Nvec, I);
+        ts::static_tensor<float, ts::default_storage_policy, ts::default_computation_policy, N> res{};
+        for (size_t i = 0; i < N; ++i) {
+            res[i] = I[i] - 2.0f * d * Nvec[i];
+        }
+        return res;
     }
 
     // Refraction vector (Snell's law)

@@ -299,6 +299,71 @@ TEST_CASE("tensor: Game Math primitives & constexpr evaluation", "[tensor][math]
         REQUIRE(n[1] == Catch::Approx(0.6f));
         REQUIRE(n[2] == Catch::Approx(0.8f));
     }
+
+    SECTION("Projections, Rejection, and Angles") {
+        ts::math::vec3 a(3.0f, 4.0f, 0.0f);
+        ts::math::vec3 b(1.0f, 0.0f, 0.0f);
+
+        auto proj = ts::math::project(a, b);
+        REQUIRE(proj[0] == Catch::Approx(3.0f));
+        REQUIRE(proj[1] == Catch::Approx(0.0f));
+
+        auto rej = ts::math::reject(a, b);
+        REQUIRE(rej[0] == Catch::Approx(0.0f));
+        REQUIRE(rej[1] == Catch::Approx(4.0f));
+
+        double ang = ts::math::angle(ts::math::vec2(1.0f, 0.0f), ts::math::vec2(0.0f, 1.0f));
+        REQUIRE(ang == Catch::Approx(M_PI / 2.0));
+    }
+
+    SECTION("Ray Reflection and Refraction (Snell's Law)") {
+        ts::math::vec3 ray(1.0f, -1.0f, 0.0f);
+        ts::math::vec3 normal(0.0f, 1.0f, 0.0f);
+
+        auto refl = ts::math::reflect(ray, normal);
+        REQUIRE(refl[0] == Catch::Approx(1.0f));
+        REQUIRE(refl[1] == Catch::Approx(1.0f));
+
+        auto refr = ts::math::refract(ts::math::vec3(0.0f, -1.0f, 0.0f), normal, 1.0f);
+        REQUIRE(refr[1] == Catch::Approx(-1.0f));
+    }
+
+    SECTION("4x4 Matrix Transformations & Projections") {
+        auto T = ts::math::translation(ts::math::vec3(10.0f, 20.0f, -5.0f));
+        ts::math::vec3 p(1.0f, 2.0f, 3.0f);
+        auto p_trans = ts::math::mul_point(T, p);
+        REQUIRE(p_trans[0] == Catch::Approx(11.0f));
+        REQUIRE(p_trans[1] == Catch::Approx(22.0f));
+        REQUIRE(p_trans[2] == Catch::Approx(-2.0f));
+
+        auto S = ts::math::scaling(ts::math::vec3(2.0f, 3.0f, 4.0f));
+        auto p_scaled = ts::math::mul_point(S, p);
+        REQUIRE(p_scaled[0] == Catch::Approx(2.0f));
+        REQUIRE(p_scaled[1] == Catch::Approx(6.0f));
+        REQUIRE(p_scaled[2] == Catch::Approx(12.0f));
+
+        auto V = ts::math::look_at(ts::math::vec3(0.0f, 0.0f, 5.0f), ts::math::vec3(0.0f, 0.0f, 0.0f), ts::math::vec3(0.0f, 1.0f, 0.0f));
+        auto eye_in_view = ts::math::mul_point(V, ts::math::vec3(0.0f, 0.0f, 5.0f));
+        REQUIRE(eye_in_view[0] == Catch::Approx(0.0f));
+        REQUIRE(eye_in_view[1] == Catch::Approx(0.0f));
+        REQUIRE(eye_in_view[2] == Catch::Approx(0.0f));
+    }
+
+    SECTION("Quaternion Rotations & Slerp") {
+        // Rotate (1, 0, 0) by 90 degrees around Z axis -> (0, 1, 0)
+        auto q = ts::math::quat_axis_angle(ts::math::vec3(0.0f, 0.0f, 1.0f), static_cast<float>(M_PI / 2.0));
+        auto v_rot = ts::math::quat_rotate(q, ts::math::vec3(1.0f, 0.0f, 0.0f));
+        REQUIRE(v_rot[0] == Catch::Approx(0.0f).margin(1e-5f));
+        REQUIRE(v_rot[1] == Catch::Approx(1.0f).margin(1e-5f));
+        REQUIRE(v_rot[2] == Catch::Approx(0.0f).margin(1e-5f));
+
+        // Slerp halfway
+        auto q_ident = ts::math::quat_identity();
+        auto q_half = ts::math::quat_slerp(q_ident, q, 0.5f);
+        auto v_half = ts::math::quat_rotate(q_half, ts::math::vec3(1.0f, 0.0f, 0.0f));
+        REQUIRE(v_half[0] == Catch::Approx(std::cos(M_PI / 4.0)).margin(1e-4f));
+        REQUIRE(v_half[1] == Catch::Approx(std::sin(M_PI / 4.0)).margin(1e-4f));
+    }
 }
 
 struct Particle {
