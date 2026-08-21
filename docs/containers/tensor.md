@@ -114,7 +114,18 @@ parallel_tensor P2({8192, 8192});
 auto P3 = dot(P1, P2);
 float par_total = sum(P3);
 
-// 7. Apple Silicon MLX GPU / Metal accelerated tensor (macOS)
+// 7. Highway SIMD + Pravaha Multi-Core Hybrid accelerated tensor
+#include <containers/tensor/hybrid_simd_pravaha_policy.hpp>
+
+using hybrid_tensor = ts::hybrid_tensor<float>;
+hybrid_tensor H1({16384, 16384});
+hybrid_tensor H2({16384, 16384});
+
+// Dual-axis hardware saturation: multi-core parallel + vector register lanes
+auto H3 = dot(H1, H2);
+float hybrid_total = sum(H3);
+
+// 8. Apple Silicon MLX GPU / Metal accelerated tensor (macOS)
 #include <containers/tensor/mlx_storage_policy.hpp>
 #include <containers/tensor/mlx_computation_policy.hpp>
 

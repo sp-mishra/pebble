@@ -136,6 +136,24 @@ namespace petika {
 
             return std::make_tuple(op, k_sv, v_sv);
         }
+
+        static std::vector<std::byte> encode_batch(const std::vector<std::vector<std::byte>>& records) {
+            std::size_t bytes = 1 + sizeof(std::uint32_t);
+            for (const auto& r : records) bytes += sizeof(std::uint32_t) + r.size();
+            std::vector<std::byte> out(bytes);
+            auto* p = out.data();
+            *reinterpret_cast<std::uint8_t*>(p) = static_cast<std::uint8_t>(EntryOp::Batch); ++p;
+            const auto count = static_cast<std::uint32_t>(records.size()); std::memcpy(p, &count, sizeof(count)); p += sizeof(count);
+            for (const auto& r : records) { const auto n = static_cast<std::uint32_t>(r.size()); std::memcpy(p, &n, sizeof(n)); p += sizeof(n); std::memcpy(p, r.data(), n); p += n; }
+            return out;
+        }
+        static std::optional<std::vector<std::vector<std::byte>>> decode_batch(std::span<const std::byte> payload) {
+            if (payload.size() < 1 + sizeof(std::uint32_t) || static_cast<EntryOp>(*reinterpret_cast<const std::uint8_t*>(payload.data())) != EntryOp::Batch) return std::nullopt;
+            auto* p = payload.data() + 1; auto remaining = payload.size() - 1; std::uint32_t count{}; std::memcpy(&count, p, sizeof(count)); p += sizeof(count); remaining -= sizeof(count);
+            std::vector<std::vector<std::byte>> out; out.reserve(count);
+            for (std::uint32_t i = 0; i < count; ++i) { if (remaining < sizeof(std::uint32_t)) return std::nullopt; std::uint32_t n{}; std::memcpy(&n, p, sizeof(n)); p += sizeof(n); remaining -= sizeof(n); if (n > remaining) return std::nullopt; out.emplace_back(p, p + n); p += n; remaining -= n; }
+            return remaining == 0 ? std::optional{std::move(out)} : std::nullopt;
+        }
     };
 
     // ============================================================================

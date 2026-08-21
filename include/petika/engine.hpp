@@ -40,7 +40,8 @@ namespace petika {
     enum class EntryOp : std::uint8_t {
         Put = 1,
         Delete = 2,
-        Clear = 3
+        Clear = 3,
+        Batch = 4
     };
 
     // Forward declaration of Manifest

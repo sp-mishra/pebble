@@ -49,6 +49,7 @@
 #include <cstdint>
 #include <expected>
 #include <functional>
+#include <algorithm>
 #include <vector>
 
 namespace medha {
@@ -102,6 +103,7 @@ namespace medha {
         >
         load(resource_handle<R>& handle, resource_key<R> key) {
             assert(phase_ == tx_phase::active);
+            enlist(handle.resource());
 
             auto ck = canonicalize(handle.id(), handle.resource(), key);
 
@@ -152,6 +154,8 @@ namespace medha {
         store(resource_handle<R>& handle, resource_key<R> key, resource_value<R> value)
             requires resource_traits < R > ::value_trivially_copyable {
             assert(phase_ == tx_phase::active);
+            enlist(handle.resource());
+            if (auto staged = handle.stage(*this, key, value); !staged) return std::unexpected(staged.error());
 
             auto ck = canonicalize(handle.id(), handle.resource(), key);
 
@@ -216,6 +220,9 @@ namespace medha {
                 return std::unexpected(tx_error{tx_status::rejected, "context not active"});
             }
             phase_ = tx_phase::validating;
+            for (const auto& p : participants_) {
+                if (auto r = p.validate(p.object, *this); !r) { abort(); return std::unexpected(r.error()); }
+            }
 
             // Build report
             commit_report report{};
@@ -232,6 +239,9 @@ namespace medha {
             // Full serializable locking not implemented here; deferred to resource validate CPO.
 
             phase_ = tx_phase::committing;
+            for (const auto& p : participants_) {
+                if (auto r = p.commit(p.object, *this); !r) { abort(); return std::unexpected(r.error()); }
+            }
             phase_ = tx_phase::committed;
 
             report.status = tx_status::committed;
@@ -257,6 +267,9 @@ namespace medha {
                 (*it)();
             }
             compensations_.clear();
+            for (auto it = participants_.rbegin(); it != participants_.rend(); ++it) {
+                it->rollback(it->object, *this);
+            }
 
             phase_ = tx_phase::aborted;
         }
@@ -281,6 +294,16 @@ namespace medha {
         void record_conflict() noexcept { ++conflict_count_; }
         void increment_attempt() noexcept { ++attempt_count_; }
 
+        template <transactional_resource R>
+        void enlist(R& resource) {
+            const auto object = static_cast<void*>(&resource);
+            if (std::ranges::any_of(participants_, [object](const participant& p) { return p.object == object; })) return;
+            participants_.push_back({object,
+                [](void* p, transaction_context& c) { return tx_validate(*static_cast<R*>(p), c); },
+                [](void* p, transaction_context& c) { return tx_commit(*static_cast<R*>(p), c); },
+                [](void* p, transaction_context& c) noexcept { tx_rollback(*static_cast<R*>(p), c); }});
+        }
+
         // Reset for retry: clear state, keep options.
         void reset_for_retry() noexcept {
             write_set_.clear();
@@ -294,12 +317,19 @@ namespace medha {
         }
 
     private:
+        struct participant {
+            void* object;
+            std::expected<void, tx_error> (*validate)(void*, transaction_context&);
+            std::expected<void, tx_error> (*commit)(void*, transaction_context&);
+            void (*rollback)(void*, transaction_context&) noexcept;
+        };
         options opts_;
         tx_phase phase_;
         read_set read_set_;
         write_set write_set_;
         snapshot_token snapshot_; // snapshot boundary (§19.4)
         std::vector<resource_id> touched_resources_;
+        std::vector<participant> participants_;
         std::vector<compensation_fn> compensations_; // LIFO on abort (§compensatable effects)
         std::chrono::steady_clock::time_point start_;
         std::uint32_t attempt_count_ = 0;

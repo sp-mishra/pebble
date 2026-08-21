@@ -65,6 +65,12 @@ namespace petika {
         using key_type = typename StoreType::key_type;
         using value_type = typename StoreType::value_type;
 
+        struct Mutation {
+            EntryOp op;
+            key_type key;
+            value_type value;
+        };
+
         explicit Transaction(StoreType& store) : store_{store} {}
 
         Result<void> put(key_type key, value_type val) {
@@ -89,16 +95,8 @@ namespace petika {
         }
 
         Result<void> commit() {
-            for (auto& m : mutations_) {
-                if (m.op == EntryOp::Put) {
-                    auto res = store_.put(m.key, m.value);
-                    if (!res) return std::unexpected(res.error());
-                }
-                else if (m.op == EntryOp::Delete) {
-                    auto res = store_.erase(m.key);
-                    if (!res) return std::unexpected(res.error());
-                }
-            }
+            auto result = store_.commit_batch(mutations_);
+            if (!result) return result;
             mutations_.clear();
             return {};
         }
@@ -108,12 +106,6 @@ namespace petika {
         }
 
     private:
-        struct Mutation {
-            EntryOp op;
-            key_type key;
-            value_type value;
-        };
-
         StoreType& store_;
         std::vector<Mutation> mutations_;
     };
@@ -187,6 +179,7 @@ namespace petika {
         // CRUD Operations
         // ------------------------------------------------------------------------
         Result<void> put(const key_type& key, const value_type& value) {
+            std::unique_lock lock{commit_mutex_};
             auto telemetry = TelemetryPolicy::trace_publish();
             (void)telemetry;
 
@@ -217,6 +210,7 @@ namespace petika {
         }
 
         Result<void> erase(const key_type& key) {
+            std::unique_lock lock{commit_mutex_};
             std::string k_str = Serializer::serialize_key(key);
             auto encoded = WalPayloadCodec::encode(EntryOp::Delete, k_str, "");
 
@@ -246,6 +240,7 @@ namespace petika {
         }
 
         Result<void> clear() {
+            std::unique_lock lock{commit_mutex_};
             auto encoded = WalPayloadCodec::encode(EntryOp::Clear, "", "");
             auto append_res = wal_->append(std::span{encoded.data(), encoded.size()});
             if (!append_res) return std::unexpected(StorageError::WalError);
@@ -256,6 +251,27 @@ namespace petika {
             }
 
             return engine_.clear(lsn);
+        }
+
+        using mutation_type = typename Transaction<Petika>::Mutation;
+        Result<void> commit_batch(const std::vector<mutation_type>& mutations) {
+            std::unique_lock lock{commit_mutex_};
+            std::vector<std::vector<std::byte>> records;
+            records.reserve(mutations.size());
+            for (const auto& m : mutations) {
+                records.push_back(WalPayloadCodec::encode(m.op, Serializer::serialize_key(m.key),
+                    m.op == EntryOp::Put ? Serializer::serialize_value(m.value) : std::string{}));
+            }
+            auto envelope = WalPayloadCodec::encode_batch(records);
+            auto lsn = wal_->append(std::span{envelope.data(), envelope.size()});
+            if (!lsn || (opts_.sync_on_write && !wal_->sync())) return std::unexpected(StorageError::WalError);
+            for (const auto& mutation : mutations) {
+                Result<void> result = mutation.op == EntryOp::Put ? engine_.put(mutation.key, mutation.value, *lsn)
+                    : engine_.erase(mutation.key, *lsn);
+                if (!result) return result;
+            }
+            manifest_.last_lsn = *lsn; manifest_.record_count = engine_.size();
+            return {};
         }
 
         // ------------------------------------------------------------------------
@@ -298,6 +314,19 @@ namespace petika {
                 if (!parsed) continue;
 
                 auto [op, k_sv, v_sv] = *parsed;
+                if (op == EntryOp::Batch) {
+                    auto batch = WalPayloadCodec::decode_batch(rec.payload);
+                    if (!batch) return std::unexpected(StorageError::CorruptedRecord);
+                    for (const auto& frame : *batch) {
+                        auto item = WalPayloadCodec::decode(frame); if (!item) return std::unexpected(StorageError::CorruptedRecord);
+                        auto [item_op, item_key, item_value] = *item;
+                        key_type k = Serializer::deserialize_key(item_key); value_type v{};
+                        if (item_op == EntryOp::Put) v = Serializer::deserialize_value(item_value);
+                        auto applied = engine_.apply_log_record(item_op, k, v, rec.lsn);
+                        if (!applied && !(item_op == EntryOp::Delete && applied.error() == StorageError::NotFound)) return std::unexpected(applied.error());
+                    }
+                    ++replayed; manifest_.last_lsn = rec.lsn; continue;
+                }
                 key_type key{};
                 value_type val{};
 
@@ -343,11 +372,26 @@ namespace petika {
         const DurabilityPolicy& wal() const noexcept { return *wal_; }
 
     private:
+        Result<void> put_unlocked(const key_type& key, const value_type& value) {
+            std::string k = Serializer::serialize_key(key), v = Serializer::serialize_value(value);
+            auto payload = WalPayloadCodec::encode(EntryOp::Put, k, v);
+            auto lsn = wal_->append(std::span{payload.data(), payload.size()});
+            if (!lsn || (opts_.sync_on_write && !wal_->sync())) return std::unexpected(StorageError::WalError);
+            return engine_.put(key, value, *lsn);
+        }
+        Result<void> erase_unlocked(const key_type& key) {
+            std::string k = Serializer::serialize_key(key);
+            auto payload = WalPayloadCodec::encode(EntryOp::Delete, k, "");
+            auto lsn = wal_->append(std::span{payload.data(), payload.size()});
+            if (!lsn || (opts_.sync_on_write && !wal_->sync())) return std::unexpected(StorageError::WalError);
+            return engine_.erase(key, *lsn);
+        }
         PetikaOptions opts_;
         Engine engine_;
         std::unique_ptr<DurabilityPolicy> wal_;
         Manifest manifest_;
         mutable std::atomic<std::uint64_t> next_snapshot_id_{0};
+        mutable std::mutex commit_mutex_;
     };
 
     // ============================================================================
