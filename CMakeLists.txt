@@ -538,10 +538,17 @@ if (BUILD_TESTS)
 endif ()
 
 # ---------------------------------------------------------------------------
-# Master Application Executable (src/app/main.cpp)
+# Master Application Executable (src/app/main.cpp) — Sokol native window
 # ---------------------------------------------------------------------------
 if (EXISTS "${CMAKE_SOURCE_DIR}/src/app/main.cpp")
-    add_executable(pebble_app src/app/main.cpp)
+
+    set(PEBBLE_APP_SOURCES
+        src/app/main.cpp
+        src/app/sokol_impl.cpp
+    )
+
+    add_executable(pebble_app ${PEBBLE_APP_SOURCES})
+
     target_link_libraries(pebble_app PRIVATE
         pebble::ecs
         pebble::akruti
@@ -553,10 +560,33 @@ if (EXISTS "${CMAKE_SOURCE_DIR}/src/app/main.cpp")
         pebble::dhvani
         spdlog::spdlog_header_only
     )
+
+    # macOS: Metal backend + frameworks required by sokol_app.h + sokol_gfx.h
+    if (APPLE)
+        # Compile both translation units as Objective-C++ (required for Metal backend)
+        set_source_files_properties(
+            src/app/main.cpp
+            src/app/sokol_impl.cpp
+            PROPERTIES COMPILE_OPTIONS "-x;objective-c++"
+        )
+        target_compile_definitions(pebble_app PRIVATE SOKOL_METAL)
+        find_library(FW_METAL        Metal)
+        find_library(FW_FOUNDATION   Foundation)
+        find_library(FW_QUARTZ       QuartzCore)
+        find_library(FW_APPKIT       AppKit)
+        find_library(FW_IOKIT        IOKit)
+        target_link_libraries(pebble_app PRIVATE
+            ${FW_METAL} ${FW_FOUNDATION} ${FW_QUARTZ} ${FW_APPKIT} ${FW_IOKIT})
+    elseif (UNIX)
+        target_compile_definitions(pebble_app PRIVATE SOKOL_GLCORE)
+        target_link_libraries(pebble_app PRIVATE GL dl m)
+    endif()
+
     if (HAS_METAL_CPP)
         target_link_libraries(pebble_app PRIVATE
             ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK} ${QUARTZCORE_FRAMEWORK})
     endif()
+
     target_compile_definitions(pebble_app PRIVATE
         TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endif()
