@@ -18,7 +18,9 @@
 #include "tarka/tarka.hpp"
 #include "tarka/backends/native_backend.hpp"
 #include "tarka/backends/z3_backend.hpp"
-#include "tarka/frontend/smt2_parser.hpp"
+#include "tarka/frontend/smt2_lexy.hpp"
+#include "tarka/frontend/smt2_samasa.hpp"
+#include "tarka/frontend/lower_to_tarka.hpp"
 #include "tarka/frontend/smt2_printer.hpp"
 #include "tarka/native/model_validator.hpp"
 
@@ -626,7 +628,6 @@ TEST_CASE("tarka native: Assumption-Based Solving & Unsat Core", "[tarka][native
 TEST_CASE("tarka frontend: SMT-LIB2 Parser Script Execution", "[tarka][frontend][smt2]") {
     Context ctx;
     RouterEngine<backend::native> solver;
-    smt2_parser parser(ctx, solver);
 
     std::string_view smt2_script = R"(
         (set-logic QF_BV)
@@ -637,12 +638,28 @@ TEST_CASE("tarka frontend: SMT-LIB2 Parser Script Execution", "[tarka][frontend]
         (check-sat)
     )";
 
-    auto parse_res = parser.parse_script(smt2_script);
-    REQUIRE(parse_res.has_value());
-
-    auto sat_res = parser.last_result();
+    auto parsed = parse_smt2_lexy(smt2_script);
+    REQUIRE(parsed.valid());
+    auto lowered = lower_to_tarka(parsed, ctx, solver);
+    REQUIRE(lowered.has_value());
+    auto sat_res = lowered->last_result;
     REQUIRE(sat_res.has_value());
     REQUIRE(*sat_res == SatResult::Sat);
+}
+
+TEST_CASE("tarka frontend: Lexy and Samasa share SMT script IR", "[tarka][frontend][smt2][parity]") {
+    constexpr std::string_view source = R"(
+        (declare-const x Int)
+        (assert (> x 0))
+        (check-sat)
+    )";
+    const auto lexy = parse_smt2_lexy(source);
+    const auto samasa = parse_smt2_samasa(source);
+    REQUIRE(lexy.valid());
+    REQUIRE(samasa.valid());
+    REQUIRE(lexy.commands.size() == samasa.commands.size());
+    for (std::size_t i = 0; i < lexy.commands.size(); ++i)
+        REQUIRE(lexy.nodes[lexy.commands[i]].kind == samasa.nodes[samasa.commands[i]].kind);
 }
 
 TEST_CASE("tarka native: Array Extensionality Skolemization", "[tarka][native][array][ext]") {
@@ -922,8 +939,6 @@ TEST_CASE("tarka differential: Native Backend vs Z3 Backend", "[tarka][different
     }
 }
 #endif
-
-
 
 
 

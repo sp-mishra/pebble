@@ -87,7 +87,8 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 * **SmallVector** (`include/containers/dynamic/SmallVector.hpp`) — Small-Buffer Optimized (SBO) dynamic vector avoiding heap allocations for small sizes.
   * Documentation: [`docs/containers/SmallVector.md`](docs/containers/SmallVector.md)
 * **static_vector** (`include/containers/static/static_vector.hpp`) — Fixed-capacity inline vector that never touches the heap.
-* **Tensor** (`include/containers/tensor/tensor.hpp`) — Zero-overhead multidimensional strided tensor view and buffer.
+* **Tensor & Tensor EDSL** (`include/containers/tensor/tensor.hpp`, `include/containers/tensor/tensor_edsl.hpp`) — High-performance policy-based multidimensional tensor engine with lazy expression templates (*deducing this*), C++23 multidimensional indexing, Google Highway SIMD, Apple Silicon MLX GPU acceleration, and Sūtra/Vākya-inspired symbolic EDSL with `_p`/`_t` parameter literals.
+  * Documentation: [`docs/containers/tensor.md`](docs/containers/tensor.md)
 
 ---
 
@@ -107,6 +108,10 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 * **Akshara** (`include/meta/akshara.hpp`) — Modern compile-time tokenization, AST generation, and grammar-directed parser combinator engine.
   * Documentation: [`docs/meta/akshara.md`](docs/meta/akshara.md)
 * **ExactRational** (`include/meta/exact_rational.hpp`) — Arbitrary precision compile-time rational numbers.
+* **Vākya** (`include/vakya/`) — Header-only structural-expression EDSL with pattern matching, properties, type reasoning, and optional Tarka-backed verification. Its core has no Lithe dependency.
+  * Documentation: [`docs/vakya/vakya.md`](docs/vakya/vakya.md)
+* **Generic Language + Samasa** (`include/languages/generic/`, `include/languages/samasa/`) — Reusable language substrate (diagnostics, CST, IR, modules, semantics) and compile-time grammar/parser framework.
+  * Documentation: [`docs/languages/generic.md`](docs/languages/generic.md), [`docs/languages/samasa/samasa.md`](docs/languages/samasa/samasa.md)
 
 ---
 

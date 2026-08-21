@@ -252,6 +252,13 @@ namespace containers::dynamic {
             for (; first != last; ++first) emplace_back(*first);
         }
 
+        // Implicit converting constructor from standard ranges (e.g. std::vector, std::span)
+        template <std::ranges::input_range R>
+            requires (!std::same_as<std::remove_cvref_t<R>, SmallVector> &&
+                      std::convertible_to<std::ranges::range_reference_t<R>, T>)
+        SmallVector(R&& r, const Alloc& a = Alloc{})
+            : SmallVector(std::ranges::begin(r), std::ranges::end(r), a) {}
+
         // Copy constructor
         SmallVector(const SmallVector& o)
             : inline_{},
@@ -647,5 +654,26 @@ namespace containers::dynamic {
     void swap(SmallVector<T, N, A>& a, SmallVector<T, N, A>& b)
         noexcept(noexcept(a.swap(b))) {
         a.swap(b);
+    }
+
+    // ---- comparison operators ---------------------------------------------
+    template <typename T1, std::size_t N1, typename A1, typename T2, std::size_t N2, typename A2>
+        requires std::equality_comparable_with<T1, T2>
+    [[nodiscard]] constexpr bool operator==(const SmallVector<T1, N1, A1>& lhs, const SmallVector<T2, N2, A2>& rhs) {
+        return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
+    }
+
+    template <typename T, std::size_t N, typename A, std::ranges::input_range R>
+        requires (!std::same_as<std::remove_cvref_t<R>, SmallVector<T, N, A>> &&
+                  std::equality_comparable_with<T, std::ranges::range_value_t<R>>)
+    [[nodiscard]] constexpr bool operator==(const SmallVector<T, N, A>& lhs, const R& rhs) {
+        return std::equal(lhs.begin(), lhs.end(), std::ranges::begin(rhs), std::ranges::end(rhs));
+    }
+
+    template <typename T, std::size_t N, typename A, std::ranges::input_range R>
+        requires (!std::same_as<std::remove_cvref_t<R>, SmallVector<T, N, A>> &&
+                  std::equality_comparable_with<std::ranges::range_value_t<R>, T>)
+    [[nodiscard]] constexpr bool operator==(const R& lhs, const SmallVector<T, N, A>& rhs) {
+        return std::equal(std::ranges::begin(lhs), std::ranges::end(lhs), rhs.begin(), rhs.end());
     }
 } // namespace containers::dynamic

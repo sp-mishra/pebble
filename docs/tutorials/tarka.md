@@ -54,7 +54,8 @@ Save the following template as `main.cpp` and compile with any C++23 compiler:
 ```cpp
 #include "tarka/tarka.hpp"
 #include "tarka/backends/native_backend.hpp"
-#include "tarka/frontend/smt2_parser.hpp"
+#include "tarka/frontend/smt2_lexy.hpp"
+#include "tarka/frontend/lower_to_tarka.hpp"
 #include "tarka/frontend/smt2_printer.hpp"
 #include "tarka/native/model_validator.hpp"
 #include "tarka/native/simplifier.hpp"
@@ -438,7 +439,6 @@ Tarka can parse `.smt2` scripts and serialize AST terms into standard SMT-LIB2 f
 void act10_smt2_interop() {
     Context ctx;
     RouterEngine<backend::native> solver;
-    smt2_parser parser(ctx, solver);
 
     std::string_view script = R"(
         (set-logic QF_BV)
@@ -449,8 +449,9 @@ void act10_smt2_interop() {
         (check-sat)
     )";
 
-    auto status = parser.parse_script(script);
-    if (status && parser.last_result() && *parser.last_result() == SatResult::Sat) {
+    auto parsed = parse_smt2_lexy(script);
+    auto status = lower_to_tarka(parsed, ctx, solver);
+    if (status && status->last_result && *status->last_result == SatResult::Sat) {
         std::cout << "[Act 10] SMT2 Script Executed Successfully: SAT!\n";
     }
 
@@ -538,4 +539,4 @@ void act12_portfolio_solving() {
 | **Solving** | `solver.assert_formula(t)`, `solver.check_sat()`, `solver.check_sat_assuming(assumptions)` | Drive the DPLL(T) solver |
 | **Model** | `solver.get_value(t)`, `model_validator::format_model(m)`, `model_validator::validate(asserts, m)` | Extract, format, and verify SAT certificates |
 | **Diagnostics** | `solver.get_unsat_core()` | Extract minimal contradictory sub-formulas |
-| **SMT-LIB2** | `smt2_parser::parse_script(str)`, `smt2_printer::to_smt2_script(asserts)` | Round-trip `.smt2` scripts |
+| **SMT-LIB2** | `parse_smt2_lexy(str)` or `parse_smt2_samasa(str)`, then `lower_to_tarka(...)` | Parse through shared IR; print benchmarks |

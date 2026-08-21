@@ -97,13 +97,15 @@ endif()
 
 # Map of library-key -> expected folder under dependencies/
 set(PEBBLE_DEP_FOLDERS
-    Catch2   "Catch2-3.9.0"
-    crc32c   "crc32c"
-    glaze    "glaze"
-    liblmdb  "liblmdb"
-    highway  "highway"
-    spdlog   "spdlog"
-    z3       "z3"
+    Catch2    "Catch2-3.9.0"
+    crc32c    "crc32c"
+    glaze     "glaze"
+    liblmdb   "liblmdb"
+    highway   "highway"
+    spdlog    "spdlog"
+    z3        "z3"
+    metal-cpp "metal-cpp"
+    mlx       "mlx"
 )
 
 set(MISSING_DEPS "")
@@ -167,6 +169,7 @@ endif()
 include_directories(/usr/local/include)
 include_directories(${HOME_INCLUDE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/dependencies)
+include_directories(${CMAKE_SOURCE_DIR}/dependencies/lexy/include)
 include_directories(${CMAKE_SOURCE_DIR}/dependencies/Catch2-3.9.0/extras)
 include_directories(include)
 include_directories(${CMAKE_SOURCE_DIR}/include)
@@ -294,20 +297,65 @@ if(BUILD_Z3)
     endif()
 endif()
 
+# ===================== MLX (Apple GPU/CPU ML framework) =======================
+option(BUILD_MLX "Build with MLX support" ON)
+
+set(HAS_MLX FALSE)
+if(BUILD_MLX AND APPLE)
+    set(MLX_DIR ${CMAKE_SOURCE_DIR}/dependencies/mlx)
+    if(EXISTS ${MLX_DIR}/CMakeLists.txt)
+        # MLX build configuration — static library, minimal footprint
+        set(MLX_BUILD_TESTS OFF CACHE BOOL "Disable MLX tests" FORCE)
+        set(MLX_BUILD_EXAMPLES OFF CACHE BOOL "Disable MLX examples" FORCE)
+        set(MLX_BUILD_BENCHMARKS OFF CACHE BOOL "Disable MLX benchmarks" FORCE)
+        set(MLX_BUILD_SAFETENSORS ON CACHE BOOL "Enable safetensors support" FORCE)
+        set(MLX_BUILD_GGUF ON CACHE BOOL "Enable GGUF support" FORCE)
+        set(MLX_BUILD_METAL ON CACHE BOOL "Enable Metal GPU backend" FORCE)
+        set(MLX_METAL_JIT ON CACHE BOOL "Enable Metal JIT compilation" FORCE)
+        set(MLX_BUILD_CPU ON CACHE BOOL "Enable CPU backend" FORCE)
+        set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build MLX as static library" FORCE)
+
+        # Use MinSizeRel or Release for MLX
+        set(MLX_ORIGINAL_BUILD_TYPE ${CMAKE_BUILD_TYPE})
+        if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set(CMAKE_BUILD_TYPE MinSizeRel)
+        endif()
+
+        add_subdirectory(${MLX_DIR} mlx_build)
+
+        # Restore original build type
+        if(DEFINED MLX_ORIGINAL_BUILD_TYPE)
+            set(CMAKE_BUILD_TYPE ${MLX_ORIGINAL_BUILD_TYPE})
+        endif()
+
+        include_directories(${MLX_DIR})
+        set(HAS_MLX TRUE)
+        add_compile_definitions(HAS_MLX=1)
+        message(STATUS "[pebble] MLX: Building as static library from dependencies/mlx")
+    endif()
+endif()
+
+# ---- metal-cpp (raw Metal, macOS only) --------------------------------------
+set(HAS_METAL_CPP FALSE)
+if(APPLE)
+    set(METAL_CPP_DIR ${CMAKE_SOURCE_DIR}/dependencies/metal-cpp)
+    if(EXISTS ${METAL_CPP_DIR}/Metal/Metal.hpp)
+        include_directories(${METAL_CPP_DIR})
+        find_library(METAL_FRAMEWORK      Metal      REQUIRED)
+        find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
+        find_library(QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
+        set(HAS_METAL_CPP TRUE)
+        add_compile_definitions(HAS_METAL_CPP=1)
+        message(STATUS "[pebble] metal-cpp: enabled (${METAL_CPP_DIR})")
+    else()
+        message(STATUS "[pebble] metal-cpp: headers not found, GPU backend disabled")
+    endif()
+endif()
+
 find_package(Threads REQUIRED)
 
 link_directories(/usr/local/lib)
 link_directories(${HOME_LIB_DIR})
-
-# Separate real compilable source files (C/C++) from headers so we can
-# avoid creating an executable target with only headers (which causes
-# "No SOURCES given to target" errors).
-#set(APP_SOURCES_CPP)
-#foreach(_f IN LISTS APP_SOURCE)
-#    if(_f MATCHES "\\.(c|cc|cpp|cxx)$")
-#        list(APPEND APP_SOURCES_CPP "${_f}")
-#    endif()
-#endforeach()
 
 SET(CATCH2_SOURCE
         "${CMAKE_SOURCE_DIR}/dependencies/Catch2-3.9.0/extras/catch_amalgamated.cpp"
@@ -335,10 +383,16 @@ if (BUILD_EXECUTABLE)
     elseif (TARGET z3_imported)
         target_link_libraries(${PROJECT_NAME} PRIVATE z3_imported)
     endif()
+    if (HAS_MLX AND TARGET mlx)
+        target_link_libraries(${PROJECT_NAME} PRIVATE mlx)
+    endif()
+    if (HAS_METAL_CPP)
+        target_link_libraries(${PROJECT_NAME} PRIVATE
+            ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK} ${QUARTZCORE_FRAMEWORK})
+    endif()
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endif()
-
 
 if (BUILD_TESTS)
     file(
@@ -359,6 +413,13 @@ if (BUILD_TESTS)
         target_link_libraries(pebble_tests PRIVATE libz3)
     elseif (TARGET z3_imported)
         target_link_libraries(pebble_tests PRIVATE z3_imported)
+    endif()
+    if (HAS_MLX AND TARGET mlx)
+        target_link_libraries(pebble_tests PRIVATE mlx)
+    endif()
+    if (HAS_METAL_CPP)
+        target_link_libraries(pebble_tests PRIVATE
+            ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK} ${QUARTZCORE_FRAMEWORK})
     endif()
     target_compile_definitions(pebble_tests PRIVATE
         TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

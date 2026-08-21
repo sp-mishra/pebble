@@ -225,7 +225,10 @@ route(term):
 | `tarka/backends/no_solver.hpp`  | no             | no        | zero-cost default backend                                        |
 | `tarka/backends/z3_backend.hpp` | no             | yes       | Z3 lowering + solve (guarded `HAS_Z3`)                           |
 | `tarka/native/simplifier.hpp`   | no             | no        | pre-encoding algebraic AST simplification pass                   |
-| `tarka/frontend/smt2_parser.hpp`| no             | no        | zero-allocation SMT-LIB2 script parser and executor              |
+| `tarka/frontend/ir.hpp`         | no             | no        | frontend-neutral SMT script IR, spans, names, diagnostics         |
+| `tarka/frontend/smt2_lexy.hpp`  | yes            | no        | Lexy SMT-LIB2 syntax frontend → shared IR                         |
+| `tarka/frontend/smt2_samasa.hpp`| no             | no        | Samasa SMT-LIB2 syntax/CST frontend → shared IR                   |
+| `tarka/frontend/lower_to_tarka.hpp`| no          | no        | shared IR semantic lowering and RouterEngine execution            |
 | `tarka/frontend/smt2_printer.hpp`| no            | no        | SMT-LIB2 term, sort, and benchmark script serializer             |
 | `tarka/native/model_validator.hpp`| no           | no        | SAT model formatter and independent assertion validator          |
 | `tarka/native/theory_quant.hpp` | no             | no        | quantifier instantiation (E-matching & Skolemization)            |

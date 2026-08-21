@@ -57,7 +57,7 @@ log_step()    { [[ $VERBOSE -eq 1 ]] && printf "${MAGENTA}[STEP]${RESET}    %s\n
 # ---------------------------------------------------------------------------
 # Library registry — parallel arrays (bash 3.2 compatible)
 # ---------------------------------------------------------------------------
-LIB_KEYS=(    "Catch2"       "crc32c"    "glaze"    "liblmdb"    "highway"    "spdlog"    "z3"    )
+LIB_KEYS=(    "Catch2"       "crc32c"    "glaze"    "liblmdb"    "highway"    "spdlog"    "z3"    "metal-cpp" "mlx" )
 LIB_URLS=(
     "https://github.com/sp-mishra/dependencies/releases/download/v0.1/Catch2-3.9.0.zip"
     "https://github.com/sp-mishra/dependencies/releases/download/v0.1/crc32c.zip"
@@ -66,16 +66,19 @@ LIB_URLS=(
     "https://github.com/sp-mishra/dependencies/releases/download/v0.1/highway.zip"
     "https://github.com/sp-mishra/dependencies/releases/download/v0.1/spdlog.zip"
     "https://github.com/sp-mishra/dependencies/releases/download/v0.1/z3.zip"
+    "https://github.com/sp-mishra/dependencies/releases/download/v0.1/metal-cpp.zip"
+    "https://github.com/sp-mishra/dependencies/releases/download/v0.1/mlx.zip"
 )
-LIB_FOLDERS=( "Catch2-3.9.0" "crc32c"    "glaze"    "liblmdb"    "highway"    "spdlog"    "z3"    )
+LIB_FOLDERS=( "Catch2-3.9.0" "crc32c"    "glaze"    "liblmdb"    "highway"    "spdlog"    "z3"    "metal-cpp" "mlx" )
 
 # ---------------------------------------------------------------------------
 # Groups
 # ---------------------------------------------------------------------------
-GROUP_PEBBLE="Catch2 crc32c glaze liblmdb highway spdlog z3"
+GROUP_PEBBLE="Catch2 crc32c glaze liblmdb highway spdlog z3 metal-cpp mlx"
 GROUP_CORE="Catch2 crc32c glaze liblmdb highway spdlog"
 GROUP_SMT="z3 Catch2"
-GROUP_ALL="Catch2 crc32c glaze liblmdb highway spdlog z3"
+GROUP_ML="mlx metal-cpp highway"
+GROUP_ALL="Catch2 crc32c glaze liblmdb highway spdlog z3 metal-cpp mlx"
 
 # ---------------------------------------------------------------------------
 # Lookup helpers
