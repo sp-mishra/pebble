@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "spline.hpp"
+
 namespace akruti {
 
 // Forward decl
@@ -22,7 +24,7 @@ using CsgPtr = std::unique_ptr<CsgNode>;
 
 enum class CsgOp { Union, Subtract, Intersect, SmoothUnion, ChamferUnion, Shell, Morph, Offset, Transform };
 
-using CsgLeaf = std::variant<Circle, Segment, Capsule, Box, OrientedBox, Triangle, RoundedBox, HalfPlane, ConvexPoly<8>>;
+using CsgLeaf = std::variant<Circle, Segment, Capsule, Box, OrientedBox, Triangle, RoundedBox, HalfPlane, ConvexPoly<8>, CubicBezierCurve, CatmullRomSpline>;
 
 struct CsgNode {
     bool     is_leaf{true};

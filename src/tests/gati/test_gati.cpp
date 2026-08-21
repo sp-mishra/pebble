@@ -95,3 +95,25 @@ TEST_CASE("Gati: Game Orchestrator Loop", "[gati][game]") {
     game.update(1.0f / 60.0f);
     REQUIRE(game.clock().total_steps() == 1);
 }
+
+TEST_CASE("Gati: Reactive Collision Cue Manager", "[gati][reactive_cues]") {
+    gati::EventBus bus;
+    gati::ReactiveCueManager cues;
+
+    int triggered_count = 0;
+    cues.on_impact(0.2f, [&](const gati::ContactEvent& ce) {
+        ++triggered_count;
+        REQUIRE(ce.depth >= 0.2f);
+    });
+
+    // 1. Weak contact (below threshold) -> should not trigger
+    bus.publish(gati::ContactEvent{1, 2, pebble::math::vec2(0.0f, 1.0f), 0.05f});
+    cues.process_events(bus);
+    REQUIRE(triggered_count == 0);
+
+    // 2. Strong contact (above threshold) -> should trigger
+    bus.publish(gati::ContactEvent{1, 2, pebble::math::vec2(0.0f, 1.0f), 0.5f});
+    cues.process_events(bus);
+    REQUIRE(triggered_count == 1);
+}
+

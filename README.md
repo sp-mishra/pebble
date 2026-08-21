@@ -109,13 +109,14 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
    * Hybrid particle-field Lagrangian continuum dynamics combining Extended Position-Based Dynamics (XPBD) mechanics, Position-Based Fluids (PBF), graph-Laplacian explicit heat diffusion with latent-heat phase transitions, strain-driven plasticity and fracture with `containers::union_find` island tracking, and `akruti` SDF obstacle contact and XPBD kinematic joints.
    * Features 3 interchangeable `ComputeBackend` execution tiers: `ScalarBackend` (zero-dep reference), `HighwayBackend` (Google Highway SIMD), and `PravahaBackend` (multi-core task graph chunking).
    * Documentation: [`docs/prakriti/prakriti.md`](docs/prakriti/prakriti.md)
-* **ECS** (`include/ecs/`) — High-performance, cache-coherent C++23 Entity-Component System.
-   * `Entity` generational handle with stale handle detection, `sparseset::SparseSet` dense component storage, $O(\min(A,B))$ multi-component query joins, deferred `CommandBuffer` execution, and Pravaha multi-threaded parallel views (`par_view`).
-   * Documentation: [`docs/ecs/ecs.md`](docs/ecs/ecs.md)
 * **Gati** (`include/gati/`) — High-performance, header-only C++23/C++26 realtime game runtime and entity orchestration engine.
    * Fixed-step deterministic clock with presentation render interpolation (`alpha`), static `SystemStack` pipeline, Catmull-Rom animation splines & state machines, lock-free `EventBus`, input mapping, and Akruti (geometry/broadphase/narrowphase) + Prakriti (physics/joints) bridges.
    * Directly uses `pebble::math` linear algebra primitives and `pravaha` parallel execution.
    * Documentation: [`docs/gati/gati.md`](docs/gati/gati.md)
+* **Spandana** (`include/spandana/`) — Plug & Play Contract-Based 2D Animation, Easing, Springs, IK, and Node-Graph World EDSL.
+   * Concept-driven architecture (`EasingFunction`, `SpringSolver`, `IKSolver2D`, `Tweenable`), 30+ Robert Penner easings, closed-form exact harmonic spring damper, Two-Bone analytical IK, sprite flipbooks, camera trauma shakes, and automatic dependency/parallelism inference node graph.
+   * Features a unified declarative World EDSL combining motion, Akruti CSG shape morphs, and Prakriti physics impulses.
+   * Documentation: [`docs/spandana/spandana.md`](docs/spandana/spandana.md)
 
 ---
 

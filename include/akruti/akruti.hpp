@@ -30,6 +30,9 @@
 #include "fracture.hpp"
 #include "khanda.hpp"
 #include "joint.hpp"
+#include "spline.hpp"
+#include "morph.hpp"
+#include "deform.hpp"
 
 // Scene layer
 #include "scene/parallel.hpp"

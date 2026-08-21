@@ -20,6 +20,7 @@
 #include "physics.hpp"
 #include "collision.hpp"
 #include "joint.hpp"
+#include "reactive_cues.hpp"
 
 namespace gati {
 

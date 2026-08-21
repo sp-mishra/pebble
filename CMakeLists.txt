@@ -403,6 +403,14 @@ target_include_directories(pebble_gati INTERFACE
 target_compile_features(pebble_gati INTERFACE cxx_std_23)
 target_link_libraries(pebble_gati INTERFACE pebble::ecs pebble::akruti pebble::prakriti pebble::pravaha)
 
+add_library(pebble_spandana INTERFACE)
+add_library(pebble::spandana ALIAS pebble_spandana)
+target_include_directories(pebble_spandana INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_compile_features(pebble_spandana INTERFACE cxx_std_23)
+target_link_libraries(pebble_spandana INTERFACE pebble::ecs pebble::akruti pebble::prakriti pebble::pravaha)
+
+
 
 # dependencies limited to Pebble containers; integrations remain opt-in.
 add_library(pebble_medha INTERFACE)
