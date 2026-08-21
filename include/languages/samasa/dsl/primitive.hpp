@@ -46,6 +46,7 @@ namespace lang::samasa {
 
     template <auto Kind>
     struct tok {
+        static constexpr auto token_kind = Kind;
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = std::remove_cvref_t<decltype(ctx.stream())>;

@@ -12,8 +12,10 @@ The `Tensor` subsystem (`include/containers/tensor/tensor.hpp`, `include/contain
 4. [Quick Start: Symbolic Tensor EDSL](#-quick-start-symbolic-tensor-edsl)
    - [Level 1 — One-Shot Scalar & Tensor Evaluation](#level-1--one-shot-scalar--tensor-evaluation)
    - [Level 2 — Compile Once, Run Many (Symbolic Model)](#level-2--compile-once-run-many-symbolic-model)
-5. [Apple Silicon GPU Acceleration (`mlx`)](#-apple-silicon-gpu-acceleration-mlx)
-6. [Arrow-Style String Storage](#-arrow-style-string-storage)
+5. [Game Math & Graphics Vectors (Constexpr Stack Math)](#-game-math--graphics-vectors-constexpr-stack-math)
+6. [Structure-of-Arrays (SoA) Reflection Storage](#-structure-of-arrays-soa-reflection-storage)
+7. [Apple Silicon GPU Acceleration (`mlx`)](#-apple-silicon-gpu-acceleration-mlx)
+8. [Arrow-Style String Storage](#-arrow-style-string-storage)
 
 ---
 
@@ -159,6 +161,57 @@ auto model = ts::compile(probs, ts::target::cpu);
 for (const auto& batch : data_loader) {
     tensor<float> predictions = model("in"_t = batch, "W1"_t = trained_W, "b1"_t = trained_b);
 }
+```
+
+---
+
+## 🎮 Game Math & Graphics Vectors (Constexpr Stack Math)
+
+For graphics, physics engines, and game math, `pebble::math` (or `ts::math` from `include/containers/numeric/math_vector.hpp`) provides specialized zero-overhead, stack-allocated vector and matrix aliases powered by `ts::static_tensor`:
+- Types: `vec2`, `vec3`, `vec4`, `quat`, `mat2`, `mat3`, `mat4` (and double/integer variants: `vec3d`, `vec4i`, `mat4d`).
+- **Fully `constexpr` enabled**: construct, index (`v[0]`, `m[0, 1]`), and perform arithmetic during compilation.
+- Geometric algorithms: `dot`, `cross`, `length`, `length_sq`, `normalize`, `distance`, `lerp`, `reflect`.
+
+```cpp
+#include <containers/numeric/math_vector.hpp>
+
+using namespace pebble::math;
+
+// 1. Compile-time vector geometry
+constexpr vec3 right(1.0f, 0.0f, 0.0f);
+constexpr vec3 up(0.0f, 1.0f, 0.0f);
+constexpr vec3 forward = cross(right, up); // (0, 0, 1)
+
+static_assert(forward[2] == 1.0f);
+static_assert(dot(right, up) == 0.0f);
+
+// 2. Normalization & transforms
+vec3 velocity(0.0f, 3.0f, 4.0f);
+vec3 dir = normalize(velocity); // (0.0, 0.6, 0.8)
+```
+
+---
+
+## 🧱 Structure-of-Arrays (SoA) Reflection Storage
+
+For high-throughput cache locality, data-oriented design (DOD), and SIMD-friendly vectorization, `ts::soa_storage_policy<StructT>` integrates with Pebble's `meta` compile-time reflection system to decompose custom structs into parallel column arrays:
+
+```cpp
+struct Particle {
+    float x, y, z;
+    float vx, vy, vz;
+    int id;
+};
+
+// Decomposes Particle into parallel contiguous column arrays
+meta::soa_storage<Particle, 1024> particles;
+particles.push_back(Particle{0.0f, 1.0f, 2.0f, 0.1f, 0.2f, 0.3f, 1});
+
+// Direct column access (perfect SIMD cache lines)
+float first_x = particles.column<0>()[0]; 
+
+// Reconstruct AoS element on demand
+Particle p = particles.get(0);
 ```
 
 ---

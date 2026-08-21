@@ -334,8 +334,18 @@ namespace ts {
         template<typename T>
         using DynamicStorage = std::vector<T, smriti::SmritiAllocator<T, ResourceT>>;
 
+        using StringStorage = ArrowStringStorage;
+    };
+
+    // Structure-of-Arrays (SoA) Storage Policy using Pebble's reflection system
+    template<typename StructT, size_t InlineCapacity = 64>
+        requires meta::Reflectable<StructT>
+    struct SoAStoragePolicy {
+        template<typename T>
+        using DynamicStorage = meta::soa_storage<StructT, InlineCapacity>;
+
         template<typename T, size_t Size>
-        using StaticStorage = std::array<T, Size>;
+        using StaticStorage = meta::soa_storage<StructT, Size>;
 
         using StringStorage = ArrowStringStorage;
     };
@@ -620,15 +630,19 @@ namespace ts {
         static constexpr size_t Size = (Dims * ... * 1);
         using storage_type = typename StoragePolicy::template StaticStorage<T, Size>;
 
-        StaticTensor() { if constexpr (Size > 0 && requires { data_.fill(T{}); }) data_.fill(T{}); }
+        constexpr StaticTensor() { if constexpr (Size > 0 && requires { data_.fill(T{}); }) data_.fill(T{}); }
 
-        StaticTensor(std::initializer_list<T> list) {
+        constexpr StaticTensor(std::initializer_list<T> list) {
             if (list.size() != Size) throw std::invalid_argument("Initializer list size does not match tensor shape.");
             if constexpr (Size > 0) std::copy(list.begin(), list.end(), data_.data());
         }
 
+        template<typename... Vals>
+            requires (sizeof...(Vals) == Size && (std::is_convertible_v<Vals, T> && ...))
+        constexpr explicit StaticTensor(Vals... vals) : data_{static_cast<T>(vals)...} {}
+
         template<typename E>
-        StaticTensor &operator=(const TensorExpression<E, T, StoragePolicy, CompPolicy> &expr) {
+        constexpr StaticTensor &operator=(const TensorExpression<E, T, StoragePolicy, CompPolicy> &expr) {
             const auto &expression = expr.self();
             if (auto expr_shape = get_shape(expression); !std::equal(shape().begin(), shape().end(), expr_shape.begin(), expr_shape.end()))
                 throw std::runtime_error("Incompatible shape in assignment to static tensor.");
@@ -649,15 +663,15 @@ namespace ts {
             return *this;
         }
 
-        const storage_type &storage() const { return data_; }
-        T *data() { 
+        constexpr const storage_type &storage() const { return data_; }
+        constexpr T *data() { 
             if constexpr (std::is_same_v<storage_type, std::vector<bool>>) {
                 return nullptr;
             } else {
                 return data_.data(); 
             }
         }
-        const T *data() const { 
+        constexpr const T *data() const { 
             if constexpr (std::is_same_v<storage_type, std::vector<bool>>) {
                 return nullptr;
             } else {
@@ -666,30 +680,30 @@ namespace ts {
         }
         constexpr const std::array<size_t, Rank> &shape() const { return shape_; }
 
-        T &operator()(const std::vector<size_t> &indices) { return data_[get_flat_index_dyn(indices)]; }
-        const T &operator()(const std::vector<size_t> &indices) const { return data_[get_flat_index_dyn(indices)]; }
+        constexpr T &operator()(const std::vector<size_t> &indices) { return data_[get_flat_index_dyn(indices)]; }
+        constexpr const T &operator()(const std::vector<size_t> &indices) const { return data_[get_flat_index_dyn(indices)]; }
 
         template<std::integral... Is>
-        T &operator()(Is... indices) {
+        constexpr T &operator()(Is... indices) {
             static_assert(sizeof...(Is) == Rank, "Incorrect number of indices.");
             return data_[get_flat_index({static_cast<size_t>(indices)...})];
         }
 
         template<std::integral... Is>
-        const T &operator()(Is... indices) const {
+        constexpr const T &operator()(Is... indices) const {
             static_assert(sizeof...(Is) == Rank, "Incorrect number of indices.");
             return data_[get_flat_index({static_cast<size_t>(indices)...})];
         }
 
         // C++23 multidimensional subscript operator
         template<std::integral... Is>
-        T &operator[](Is... indices) {
+        constexpr T &operator[](Is... indices) {
             static_assert(sizeof...(Is) == Rank, "Incorrect number of indices.");
             return data_[get_flat_index({static_cast<size_t>(indices)...})];
         }
 
         template<std::integral... Is>
-        const T &operator[](Is... indices) const {
+        constexpr const T &operator[](Is... indices) const {
             static_assert(sizeof...(Is) == Rank, "Incorrect number of indices.");
             return data_[get_flat_index({static_cast<size_t>(indices)...})];
         }
@@ -1674,6 +1688,8 @@ namespace ts {
     using small_tensor_storage_policy = SmallTensorStoragePolicy<InlineBytes>;
     template<typename ResourceT>
     using smriti_storage_policy = SmritiStoragePolicy<ResourceT>;
+    template<typename StructT, size_t InlineCap = 64>
+    using soa_storage_policy = SoAStoragePolicy<StructT, InlineCap>;
     using arrow_string_storage = ArrowStringStorage;
 
 } // namespace ts

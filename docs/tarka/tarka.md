@@ -227,7 +227,7 @@ route(term):
 | `tarka/native/simplifier.hpp`   | no             | no        | pre-encoding algebraic AST simplification pass                   |
 | `tarka/frontend/ir.hpp`         | no             | no        | frontend-neutral SMT script IR, spans, names, diagnostics         |
 | `tarka/frontend/smt2_lexy.hpp`  | yes            | no        | Lexy SMT-LIB2 syntax frontend → shared IR                         |
-| `tarka/frontend/smt2_samasa.hpp`| no             | no        | Samasa SMT-LIB2 syntax/CST frontend → shared IR                   |
+| `tarka/frontend/smt2_samasa.hpp`| no            | no        | Samasa SMT-LIB2 scanner/event frontend → shared IR                |
 | `tarka/frontend/lower_to_tarka.hpp`| no          | no        | shared IR semantic lowering and RouterEngine execution            |
 | `tarka/frontend/smt2_printer.hpp`| no            | no        | SMT-LIB2 term, sort, and benchmark script serializer             |
 | `tarka/native/model_validator.hpp`| no           | no        | SAT model formatter and independent assertion validator          |

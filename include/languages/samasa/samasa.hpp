@@ -91,7 +91,8 @@ namespace lang::samasa {
     // route for frontends that lower parse events directly into their own IR.
     template <class Grammar, class Sink, class KWTable = keyword_table<>,
               class OpTrie = operator_trie<>,
-              class LinePol = no_line_sensitivity<typename Grammar::token_kind>>
+              class LinePol = no_line_sensitivity<typename Grammar::token_kind>,
+              class Profile = fast_profile>
     [[nodiscard]] bool parse_events(std::string_view source, Sink&& sink,
                                     const default_parse_options& opts = {},
                                     const scan_token_kinds<typename Grammar::token_kind>& kinds = {},
@@ -99,7 +100,8 @@ namespace lang::samasa {
         using SK = typename Grammar::syntax_kind; using TK = typename Grammar::token_kind;
         lang::collecting_sink<diagnostic> diagnostics; auto tokens = scan<KWTable, OpTrie, LinePol, TK>(source,kinds,lp,diagnostics);
         lang::parse_tree_stats stats; event_stream<SK> events;
-        parse_context<SK,TK> ctx(tokens.view(),source,events,diagnostics,stats,opts.budget);
+        parse_context<SK,TK, typename Profile::memo_policy,
+                      typename Profile::trace_policy> ctx(tokens.view(),source,events,diagnostics,stats,opts.budget);
         const auto root = events.begin(SK{}); auto result = typename Grammar::root_rule{}.match(ctx);
         if (!result.ok()) { events.rollback(root); return false; }
         events.end(root,{0,static_cast<std::uint32_t>(source.size())});
@@ -112,7 +114,8 @@ namespace lang::samasa {
               class KWTable   = keyword_table<>,
               class OpTrie    = operator_trie<>,
               class LinePol   = no_line_sensitivity<typename Grammar::token_kind>,
-              class... Policies>
+              class Profile   = fast_profile,
+              class ScannerPolicy = scanner_policy<typename Grammar::token_kind>>
     [[nodiscard]] parse_output<typename Grammar::syntax_kind, typename Grammar::token_kind>
     parse(std::string_view           source,
           const default_parse_options& opts  = {},
@@ -126,15 +129,16 @@ namespace lang::samasa {
         Out output;
 
         // 1. Scan.
-        output.tokens = scan<KWTable, OpTrie, LinePol, TK>(
-            source, tok_kinds, lp, output.diagnostics);
+        output.tokens = scan<KWTable, OpTrie, LinePol, TK, ScannerPolicy>(
+            source, tok_kinds, lp, output.diagnostics, ScannerPolicy{});
 
         // 2. Parse.
         output.stats.source_bytes = static_cast<std::uint32_t>(source.size());
         output.stats.total_tokens = output.tokens.view().size();
 
         event_stream<SK>        events;
-        parse_context<SK, TK>   ctx(output.tokens.view(), source,
+        parse_context<SK, TK, typename Profile::memo_policy,
+                      typename Profile::trace_policy> ctx(output.tokens.view(), source,
                                     events, output.diagnostics, output.stats,
                                     opts.budget);
 

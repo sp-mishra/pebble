@@ -121,6 +121,21 @@ namespace lang::samasa {
             using Stream = typename Ctx::stream_type;
             using R      = parse_result<Stream>;
 
+            if constexpr ((requires { Ms::token_kind; } && ...)) {
+                const auto cur = ctx.cursor();
+                if (cur.at_end()) return R::soft_failure(cur);
+                std::optional<R> selected;
+                auto dispatch = [&]<std::size_t I>() {
+                    using M = std::tuple_element_t<I, std::tuple<Ms...>>;
+                    if (!selected && cur.peek().kind == M::token_kind)
+                        selected = std::get<I>(matchers).match(ctx);
+                };
+                [&]<std::size_t... Is>(std::index_sequence<Is...>) { (dispatch.template operator()<Is>(), ...); }(std::index_sequence_for<Ms...>{});
+                if (selected) { ctx.set_cursor(selected->next); return *selected; }
+                ctx.update_furthest(cur.peek().offset);
+                return R::soft_failure(cur);
+            }
+
             std::uint32_t fe = 0;
             std::optional<R> found;
 

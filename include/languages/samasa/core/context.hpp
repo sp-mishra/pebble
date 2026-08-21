@@ -23,6 +23,8 @@
 #include "../lex/token_stream.hpp"
 #include "languages/generic/core/diagnostics.hpp"
 #include "languages/generic/core/parse_stats.hpp"
+#include "../policies/memo_policy.hpp"
+#include "../policies/trace_policy.hpp"
 
 namespace lang::samasa {
 
@@ -36,7 +38,8 @@ namespace lang::samasa {
         std::uint32_t                 repair_count;
     };
 
-    template <class SyntaxKind, class TokenKind, class... Policies>
+    template <class SyntaxKind, class TokenKind,
+              class MemoPolicy = no_memo, class TracePolicy = no_trace>
     class parse_context {
     public:
         using syntax_kind  = SyntaxKind;
@@ -45,6 +48,8 @@ namespace lang::samasa {
         using cursor_type  = cursor<stream_type>;
         using event_marker = typename event_stream<SyntaxKind>::marker;
         using checkpoint_type = parse_checkpoint<cursor_type, event_marker>;
+        using memo_policy = MemoPolicy;
+        using trace_policy = TracePolicy;
 
         parse_context(
             const stream_type&                    stream,
@@ -121,6 +126,8 @@ namespace lang::samasa {
 
         // ---- Stats ---------------------------------------------------------
         lang::parse_tree_stats& stats() noexcept { return stats_; }
+        [[nodiscard]] MemoPolicy& memo() noexcept { return memo_; }
+        [[nodiscard]] TracePolicy& trace() noexcept { return trace_; }
 
         // ---- Limits --------------------------------------------------------
         [[nodiscard]] const limits& budget() const noexcept { return budget_; }
@@ -136,6 +143,8 @@ namespace lang::samasa {
         std::uint32_t                      depth_          = 0;
         std::uint32_t                      furthest_error_ = 0;
         std::uint32_t                      repairs_        = 0;
+        [[no_unique_address]] MemoPolicy    memo_{};
+        [[no_unique_address]] TracePolicy   trace_{};
     };
 
 } // namespace lang::samasa

@@ -1,5 +1,6 @@
 #include <catch_amalgamated.hpp>
 #include <containers/tensor/tensor.hpp>
+#include <containers/numeric/math_vector.hpp>
 #include <containers/tensor/highway_computation_policy.hpp>
 #include <containers/tensor/tensor_utils.hpp>
 #if __has_include(<mlx/mlx.h>)
@@ -261,4 +262,67 @@ TEST_CASE("tensor: MLX Apple Silicon GPU execution", "[tensor][mlx][gpu]") {
     }
 }
 #endif
+
+TEST_CASE("tensor: Game Math primitives & constexpr evaluation", "[tensor][math][constexpr]") {
+    SECTION("constexpr static_tensor construction and element access") {
+        constexpr ts::static_tensor<float, ts::default_storage_policy, ts::default_computation_policy, 2, 2> mat(
+            1.0f, 2.0f,
+            3.0f, 4.0f
+        );
+        static_assert(mat.shape()[0] == 2 && mat.shape()[1] == 2);
+        static_assert(mat[0, 0] == 1.0f);
+        static_assert(mat[0, 1] == 2.0f);
+        static_assert(mat[1, 0] == 3.0f);
+        static_assert(mat[1, 1] == 4.0f);
+
+        REQUIRE(mat[0, 0] == 1.0f);
+        REQUIRE(mat[1, 1] == 4.0f);
+    }
+
+    SECTION("Game Math 3D vectors: dot, cross, length, normalize") {
+        constexpr ts::math::vec3 v1(1.0f, 0.0f, 0.0f);
+        constexpr ts::math::vec3 v2(0.0f, 1.0f, 0.0f);
+
+        constexpr auto v3 = ts::math::cross(v1, v2);
+        static_assert(v3[0] == 0.0f && v3[1] == 0.0f && v3[2] == 1.0f);
+        REQUIRE(v3[2] == Catch::Approx(1.0f));
+
+        constexpr float d = ts::math::dot(v1, v2);
+        static_assert(d == 0.0f);
+        REQUIRE(d == Catch::Approx(0.0f));
+
+        ts::math::vec3 v4(0.0f, 3.0f, 4.0f);
+        REQUIRE(ts::math::length_sq(v4) == Catch::Approx(25.0f));
+        REQUIRE(ts::math::length(v4) == Catch::Approx(5.0f));
+
+        auto n = ts::math::normalize(v4);
+        REQUIRE(n[1] == Catch::Approx(0.6f));
+        REQUIRE(n[2] == Catch::Approx(0.8f));
+    }
+}
+
+struct Particle {
+    float x, y, z;
+    float vx, vy, vz;
+    int id;
+};
+
+TEST_CASE("tensor: Structure-of-Arrays (SoA) Reflection Storage", "[tensor][soa]") {
+    SECTION("SoA column layout and reconstruction") {
+        meta::soa_storage<Particle, 16> soa;
+        soa.push_back(Particle{1.0f, 2.0f, 3.0f, 0.1f, 0.2f, 0.3f, 42});
+        soa.push_back(Particle{4.0f, 5.0f, 6.0f, 0.4f, 0.5f, 0.6f, 100});
+
+        REQUIRE(soa.size() == 2);
+        REQUIRE(soa.column<0>()[0] == Catch::Approx(1.0f));
+        REQUIRE(soa.column<0>()[1] == Catch::Approx(4.0f));
+        REQUIRE(soa.column<6>()[0] == 42);
+        REQUIRE(soa.column<6>()[1] == 100);
+
+        Particle p0 = soa.get(0);
+        REQUIRE(p0.x == Catch::Approx(1.0f));
+        REQUIRE(p0.y == Catch::Approx(2.0f));
+        REQUIRE(p0.id == 42);
+    }
+}
 

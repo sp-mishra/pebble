@@ -144,6 +144,13 @@ fixed-capacity table and falls back to a cache miss on capacity overflow.
 `fast_profile` and `traced_profile` name the common policy selections. The
 default remains the lightweight `fast_profile` configuration.
 
+`parse<Grammar, KW, Ops, LinePolicy, Profile>()` now installs the selected
+memo and trace policies in `parse_context`; a `memoized<Rule>` therefore uses
+the selected cache rather than silently falling through. For a `choice_t` made
+only of distinct `tok<K>` alternatives, Samasa emits direct token-kind
+prediction and skips ordered-choice checkpoints entirely. Ambiguous choices
+retain normal PEG ordering and rollback semantics.
+
 Samasa is tuned on both the run-time hot path (per-token scanning + parsing) and compile-time
 include cost. All optimizations are behavior-preserving — the conformance suite passes unchanged.
 
@@ -245,7 +252,9 @@ Scans source text, runs the PEG grammar, returns `parse_output<SK, TK>`.
 template <class Grammar,
           class KWTable = keyword_table<>,
           class OpTrie  = operator_trie<>,
-          class LinePol = no_line_sensitivity<typename Grammar::token_kind>>
+          class LinePol = no_line_sensitivity<typename Grammar::token_kind>,
+          class Profile = fast_profile,
+          class ScannerPolicy = scanner_policy<typename Grammar::token_kind>>
 parse_output<typename Grammar::syntax_kind, typename Grammar::token_kind>
 parse(std::string_view source,
       const parse_options& opts  = {},
