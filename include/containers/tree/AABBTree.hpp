@@ -122,20 +122,33 @@ namespace containers {
             [[nodiscard]] bool is_leaf() const noexcept { return left == null_node; }
         };
 
+        template <class V>
+        static constexpr auto get_x(const V& v) noexcept {
+            if constexpr (requires { v.x; }) return v.x;
+            else return v[0];
+        }
+
+        template <class V>
+        static constexpr auto get_y(const V& v) noexcept {
+            if constexpr (requires { v.y; }) return v.y;
+            else return v[1];
+        }
+
         static bool contains_box(const AABB& outer, const AABB& inner) noexcept {
-            return outer.lo.x <= inner.lo.x && outer.lo.y <= inner.lo.y &&
-                outer.hi.x >= inner.hi.x && outer.hi.y >= inner.hi.y;
+            return get_x(outer.lo) <= get_x(inner.lo) && get_y(outer.lo) <= get_y(inner.lo) &&
+                   get_x(outer.hi) >= get_x(inner.hi) && get_y(outer.hi) >= get_y(inner.hi);
         }
 
         static bool ray_hits(const AABB& b, const Vec& o, const Vec& inv, Scalar tmax) noexcept {
-            Scalar t1 = (b.lo.x - o.x) * inv.x, t2 = (b.hi.x - o.x) * inv.x;
+            Scalar t1 = (get_x(b.lo) - get_x(o)) * get_x(inv), t2 = (get_x(b.hi) - get_x(o)) * get_x(inv);
             Scalar tmin = t1 < t2 ? t1 : t2, tmx = t1 < t2 ? t2 : t1;
-            t1 = (b.lo.y - o.y) * inv.y;
-            t2 = (b.hi.y - o.y) * inv.y;
+            t1 = (get_y(b.lo) - get_y(o)) * get_y(inv);
+            t2 = (get_y(b.hi) - get_y(o)) * get_y(inv);
             tmin = (t1 < t2 ? t1 : t2) > tmin ? (t1 < t2 ? t1 : t2) : tmin;
             tmx = (t1 < t2 ? t2 : t1) < tmx ? (t1 < t2 ? t2 : t1) : tmx;
             return tmx >= tmin && tmx >= Scalar(0) && tmin <= tmax;
         }
+
 
         std::uint32_t alloc_node() {
             if (free_ != null_node) {

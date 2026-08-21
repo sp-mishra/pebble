@@ -30,11 +30,13 @@ Pebble is a modern, header-only, policy-based C++23 systems library engineered f
 
 * **Petika** (`include/petika/`) — Unified, engine-agnostic storage framework and platform. Decouples application storage APIs from physical engine architectures.
   * **`petika::Petika`**: Storage hub supporting CRUD, transactions, snapshots, and recovery.
-  * **`petika::JournaledSkipEngine`**: Production-ready SkipList engine with $O(\log n)$ point operations, $O(\log n + k)$ range scans, Smriti arena memory, and Nitya log replay.
+  * **`petika::MvccJournaledSkipEngine`**: Default Anukrama-backed MVCC SkipList engine with stable LSN snapshots and Nitya log replay. `JournaledSkipEngine` remains available through explicit `SingleVersion*` aliases.
   * **`kosha::adapter::PetikaAdapter`**: High-performance Kosha cache storage adapter.
   * Documentation: [`docs/petika/petika.md`](docs/petika/petika.md)
 * **Nitya** (`include/nitya/`) — Generic Durable Log Engine (DLE). Byte-offset LSN, Reserve $\to$ Publish $\to$ Sync pipeline, Setu memory mapping, streaming recovery, replication streams, and EasyRules retention/archival.
   * Documentation: [`docs/containers/nitya.md`](docs/containers/nitya.md)
+* **Anukrama** (`include/containers/anukrama/`) — Generic static-composition versioned state: immutable MVCC chains, stable snapshots, optimistic validation, and explicit reclamation. Petika can bind durable Nitya LSNs as its commit clock without making Nitya mandatory.
+  * Documentation: [`docs/containers/anukrama.md`](docs/containers/anukrama.md)
 
 ---
 
@@ -63,6 +65,8 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 * **NAryTree** (`include/containers/tree/NAryTree.hpp`) — Owning n-ary tree with SIMD batch traversals.
   * Documentation: [`docs/containers/NAryTree.md`](docs/containers/NAryTree.md)
 * **AABBTree** (`include/containers/tree/AABBTree.hpp`) — Bounding-volume hierarchy with SAH-lite sibling-merge insertion and refit rebalancing.
+* **BPlusTree** (`include/containers/tree/bplus_tree.hpp`) — High-performance, policy-based cache-aligned B+ tree (`BPlusMap`, `BPlusSet`) with Highway SIMD search, Smriti arena compatibility, and $O(\log_B N + K)$ range scanning.
+  * Documentation: [`docs/containers/bplus_tree.md`](docs/containers/bplus_tree.md)
 * **DisjointSet** & **union_find** (`include/containers/graph/DisjointSet.hpp`, `include/containers/union_find.hpp`) — Disjoint-set forests with union-by-rank, path compression, and path-splitting.
 
 ### Caching, Stores & Registries
@@ -92,6 +96,16 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
   * Comprehensive Zero-to-Hero Tutorial: [`docs/tutorials/tensor.md`](docs/tutorials/tensor.md)
 * **Math Vectors & Game Graphics Primitives** (`include/containers/numeric/math_vector.hpp`) — Stack-allocated, zero-heap, `constexpr`-enabled linear algebra primitives (`vec2`, `vec3`, `vec4`, `quat`, `mat4`), ray optics (`reflect`, `refract`), camera view (`look_at`), projection (`perspective`), and quaternion slerp built on `static_tensor`.
   * Documentation: [`docs/containers/math_vector.md`](docs/containers/math_vector.md)
+* **Akruti** (`include/akruti/`) — Header-only, concept-based 2D shape, geometry, narrowphase, CCD, CSG, and fracture system.
+  * `Shape` concept, analytic primitives (`Circle`, `Box`, `Segment`, `Capsule`, `HalfPlane`, `ConvexPoly`), Andrew's monotone chain convex hull (`akruti/hull.hpp`).
+  * Queries (`raycast`, `closest_point`, `point_inside`, `winding_number`).
+  * GJK boolean intersection, EPA penetration depth/normal, and separation distance (`akruti/gjk.hpp`).
+  * Continuous collision detection (conservative advancement TOI and speculative anti-tunneling bounds in `akruti/ccd.hpp`).
+  * Constructive Solid Geometry (`akruti/csg.hpp`) with `Union`, `Subtract`, `Intersect`, `SmoothUnion`, `Offset`, `Transform`.
+  * Advanced fracture pipeline (**Khanda** in `akruti/khanda.hpp`) with Voronoi partitioning, ear-clipping triangulation, convex decomposition, Poisson-disk sampling with impact densification, and exact polar moment of inertia.
+  * Bulk scene orchestrator (`akruti/scene/`) backed by SoA batches, dynamic `AABBTree` BVH, and optional `pravaha` task graph execution.
+  * Documentation: [`docs/akruti/akruti.md`](docs/akruti/akruti.md)
+
 
 ---
 
@@ -101,7 +115,7 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
   * Documentation: [`docs/observability/nadi.md`](docs/observability/nadi.md), [`docs/observability/turbo_twig_telemetry.md`](docs/observability/turbo_twig_telemetry.md)
 * **EasyRules** (`include/rules/easy_rules.hpp`) — Declarative C++23 business and policy rule engine, facts registry, and execution pipeline.
   * Documentation: [`docs/rules/easy_rules.md`](docs/rules/easy_rules.md)
-* **Medha** (`include/medha/medha.hpp`) — Header-only optimistic and serializable transactions over user-defined resources, with opt-in Smriti, Tarka/Vākya, Pravaha, and metadata-only Lithe adapters.
+* **Medha** (`include/medha/medha.hpp`) — Header-only optimistic and serializable transactions over user-defined resources, with opt-in Anukrama, Smriti, Tarka/Vākya, Pravaha, and metadata-only Lithe adapters.
   * CMake targets: `pebble::medha`, `pebble::medha_smriti`, `pebble::medha_tarka`, `pebble::medha_pravaha`, and `pebble::medha_lithe_metadata`.
   * Documentation: [`docs/medha/medha.md`](docs/medha/medha.md)
 

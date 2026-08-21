@@ -372,6 +372,19 @@ if (HAS_METAL_CPP)
         ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK} ${QUARTZCORE_FRAMEWORK})
 endif()
 
+add_library(pebble_anukrama INTERFACE)
+add_library(pebble::anukrama ALIAS pebble_anukrama)
+target_include_directories(pebble_anukrama INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_compile_features(pebble_anukrama INTERFACE cxx_std_23)
+
+add_library(pebble_akruti INTERFACE)
+add_library(pebble::akruti ALIAS pebble_akruti)
+target_include_directories(pebble_akruti INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_compile_features(pebble_akruti INTERFACE cxx_std_23)
+
+
 # Medha is a header-only transactional-memory component.  Its core keeps
 # dependencies limited to Pebble containers; integrations remain opt-in.
 add_library(pebble_medha INTERFACE)

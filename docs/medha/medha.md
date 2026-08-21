@@ -637,6 +637,18 @@ The following are defined as metadata/contracts only — no network behavior:
 - Core is leaf — does NOT depend on Lithe/Pravaha/Tarka/Sutra.
 - Adapters are `__has_include`-guarded: absent deps cost nothing.
 
+## Anukrama adapter
+
+`#include <medha/adapters/anukrama.hpp>` adapts an
+`anukrama::store<Key, Value>` as a Medha transactional resource. The adapter
+owns a typed, per-attempt staging batch and pins an Anukrama snapshot on first
+resource access. At commit it invokes Anukrama's `commit_if_unchanged`, which
+validates staged-key versions and publishes the batch under one writer lock.
+
+This gives point-key optimistic conflict detection within that resource. It
+does not claim predicate/range serializability, nor durable cross-resource
+atomic commit; those require corresponding resource protocols.
+
 ---
 
 ## Frontend consumers

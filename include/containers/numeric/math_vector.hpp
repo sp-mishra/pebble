@@ -44,6 +44,19 @@ namespace pebble::math {
     // 2. Vector Arithmetic & Geometric Functions
     // ========================================================================
 
+    // 2D Vector Cross Product (Scalar z-component)
+    template<typename T>
+    constexpr T cross(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, 2> &a,
+                      const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, 2> &b) noexcept {
+        return a[0] * b[1] - a[1] * b[0];
+    }
+
+    // 2D 90-degree Perpendicular Vector (counter-clockwise)
+    template<typename T>
+    constexpr auto perp(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, 2> &v) noexcept {
+        return ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, 2>(-v[1], v[0]);
+    }
+
     // 3D Vector Cross Product
     constexpr vec3 cross(const vec3 &a, const vec3 &b) noexcept {
         return vec3(
@@ -52,6 +65,7 @@ namespace pebble::math {
             a[0] * b[1] - a[1] * b[0]
         );
     }
+
 
     constexpr vec3d cross(const vec3d &a, const vec3d &b) noexcept {
         return vec3d(
@@ -189,6 +203,158 @@ namespace pebble::math {
     constexpr float determinant(const mat2 &m) noexcept {
         return m[0, 0] * m[1, 1] - m[0, 1] * m[1, 0];
     }
+
+    // 2D 2x2 Matrix-Vector Multiplication (y = M * x)
+    constexpr vec2 mul(const mat2 &m, const vec2 &v) noexcept {
+        return vec2(
+            m[0, 0] * v[0] + m[0, 1] * v[1],
+            m[1, 0] * v[0] + m[1, 1] * v[1]
+        );
+    }
+
+    // 2D 2x2 Matrix Multiplication
+    constexpr mat2 mul(const mat2 &a, const mat2 &b) noexcept {
+        return mat2(
+            a[0, 0] * b[0, 0] + a[0, 1] * b[1, 0], a[0, 0] * b[0, 1] + a[0, 1] * b[1, 1],
+            a[1, 0] * b[0, 0] + a[1, 1] * b[1, 0], a[1, 0] * b[0, 1] + a[1, 1] * b[1, 1]
+        );
+    }
+
+    // 2D 2x2 Matrix Transpose
+    constexpr mat2 transpose(const mat2 &m) noexcept {
+        return mat2(m[0, 0], m[1, 0], m[0, 1], m[1, 1]);
+    }
+
+    // 2D 2x2 Matrix Inverse
+    constexpr mat2 inverse(const mat2 &m) noexcept {
+        float d = determinant(m);
+        if (d > -1e-12f && d < 1e-12f) return mat2(1.0f, 0.0f, 0.0f, 1.0f);
+        float inv_d = 1.0f / d;
+        return mat2(
+             m[1, 1] * inv_d, -m[0, 1] * inv_d,
+            -m[1, 0] * inv_d,  m[0, 0] * inv_d
+        );
+    }
+
+    // 2D 2x2 Rotation Matrix (radians)
+    inline mat2 rotation2d(float radians) noexcept {
+        float c = std::cos(radians), s = std::sin(radians);
+        return mat2(c, -s, s, c);
+    }
+
+    // 2D 2x2 Scaling Matrix
+    constexpr mat2 scaling2d(float sx, float sy) noexcept {
+        return mat2(sx, 0.0f, 0.0f, sy);
+    }
+
+    // ========================================================================
+    // 2D & 3D Axis-Aligned Bounding Box (AABB)
+    // ========================================================================
+    struct aabb2 {
+        vec2 lo{};
+        vec2 hi{};
+
+        constexpr aabb2() noexcept = default;
+        constexpr aabb2(vec2 lo_, vec2 hi_) noexcept : lo(lo_), hi(hi_) {}
+
+        [[nodiscard]] constexpr vec2 center() const noexcept {
+            return vec2((lo[0] + hi[0]) * 0.5f, (lo[1] + hi[1]) * 0.5f);
+        }
+        [[nodiscard]] constexpr vec2 extent() const noexcept {
+            return vec2(hi[0] - lo[0], hi[1] - lo[1]);
+        }
+
+        [[nodiscard]] constexpr bool contains(const vec2 &p) const noexcept {
+            return p[0] >= lo[0] && p[0] <= hi[0] && p[1] >= lo[1] && p[1] <= hi[1];
+        }
+        template <class P>
+        [[nodiscard]] constexpr bool contains(const P &p) const noexcept {
+            if constexpr (requires { p.x; p.y; }) {
+                return p.x >= lo[0] && p.x <= hi[0] && p.y >= lo[1] && p.y <= hi[1];
+            } else {
+                return p[0] >= lo[0] && p[0] <= hi[0] && p[1] >= lo[1] && p[1] <= hi[1];
+            }
+        }
+
+        [[nodiscard]] constexpr bool overlaps(const aabb2 &o) const noexcept {
+            return lo[0] <= o.hi[0] && hi[0] >= o.lo[0] && lo[1] <= o.hi[1] && hi[1] >= o.lo[1];
+        }
+        constexpr void expand(const vec2 &p) noexcept {
+            lo[0] = std::min(lo[0], p[0]); lo[1] = std::min(lo[1], p[1]);
+            hi[0] = std::max(hi[0], p[0]); hi[1] = std::max(hi[1], p[1]);
+        }
+        constexpr void expand(const aabb2 &o) noexcept { expand(o.lo); expand(o.hi); }
+        [[nodiscard]] constexpr aabb2 fattened(float m) const noexcept {
+            return aabb2(vec2(lo[0] - m, lo[1] - m), vec2(hi[0] + m, hi[1] + m));
+        }
+        [[nodiscard]] constexpr float area() const noexcept {
+            const float dx = hi[0] - lo[0], dy = hi[1] - lo[1];
+            return dx * dy;
+        }
+        [[nodiscard]] constexpr vec2 clamp(const vec2 &p) const noexcept {
+            return vec2(std::clamp(p[0], lo[0], hi[0]), std::clamp(p[1], lo[1], hi[1]));
+        }
+        [[nodiscard]] static constexpr aabb2 merge(const aabb2 &a, const aabb2 &b) noexcept {
+            return aabb2(vec2(std::min(a.lo[0], b.lo[0]), std::min(a.lo[1], b.lo[1])),
+                         vec2(std::max(a.hi[0], b.hi[0]), std::max(a.hi[1], b.hi[1])));
+        }
+
+        friend constexpr bool operator==(const aabb2&, const aabb2&) = default;
+    };
+
+    // 3D Axis-Aligned Bounding Box (AABB)
+    struct aabb3 {
+        vec3 lo{};
+        vec3 hi{};
+
+        constexpr aabb3() noexcept = default;
+        constexpr aabb3(vec3 lo_, vec3 hi_) noexcept : lo(lo_), hi(hi_) {}
+
+        [[nodiscard]] constexpr vec3 center() const noexcept {
+            return vec3((lo[0] + hi[0]) * 0.5f, (lo[1] + hi[1]) * 0.5f, (lo[2] + hi[2]) * 0.5f);
+        }
+        [[nodiscard]] constexpr vec3 extent() const noexcept {
+            return vec3(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
+        }
+
+        [[nodiscard]] constexpr bool contains(const vec3 &p) const noexcept {
+            return p[0] >= lo[0] && p[0] <= hi[0] &&
+                   p[1] >= lo[1] && p[1] <= hi[1] &&
+                   p[2] >= lo[2] && p[2] <= hi[2];
+        }
+        [[nodiscard]] constexpr bool overlaps(const aabb3 &o) const noexcept {
+            return lo[0] <= o.hi[0] && hi[0] >= o.lo[0] &&
+                   lo[1] <= o.hi[1] && hi[1] >= o.lo[1] &&
+                   lo[2] <= o.hi[2] && hi[2] >= o.lo[2];
+        }
+        constexpr void expand(const vec3 &p) noexcept {
+            lo[0] = std::min(lo[0], p[0]); lo[1] = std::min(lo[1], p[1]); lo[2] = std::min(lo[2], p[2]);
+            hi[0] = std::max(hi[0], p[0]); hi[1] = std::max(hi[1], p[1]); hi[2] = std::max(hi[2], p[2]);
+        }
+        constexpr void expand(const aabb3 &o) noexcept { expand(o.lo); expand(o.hi); }
+        [[nodiscard]] constexpr aabb3 fattened(float m) const noexcept {
+            return aabb3(vec3(lo[0] - m, lo[1] - m, lo[2] - m),
+                         vec3(hi[0] + m, hi[1] + m, hi[2] + m));
+        }
+        [[nodiscard]] constexpr float area() const noexcept {
+            const float dx = hi[0] - lo[0], dy = hi[1] - lo[1], dz = hi[2] - lo[2];
+            return 2.0f * (dx * dy + dy * dz + dz * dx);
+        }
+        [[nodiscard]] constexpr vec3 clamp(const vec3 &p) const noexcept {
+            return vec3(std::clamp(p[0], lo[0], hi[0]),
+                        std::clamp(p[1], lo[1], hi[1]),
+                        std::clamp(p[2], lo[2], hi[2]));
+        }
+        [[nodiscard]] static constexpr aabb3 merge(const aabb3 &a, const aabb3 &b) noexcept {
+            return aabb3(vec3(std::min(a.lo[0], b.lo[0]), std::min(a.lo[1], b.lo[1]), std::min(a.lo[2], b.lo[2])),
+                         vec3(std::max(a.hi[0], b.hi[0]), std::max(a.hi[1], b.hi[1]), std::max(a.hi[2], b.hi[2])));
+        }
+
+        friend constexpr bool operator==(const aabb3&, const aabb3&) = default;
+    };
+
+
+
 
     // 3D 3x3 Determinant
     constexpr float determinant(const mat3 &m) noexcept {

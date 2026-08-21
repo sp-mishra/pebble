@@ -614,11 +614,19 @@ namespace nitya {
     template <std::size_t QueueCapacity = 1024>
     class group_commit_concurrency {
     public:
+        // A ticket can outlive the caller that queued it: the durability
+        // watermark may satisfy that caller before a later leader drains the
+        // queue.  Keep its completion state owned by both the caller and the
+        // queue so a deferred drain never dereferences a departed stack frame.
+        struct commit_completion {
+            std::atomic<bool> done{false};
+            std::atomic<LogError> result{LogError::Success};
+        };
+
         struct commit_ticket {
             lsn_t lsn{0};
             std::size_t total_bytes{0};
-            std::atomic<bool>* done{nullptr};
-            std::atomic<LogError>* result{nullptr};
+            std::shared_ptr<commit_completion> completion{};
         };
 
         group_commit_concurrency() = default;
@@ -899,17 +907,15 @@ namespace nitya {
             auto telemetry = TelemetryPolicy::trace_flush();
             (void)telemetry;
 
-            // --- Ticket represents this thread's stake in the group commit. ---
-            // SAFETY: done/result_code must remain alive until the ticket is processed by
-            // a leader (done.load()==true) or this thread itself becomes the leader.
-            std::atomic<bool> done{false};
-            std::atomic<LogError> result_code{LogError::Success};
+            // The queue may retain a ticket after this caller observes that its
+            // target LSN is durable.  Shared ownership prevents that deferred
+            // drain from touching per-call stack storage.
+            auto completion = std::make_shared<typename ConcurrencyPolicy::commit_completion>();
 
             typename ConcurrencyPolicy::commit_ticket ticket{
                 .lsn = target_lsn,
                 .total_bytes = 0,
-                .done = &done,
-                .result = &result_code
+                .completion = completion
             };
 
             // Enqueue ticket.  If the queue is momentarily full, try to become leader
@@ -921,7 +927,7 @@ namespace nitya {
                 std::unique_lock direct_lk{flush_mutex_, std::defer_lock};
                 if (direct_lk.try_lock()) {
                     // Became leader without a ticket in the queue — safe to return directly.
-                    return execute_leader_flush(target_lsn, done, result_code);
+                    return execute_leader_flush(target_lsn, completion);
                 }
                 std::this_thread::yield();
             }
@@ -934,32 +940,39 @@ namespace nitya {
             {
                 std::unique_lock lk{flush_mutex_, std::defer_lock};
                 if (lk.try_lock()) {
-                    return execute_leader_flush(target_lsn, done, result_code);
+                    return execute_leader_flush(target_lsn, completion);
                 }
             }
 
-            // Follower path — progress-based loop checking done, leadership retry, and flushed_lsn_.wait().
+            // Follower path.  The flushed watermark is the durability contract;
+            // personal ticket completion is only needed to propagate a leader's
+            // error.  Once the watermark covers this LSN, return immediately --
+            // the shared completion state keeps any deferred queue entry safe.
             for (;;) {
-                if (done.load(std::memory_order_acquire)) {
-                    if (const auto err = result_code.load(std::memory_order_relaxed); err != LogError::Success) {
+                if (completion->done.load(std::memory_order_acquire)) {
+                    if (const auto err = completion->result.load(std::memory_order_relaxed);
+                        err != LogError::Success) {
                         return std::unexpected(err);
                     }
-                    if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
-                        return {};
-                    }
-                    return std::unexpected(LogError::InternalError);
+                    return flushed_lsn_.load(std::memory_order_acquire) >= target_lsn
+                        ? Result<void>{}
+                        : std::unexpected(LogError::InternalError);
+                }
+
+                if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) {
+                    return {};
                 }
 
                 // Try to promote to leader and drain queue (which will include our ticket).
                 {
                     std::unique_lock retry_lk{flush_mutex_, std::defer_lock};
                     if (retry_lk.try_lock()) {
-                        return execute_leader_flush(target_lsn, done, result_code);
+                        return execute_leader_flush(target_lsn, completion);
                     }
                 }
 
-                if (const auto cur = flushed_lsn_.load(std::memory_order_acquire); cur < target_lsn && !done.load(
-                    std::memory_order_acquire)) {
+                if (const auto cur = flushed_lsn_.load(std::memory_order_acquire);
+                    cur < target_lsn && !completion->done.load(std::memory_order_acquire)) {
                     flushed_lsn_.wait(cur, std::memory_order_acquire);
                 }
             }
@@ -1426,8 +1439,7 @@ namespace nitya {
         // Internal helper: assumes flush_mutex_ is held
         Result<void> execute_leader_flush(
             const lsn_t target_lsn,
-            std::atomic<bool>& done,
-            std::atomic<LogError>& result_code) {
+            const std::shared_ptr<typename ConcurrencyPolicy::commit_completion>& own_completion) {
             auto own_err = LogError::Success;
             bool own_resolved = false;
 
@@ -1462,17 +1474,14 @@ namespace nitya {
                 }
 
                 for (auto& t : follower_tickets) {
-                    if (t.done == &done) {
+                    if (t.completion == own_completion) {
                         continue;
                     }
 
-                    if (t.result) {
-                        t.result->store(flush_err, std::memory_order_relaxed);
-                    }
-
-                    if (t.done) {
-                        t.done->store(true, std::memory_order_release);
-                        t.done->notify_one();
+                    if (t.completion) {
+                        t.completion->result.store(flush_err, std::memory_order_relaxed);
+                        t.completion->done.store(true, std::memory_order_release);
+                        t.completion->done.notify_one();
                     }
                 }
 
@@ -1489,9 +1498,9 @@ namespace nitya {
                 own_err = LogError::InternalError;
             }
 
-            result_code.store(own_err, std::memory_order_relaxed);
-            done.store(true, std::memory_order_release);
-            done.notify_one();
+            own_completion->result.store(own_err, std::memory_order_relaxed);
+            own_completion->done.store(true, std::memory_order_release);
+            own_completion->done.notify_one();
 
             if (own_err != LogError::Success) {
                 return std::unexpected(own_err);

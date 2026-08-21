@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <span>
 #include <string_view>
 #include <type_traits>
@@ -128,6 +129,20 @@ namespace medha {
                     .resource = rid,
                     .key_hash = hash,
                     .stable_key_bytes = std::span<const std::byte>(bytes, sizeof(K)),
+                };
+            }
+
+            template <class R, class K>
+            [[nodiscard]] canonical_key operator()(resource_id rid,
+                                                   const R&,
+                                                   const K& key) const noexcept
+                requires (!std::is_trivially_copyable_v<K> && requires(const K& value) {
+                    { std::hash<K>{}(value) } -> std::convertible_to<std::size_t>;
+                }) {
+                return canonical_key{
+                    .resource = rid,
+                    .key_hash = static_cast<std::uint64_t>(std::hash<K>{}(key)),
+                    .stable_key_bytes = {},
                 };
             }
         };

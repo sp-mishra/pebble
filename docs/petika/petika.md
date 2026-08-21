@@ -61,14 +61,19 @@ using Store = petika::SkipStore<std::string, std::string>;
 
 ---
 
-## 4. Practical First Production Engine: `JournaledSkipEngine`
+## 4. Default Production Engine: `MvccJournaledSkipEngine`
 
-Petika introduces `petika::JournaledSkipEngine`:
+`petika::StringSkipStore` and `petika::SkipStore` select
+`petika::MvccJournaledSkipEngine`, which composes Nitya durability with
+Anukrama version chains:
 
 - **Skip List Index**: $O(\log n)$ point lookups, $O(\log n + k)$ ordered range scans without page-split overhead.
-- **Log Authority**: The Nitya WAL is the durable source of truth. The index is fully in-memory and deterministic to
-  rebuild.
-- **Smriti Memory**: Fast linear arena node allocation.
+- **Stable snapshots**: each snapshot captures the last published Nitya LSN and reads the latest Anukrama version at or before that boundary.
+- **Optimistic writes**: a transaction captures an LSN boundary and rejects a same-key write changed after that boundary before appending its WAL batch.
+- **Log authority**: the Nitya WAL is the durable source of truth; recovery replays batches in LSN order.
+
+`JournaledSkipEngine` remains available via `SingleVersionSkipStore` when an
+application deliberately chooses single-version, last-writer-wins semantics.
 
 ---
 
@@ -109,7 +114,10 @@ store.scan("user:100", "user:300", [](const auto& entry) {
 auto tx = store.transaction();
 tx.put("account:1", "100");
 tx.put("account:2", "200");
-tx.commit();
+if (!tx.commit()) {
+    // A concurrent same-key writer advanced the Anukrama version chain.
+    // Retry the transaction from a fresh snapshot.
+}
 ```
 
 ### Kosha Cache Adapter Integration

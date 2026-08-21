@@ -108,16 +108,19 @@ namespace medha {
             auto ck = canonicalize(handle.id(), handle.resource(), key);
 
             // Read-your-writes: check write set first
-            if (const auto* we = write_set_.find(ck)) {
-                if (we->storage == value_storage_kind::inline_copy) {
-                    resource_value<R> v{};
-                    static_assert(sizeof(v) <= kInlineValueBytes,
-                                  "value type too large for inline write_set storage");
-                    __builtin_memcpy(&v, we->inline_bytes, sizeof(v));
-                    return v;
+            if constexpr (resource_traits<R>::value_trivially_copyable) {
+                if (const auto* we = write_set_.find(ck)) {
+                    if (we->storage == value_storage_kind::inline_copy) {
+                        resource_value<R> v{};
+                        static_assert(sizeof(v) <= kInlineValueBytes,
+                                      "value type too large for inline write_set storage");
+                        __builtin_memcpy(&v, we->inline_bytes, sizeof(v));
+                        return v;
+                    }
                 }
-                // resource-owned staging: fall through to resource read
             }
+            // Resource-owned staging falls through to the resource, which owns
+            // the typed attempt-local value and provides read-your-writes.
 
             // Delegate to resource
             auto r = handle.read(*this, key);
@@ -163,6 +166,30 @@ namespace medha {
             if (const auto* rv = read_set_.find(ck)) base = *rv;
 
             write_set_.stage_inline(ck, base, value);
+            read_set_.mark_shadowed(ck);
+            ++stats_writes_;
+            return {};
+        }
+
+        // Resource-owned staging is the generic path for values that cannot be
+        // copied into Medha's fixed inline write set. The resource keeps the
+        // typed staged value for this attempt; Medha records an opaque handle
+        // only so lifecycle, validation, and rollback remain coordinated.
+        template <transactional_resource R>
+        [[nodiscard]] std::expected<void, tx_error>
+        store(resource_handle<R>& handle, resource_key<R> key, resource_value<R> value)
+            requires (!resource_traits<R>::value_trivially_copyable &&
+                      resource_traits<R>::resource_stages_values) {
+            assert(phase_ == tx_phase::active);
+            enlist(handle.resource());
+            if (auto staged = handle.stage(*this, key, std::move(value)); !staged)
+                return std::unexpected(staged.error());
+            auto ck = canonicalize(handle.id(), handle.resource(), key);
+            version_stamp base{};
+            if (const auto* rv = read_set_.find(ck)) base = *rv;
+            // The staged value remains resource-owned; a null opaque handle is
+            // valid because rollback/commit dispatch through the participant.
+            write_set_.stage_handle(ck, base, {});
             read_set_.mark_shadowed(ck);
             ++stats_writes_;
             return {};

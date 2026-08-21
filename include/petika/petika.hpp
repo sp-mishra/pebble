@@ -21,6 +21,7 @@
 #include "petika/engine.hpp"
 #include "petika/serializer.hpp"
 #include "petika/engines/journaled_skip_engine.hpp"
+#include "petika/engines/mvcc_journaled_skip_engine.hpp"
 #include "nitya/nitya.hpp"
 #include "utils/setu.hpp"
 #include "mem/smriti.hpp"
@@ -70,15 +71,22 @@ namespace petika {
             key_type key;
             value_type value;
         };
+        struct Observation {
+            key_type key;
+            nitya::lsn_t version{};
+        };
 
-        explicit Transaction(StoreType& store) : store_{store} {}
+        Transaction(StoreType& store, const nitya::lsn_t snapshot_lsn)
+            : store_{store}, snapshot_lsn_{snapshot_lsn} {}
 
         Result<void> put(key_type key, value_type val) {
+            observe_write(key);
             mutations_.emplace_back(EntryOp::Put, std::move(key), std::move(val));
             return {};
         }
 
         Result<void> erase(key_type key) {
+            observe_write(key);
             mutations_.emplace_back(EntryOp::Delete, std::move(key), value_type{});
             return {};
         }
@@ -91,23 +99,38 @@ namespace petika {
                     return it->value;
                 }
             }
-            return store_.get(key);
+            if constexpr (requires(const StoreType& store, const key_type& k, nitya::lsn_t at) {
+                { store.get_at(k, at) } -> std::same_as<Result<value_type>>;
+            }) return store_.get_at(key, snapshot_lsn_);
+            else return store_.get(key);
         }
 
         Result<void> commit() {
-            auto result = store_.commit_batch(mutations_);
+            auto result = store_.commit_batch(mutations_, observations_);
             if (!result) return result;
             mutations_.clear();
+            observations_.clear();
             return {};
         }
 
         void abort() noexcept {
             mutations_.clear();
+            observations_.clear();
         }
 
     private:
+        void observe_write(const key_type& key) {
+            for (const auto& observation : observations_) {
+                if (observation.key == key) return;
+            }
+            if constexpr (requires(const StoreType& store, const key_type& k, nitya::lsn_t at) {
+                { store.version_at(k, at) } -> std::same_as<nitya::lsn_t>;
+            }) observations_.push_back({key, store_.version_at(key, snapshot_lsn_)});
+        }
         StoreType& store_;
+        nitya::lsn_t snapshot_lsn_{};
         std::vector<Mutation> mutations_;
+        std::vector<Observation> observations_;
     };
 
     template <typename StoreType>
@@ -123,7 +146,10 @@ namespace petika {
         [[nodiscard]] nitya::lsn_t lsn() const noexcept { return snapshot_lsn_; }
 
         Result<value_type> get(const key_type& key) const {
-            return store_.get(key);
+            if constexpr (requires(const StoreType& store, const key_type& k, nitya::lsn_t at) {
+                { store.engine().get_at(k, at) } -> std::same_as<Result<value_type>>;
+            }) return store_.engine().get_at(key, snapshot_lsn_);
+            else return store_.get(key);
         }
 
     private:
@@ -215,6 +241,20 @@ namespace petika {
             return engine_.get(key);
         }
 
+        Result<value_type> get_at(const key_type& key, const nitya::lsn_t lsn) const {
+            if constexpr (requires(const Engine& engine, const key_type& k, nitya::lsn_t at) {
+                { engine.get_at(k, at) } -> std::same_as<Result<value_type>>;
+            }) return engine_.get_at(key, lsn);
+            else return engine_.get(key);
+        }
+
+        [[nodiscard]] nitya::lsn_t version_at(const key_type& key, const nitya::lsn_t lsn) const {
+            if constexpr (requires(const Engine& engine, const key_type& k, nitya::lsn_t at) {
+                { engine.version_at(k, at) } -> std::same_as<nitya::lsn_t>;
+            }) return engine_.version_at(key, lsn);
+            else return 0;
+        }
+
         Result<void> erase(const key_type& key) {
             std::unique_lock lock{commit_mutex_};
             std::string k_str = Serializer::serialize_key(key);
@@ -230,7 +270,10 @@ namespace petika {
                 }
             }
 
-            return engine_.erase(key, lsn);
+            if (auto erased = engine_.erase(key, lsn); !erased) return erased;
+            manifest_.last_lsn = lsn;
+            manifest_.record_count = engine_.size();
+            return {};
         }
 
         [[nodiscard]] bool contains(const key_type& key) const {
@@ -256,12 +299,23 @@ namespace petika {
                 (void)wal_->sync();
             }
 
-            return engine_.clear(lsn);
+            if (auto cleared = engine_.clear(lsn); !cleared) return cleared;
+            manifest_.last_lsn = lsn;
+            manifest_.record_count = engine_.size();
+            return {};
         }
 
         using mutation_type = typename Transaction<Petika>::Mutation;
-        Result<void> commit_batch(const std::vector<mutation_type>& mutations) {
+        using observation_type = typename Transaction<Petika>::Observation;
+        Result<void> commit_batch(const std::vector<mutation_type>& mutations,
+                                  const std::vector<observation_type>& observations = {}) {
             std::unique_lock lock{commit_mutex_};
+            if constexpr (requires(const Engine& engine, const std::vector<observation_type>& observed) {
+                { engine.validate_observations(observed) } -> std::same_as<bool>;
+            }) {
+                if (!engine_.validate_observations(observations))
+                    return std::unexpected(StorageError::TransactionAborted);
+            }
             std::vector<std::vector<std::byte>> records;
             records.reserve(mutations.size());
             for (const auto& m : mutations) {
@@ -296,12 +350,17 @@ namespace petika {
         // Transactions & Snapshots
         // ------------------------------------------------------------------------
         Transaction<Petika> transaction() {
-            return Transaction<Petika>{*this};
+            std::unique_lock lock{commit_mutex_};
+            return Transaction<Petika>{*this, manifest_.last_lsn};
         }
 
         Snapshot<Petika> snapshot() const {
+            std::unique_lock lock{commit_mutex_};
             std::uint64_t next_id = ++next_snapshot_id_;
-            return Snapshot<Petika>{next_id, wal_->tail_lsn(), *this};
+            // The WAL tail is an allocation cursor and may already point beyond
+            // the last published transaction.  Snapshots must capture an
+            // engine-visible commit boundary instead.
+            return Snapshot<Petika>{next_id, manifest_.last_lsn, *this};
         }
 
         // ------------------------------------------------------------------------
@@ -406,11 +465,25 @@ namespace petika {
     // Type Aliases for Standard Configurations
     // ============================================================================
     template <typename Key, typename Value, typename Comparator = LexicalComparator>
-    using SkipStore = Petika<JournaledSkipEngine<Key, Value, Comparator>,
+    using SkipStore = Petika<MvccJournaledSkipEngine<Key, Value, Comparator>,
                              BinarySerializer,
                              Comparator>;
 
-    using StringSkipStore = Petika<JournaledSkipEngine<std::string, std::string, LexicalComparator>,
+    using StringSkipStore = Petika<MvccJournaledSkipEngine<std::string, std::string, LexicalComparator>,
                                    StringSerializer,
                                    LexicalComparator>;
+
+    template <typename Key, typename Value, typename Comparator = LexicalComparator>
+    using SingleVersionSkipStore = Petika<JournaledSkipEngine<Key, Value, Comparator>,
+                                          BinarySerializer,
+                                          Comparator>;
+
+    using SingleVersionStringSkipStore = Petika<JournaledSkipEngine<std::string, std::string, LexicalComparator>,
+                                                 StringSerializer,
+                                                 LexicalComparator>;
+
+    template <typename Key, typename Value, typename Comparator = LexicalComparator>
+    using MvccSkipStore = Petika<MvccJournaledSkipEngine<Key, Value, Comparator>,
+                                 BinarySerializer,
+                                 Comparator>;
 } // namespace petika

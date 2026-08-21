@@ -227,6 +227,18 @@ TEST_CASE("Petika: failed batch has no partial in-memory publication", "[petika]
     CHECK_FALSE(db.get("new-key").has_value());
 }
 
+TEST_CASE("Petika: default MVCC transaction rejects a stale same-key write", "[petika][transaction][mvcc]") {
+    TmpPetikaDir tmp;
+    petika::StringSkipStore db{{.db_dir = tmp.path, .auto_recovery = false}};
+    REQUIRE(db.put("counter", "1").has_value());
+    auto stale = db.transaction();
+    REQUIRE(stale.get("counter") == "1");
+    REQUIRE(db.put("counter", "2").has_value());
+    REQUIRE(stale.put("counter", "3").has_value());
+    CHECK_FALSE(stale.commit().has_value());
+    CHECK(db.get("counter") == "2");
+}
+
 // ============================================================================
 // § 5  Snapshots
 // ============================================================================
@@ -249,6 +261,30 @@ TEST_CASE (
 
     REQUIRE(db.put("version", "v2.0").has_value());
     CHECK(*db.get("version") == "v2.0");
+}
+
+TEST_CASE("Petika: MvccJournaledSkipEngine retains a durable snapshot view", "[petika][mvcc][snapshot]") {
+    TmpPetikaDir tmp;
+    petika::MvccSkipStore<std::string, std::string> db{{.db_dir = tmp.path, .auto_recovery = false}};
+    REQUIRE(db.put("version", "v1").has_value());
+    auto stable = db.snapshot();
+    REQUIRE(db.put("version", "v2").has_value());
+    CHECK(stable.get("version") == "v1");
+    CHECK(db.get("version") == "v2");
+}
+
+TEST_CASE("Petika: MvccJournaledSkipEngine replays durable versions", "[petika][mvcc][recovery]") {
+    TmpPetikaDir tmp;
+    {
+        petika::MvccSkipStore<std::string, std::string> db{{.db_dir = tmp.path, .auto_recovery = false}};
+        REQUIRE(db.put("version", "v1").has_value());
+        REQUIRE(db.put("version", "v2").has_value());
+        REQUIRE(db.sync().has_value());
+    }
+    petika::MvccSkipStore<std::string, std::string> recovered{{.db_dir = tmp.path, .auto_recovery = true}};
+    CHECK(recovered.get("version") == "v2");
+    CHECK(recovered.recover().has_value());
+    CHECK(recovered.get("version") == "v2");
 }
 
 // ============================================================================
