@@ -932,9 +932,9 @@ namespace nitya {
                 std::this_thread::yield();
             }
 
-            // Ticket is now in the queue.  From this point we MUST NOT return until
-            // either (a) done==true (leader signalled us) or (b) we become the leader
-            // and drain the queue ourselves (which will pop our own ticket).
+            // The ticket is now queued. A later leader may drain it, but the
+            // caller may also complete as soon as the durable watermark covers
+            // its target; `completion` then remains owned by the queue.
 
             // Try to become leader immediately.
             {

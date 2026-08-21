@@ -1154,6 +1154,62 @@ TEST_CASE (
     CHECK(log.flushed_lsn() >= lsns.back());
 }
 
+TEST_CASE (
+"Nitya: Repeated concurrent group commit batches make durable progress"
+,
+"[nitya][group_commit][liveness]"
+)
+ {
+    TmpWalDir tmp;
+    nitya::wal_options opts{
+        .wal_dir = tmp.path,
+        .segment_size = 16 * 1024 * 1024
+    };
+
+    nitya::wal<> log{opts};
+    constexpr int kBatches = 32;
+    constexpr int kWaiters = 16;
+
+    for (int batch = 0; batch < kBatches; ++batch) {
+        std::vector<nitya::lsn_t> targets(kWaiters);
+        for (int i = 0; i < kWaiters; ++i) {
+            const auto payload = "GROUP_" + std::to_string(batch) + "_" + std::to_string(i);
+            auto res = log.append(as_byte_span(payload));
+            REQUIRE(res.has_value());
+            targets[i] = *res + nitya::k_frame_overhead + payload.size();
+        }
+
+        std::atomic<int> ready{0};
+        std::atomic<bool> start{false};
+        std::atomic<int> completed{0};
+        std::vector<std::thread> threads;
+        threads.reserve(kWaiters);
+
+        for (int i = 0; i < kWaiters; ++i) {
+            threads.emplace_back([&log, &targets, &ready, &start, &completed, i] {
+                ready.fetch_add(1, std::memory_order_release);
+                start.wait(false, std::memory_order_acquire);
+                if (log.wait_durable(targets[i])) {
+                    completed.fetch_add(1, std::memory_order_relaxed);
+                }
+            });
+        }
+
+        while (ready.load(std::memory_order_acquire) != kWaiters) {
+            std::this_thread::yield();
+        }
+        start.store(true, std::memory_order_release);
+        start.notify_all();
+
+        for (auto& thread : threads) {
+            thread.join();
+        }
+
+        CHECK(completed.load(std::memory_order_relaxed) == kWaiters);
+        CHECK(log.flushed_lsn() >= targets.back());
+    }
+}
+
 // ============================================================================
 // § 17 Background Flusher Watermark and Clean Shutdown Tests
 // ============================================================================
