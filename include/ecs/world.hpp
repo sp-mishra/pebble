@@ -75,6 +75,15 @@ public:
         return (idx >= 1 && idx <= slots_.size()) ? slots_[idx - 1].generation : 0;
     }
 
+    [[nodiscard]] Entity entity_from_index(std::uint32_t idx) const noexcept {
+        return Entity{idx, generation_of(idx)};
+    }
+
+    [[nodiscard]] bool alive_index(std::uint32_t idx) const noexcept {
+        if (idx == 0 || idx > slots_.size()) return false;
+        return slots_[idx - 1].alive;
+    }
+
     // ── Component Management (Zero-Hashing Flat Vector Lookup) ───────────────
 
     template <Component C>

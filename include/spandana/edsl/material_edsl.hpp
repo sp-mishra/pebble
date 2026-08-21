@@ -20,9 +20,15 @@ class SetMaterialAction : public IAnimationAction {
 public:
     SetMaterialAction(pebble::ecs::World& world, pebble::ecs::Entity entity,
                       gati::MaterialComponent mat, ResourceKey key)
-        : world_(world), entity_(entity), mat_(mat), key_(key) {}
+        : world_(world), entity_(entity), mat_(mat), key_(key) {
+        apply();
+    }
 
     void on_start() override {
+        apply();
+    }
+
+    void apply() {
         if (!world_.alive(entity_)) return;
         if (world_.has<gati::MaterialComponent>(entity_)) {
             *world_.get<gati::MaterialComponent>(entity_) = mat_;

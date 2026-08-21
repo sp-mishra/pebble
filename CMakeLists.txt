@@ -108,6 +108,8 @@ set(PEBBLE_DEP_FOLDERS
     z3        "z3"
     metal-cpp "metal-cpp"
     mlx       "mlx"
+    sokol     "sokol"
+    notcurses "notcurses"
 )
 
 set(MISSING_DEPS "")
@@ -180,6 +182,9 @@ include_directories(${CMAKE_SOURCE_DIR}/dependencies/glaze/include)
 include_directories(${CMAKE_SOURCE_DIR}/dependencies/liblmdb)
 include_directories(${CMAKE_SOURCE_DIR}/dependencies/z3/include)
 include_directories(${CMAKE_SOURCE_DIR}/dependencies/z3)
+include_directories(${CMAKE_SOURCE_DIR}/dependencies/sokol)
+include_directories(${CMAKE_SOURCE_DIR}/dependencies/notcurses/include)
+
 
 # Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -416,6 +421,17 @@ target_include_directories(pebble_dhvani INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_compile_features(pebble_dhvani INTERFACE cxx_std_23)
 
+add_library(pebble_kalpana INTERFACE)
+add_library(pebble::kalpana ALIAS pebble_kalpana)
+target_include_directories(pebble_kalpana INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/dependencies/sokol>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/dependencies/notcurses/include>)
+target_compile_features(pebble_kalpana INTERFACE cxx_std_23)
+target_link_libraries(pebble_kalpana INTERFACE pebble::akruti pebble::pravaha)
+
+
+
 
 
 
@@ -520,3 +536,28 @@ if (BUILD_TESTS)
     target_compile_definitions(pebble_tests PRIVATE
         TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endif ()
+
+# ---------------------------------------------------------------------------
+# Master Application Executable (src/app/main.cpp)
+# ---------------------------------------------------------------------------
+if (EXISTS "${CMAKE_SOURCE_DIR}/src/app/main.cpp")
+    add_executable(pebble_app src/app/main.cpp)
+    target_link_libraries(pebble_app PRIVATE
+        pebble::ecs
+        pebble::akruti
+        pebble::prakriti
+        pebble::pravaha
+        pebble::gati
+        pebble::spandana
+        pebble::kalpana
+        pebble::dhvani
+        spdlog::spdlog_header_only
+    )
+    if (HAS_METAL_CPP)
+        target_link_libraries(pebble_app PRIVATE
+            ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK} ${QUARTZCORE_FRAMEWORK})
+    endif()
+    target_compile_definitions(pebble_app PRIVATE
+        TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+endif()
+

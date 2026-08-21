@@ -120,6 +120,9 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 * **Dhvani** (`include/dhvani/`) — Lightweight Audio Cue & Spatial 2D Sound Engine.
    * 2D distance attenuation, equal-power stereo panning, listener orientation, zero-allocation SPSC `SoundBus`, and Spandana timeline synchronization.
    * Documentation: [`docs/dhvani/dhvani.md`](docs/dhvani/dhvani.md)
+* **Kalpana** (`include/kalpana/`) — 2D Vector Graphics, Realtime Painting & Kubelka–Munk Spectral Pigment Mixing.
+   * Linear-light RGBA, 16-band subtractive spectral pigment mixing, vector path command streams with Akruti geometry bridges, brushes with pressure dynamics, scene graph, and pluggable backends (headless capture, Sokol GFX GPU, Notcurses terminal).
+   * Documentation: [`docs/kalpana/kalpana.md`](docs/kalpana/kalpana.md)
 
 ---
 
@@ -256,6 +259,9 @@ CMake automatically detects missing dependencies during configuration and seamle
   - `-DBUILD_TESTS=ON/OFF`: Build unit test runner (`pebble_tests`). Default `ON` for top-level build.
   - `-DBUILD_Z3=ON/OFF`: Enable static optimized Z3 backend compilation for Tarka. Default `ON`.
   - `-DDEPS_VERBOSE=ON/OFF`: Show verbose dependency fetch output during CMake configuration.
+* **Executable Targets**:
+  - `pebble_tests`: Catch2 unit test suite runner.
+  - `pebble_app`: Master end-to-end simulation showcase executable (`src/app/main.cpp`).
 
 ---
 

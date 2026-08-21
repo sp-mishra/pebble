@@ -23,8 +23,8 @@ struct MaterialReactionSystem {
     // Process contact events and evaluate material reactions
     static void evaluate_reactions(pebble::ecs::World& world, const ContactEvent& ce,
                                    float thermal_conductivity_factor = 0.5f) {
-        const pebble::ecs::Entity ent_a(ce.a);
-        const pebble::ecs::Entity ent_b(ce.b);
+        const pebble::ecs::Entity ent_a = world.entity_from_index(ce.a);
+        const pebble::ecs::Entity ent_b = world.entity_from_index(ce.b);
 
         auto* mat_a = world.get<MaterialComponent>(ent_a);
         auto* mat_b = world.get<MaterialComponent>(ent_b);
@@ -33,14 +33,18 @@ struct MaterialReactionSystem {
 
         if (!mat_a && !mat_b) return;
 
-        const pebble::math::vec2 contact_pt = (tr_a && tr_b)
-            ? (tr_a->position + tr_b->position) * 0.5f
-            : (tr_a ? tr_a->position : pebble::math::vec2(0.0f, 0.0f));
+        const pebble::math::vec2 contact_pt = (ce.point[0] != 0.0f || ce.point[1] != 0.0f)
+            ? ce.point
+            : ((tr_a && tr_b)
+                ? (tr_a->position + tr_b->position) * 0.5f
+                : (tr_a ? tr_a->position : pebble::math::vec2(0.0f, 0.0f)));
 
         // 1. Kinetic Impact Stress & Shatter Evaluation
         const float impact_speed = std::abs(ce.depth) * 50.0f; // Approximate relative speed from contact depth
         if (mat_a && mat_a->phase_fractions.solid() > 0.5f) {
-            const float strain = impact_speed / (mat_a->params.youngs_modulus > 0 ? std::sqrt(mat_a->params.youngs_modulus) : 1e4f);
+            const float density = std::max(1.0f, mat_a->params.rest_density);
+            const float sound_speed = std::sqrt(std::max(1.0f, (mat_a->params.youngs_modulus > 0 ? mat_a->params.youngs_modulus : 1e7f) / density));
+            const float strain = impact_speed / sound_speed;
             if (strain > mat_a->params.ultimate_strain) {
                 // Brittle fracture!
                 pebble::spandana::DestructionEngine::shatter_entity_in_world(
@@ -48,7 +52,9 @@ struct MaterialReactionSystem {
             }
         }
         if (mat_b && world.alive(ent_b) && mat_b->phase_fractions.solid() > 0.5f) {
-            const float strain = impact_speed / (mat_b->params.youngs_modulus > 0 ? std::sqrt(mat_b->params.youngs_modulus) : 1e4f);
+            const float density = std::max(1.0f, mat_b->params.rest_density);
+            const float sound_speed = std::sqrt(std::max(1.0f, (mat_b->params.youngs_modulus > 0 ? mat_b->params.youngs_modulus : 1e7f) / density));
+            const float strain = impact_speed / sound_speed;
             if (strain > mat_b->params.ultimate_strain) {
                 pebble::spandana::DestructionEngine::shatter_entity_in_world(
                     world, ent_b, contact_pt, /*shards*/ 8, /*impulse*/ impact_speed * 10.0f);

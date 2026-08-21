@@ -100,8 +100,8 @@ public:
 
     // Process elemental reactions across contact events
     static void process_contact(pebble::ecs::World& world, const ContactEvent& ce) {
-        const pebble::ecs::Entity ent_a(ce.a);
-        const pebble::ecs::Entity ent_b(ce.b);
+        const pebble::ecs::Entity ent_a = world.entity_from_index(ce.a);
+        const pebble::ecs::Entity ent_b = world.entity_from_index(ce.b);
 
         auto* elem_a = world.get<ElementalComponent>(ent_a);
         auto* elem_b = world.get<ElementalComponent>(ent_b);

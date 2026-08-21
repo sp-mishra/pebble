@@ -57,7 +57,13 @@ private:
 };
 
 // Built-in gameplay & physics event payloads
-struct ContactEvent  { std::uint32_t a, b; Vec2 normal; Scalar depth; };
+struct ContactEvent {
+    std::uint32_t a = 0;
+    std::uint32_t b = 0;
+    Vec2 normal{0.0f, 0.0f};
+    Scalar depth = 0.0f;
+    Vec2 point{0.0f, 0.0f};
+};
 struct TriggerEvent  { std::uint32_t entity, trigger; bool entering; };
 struct FractureEvent { std::uint32_t entity; std::uint32_t shard_count; };
 

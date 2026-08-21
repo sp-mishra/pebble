@@ -40,11 +40,11 @@ TEST_CASE("Spandana & Gati: Brittle Glass Shatter on High-Velocity Collision", "
     world.add<gati::MaterialComponent>(steel_entity, gati::MaterialComponent::Steel());
 
     gati::ContactEvent ce{
-        .a = glass_entity,
-        .b = steel_entity,
+        .a = glass_entity.index,
+        .b = steel_entity.index,
         .normal = {1.0f, 0.0f},
-        .point = {0.5f, 0.0f},
-        .depth = 5.0f // High penetration / impact depth
+        .depth = 5.0f, // High penetration / impact depth
+        .point = {0.5f, 0.0f}
     };
 
     gati::MaterialReactionSystem::evaluate_reactions(world, ce);
@@ -67,11 +67,11 @@ TEST_CASE("Spandana & Gati: Molten Material Fusion / Welding on Contact", "[span
     world.add<gati::MaterialComponent>(lava_b, gati::MaterialComponent::Lava());
 
     gati::ContactEvent ce{
-        .a = lava_a,
-        .b = lava_b,
+        .a = lava_a.index,
+        .b = lava_b.index,
         .normal = {1.0f, 0.0f},
-        .point = {5.0f, 0.0f},
-        .depth = 1.0f
+        .depth = 1.0f,
+        .point = {5.0f, 0.0f}
     };
 
     gati::MaterialReactionSystem::evaluate_reactions(world, ce);

@@ -18,11 +18,11 @@ TEST_CASE("Gati Elemental: Water and Lava Contact Fuses to Obsidian with Steam",
     world.add<gati::ElementalComponent>(lava, {.type = gati::ElementType::Lava});
 
     gati::ContactEvent ce{
-        .a = water,
-        .b = lava,
+        .a = water.index,
+        .b = lava.index,
         .normal = {1.0f, 0.0f},
-        .point = {2.5f, 0.0f},
-        .depth = 1.0f
+        .depth = 1.0f,
+        .point = {2.5f, 0.0f}
     };
 
     gati::ElementalReactionMatrix::process_contact(world, ce);
