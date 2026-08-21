@@ -3,7 +3,8 @@
 // eval.hpp — L1 / L2 Evaluation and Engine Execution for Tensor EDSL
 // ============================================================================
 // C++23 / C++26, header-only, zero virtual dispatch execution engine.
-// Dispatches to CPU, Highway SIMD, and Apple Silicon MLX GPU backends.
+// Dispatches to CPU, Highway SIMD, Apple Silicon MLX GPU, and Pravaha Parallel
+// Fused Backends.
 // ============================================================================
 
 #ifndef PEBBLE_CONTAINERS_TENSOR_EDSL_EVAL_HPP
@@ -12,6 +13,7 @@
 #include "operators.hpp"
 #include <containers/tensor/tensor.hpp>
 #include <containers/tensor/highway_computation_policy.hpp>
+#include <pravaha/pravaha.hpp>
 #if __has_include(<mlx/mlx.h>)
 #include <containers/tensor/mlx_storage_policy.hpp>
 #include <containers/tensor/mlx_computation_policy.hpp>
@@ -22,6 +24,9 @@
 #include <any>
 #include <functional>
 #include <cmath>
+#include <thread>
+#include <algorithm>
+#include <span>
 
 namespace ts::edsl {
 
@@ -80,10 +85,184 @@ namespace ts::edsl {
     };
 
     // ========================================================================
-    // Runtime AST Evaluator
+    // Runtime AST Evaluator & Fused Kernel Subsystem
     // ========================================================================
     namespace detail {
 
+        inline bool is_elementwise_op(const op_kind k) noexcept {
+            switch (k) {
+                case op_kind::constant:
+                case op_kind::param_ref:
+                case op_kind::tensor_ref:
+                case op_kind::add:
+                case op_kind::sub:
+                case op_kind::mul:
+                case op_kind::div:
+                case op_kind::neg:
+                case op_kind::relu:
+                case op_kind::sigmoid:
+                case op_kind::gelu:
+                case op_kind::exp:
+                case op_kind::log:
+                case op_kind::sqrt:
+                case op_kind::abs:
+                case op_kind::fma:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        inline bool is_pure_elementwise_tree(const expr_ptr &node) noexcept {
+            if (!node) return true;
+            if (!is_elementwise_op(node->kind)) return false;
+            for (const auto &child : node->children) {
+                if (!is_pure_elementwise_tree(child)) return false;
+            }
+            return true;
+        }
+
+        inline TensorShape infer_elementwise_shape(const expr_ptr &node, const binding_context &ctx) {
+            if (!node) return TensorShape{1};
+            if (node->kind == op_kind::tensor_ref) {
+                auto it = ctx.tensors.find(node->name_payload);
+                if (it != ctx.tensors.end()) {
+                    return it->second.shape();
+                }
+            }
+            for (const auto &c : node->children) {
+                auto s = infer_elementwise_shape(c, ctx);
+                if (calculate_size_dyn(s) > 1) {
+                    return s;
+                }
+            }
+            return TensorShape{1};
+        }
+
+        // Fused scalar evaluation at element index `i` without heap allocations
+        inline float evaluate_scalar_at(const expr_ptr &node, const binding_context &ctx, const std::size_t i) {
+            if (!node) return 0.0f;
+
+            switch (node->kind) {
+                case op_kind::constant:
+                    return node->scalar_payload;
+
+                case op_kind::param_ref: {
+                    auto it = ctx.scalars.find(node->name_payload);
+                    if (it != ctx.scalars.end()) return it->second;
+                    auto tit = ctx.tensors.find(node->name_payload);
+                    if (tit != ctx.tensors.end()) {
+                        const auto &t = tit->second;
+                        return (t.size() == 1) ? t.data()[0] : t.data()[i % t.size()];
+                    }
+                    throw std::runtime_error("Unbound parameter: " + node->name_payload);
+                }
+
+                case op_kind::tensor_ref: {
+                    auto it = ctx.tensors.find(node->name_payload);
+                    if (it != ctx.tensors.end()) {
+                        const auto &t = it->second;
+                        return (t.size() == 1) ? t.data()[0] : t.data()[i % t.size()];
+                    }
+                    auto sit = ctx.scalars.find(node->name_payload);
+                    if (sit != ctx.scalars.end()) return sit->second;
+                    throw std::runtime_error("Unbound tensor: " + node->name_payload);
+                }
+
+                case op_kind::add:
+                    return evaluate_scalar_at(node->children[0], ctx, i) +
+                           evaluate_scalar_at(node->children[1], ctx, i);
+
+                case op_kind::sub:
+                    return evaluate_scalar_at(node->children[0], ctx, i) -
+                           evaluate_scalar_at(node->children[1], ctx, i);
+
+                case op_kind::mul:
+                    return evaluate_scalar_at(node->children[0], ctx, i) *
+                           evaluate_scalar_at(node->children[1], ctx, i);
+
+                case op_kind::div:
+                    return evaluate_scalar_at(node->children[0], ctx, i) /
+                           evaluate_scalar_at(node->children[1], ctx, i);
+
+                case op_kind::neg:
+                    return -evaluate_scalar_at(node->children[0], ctx, i);
+
+                case op_kind::relu:
+                    return std::max(0.0f, evaluate_scalar_at(node->children[0], ctx, i));
+
+                case op_kind::sigmoid: {
+                    const float val = evaluate_scalar_at(node->children[0], ctx, i);
+                    return 1.0f / (1.0f + std::exp(-val));
+                }
+
+                case op_kind::gelu: {
+                    const float x = evaluate_scalar_at(node->children[0], ctx, i);
+                    return 0.5f * x * (1.0f + std::tanh(std::sqrt(2.0f / M_PI) * (x + 0.044715f * x * x * x)));
+                }
+
+                case op_kind::exp:
+                    return std::exp(evaluate_scalar_at(node->children[0], ctx, i));
+
+                case op_kind::log:
+                    return std::log(evaluate_scalar_at(node->children[0], ctx, i));
+
+                case op_kind::sqrt:
+                    return std::sqrt(evaluate_scalar_at(node->children[0], ctx, i));
+
+                case op_kind::abs:
+                    return std::abs(evaluate_scalar_at(node->children[0], ctx, i));
+
+                case op_kind::fma: {
+                    const float a = evaluate_scalar_at(node->children[0], ctx, i);
+                    const float b = evaluate_scalar_at(node->children[1], ctx, i);
+                    const float c = evaluate_scalar_at(node->children[2], ctx, i);
+                    return (a * b) + c;
+                }
+
+                default:
+                    throw std::runtime_error("Unsupported op in fused elementwise evaluation");
+            }
+        }
+
+        // Parallel Fused Elementwise Execution via Pravaha
+        inline ts::tensor<float> evaluate_fused_parallel(const expr_ptr &root, const binding_context &ctx) {
+            const TensorShape out_shape = infer_elementwise_shape(root, ctx);
+            const std::size_t total_size = calculate_size_dyn(out_shape);
+
+            ts::tensor<float> result(out_shape);
+            float* out_ptr = result.data();
+
+            if (total_size == 0) return result;
+
+            if (total_size < 2048) {
+                // Small buffer fast-path
+                for (std::size_t i = 0; i < total_size; ++i) {
+                    out_ptr[i] = evaluate_scalar_at(root, ctx, i);
+                }
+                return result;
+            }
+
+            // Pravaha Multi-Core Chunked Fused Execution
+            ::pravaha::Runner<::pravaha::JThreadBackend> runner;
+            const unsigned int hw_threads = std::max(1u, std::thread::hardware_concurrency());
+            const std::size_t chunk_sz = std::max<std::size_t>(512, (total_size + hw_threads - 1) / hw_threads);
+            const auto chunks = ::pravaha::StaticChunkingPolicy::chunks(total_size, chunk_sz);
+
+            for (const auto &ch : chunks) {
+                auto task_fn = [&root, &ctx, out_ptr, begin = ch.begin, end = ch.end]() {
+                    for (std::size_t i = begin; i < end; ++i) {
+                        out_ptr[i] = evaluate_scalar_at(root, ctx, i);
+                    }
+                };
+                (void)runner.submit(::pravaha::task("edsl_fused_elementwise_chunk", std::move(task_fn)));
+            }
+            runner.backend_ref().drain();
+
+            return result;
+        }
+
+        // Standard Recursive Node Evaluator
         inline ts::tensor<float> evaluate_node(const expr_ptr &node, const binding_context &ctx) {
             if (!node) {
                 return ts::tensor<float>({1}, {0.0f});
@@ -277,14 +456,19 @@ namespace ts::edsl {
         template<typename... Bindings>
         ts::tensor<float> operator()(Bindings&&... binds) const {
             binding_context ctx(std::forward<Bindings>(binds)...);
+
+            if (backend == target_backend::parallel_pravaha) {
+                // If the entire graph is elementwise, execute single-pass fused kernel
+                if (detail::is_pure_elementwise_tree(root_expr.node)) {
+                    return detail::evaluate_fused_parallel(root_expr.node, ctx);
+                }
+                // Otherwise evaluate standard AST
+                return detail::evaluate_node(root_expr.node, ctx);
+            }
+
             auto cpu_res = detail::evaluate_node(root_expr.node, ctx);
 
             if (backend == target_backend::simd_highway) {
-                // Optimized through Highway SIMD
-                return cpu_res;
-            }
-            if (backend == target_backend::parallel_pravaha) {
-                // Parallel multi-core execution through Pravaha
                 return cpu_res;
             }
 #if __has_include(<mlx/mlx.h>)

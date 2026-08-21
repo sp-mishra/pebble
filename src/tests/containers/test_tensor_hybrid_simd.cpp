@@ -33,8 +33,8 @@ TEST_CASE("Hybrid SIMD + Pravaha: Basic Arithmetic Operations", "[tensor][hybrid
         std::vector<float> data_a(N, 3.5f);
         std::vector<float> data_b(N, 1.5f);
 
-        hybrid_tensor<float> A({N}, data_a);
-        hybrid_tensor<float> B({N}, data_b);
+        hybrid_tensor<float> A({N}, data_a.begin(), data_a.end());
+        hybrid_tensor<float> B({N}, data_b.begin(), data_b.end());
 
         auto C = A + B;
         REQUIRE(C.size() == N);
@@ -69,7 +69,7 @@ TEST_CASE("Hybrid SIMD + Pravaha: Unary Operations & Reductions", "[tensor][hybr
         constexpr std::size_t N = 32768;
         std::vector<float> data(N, 2.0f);
 
-        hybrid_tensor<float> T({N}, data);
+        hybrid_tensor<float> T({N}, data.begin(), data.end());
 
         float total = ts::sum(T);
         REQUIRE(total == Catch::Approx(static_cast<float>(N * 2)));
@@ -92,8 +92,8 @@ TEST_CASE("Hybrid SIMD + Pravaha: Blocked Parallel Matrix Multiplication", "[ten
     std::vector<float> a_data(M * K, 1.5f);
     std::vector<float> b_data(K * N, 2.0f);
 
-    hybrid_tensor<float> A({M, K}, a_data);
-    hybrid_tensor<float> B({K, N}, b_data);
+    hybrid_tensor<float> A({M, K}, a_data.begin(), a_data.end());
+    hybrid_tensor<float> B({K, N}, b_data.begin(), b_data.end());
 
     auto C = ts::dot(A, B);
 

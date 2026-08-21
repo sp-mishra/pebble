@@ -1070,6 +1070,76 @@ namespace nitya {
             return recovery_stream{*this, start_lsn, mode};
         }
 
+        // Multi-segment parallel recovery using Pravaha task runners
+        template <typename PravahaRunnerT, typename RecordCallback>
+        recovery_status recover_async(
+            PravahaRunnerT& runner,
+            RecordCallback&& on_record,
+            lsn_t start_lsn = 0,
+            recovery_mode mode = recovery_mode::stop_at_first_error
+        ) {
+            auto segments = list_segments();
+            recovery_status total_status{};
+
+            if (segments.empty()) {
+                return total_status;
+            }
+
+            // Filter segments starting at or after start_lsn
+            std::vector<segment_descriptor> target_segs;
+            for (const auto& seg : segments) {
+                if (seg.end_lsn > start_lsn) {
+                    target_segs.push_back(seg);
+                }
+            }
+
+            if (target_segs.empty()) {
+                return total_status;
+            }
+
+            // Parallel verification per segment
+            std::vector<std::vector<wal_record>> segment_records(target_segs.size());
+            std::vector<recovery_status> segment_statuses(target_segs.size());
+
+            for (std::size_t i = 0; i < target_segs.size(); ++i) {
+                const auto& seg = target_segs[i];
+                auto* recs = &segment_records[i];
+                auto* stat = &segment_statuses[i];
+
+                lsn_t seg_start = std::max(start_lsn, seg.begin_lsn + k_segment_header_size);
+
+                auto task_fn = [this, seg_start, seg, mode, recs, stat]() {
+                    lsn_t cur = seg_start;
+                    while (cur < seg.end_lsn) {
+                        auto rec = read_record_at(cur, stat, mode);
+                        if (!rec) break;
+                        recs->push_back(std::move(*rec));
+                    }
+                };
+                (void)runner.submit(::pravaha::task("nitya_recover_seg", std::move(task_fn)));
+            }
+            runner.backend_ref().drain();
+
+            // Assemble ordered records and update total status
+            for (std::size_t i = 0; i < target_segs.size(); ++i) {
+                for (auto& r : segment_records[i]) {
+                    on_record(r);
+                    total_status.records_recovered++;
+                    total_status.bytes_recovered += (k_frame_overhead + r.payload.size());
+                    total_status.last_valid_lsn = r.lsn;
+                }
+                if (segment_statuses[i].error != LogError::Success && segment_statuses[i].error != LogError::EndOfLog) {
+                    total_status.error = segment_statuses[i].error;
+                    total_status.first_bad_lsn = segment_statuses[i].first_bad_lsn;
+                    if (mode == recovery_mode::strict || mode == recovery_mode::stop_at_first_error) {
+                        break;
+                    }
+                }
+            }
+
+            return total_status;
+        }
+
         // ------------------------------------------------------------------------
         // 6. Replication Stream Subscription
         // ------------------------------------------------------------------------

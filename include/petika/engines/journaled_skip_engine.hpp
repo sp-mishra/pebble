@@ -108,6 +108,25 @@ namespace petika {
             return {};
         }
 
+        template <class Range>
+        Result<void> apply_batch(const Range& mutations, nitya::lsn_t lsn) {
+            std::unique_lock lk{mutex_};
+            // Copy-on-write publication makes a failed batch invisible.  The
+            // swap is the single in-memory publication point for this engine.
+            IndexType next{list_};
+            for (const auto& mutation : mutations) {
+                if (mutation.op == EntryOp::Put) {
+                    next.insert_or_assign(mutation.key, NodePayload{.value = mutation.value, .lsn = lsn});
+                } else if (mutation.op == EntryOp::Delete) {
+                    if (!next.erase(mutation.key)) return std::unexpected(StorageError::NotFound);
+                } else {
+                    return std::unexpected(StorageError::InvalidArg);
+                }
+            }
+            list_ = std::move(next);
+            return {};
+        }
+
         // ------------------------------------------------------------------------
         // Range Scan: [start_key, end_key)
         // ------------------------------------------------------------------------
@@ -142,6 +161,8 @@ namespace petika {
                 return erase(key, lsn);
             case EntryOp::Clear:
                 return clear(lsn);
+            case EntryOp::Batch:
+                return std::unexpected(StorageError::NotSupported);
             }
             return {};
         }

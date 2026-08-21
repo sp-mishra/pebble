@@ -148,6 +148,12 @@ namespace petika {
         using engine_type = Engine;
         using serializer_type = Serializer;
         using comparator_type = Comparator;
+        // Owning scan value for adapters that retain work beyond the engine lock.
+        struct entry_type {
+            key_type key;
+            value_type value;
+            nitya::lsn_t lsn{};
+        };
 
         explicit Petika(PetikaOptions opts = PetikaOptions{})
             : opts_{std::move(opts)}, engine_{}, manifest_{} {
@@ -265,11 +271,10 @@ namespace petika {
             auto envelope = WalPayloadCodec::encode_batch(records);
             auto lsn = wal_->append(std::span{envelope.data(), envelope.size()});
             if (!lsn || (opts_.sync_on_write && !wal_->sync())) return std::unexpected(StorageError::WalError);
-            for (const auto& mutation : mutations) {
-                Result<void> result = mutation.op == EntryOp::Put ? engine_.put(mutation.key, mutation.value, *lsn)
-                    : engine_.erase(mutation.key, *lsn);
-                if (!result) return result;
-            }
+            static_assert(requires(Engine& e, const std::vector<mutation_type>& b, nitya::lsn_t at) {
+                { e.apply_batch(b, at) } -> std::same_as<Result<void>>;
+            }, "transactional Petika engines must implement atomic apply_batch");
+            if (auto result = engine_.apply_batch(mutations, *lsn); !result) return result;
             manifest_.last_lsn = *lsn; manifest_.record_count = engine_.size();
             return {};
         }
@@ -317,14 +322,17 @@ namespace petika {
                 if (op == EntryOp::Batch) {
                     auto batch = WalPayloadCodec::decode_batch(rec.payload);
                     if (!batch) return std::unexpected(StorageError::CorruptedRecord);
+                    std::vector<mutation_type> mutations;
+                    mutations.reserve(batch->size());
                     for (const auto& frame : *batch) {
                         auto item = WalPayloadCodec::decode(frame); if (!item) return std::unexpected(StorageError::CorruptedRecord);
                         auto [item_op, item_key, item_value] = *item;
                         key_type k = Serializer::deserialize_key(item_key); value_type v{};
                         if (item_op == EntryOp::Put) v = Serializer::deserialize_value(item_value);
-                        auto applied = engine_.apply_log_record(item_op, k, v, rec.lsn);
-                        if (!applied && !(item_op == EntryOp::Delete && applied.error() == StorageError::NotFound)) return std::unexpected(applied.error());
+                        if (item_op != EntryOp::Put && item_op != EntryOp::Delete) return std::unexpected(StorageError::CorruptedRecord);
+                        mutations.push_back({item_op, std::move(k), std::move(v)});
                     }
+                    if (auto applied = engine_.apply_batch(mutations, rec.lsn); !applied) return std::unexpected(applied.error());
                     ++replayed; manifest_.last_lsn = rec.lsn; continue;
                 }
                 key_type key{};

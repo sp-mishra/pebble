@@ -217,6 +217,16 @@ TEST_CASE (
     CHECK(*db.get("account:2") == "250");
 }
 
+TEST_CASE("Petika: failed batch has no partial in-memory publication", "[petika][transaction][atomic]") {
+    TmpPetikaDir tmp;
+    petika::StringSkipStore db{{.db_dir = tmp.path, .auto_recovery = false}};
+    auto tx = db.transaction();
+    REQUIRE(tx.put("new-key", "new-value").has_value());
+    REQUIRE(tx.erase("missing-key").has_value());
+    REQUIRE_FALSE(tx.commit().has_value());
+    CHECK_FALSE(db.get("new-key").has_value());
+}
+
 // ============================================================================
 // § 5  Snapshots
 // ============================================================================
