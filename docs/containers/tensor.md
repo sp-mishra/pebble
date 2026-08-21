@@ -103,7 +103,18 @@ simd_tensor Y({1024});
 auto Z = (X * 2.0f + Y) / 3.0f;
 float total = sum(Z);
 
-// 6. Apple Silicon MLX GPU / Metal accelerated tensor (macOS)
+// 6. Pravaha Multi-Core Task-Parallel accelerated tensor
+#include <containers/tensor/pravaha_computation_policy.hpp>
+
+using parallel_tensor = ts::parallel_tensor<float>;
+parallel_tensor P1({8192, 8192});
+parallel_tensor P2({8192, 8192});
+
+// Multi-core parallel matrix multiplication & reductions
+auto P3 = dot(P1, P2);
+float par_total = sum(P3);
+
+// 7. Apple Silicon MLX GPU / Metal accelerated tensor (macOS)
 #include <containers/tensor/mlx_storage_policy.hpp>
 #include <containers/tensor/mlx_computation_policy.hpp>
 

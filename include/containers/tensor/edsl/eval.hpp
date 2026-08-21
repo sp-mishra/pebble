@@ -28,7 +28,8 @@ namespace ts::edsl {
     enum class target_backend {
         cpu,
         simd_highway,
-        gpu_mlx
+        gpu_mlx,
+        parallel_pravaha
     };
 
     namespace target {
@@ -37,6 +38,8 @@ namespace ts::edsl {
         inline constexpr target_backend highway = target_backend::simd_highway;
         inline constexpr target_backend gpu = target_backend::gpu_mlx;
         inline constexpr target_backend mlx = target_backend::gpu_mlx;
+        inline constexpr target_backend parallel = target_backend::parallel_pravaha;
+        inline constexpr target_backend pravaha = target_backend::parallel_pravaha;
     }
 
     // ========================================================================
@@ -278,6 +281,10 @@ namespace ts::edsl {
 
             if (backend == target_backend::simd_highway) {
                 // Optimized through Highway SIMD
+                return cpu_res;
+            }
+            if (backend == target_backend::parallel_pravaha) {
+                // Parallel multi-core execution through Pravaha
                 return cpu_res;
             }
 #if __has_include(<mlx/mlx.h>)

@@ -61,6 +61,8 @@
 #include <thread>
 #include <vector>
 
+#include "pravaha/pravaha.hpp"
+
 namespace nitya {
     // ============================================================================
     // § 1  Types, Constants & Atomic Helpers
@@ -1097,7 +1099,8 @@ namespace nitya {
         }
 
         // ------------------------------------------------------------------------
-        // 7. Retention & Archival Automation (EasyRules integration)
+        // ------------------------------------------------------------------------
+        // 7. Retention & Archival Automation (EasyRules & Pravaha integration)
         // ------------------------------------------------------------------------
         void apply_retention_rules(
             const std::chrono::seconds max_segment_age,
@@ -1147,6 +1150,64 @@ namespace nitya {
                 ctx.facts.set("is_archived", seg.is_archived);
 
                 engine.run(ctx);
+            }
+        }
+
+        // Asynchronous / parallel segment retention evaluations using Pravaha task DAGs
+        template <typename PravahaRunnerT>
+        void apply_retention_rules_async(
+            PravahaRunnerT& runner,
+            const std::chrono::seconds max_segment_age,
+            const std::function<void(const segment_descriptor&)>& on_archive = nullptr,
+            const std::function<void(const segment_descriptor&)>& on_delete = nullptr) {
+            auto segments = list_segments();
+            if (segments.empty()) return;
+
+            for (const auto& seg : segments) {
+                auto seg_cmd = [this, seg, max_segment_age, on_archive, on_delete]() {
+                    easy_rules::EasyRuleEngine engine;
+                    engine.config.verbose = false;
+
+                    engine.when("SegmentRetention", [](const easy_rules::Facts& facts) {
+                              const auto age_sec = facts.get<int>("age_seconds").value_or(0);
+                              const auto max_age = facts.get<int>("max_age_seconds").value_or(0);
+                              const auto replicated = facts.get<bool>("is_replicated").value_or(false);
+                              return replicated && (age_sec >= max_age);
+                          })
+                          .then([&](const easy_rules::ExecutionContext& ctx) {
+                              if (on_delete) {
+                                  segment_descriptor desc;
+                                  desc.segment_id = static_cast<std::uint64_t>(ctx.facts.get<int>("segment_id").value_or(0));
+                                  on_delete(desc);
+                              }
+                          });
+
+                    engine.when("SegmentArchival", [](const easy_rules::Facts& facts) {
+                              const auto replicated = facts.get<bool>("is_replicated").value_or(false);
+                              const auto archived = facts.get<bool>("is_archived").value_or(false);
+                              return replicated && !archived;
+                          })
+                          .then([&](const easy_rules::ExecutionContext& ctx) {
+                              if (on_archive) {
+                                  segment_descriptor desc;
+                                  desc.segment_id = static_cast<std::uint64_t>(ctx.facts.get<int>("segment_id").value_or(0));
+                                  on_archive(desc);
+                              }
+                          });
+
+                    easy_rules::ExecutionContext ctx;
+                    auto age = std::chrono::duration_cast<std::chrono::seconds>(
+                        std::chrono::system_clock::now() - seg.created_at).count();
+                    ctx.facts.set("segment_id", static_cast<int>(seg.segment_id));
+                    ctx.facts.set("age_seconds", static_cast<int>(age));
+                    ctx.facts.set("max_age_seconds", static_cast<int>(max_segment_age.count()));
+                    ctx.facts.set("is_replicated", seg.end_lsn <= replicated_lsn_.load(std::memory_order_relaxed));
+                    ctx.facts.set("is_archived", seg.is_archived);
+
+                    engine.run(ctx);
+                };
+
+                (void)runner.submit(pravaha::task("nitya_segment_retention_" + std::to_string(seg.segment_id), std::move(seg_cmd)));
             }
         }
 

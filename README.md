@@ -101,6 +101,9 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
   * Documentation: [`docs/observability/nadi.md`](docs/observability/nadi.md), [`docs/observability/turbo_twig_telemetry.md`](docs/observability/turbo_twig_telemetry.md)
 * **EasyRules** (`include/rules/easy_rules.hpp`) — Declarative C++23 business and policy rule engine, facts registry, and execution pipeline.
   * Documentation: [`docs/rules/easy_rules.md`](docs/rules/easy_rules.md)
+* **Medha** (`include/medha/medha.hpp`) — Header-only optimistic and serializable transactions over user-defined resources, with opt-in Smriti, Tarka/Vākya, Pravaha, and metadata-only Lithe adapters.
+  * CMake targets: `pebble::medha`, `pebble::medha_smriti`, `pebble::medha_tarka`, `pebble::medha_pravaha`, and `pebble::medha_lithe_metadata`.
+  * Documentation: [`docs/medha/medha.md`](docs/medha/medha.md)
 
 ---
 
@@ -146,6 +149,7 @@ Tests in `src/tests/` are organized into modular, dedicated subdirectories mappi
 src/tests/
 ├── containers/        # Graph (LiteGraph, DominatorTree, egraph), Tree, Cache (Kosha), Associative, Dynamic
 ├── mem/               # Memory allocators (Smriti arenas, pools, buddy)
+├── medha/             # Transactional memory core and opt-in adapters
 ├── meta/              # Metaprogramming, reflection, Akshara parsing, ExactRational
 ├── nitya/             # Nitya Durable Log Engine, segments, framing, replication
 ├── petika/            # Petika storage platform, engines, transactions

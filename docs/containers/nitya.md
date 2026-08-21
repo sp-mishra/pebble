@@ -183,3 +183,24 @@ for (const auto& record : recovery) {
 auto st = recovery.status();
 std::cout << "Recovered " << st.records_recovered << " records, " << st.bytes_recovered << " bytes.\n";
 ```
+
+### 3. Pravaha Asynchronous Maintenance & Retention
+
+```cpp
+#include "pravaha/pravaha.hpp"
+
+pravaha::Runner<pravaha::JThreadBackend> runner;
+
+// Evaluate segment retention & archival policies in parallel task graphs
+log.apply_retention_rules_async(
+    runner,
+    std::chrono::seconds(86400),
+    [](const nitya::segment_descriptor& seg) {
+        std::cout << "Archiving segment " << seg.segment_id << "\n";
+    },
+    [](const nitya::segment_descriptor& seg) {
+        std::cout << "Deleting expired segment " << seg.segment_id << "\n";
+    }
+);
+runner.backend_ref().drain();
+```

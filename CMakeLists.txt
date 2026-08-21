@@ -372,6 +372,31 @@ if (HAS_METAL_CPP)
         ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK} ${QUARTZCORE_FRAMEWORK})
 endif()
 
+# Medha is a header-only transactional-memory component.  Its core keeps
+# dependencies limited to Pebble containers; integrations remain opt-in.
+add_library(pebble_medha INTERFACE)
+add_library(pebble::medha ALIAS pebble_medha)
+target_include_directories(pebble_medha INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_compile_features(pebble_medha INTERFACE cxx_std_23)
+
+add_library(pebble_medha_smriti INTERFACE)
+add_library(pebble::medha_smriti ALIAS pebble_medha_smriti)
+target_link_libraries(pebble_medha_smriti INTERFACE pebble::medha)
+
+add_library(pebble_medha_tarka INTERFACE)
+add_library(pebble::medha_tarka ALIAS pebble_medha_tarka)
+target_link_libraries(pebble_medha_tarka INTERFACE pebble::medha)
+
+add_library(pebble_medha_pravaha INTERFACE)
+add_library(pebble::medha_pravaha ALIAS pebble_medha_pravaha)
+target_link_libraries(pebble_medha_pravaha INTERFACE pebble::medha pebble::pravaha)
+
+# Current Lithe lowering is metadata-only; it has no Pebble Lithe dependency.
+add_library(pebble_medha_lithe_metadata INTERFACE)
+add_library(pebble::medha_lithe_metadata ALIAS pebble_medha_lithe_metadata)
+target_link_libraries(pebble_medha_lithe_metadata INTERFACE pebble::medha)
+
 link_directories(/usr/local/lib)
 link_directories(${HOME_LIB_DIR})
 
@@ -425,6 +450,8 @@ if (BUILD_TESTS)
     add_executable(pebble_tests ${TEST_SOURCE})
     target_link_libraries(pebble_tests PRIVATE
             Catch2
+            pebble::medha
+            pebble::medha_pravaha
             pebble::pravaha
             spdlog::spdlog_header_only
             crc32c
