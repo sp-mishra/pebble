@@ -109,16 +109,36 @@ against the target `Sort`.
 ### Backends
 
 - **`native_backend`** (`tarka/backends/native_backend.hpp`, zero external dependencies, header-only):
-  Native SMT solver built entirely on Pebble internal data structures and algorithms.
-  - CDCL propositional core with 2-watched literals, 1UIP conflict analysis, VSIDS branching, and Luby restarts.
-  - QF_UF (Congruence Closure over uninterpreted functions and equalities).
-  - QF_BV (Bit-blasting of all arithmetic, bitwise, shifts, predicates, extract/concat with model recovery).
-  - QF_LRA / QF_LIA (Simplex Tableau over exact rationals + Difference Logic negative cycle detection).
-  - QF_AX (Arrays with read-over-write axioms and extensionality).
-  - Nelson-Oppen multi-theory combination and full model extraction.
+  Production-grade native DPLL(T) SMT solver built entirely from first principles on Pebble internal algorithms:
+  - **Propositional Core (`cdcl_solver.hpp`)**:
+    - **2-Watched Literal Scheme**: Zero-scan Boolean constraint propagation ($O(1)$ backtrack time).
+    - **1UIP Conflict Analysis & Non-Chronological Backtracking**: Computes first Unique Implication Points to construct optimal asserting conflict clauses.
+    - **VSIDS (Variable State Independent Decaying Sum)**: Exponentially decayed variable activity heuristics for branch ordering.
+    - **Luby Sequence Restarts & Phase Saving**: Escapes search dead-ends with optimal restart cadence and polar phase persistence.
+  - **Theory of Uninterpreted Functions (`theory_uf.hpp` / `egraph.hpp`)**:
+    - Congruence closure using Pebble's union-find engine and structural hash-consing.
+    - Incremental merge, explain-trail, and deducing equalities across nested functions ($f(x) = f(y)$ if $x = y$).
+  - **Theory of Fixed-Size Bit-Vectors (`theory_bv.hpp`)**:
+    - Complete Tseitin bit-blaster into native CNF propositions:
+      - Full-adder chains for bitwise additions (`BvAdd`, `BvSub`).
+      - Booth/Wallace-tree style bitwise multiplication (`BvMul`), unsigned/signed division/modulo (`BvUDiv`, `BvURem`).
+      - Bitwise logic (`BvAnd`, `BvOr`, `BvXor`, `BvNot`, `BvShl`, `BvLShr`, `BvAShr`).
+      - Sub-vector extraction (`BvExtract`), concatenation (`BvConcat`), sign/zero extensions.
+      - Structural word-level equalities and order comparisons (`BvUlt`, `BvSlt`, `BvUle`, `BvSle`).
+  - **Linear Real & Integer Arithmetic (`theory_lra.hpp`, `theory_dl.hpp`)**:
+    - **Incremental Simplex Tableau**: Slack-variable augmented matrix with exact rational representation (`ExactRational`).
+    - **Bland's Anti-Cycling Rule**: Guaranteed termination on degenerate pivots.
+    - **Difference Logic (`theory_dl.hpp`)**: Bellman-Ford / Floyd-Warshall negative cycle detection on constraint graphs for $x - y \le k$ fast-path solving.
+  - **Theory of Arrays (`theory_array.hpp`)**:
+    - Extensional Array Theory ($QF\_AX$): Enforces McCarthy's read-over-write axioms ($Select(Store(A, i, v), i) = v$ and $i \ne j \implies Select(Store(A, i, v), j) = Select(A, j)$) with weak extensionality lemmas.
+  - **Nelson-Oppen Multi-Theory Combination (`theory_combination.hpp`)**:
+    - Cooperating DPLL(T) architecture: stably infinite theory arrangement, convex and non-convex interface equality propagation, and back-propagated conflict lemmas.
+  - **Simplification & Model Validation**:
+    - Pre-solve algebraic AST simplification (`simplifier.hpp`).
+    - Independent SAT/SMT model formatting and certificate verification (`model_validator.hpp`).
 - **`z3_backend`** (primary external, `#if defined(HAS_Z3) && __has_include(<z3++.h>)`): owns `z3::context`+`z3::solver`; lowers
   `Term`→`z3::expr` via post-order walk cached in `ShardedCache<uint64_t, Z3_ast>` (shared-DAG subterms lower once).
-  Cancellation via `z3::context::interrupt()` wired to the `stop_token`.
+  Cancellation via `z3::context::interrupt()` wired to the `stop_token`. Used for differential testing and external oracle verification.
 - **`no_solver_backend`** (zero-cost default, always available): every op returns `deferred`/`Unknown`, mirroring
   `vakya::types::no_smt_backend`. `RouterEngine<>` defaults to it, so Tarka builds and its non-solver tests pass even
   with `BUILD_Z3=OFF`.

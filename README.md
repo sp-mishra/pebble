@@ -112,8 +112,12 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 
 ## 6. Utilities & Algorithms
 
-* **Tarka** (`include/tarka/`) — Zero-overhead multi-solver SMT substrate and native DPLL(T) solver (CDCL, EUF congruence closure, QF_BV bit-blasting, Simplex LRA/LIA, QF_AX arrays, and Z3 bridge).
+* **Tarka** (`include/tarka/`) — Zero-overhead multi-solver SMT substrate and native DPLL(T) solver.
+  * **Theories Supported**: CDCL Propositional SAT, EUF congruence closure (uninterpreted functions), QF_BV bit-blasting (arithmetic/bitwise), Simplex LRA/LIA linear arithmetic, QF_AX arrays with extensionality, and Nelson-Oppen multi-theory combination.
+  * **Dual Engine Architecture**: Features high-performance **Native C++23 DPLL(T)** engine alongside an **Optimized Static Z3 Bridge** (`tarka::backend::z3_backend`) for differential validation and complete fallback solving.
+  * **Frontend & Formatter**: SMT-LIB2 parser, AST serializer (`smt2_printer.hpp`), and independent certificate/model validator (`model_validator.hpp`).
   * Documentation: [`docs/tarka/tarka.md`](docs/tarka/tarka.md)
+  * Comprehensive Zero-to-Hero Tutorial: [`docs/tutorials/tarka.md`](docs/tutorials/tarka.md)
 * **SingleFlight** (`include/utils/single_flight.hpp`) — Duplicate function execution suppressor / coalescer for concurrent workloads.
 * **Profiler & Logging** (`include/utils/profiler.hpp`, `include/utils/log.hpp`) — Structured, low-latency logging and micro-benchmarking profilers.
   * Documentation: [`docs/utils/profiler.md`](docs/utils/profiler.md), [`docs/utils/log.md`](docs/utils/log.md)
@@ -135,7 +139,7 @@ src/tests/
 ├── nitya/             # Nitya Durable Log Engine, segments, framing, replication
 ├── petika/            # Petika storage platform, engines, transactions
 ├── rules/             # EasyRules business rules, facts, pipeline
-├── tarka/             # Tarka SMT solver, theories, CDCL, backends (Native, Z3)
+├── tarka/             # Tarka SMT solver, theories, CDCL, backends (Native, Z3 differential tests)
 ├── observability/     # NADI tracing, pulse scopes, telemetry
 ├── utils/             # Setu mmap, SingleFlight, Profiler, Log, UltraCRC
 └── test_harness/      # Example registry and test fixtures
@@ -158,8 +162,88 @@ Every test file uses the **Catch2 v3** framework and adheres to a uniform struct
 
 ---
 
+## 📦 Dependencies & Bootstrap Script
+
+Pebble is predominantly header-only with zero mandatory runtime dependencies. Optional acceleration and external integrations are managed cleanly via an automated dependency fetcher script:
+
+### Dependency Matrix
+
+| Dependency | Required By | Optional? | Purpose |
+|:---|:---|:---:|:---|
+| **Catch2 v3** | `pebble_tests` | Yes (Test-only) | Unit test framework and test runner. |
+| **Z3 SMT Solver** | `tarka` | Yes | Static, optimized SMT solver engine backend for differential testing and complete theory fallback. |
+| **Google Highway** | `LiteGraph`, `SymbolTable`, `NAryTree` | Yes | Portable SIMD intrinsics for vector-accelerated graph/tree sweeps and batch string interning. |
+| **crc32c** | `nitya`, `petika`, `UltraCRC` | Yes | Hardware-accelerated (SSE4.2/ARMv8) CRC32C checksums for WAL framing and block validation. |
+| **spdlog** | `pebble` / `pebble_tests` | Yes | High-performance asynchronous and structured logging. |
+| **liblmdb** | `kosha` | Yes | Embedded transactional key-value backing store adapter. |
+| **glaze** | `meta` / `tarka` | Yes | Zero-allocation compile-time JSON/binary serialization. |
+
+### Using `scripts/fetch_deps.sh`
+
+Pebble provides [`scripts/fetch_deps.sh`](scripts/fetch_deps.sh) to bootstrap all third-party dependencies from verified release archives without requiring system-level package manager modifications:
+
+```bash
+# Download all missing dependencies automatically
+./scripts/fetch_deps.sh
+
+# Download specific dependency groups
+./scripts/fetch_deps.sh --group pebble   # all Pebble dependencies
+./scripts/fetch_deps.sh --group smt      # Z3 and Catch2 for SMT development
+./scripts/fetch_deps.sh --group core     # core systems dependencies
+
+# Download individual libraries
+./scripts/fetch_deps.sh z3 highway
+
+# Force re-download / refresh existing archives
+./scripts/fetch_deps.sh --force z3
+
+# Clean up dependencies directory
+./scripts/fetch_deps.sh --clean
+```
+
+CMake automatically detects missing dependencies during configuration and seamlessly invokes `scripts/fetch_deps.sh`.
+
+---
+
 ## 🛠️ Build & Requirements
 
 * **Compiler**: Modern C++23 compliant compiler (Clang 16+, GCC 13+, Apple Clang 15+).
 * **Build System**: CMake 3.25+ (`CMakeLists.txt`) — builds all test files recursively (`GLOB_RECURSE`).
-* **Dependencies**: Google Highway (optional for SIMD acceleration), Catch2 v3 (for unit tests), Z3 SMT solver (static library).
+* **Configuration Options**:
+  - `-DBUILD_TESTS=ON/OFF`: Build unit test runner (`pebble_tests`). Default `ON` for top-level build.
+  - `-DBUILD_Z3=ON/OFF`: Enable static optimized Z3 backend compilation for Tarka. Default `ON`.
+  - `-DDEPS_VERBOSE=ON/OFF`: Show verbose dependency fetch output during CMake configuration.
+
+---
+
+## 🤝 Contribution Guidelines
+
+We welcome high-quality contributions, bug fixes, and algorithmic optimizations! Please ensure all contributions adhere to Pebble's architectural standards:
+
+1. **Zero-Overhead Principle**: No virtual functions, no dynamic memory allocations on hot paths, and no unnecessary runtime overhead.
+2. **Modern C++ Standard**: All code must conform to C++23 / C++26 standard idioms and compile cleanly without warnings on macOS (Apple Clang) and Linux (GCC/Clang).
+3. **Header-Only Design**: Core subsystems must remain lightweight, header-only, and modular.
+4. **Test Coverage**: Every new feature, data structure, or algorithm must include comprehensive unit tests under `src/tests/<subsystem>/` adhering to Catch2 tagging guidelines.
+5. **No Circular Dependencies**: Subsystems must maintain a strict top-down dependency hierarchy (`mem/` $\to$ `containers/`, `tarka/`, `petika/`).
+
+---
+
+## 🤖 AI Usage Guidelines & Human Oversight
+
+Artificial Intelligence (AI) coding tools and LLM pair programmers may be used in the development and enhancement of Pebble, subject to the following mandatory guidelines:
+
+- **Mandatory Human Review**: All AI-generated or AI-assisted code, documentation, and tests must undergo thorough human review for architectural compliance, correctness, zero-overhead guarantees, and safety before being integrated.
+- **Verification & Testing**: AI-generated contributions must compile without warnings and pass all unit tests, differential validation suites, and static analyzers.
+- **Design Alignment**: AI tools must strictly adhere to Pebble's zero-virtual, header-only, and memory-policy architecture. Blind boilerplate generation is prohibited.
+
+---
+
+## ⚖️ License & Legal Disclaimer
+
+### License
+Pebble is distributed under the terms of the project's open-source license. See `LICENSE` for full details.
+
+### Disclaimer
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHORS, CONTRIBUTORS, OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+THIRD-PARTY LIBRARIES (SUCH AS Z3, HIGHWAY, CATCH2, CRC32C, SPDLOG, GLAZE, AND LMDB) ARE THE PROPERTY OF THEIR RESPECTIVE OWNERS AND ARE SUBJECT TO THEIR OWN LICENSING TERMS. USERS AND CONTRIBUTORS ARE RESPONSIBLE FOR ENSURING COMPLIANCE WITH ALL APPLICABLE THIRD-PARTY LICENSES.
