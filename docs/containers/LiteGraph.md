@@ -6,11 +6,12 @@
 > **Headers:**
 > - `include/containers/graph/LiteGraph.hpp` — Core graph data structure
 > - `include/containers/graph/LiteGraphAlgorithms.hpp` — Algorithm library (BFS, DFS, Dijkstra, etc.)
-> - `include/containers/graph/LiteGraphHighway.hpp` — SIMD-accelerated operations (optional)
+> - `include/containers/graph/LiteGraphHighway.hpp` — SIMD-accelerated operations (optional add-on)
+> - `include/containers/graph/LiteGraphPravaha.hpp` — Multi-core parallel graph algorithms (optional add-on)
 >
-> **Namespace:** `litegraph`  
+> **Namespace:** `litegraph` (and `litegraph::pravaha` for parallel add-ons)  
 > **Standard required:** C++23 (`-std=c++2b`)  
-> **Dependencies:** Standard library only (core); optional external Google Highway (SIMD)
+> **Dependencies:** Standard library only (core); optional external Google Highway (SIMD) or Pravaha (Task-Parallel)
 
 ---
 
@@ -1275,6 +1276,36 @@ int main() {
 
 ---
 
+## 10. Multi-Core Task Parallelism (Pravaha Add-on)
+
+When including `LiteGraphPravaha.hpp`, callers can execute heavy graph workloads across multi-core CPUs via `pravaha::Runner` / `JThreadBackend`:
+
+```cpp
+#include <containers/graph/LiteGraph.hpp>
+#include <containers/graph/LiteGraphPravaha.hpp>
+
+litegraph::Graph<std::string, double, litegraph::Directed> g;
+// ... populate graph ...
+
+// 1. Parallel Level-Synchronous BFS
+litegraph::pravaha::parallel_bfs(g, start_node, [](litegraph::NodeId u, const std::string& data) {
+    // Thread-safe visitor execution across frontier chunks
+});
+
+// 2. Parallel CSR PageRank
+auto csr = litegraph::freeze_to_csr(g);
+auto pr_res = litegraph::pravaha::parallel_pagerank(csr, {.damping_factor = 0.85});
+
+// 3. Parallel Multi-Source Dijkstra
+std::vector<litegraph::NodeId> sources = {n0, n1, n2, n3};
+auto all_paths = litegraph::pravaha::parallel_multi_source_dijkstra(g, sources);
+
+// 4. Parallel Betweenness Centrality (Parallel Brandes Algorithm)
+auto centrality = litegraph::pravaha::parallel_betweenness_centrality(g);
+```
+
+---
+
 ## Appendix: Quick Reference
 
 | Feature                    | Function                        | Signature                                                                         |
@@ -1301,6 +1332,10 @@ int main() {
 | **SCC**                    | `strongly_connected_components` | `std::vector<std::vector<NodeId>> strongly_connected_components(const GraphT &g)` |
 | **Cycle detect**           | `has_cycle`                     | `bool has_cycle(const GraphT &g)`                                                 |
 | **PageRank**               | `pagerank`                      | `CsrPageRankResult pagerank(const CsrGraph<...> &g, options)`                     |
+| **Parallel PageRank**      | `pravaha::parallel_pagerank`    | `CsrPageRankResult parallel_pagerank(const CsrGraph<...> &g, options)`            |
+| **Parallel BFS**           | `pravaha::parallel_bfs`         | `void parallel_bfs(const GraphT &g, NodeId start, Fn &&visit)`                    |
+| **Parallel Multi Dijkstra**| `pravaha::parallel_multi_source_dijkstra` | `vector<pair<vector<double>, vector<opt<NodeId>>>> (g, sources)`      |
+| **Parallel Betweenness**   | `pravaha::parallel_betweenness_centrality`| `vector<double> parallel_betweenness_centrality(const GraphT &g)`       |
 | **VF2**                    | `vf2_subgraph_isomorphism`      | `auto vf2_subgraph_isomorphism(pattern, target, node_comp, edge_comp)`            |
 | **Max flow**               | `edmonds_karp_max_flow`         | `double edmonds_karp_max_flow(g, source, sink, capacity_fn)`                      |
 | **Graph coloring**         | `greedy_graph_coloring`         | `std::vector<std::optional<int>> greedy_graph_coloring(const GraphT &g)`          |
