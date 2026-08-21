@@ -8,4 +8,6 @@
 #include "physics_edsl.hpp"
 #include "effect_edsl.hpp"
 #include "particle_edsl.hpp"
+#include "destruction_edsl.hpp"
+#include "material_edsl.hpp"
 

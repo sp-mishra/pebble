@@ -21,6 +21,9 @@
 #include "collision.hpp"
 #include "joint.hpp"
 #include "reactive_cues.hpp"
+#include "material.hpp"
+#include "material_reaction.hpp"
+#include "elemental.hpp"
 
 namespace gati {
 

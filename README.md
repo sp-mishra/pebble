@@ -114,7 +114,7 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
    * Directly uses `pebble::math` linear algebra primitives and `pravaha` parallel execution.
    * Documentation: [`docs/gati/gati.md`](docs/gati/gati.md)
 * **Spandana** (`include/spandana/`) — Plug & Play Contract-Based 2D Animation, Easing, Springs, IK, and Node-Graph World EDSL.
-   * Concept-driven architecture (`EasingFunction`, `SpringSolver`, `IKSolver2D`, `Tweenable`), 30+ Robert Penner easings, closed-form exact harmonic spring damper, Two-Bone analytical IK, sprite flipbooks, camera trauma shakes, and automatic dependency/parallelism inference node graph.
+   * Concept-driven architecture (`EasingFunction`, `SpringSolver`, `IKSolver2D`, `Tweenable`), 30+ Robert Penner easings, closed-form exact harmonic spring damper, Two-Bone analytical IK, 2D skeletal bone hierarchy & Linear Blend Skinning (`Skeleton2D`), sprite flipbooks, camera trauma shakes, procedural Voronoi destruction (`DestructionEngine`), parametric 2D directional blend spaces (`BlendSpace2D`), continuous material thermodynamics & phase changes, chemical reaction matrix (`ElementalReactionMatrix`), Glaze JSON serialization, and automatic dependency/parallelism inference node graph.
    * Features a unified declarative World EDSL combining motion, Akruti CSG shape morphs, and Prakriti physics impulses.
    * Documentation: [`docs/spandana/spandana.md`](docs/spandana/spandana.md)
 * **Dhvani** (`include/dhvani/`) — Lightweight Audio Cue & Spatial 2D Sound Engine.
