@@ -117,6 +117,9 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
    * Concept-driven architecture (`EasingFunction`, `SpringSolver`, `IKSolver2D`, `Tweenable`), 30+ Robert Penner easings, closed-form exact harmonic spring damper, Two-Bone analytical IK, sprite flipbooks, camera trauma shakes, and automatic dependency/parallelism inference node graph.
    * Features a unified declarative World EDSL combining motion, Akruti CSG shape morphs, and Prakriti physics impulses.
    * Documentation: [`docs/spandana/spandana.md`](docs/spandana/spandana.md)
+* **Dhvani** (`include/dhvani/`) — Lightweight Audio Cue & Spatial 2D Sound Engine.
+   * 2D distance attenuation, equal-power stereo panning, listener orientation, zero-allocation SPSC `SoundBus`, and Spandana timeline synchronization.
+   * Documentation: [`docs/dhvani/dhvani.md`](docs/dhvani/dhvani.md)
 
 ---
 

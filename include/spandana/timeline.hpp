@@ -45,7 +45,14 @@ public:
     // Add an action with automatic resource dependency inference
     template <typename ActionT>
     Timeline& add(ActionT&& act) {
-        auto action_ptr = std::make_shared<std::decay_t<ActionT>>(std::forward<ActionT>(act));
+        std::shared_ptr<IAnimationAction> action_ptr;
+        if constexpr (std::is_base_of_v<IAnimationAction, std::decay_t<ActionT>>) {
+            action_ptr = std::make_shared<std::decay_t<ActionT>>(std::forward<ActionT>(act));
+        } else {
+            // Converts from builder (e.g. AudioCueBuilder)
+            action_ptr = std::make_shared<decltype(act.build())>(act.build());
+        }
+
         const ResourceKey key = action_ptr->resource_key();
         const float dur = action_ptr->duration();
 
