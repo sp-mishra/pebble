@@ -124,6 +124,26 @@ Concrete named algorithms in the implementation, with the header they live in.
 
 ## Performance
 
+### Lightweight compiler and frontend profiles
+
+Samasa now exposes `grammar_metadata<G>` as the single reusable compile-time
+analysis product: validation, FIRST sets, FOLLOW sets, rule count, and validity
+are materialized once per grammar specialization. Frontends and tooling should
+consume it instead of independently instantiating analysis queries.
+
+For consumers that lower directly into another IR, `parse_events<G>(source,
+sink, ...)` performs scan + parse and forwards the event log without building a
+green or red tree. This is the recommended path for batch compiler frontends
+that do not retain a CST.
+
+`token_buffer` uses Pebble's `containers::dynamic::SmallVector` for inline token
+and trivia storage. `dense_memo<MaxRules, MaxTokens>` is available when grammar
+and input bounds are known; it replaces allocating hash-map entries with a flat
+fixed-capacity table and falls back to a cache miss on capacity overflow.
+
+`fast_profile` and `traced_profile` name the common policy selections. The
+default remains the lightweight `fast_profile` configuration.
+
 Samasa is tuned on both the run-time hot path (per-token scanning + parsing) and compile-time
 include cost. All optimizations are behavior-preserving — the conformance suite passes unchanged.
 

@@ -8,7 +8,7 @@
 
 #include <cstdint>
 #include <span>
-#include <vector>
+#include "containers/dynamic/SmallVector.hpp"
 #include "token.hpp"
 
 namespace lang::samasa {
@@ -34,11 +34,15 @@ namespace lang::samasa {
         }
     };
 
-    // Owning vector — scanner produces this; then a token_stream view is taken.
+    // Owning scanner buffer. Typical source files keep both token and trivia
+    // storage inline; callers that need a different allocator can use the
+    // storage template directly.
     template <class TokenKind>
     struct token_buffer {
-        std::vector<token<TokenKind>> data;
-        std::vector<trivia>           trivia_arena;
+        using token_storage  = containers::dynamic::SmallVector<token<TokenKind>, 512>;
+        using trivia_storage = containers::dynamic::SmallVector<trivia, 256>;
+        token_storage  data;
+        trivia_storage trivia_arena;
 
         [[nodiscard]] token_stream<TokenKind> view() const noexcept {
             return {std::span<const token<TokenKind>>(data)};

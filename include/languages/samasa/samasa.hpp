@@ -52,6 +52,7 @@
 #include "grammar/validation.hpp"
 #include "grammar/expected_sets.hpp"
 #include "grammar/fingerprint.hpp"
+#include "grammar/metadata.hpp"
 
 // Tree
 #include "tree/event_stream.hpp"
@@ -73,6 +74,7 @@
 #include "policies/error_policy.hpp"
 #include "policies/execution_policy.hpp"
 #include "policies/trace_policy.hpp"
+#include "policies/profile.hpp"
 
 // Tooling (pay-for-use — include separately if not needed at compile time)
 // #include "tooling/describe.hpp"
@@ -84,6 +86,26 @@
 // ---- parse<G> entry point ---------------------------------------------------
 
 namespace lang::samasa {
+
+    // Parse without materializing a green/red tree.  This is the low-allocation
+    // route for frontends that lower parse events directly into their own IR.
+    template <class Grammar, class Sink, class KWTable = keyword_table<>,
+              class OpTrie = operator_trie<>,
+              class LinePol = no_line_sensitivity<typename Grammar::token_kind>>
+    [[nodiscard]] bool parse_events(std::string_view source, Sink&& sink,
+                                    const default_parse_options& opts = {},
+                                    const scan_token_kinds<typename Grammar::token_kind>& kinds = {},
+                                    const LinePol& lp = {}) {
+        using SK = typename Grammar::syntax_kind; using TK = typename Grammar::token_kind;
+        lang::collecting_sink<diagnostic> diagnostics; auto tokens = scan<KWTable, OpTrie, LinePol, TK>(source,kinds,lp,diagnostics);
+        lang::parse_tree_stats stats; event_stream<SK> events;
+        parse_context<SK,TK> ctx(tokens.view(),source,events,diagnostics,stats,opts.budget);
+        const auto root = events.begin(SK{}); auto result = typename Grammar::root_rule{}.match(ctx);
+        if (!result.ok()) { events.rollback(root); return false; }
+        events.end(root,{0,static_cast<std::uint32_t>(source.size())});
+        for (const auto& event : events.all()) sink(event);
+        return !diagnostics.has_errors();
+    }
 
     // parse<G>(source, opts) — scan + parse source text into a parse_output.
     template <class Grammar,

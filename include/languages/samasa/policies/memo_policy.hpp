@@ -22,6 +22,7 @@
 // Memo lookup/store are no-ops for no_memo — zero overhead at call site.
 
 #include <cstdint>
+#include <array>
 #include <string_view>
 #include <unordered_map>
 #include "../core/result.hpp"
@@ -123,6 +124,31 @@ namespace lang::samasa {
 
     private:
         std::unordered_map<memo_key, memo_value, memo_key_hash> table_;
+    };
+
+    // Fixed-capacity memo table for known grammar/input bounds.  It eliminates
+    // hash nodes and allocations; rule hashes are assigned a compact row lazily
+    // on first use.  Overflow degrades to a cache miss, never changes parsing.
+    template <std::size_t MaxRules, std::size_t MaxTokens>
+    class dense_memo {
+    public:
+        static constexpr bool enabled = true;
+        [[nodiscard]] bool lookup(memo_key k, memo_value& out) const noexcept {
+            const auto row = find(k.rule_hash); if (row == MaxRules || k.token_pos >= MaxTokens) return false;
+            const auto& v = table_[row * MaxTokens + k.token_pos]; if (!v.valid) return false; out = v; return true;
+        }
+        void store(memo_key k, memo_value v) noexcept {
+            if (k.token_pos >= MaxTokens) return; auto row = find(k.rule_hash);
+            if (row == MaxRules) { if (rule_count_ == MaxRules) return; row = rule_count_++; rules_[row] = k.rule_hash; }
+            table_[row * MaxTokens + k.token_pos] = v;
+        }
+        constexpr void reserve(std::size_t) noexcept {}
+        constexpr void clear() noexcept { table_ = {}; rules_ = {}; rule_count_ = 0; }
+    private:
+        [[nodiscard]] std::size_t find(std::uint64_t h) const noexcept { for(std::size_t i=0;i<rule_count_;++i) if(rules_[i]==h)return i; return MaxRules; }
+        std::array<memo_value, MaxRules * MaxTokens> table_{};
+        std::array<std::uint64_t, MaxRules> rules_{};
+        std::size_t rule_count_ = 0;
     };
 
     // ---- memoized<Rule> ----------------------------------------------------
