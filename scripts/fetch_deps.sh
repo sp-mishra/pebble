@@ -14,15 +14,17 @@
 #   -f, --force           Re-download even if the folder already exists
 #   -q, --quiet           Suppress verbose output (verbose is ON by default)
 #   -l, --list            List all known libraries and groups, then exit
+#   -c, --clean           Remove all downloaded dependencies and temp files
 #   -h, --help            Show this help message and exit
 #
 # Examples:
 #   ./scripts/fetch_deps.sh                     # download all missing deps
 #   ./scripts/fetch_deps.sh --group pebble      # download the pebble group
-#   ./scripts/fetch_deps.sh glaze spdlog        # download specific libs
-#   ./scripts/fetch_deps.sh --force Catch2      # force re-download
+#   ./scripts/fetch_deps.sh z3 spdlog           # download specific libs
+#   ./scripts/fetch_deps.sh --force z3          # force re-download
 #   ./scripts/fetch_deps.sh --quiet             # suppress verbose output
 #   ./scripts/fetch_deps.sh -d /tmp/deps        # custom output directory
+#   ./scripts/fetch_deps.sh --clean             # clean up dependencies dir
 # =============================================================================
 
 set -euo pipefail
@@ -55,7 +57,7 @@ log_step()    { [[ $VERBOSE -eq 1 ]] && printf "${MAGENTA}[STEP]${RESET}    %s\n
 # ---------------------------------------------------------------------------
 # Library registry — parallel arrays (bash 3.2 compatible)
 # ---------------------------------------------------------------------------
-LIB_KEYS=(    "Catch2"       "crc32c"    "glaze"    "liblmdb"    "highway"    "spdlog"    )
+LIB_KEYS=(    "Catch2"       "crc32c"    "glaze"    "liblmdb"    "highway"    "spdlog"    "z3"    )
 LIB_URLS=(
     "https://github.com/sp-mishra/dependencies/releases/download/v0.1/Catch2-3.9.0.zip"
     "https://github.com/sp-mishra/dependencies/releases/download/v0.1/crc32c.zip"
@@ -63,14 +65,17 @@ LIB_URLS=(
     "https://github.com/sp-mishra/dependencies/releases/download/v0.1/liblmdb.zip"
     "https://github.com/sp-mishra/dependencies/releases/download/v0.1/highway.zip"
     "https://github.com/sp-mishra/dependencies/releases/download/v0.1/spdlog.zip"
+    "https://github.com/sp-mishra/dependencies/releases/download/v0.1/z3.zip"
 )
-LIB_FOLDERS=( "Catch2-3.9.0" "crc32c"    "glaze"    "liblmdb"    "highway"    "spdlog"    )
+LIB_FOLDERS=( "Catch2-3.9.0" "crc32c"    "glaze"    "liblmdb"    "highway"    "spdlog"    "z3"    )
 
 # ---------------------------------------------------------------------------
 # Groups
 # ---------------------------------------------------------------------------
-GROUP_PEBBLE="Catch2 crc32c glaze liblmdb highway spdlog"
-GROUP_ALL="Catch2 crc32c glaze liblmdb highway spdlog"
+GROUP_PEBBLE="Catch2 crc32c glaze liblmdb highway spdlog z3"
+GROUP_CORE="Catch2 crc32c glaze liblmdb highway spdlog"
+GROUP_SMT="z3 Catch2"
+GROUP_ALL="Catch2 crc32c glaze liblmdb highway spdlog z3"
 
 # ---------------------------------------------------------------------------
 # Lookup helpers
@@ -86,6 +91,8 @@ find_lib_index() {
 resolve_group() {
     case "$1" in
         pebble) echo "$GROUP_PEBBLE" ;;
+        core)   echo "$GROUP_CORE"   ;;
+        smt)    echo "$GROUP_SMT"    ;;
         all)    echo "$GROUP_ALL"    ;;
         *)      return 1 ;;
     esac
@@ -112,7 +119,7 @@ GROUP_NAME=""
 SPECIFIC_LIBS=()
 
 # ---------------------------------------------------------------------------
-# Usage / list
+# Usage / list / clean
 # ---------------------------------------------------------------------------
 usage() {
     sed -n '/^# Usage:/,/^# ===/p' "$0" | sed 's/^# \?//'
@@ -127,7 +134,21 @@ list_libs() {
     done
     log_section "Known Groups"
     printf "  ${BOLD}%-20s${RESET} %s\n" "pebble" "$GROUP_PEBBLE"
+    printf "  ${BOLD}%-20s${RESET} %s\n" "core"   "$GROUP_CORE"
+    printf "  ${BOLD}%-20s${RESET} %s\n" "smt"    "$GROUP_SMT"
     printf "  ${BOLD}%-20s${RESET} %s\n" "all"    "$GROUP_ALL"
+    exit 0
+}
+
+clean_deps() {
+    log_section "Cleaning Dependencies"
+    if [[ -d "$DEPS_DIR" ]]; then
+        log_warn "Removing all contents in ${DEPS_DIR} …"
+        rm -rf "${DEPS_DIR:?}"/* "${DEPS_DIR}"/.[!.]* "${DEPS_DIR}"/..?* 2>/dev/null || true
+        log_ok "Dependencies directory cleaned."
+    else
+        log_info "Dependencies directory does not exist: ${DEPS_DIR}"
+    fi
     exit 0
 }
 
@@ -145,6 +166,7 @@ while [[ $# -gt 0 ]]; do
         -f|--force)   FORCE=1;    shift ;;
         -q|--quiet)   VERBOSE=0;  shift ;;
         -l|--list)    list_libs ;;
+        -c|--clean)   clean_deps ;;
         -h|--help)    usage ;;
         -*)
             log_error "Unknown option: $1  (use --help for usage)"; exit 1 ;;
@@ -216,7 +238,7 @@ cleanup_stale() {
         fi
     done
     # Also remove any stray *.zip files left over from crashed downloads
-    for stale in "${DEPS_DIR}"/*.zip; do
+    for stale in "${DEPS_DIR}"/*.zip "${DEPS_DIR}"/.dl_*; do
         if [[ -f "$stale" ]]; then
             log_warn "Removing stale zip: ${stale}"
             rm -f "$stale"
@@ -269,7 +291,6 @@ fetch_library() {
 
     local zip_name zip_path tmp_dir
     zip_name="$(basename "$url")"
-    # Use a unique tmp name for the zip to avoid conflicts with any directory of the same base name
     zip_path="${DEPS_DIR}/.dl_${name}_$$.zip"
     tmp_dir="${DEPS_DIR}/.tmp_${name}_$$"
 
@@ -352,11 +373,13 @@ fetch_library() {
     log_step "Installing ${name} …"
 
     # Always remove target first — unconditionally, no [[ -d ]] guard.
-    # This avoids mv nesting inside an existing non-empty directory.
     rm -rf "$target_dir"
 
-    if [[ ${#real_dirs[@]} -eq 1 ]]; then
+    if [[ ${#real_dirs[@]} -eq 1 && "$(basename "${real_dirs[0]}")" != "$folder" ]]; then
         # Single wrapper dir: rename it to target_dir
+        mv "${real_dirs[0]}" "$target_dir"
+        rm -rf "$tmp_dir"
+    elif [[ ${#real_dirs[@]} -eq 1 && "$(basename "${real_dirs[0]}")" == "$folder" ]]; then
         mv "${real_dirs[0]}" "$target_dir"
         rm -rf "$tmp_dir"
     else

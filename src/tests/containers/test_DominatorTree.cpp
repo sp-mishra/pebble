@@ -653,15 +653,7 @@ namespace {
     }
 } // namespace
 
-TEST_CASE (
-
-
-
-"[dominates] Self-dominance is always true"
-,
-"[DominatorTree][query]"
-)
- {
+TEST_CASE("dominates: Self-dominance is always true", "[DominatorTree][query][dominates]") {
     auto r = make_diamond_with_tail();
     for (size_t n : {size_t{0},size_t{1},size_t{2},size_t{3},size_t{4}}) {
         INFO("node=" << n);
@@ -669,15 +661,7 @@ TEST_CASE (
     }
 }
 
-TEST_CASE (
-
-
-
-"[dominates] Entry dominates all reachable nodes"
-,
-"[DominatorTree][query]"
-)
- {
+TEST_CASE("dominates: Entry dominates all reachable nodes", "[DominatorTree][query][dominates]") {
     auto r = make_diamond_with_tail();
     for (size_t n : {size_t{1},size_t{2},size_t{3},size_t{4}}) {
         INFO("node=" << n);
@@ -685,15 +669,7 @@ TEST_CASE (
     }
 }
 
-TEST_CASE (
-
-
-
-"[dominates] Non-dominator returns false"
-,
-"[DominatorTree][query]"
-)
- {
+TEST_CASE("dominates: Non-dominator returns false", "[DominatorTree][query][dominates]") {
     auto r = make_diamond_with_tail();
     // 1 and 2 are siblings; neither dominates the other
     REQUIRE_FALSE(dominates(r, size_t{1}, size_t{2}));
@@ -702,15 +678,7 @@ TEST_CASE (
     REQUIRE_FALSE(dominates(r, size_t{4}, size_t{3}));
 }
 
-TEST_CASE (
-
-
-
-"[dominates] Transitive dominance through chain"
-,
-"[DominatorTree][query]"
-)
- {
+TEST_CASE("dominates: Transitive dominance through chain", "[DominatorTree][query][dominates]") {
     // 0 -> 1 -> 2 -> 3: 0 dominates 3 transitively
     auto r = compute_dominators(make_view(0, {0,1,2,3}, {{0,1},{1,2},{2,3}}));
     REQUIRE(dominates(r, size_t{0}, size_t{3}));
@@ -719,29 +687,13 @@ TEST_CASE (
     REQUIRE_FALSE(dominates(r, size_t{3}, size_t{0}));
 }
 
-TEST_CASE (
-
-
-
-"[dominates] Missing node returns false"
-,
-"[DominatorTree][query]"
-)
- {
+TEST_CASE("dominates: Missing node returns false", "[DominatorTree][query][dominates]") {
     auto r = make_diamond_with_tail();
     REQUIRE_FALSE(dominates(r, size_t{99}, size_t{0}));
     REQUIRE_FALSE(dominates(r, size_t{0}, size_t{99}));
 }
 
-TEST_CASE (
-
-
-
-"[immediate_dominator_of] Correct idoms"
-,
-"[DominatorTree][query]"
-)
- {
+TEST_CASE("immediate_dominator_of: Correct idoms", "[DominatorTree][query][idom]") {
     auto r = make_diamond_with_tail();
     // entry has no dominator above it
     REQUIRE_FALSE(immediate_dominator_of(r, size_t{0}).has_value());
@@ -751,28 +703,12 @@ TEST_CASE (
     REQUIRE(immediate_dominator_of(r, size_t{4}) == size_t{3});
 }
 
-TEST_CASE (
-
-
-
-"[immediate_dominator_of] Missing node returns nullopt"
-,
-"[DominatorTree][query]"
-)
- {
+TEST_CASE("immediate_dominator_of: Missing node returns nullopt", "[DominatorTree][query][idom]") {
     auto r = make_diamond_with_tail();
     REQUIRE_FALSE(immediate_dominator_of(r, size_t{99}).has_value());
 }
 
-TEST_CASE (
-
-
-
-"[dominated_children_of] Direct children only"
-,
-"[DominatorTree][query]"
-)
- {
+TEST_CASE("dominated_children_of: Direct children only", "[DominatorTree][query][children]") {
     auto r = make_diamond_with_tail();
     // 0 directly dominates 1, 2, 3 (not 4)
     auto const& c0 = dominated_children_of(r, size_t{0});
@@ -789,28 +725,12 @@ TEST_CASE (
     REQUIRE(dominated_children_of(r, size_t{4}).empty());
 }
 
-TEST_CASE (
-
-
-
-"[dominated_children_of] Missing node returns empty set"
-,
-"[DominatorTree][query]"
-)
- {
+TEST_CASE("dominated_children_of: Missing node returns empty set", "[DominatorTree][query][children]") {
     auto r = make_diamond_with_tail();
     REQUIRE(dominated_children_of(r, size_t{99}).empty());
 }
 
-TEST_CASE (
-
-
-
-"[dominated_nodes] Full transitive subtree"
-,
-"[DominatorTree][query]"
-)
- {
+TEST_CASE("dominated_nodes: Full transitive subtree", "[DominatorTree][query][subtree]") {
     auto r = make_diamond_with_tail();
     // Entry dominates everything below it (1,2,3,4)
     auto dn0 = dominated_nodes(r, size_t{0});
@@ -828,28 +748,12 @@ TEST_CASE (
     REQUIRE(dominated_nodes(r, size_t{1}).empty());
 }
 
-TEST_CASE (
-
-
-
-"[dominated_nodes] Missing node returns empty"
-,
-"[DominatorTree][query]"
-)
- {
+TEST_CASE("dominated_nodes: Missing node returns empty", "[DominatorTree][query][subtree]") {
     auto r = make_diamond_with_tail();
     REQUIRE(dominated_nodes(r, size_t{99}).empty());
 }
 
-TEST_CASE (
-
-
-
-"[dominated_nodes] Deep chain is fully transitive"
-,
-"[DominatorTree][query]"
-)
- {
+TEST_CASE("dominated_nodes: Deep chain is fully transitive", "[DominatorTree][query][subtree]") {
     // 0->1->2->3->4->5: 0 should dominate all of 1-5
     auto r = compute_dominators(make_view(0, {0,1,2,3,4,5},
         {{0,1},{1,2},{2,3},{3,4},{4,5}}));
@@ -1116,15 +1020,7 @@ TEST_CASE (
     REQUIRE(immediate_dominator_of(r, std::string{"B"}) == std::string{"A"});
 }
 
-TEST_CASE (
-
-
-
-"[generic] Branch-merge: entry dominates merge, branches do not"
-,
-"[DominatorTree][generic]"
-)
- {
+TEST_CASE("generic: Branch-merge: entry dominates merge, branches do not", "[DominatorTree][generic]") {
     // entry -> then
     // entry -> else
     // then  -> merge
@@ -1140,15 +1036,7 @@ TEST_CASE (
     REQUIRE_FALSE(dominates(r, std::string{"else"},  std::string{"merge"}));
 }
 
-TEST_CASE (
-
-
-
-"[generic] Loop: back edge and loop header identified"
-,
-"[DominatorTree][generic]"
-)
- {
+TEST_CASE("generic: Loop: back edge and loop header identified", "[DominatorTree][generic]") {
     // entry -> header -> body -> header  (back edge: body -> header)
     auto view = make_string_view("entry", {"entry","header","body"},
                                  {{"entry","header"},{"header","body"},{"body","header"}});

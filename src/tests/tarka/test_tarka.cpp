@@ -17,6 +17,7 @@
 
 #include "tarka/tarka.hpp"
 #include "tarka/backends/native_backend.hpp"
+#include "tarka/backends/z3_backend.hpp"
 #include "tarka/frontend/smt2_parser.hpp"
 #include "tarka/frontend/smt2_printer.hpp"
 #include "tarka/native/model_validator.hpp"
@@ -752,6 +753,176 @@ TEST_CASE("tarka native: Model Formatter & Validator", "[tarka][native][model][v
     REQUIRE(valid_res.is_valid);
     REQUIRE(valid_res.violated_assertions.empty());
 }
+
+#if defined(HAS_Z3) && (HAS_Z3 != 0) && (__has_include(<z3++.h>) || __has_include("z3++.h"))
+TEST_CASE("tarka differential: Native Backend vs Z3 Backend", "[tarka][differential][z3]") {
+    Context ctx;
+
+    SECTION("Propositional logic equivalence (SAT and UNSAT)") {
+        auto bool_s = ctx.bool_sort();
+        auto p = ctx.make_symbol("p", bool_s);
+        auto q = ctx.make_symbol("q", bool_s);
+        auto r = ctx.make_symbol("r", bool_s);
+
+        // SAT formula: (p || q) && (!p || r) && (!q || r) && r
+        Term f_sat = (p || q) && ((!p) || r) && ((!q) || r) && r;
+
+        RouterEngine<backend::native> native_solver;
+        RouterEngine<backend::z3_backend> z3_solver;
+
+        native_solver.assert_formula(f_sat);
+        z3_solver.assert_formula(f_sat);
+
+        auto native_res1 = native_solver.check_sat();
+        auto z3_res1 = z3_solver.check_sat();
+
+        REQUIRE(native_res1.has_value());
+        REQUIRE(z3_res1.has_value());
+        CHECK(*native_res1 == SatResult::Sat);
+        CHECK(*z3_res1 == SatResult::Sat);
+
+        // UNSAT formula: f_sat && !r
+        Term f_unsat = f_sat && (!r);
+        RouterEngine<backend::native> native_unsat;
+        RouterEngine<backend::z3_backend> z3_unsat;
+
+        native_unsat.assert_formula(f_unsat);
+        z3_unsat.assert_formula(f_unsat);
+
+        auto native_res2 = native_unsat.check_sat();
+        auto z3_res2 = z3_unsat.check_sat();
+
+        REQUIRE(native_res2.has_value());
+        REQUIRE(z3_res2.has_value());
+        CHECK(*native_res2 == SatResult::Unsat);
+        CHECK(*z3_res2 == SatResult::Unsat);
+    }
+
+    SECTION("BitVector arithmetic & bitwise equivalence (QF_BV)") {
+        auto bv32 = ctx.bv_sort(32);
+        auto x = ctx.make_symbol("x", bv32);
+        auto y = ctx.make_symbol("y", bv32);
+        auto c10 = ctx.make_value(10, bv32);
+        auto c25 = ctx.make_value(25, bv32);
+
+        // SAT: (x ^ y) == 25 && (x + 10) == y
+        Term xor_xy = ctx.make_term(Op::BvXor, bv32, {x, y});
+        Term add_x10 = ctx.make_term(Op::BvAdd, bv32, {x, c10});
+        Term f_bv = (xor_xy == c25) && (add_x10 == y);
+
+        RouterEngine<backend::native> native_solver;
+        RouterEngine<backend::z3_backend> z3_solver;
+
+        native_solver.assert_formula(f_bv);
+        z3_solver.assert_formula(f_bv);
+
+        auto n_res = native_solver.check_sat();
+        auto z_res = z3_solver.check_sat();
+
+        REQUIRE(n_res.has_value());
+        REQUIRE(z_res.has_value());
+        CHECK(*n_res == *z_res);
+
+        if (*n_res == SatResult::Sat) {
+            auto n_x = native_solver.get_value(x);
+            auto n_y = native_solver.get_value(y);
+            REQUIRE(n_x.has_value());
+            REQUIRE(n_y.has_value());
+
+            std::unordered_map<Term, SmtValue> model;
+            model[x] = *n_x;
+            model[y] = *n_y;
+            auto valid = model_validator::validate(std::vector<Term>{f_bv}, model);
+            CHECK(valid.is_valid);
+        }
+    }
+
+    SECTION("BitVector division-by-zero semantics comparison") {
+        auto bv32 = ctx.bv_sort(32);
+        auto a = ctx.make_symbol("a", bv32);
+        auto c0 = ctx.make_value(0, bv32);
+        auto all_ones = ctx.make_value(0xFFFFFFFFU, bv32);
+
+        // SMT-LIB division-by-zero standard: (a / 0) == 0xFFFFFFFF
+        Term udiv_0 = ctx.make_term(Op::BvUdiv, bv32, {a, c0});
+        Term eq_all_ones = (udiv_0 == all_ones);
+
+        RouterEngine<backend::native> native_solver;
+        RouterEngine<backend::z3_backend> z3_solver;
+
+        native_solver.assert_formula(eq_all_ones);
+        z3_solver.assert_formula(eq_all_ones);
+
+        auto n_res = native_solver.check_sat();
+        auto z_res = z3_solver.check_sat();
+
+        REQUIRE(n_res.has_value());
+        REQUIRE(z_res.has_value());
+        CHECK(*n_res == SatResult::Sat);
+        CHECK(*z_res == SatResult::Sat);
+    }
+
+    SECTION("Array read-over-write and extensionality comparison (QF_AX)") {
+        auto bv32 = ctx.bv_sort(32);
+        auto arr_s = ctx.array_sort(bv32, bv32);
+
+        auto arr = ctx.make_symbol("arr", arr_s);
+        auto i = ctx.make_symbol("i", bv32);
+        auto j = ctx.make_symbol("j", bv32);
+        auto val = ctx.make_symbol("val", bv32);
+
+        Term stored = ctx.make_term(Op::Store, arr_s, {arr, i, val});
+        Term read_j = ctx.make_term(Op::Select, bv32, {stored, j});
+        Term orig_j = ctx.make_term(Op::Select, bv32, {arr, j});
+
+        // Bug search: i != j && read_j != orig_j -> must be UNSAT in both solvers
+        Term formula = (i != j) && (read_j != orig_j);
+
+        RouterEngine<backend::native> native_solver;
+        RouterEngine<backend::z3_backend> z3_solver;
+
+        native_solver.assert_formula(formula);
+        z3_solver.assert_formula(formula);
+
+        auto n_res = native_solver.check_sat();
+        auto z_res = z3_solver.check_sat();
+
+        REQUIRE(n_res.has_value());
+        REQUIRE(z_res.has_value());
+        CHECK(*n_res == SatResult::Unsat);
+        CHECK(*z_res == SatResult::Unsat);
+    }
+
+    SECTION("Linear Real Arithmetic comparison (QF_LRA)") {
+        auto real_s = ctx.real_sort();
+        auto x = ctx.make_symbol("x", real_s);
+        auto y = ctx.make_symbol("y", real_s);
+
+        auto c10 = ctx.make_real(10, 1, real_s);
+        auto c5  = ctx.make_real(5, 1, real_s);
+        auto c100 = ctx.make_real(100, 1, real_s);
+
+        // x + y <= 10 && x >= 5 && y >= 5
+        Term sum_xy = ctx.make_term(Op::Add, real_s, {x, y});
+        Term f_lra = (sum_xy <= c10) && (x >= c5) && (y >= c5);
+
+        RouterEngine<backend::native> native_solver;
+        RouterEngine<backend::z3_backend> z3_solver;
+
+        native_solver.assert_formula(f_lra);
+        z3_solver.assert_formula(f_lra);
+
+        auto n_res = native_solver.check_sat();
+        auto z_res = z3_solver.check_sat();
+
+        REQUIRE(n_res.has_value());
+        REQUIRE(z_res.has_value());
+        CHECK(*n_res == SatResult::Sat);
+        CHECK(*z_res == SatResult::Sat);
+    }
+}
+#endif
+
 
 
 

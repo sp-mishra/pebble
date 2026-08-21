@@ -125,10 +125,41 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 * **Example Registry** (`include/test/example_registry.hpp`) — Self-registering runnable examples and test harness framework.
   * Documentation: [`docs/test/example_registry.md`](docs/test/example_registry.md)
 
+### Test Organization & Layout
+Tests in `src/tests/` are organized into modular, dedicated subdirectories mapping directly to subsystems:
+```
+src/tests/
+├── containers/        # Graph (LiteGraph, DominatorTree, egraph), Tree, Cache (Kosha), Associative, Dynamic
+├── mem/               # Memory allocators (Smriti arenas, pools, buddy)
+├── meta/              # Metaprogramming, reflection, Akshara parsing, ExactRational
+├── nitya/             # Nitya Durable Log Engine, segments, framing, replication
+├── petika/            # Petika storage platform, engines, transactions
+├── rules/             # EasyRules business rules, facts, pipeline
+├── tarka/             # Tarka SMT solver, theories, CDCL, backends (Native, Z3)
+├── observability/     # NADI tracing, pulse scopes, telemetry
+├── utils/             # Setu mmap, SingleFlight, Profiler, Log, UltraCRC
+└── test_harness/      # Example registry and test fixtures
+```
+
+### Test Case Format & Tagging Standards
+Every test file uses the **Catch2 v3** framework and adheres to a uniform structure:
+1. **Naming Convention**: `module: Scenario / Feature description`
+   - *Example*: `TEST_CASE("tarka: Propositional logic equivalence", "[tarka][differential][z3]")`
+   - *Example*: `TEST_CASE("LiteGraph: Dijkstra shortest path with SIMD", "[LiteGraph][algorithms][shortest_path]")`
+   - *Example*: `TEST_CASE("dominates: Entry dominates all reachable nodes", "[DominatorTree][query][dominates]")`
+2. **Hierarchical Tagging**:
+   - `[<library>]`: Primary module tag (`[tarka]`, `[LiteGraph]`, `[nitya]`, `[meta]`, etc.).
+   - `[<subsystem>]`: Specific feature or theory area (`[query]`, `[framing]`, `[bv]`, `[lra]`).
+   - `[<property>]`: Test type or dependency gate (`[differential]`, `[z3]`, `[simd]`, `[lockfree]`).
+3. **Invariants & Assertions**:
+   - Use `STATIC_REQUIRE` for compile-time/consteval validation.
+   - Use `REQUIRE` for critical preconditions and `CHECK` for individual invariants.
+   - Conditional backend/dependency tests are guarded with feature-test macros (e.g. `HAS_Z3`, `__has_include(<z3++.h>)`).
+
 ---
 
 ## 🛠️ Build & Requirements
 
 * **Compiler**: Modern C++23 compliant compiler (Clang 16+, GCC 13+, Apple Clang 15+).
-* **Build System**: CMake 3.25+ (`CMakeLists.txt`).
-* **Dependencies**: Google Highway (optional for SIMD acceleration), Catch2 v3 (for unit tests).
+* **Build System**: CMake 3.25+ (`CMakeLists.txt`) — builds all test files recursively (`GLOB_RECURSE`).
+* **Dependencies**: Google Highway (optional for SIMD acceleration), Catch2 v3 (for unit tests), Z3 SMT solver (static library).

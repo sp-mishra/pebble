@@ -1,6 +1,7 @@
-#define CATCH_CONFIG_MAIN
-#include <catch_amalgamated.hpp>
+#include "catch_amalgamated.hpp"
 #include "containers/associative/SparseSet.hpp"
+#include "mem/smriti.hpp"
+#include "mem/arena.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -788,4 +789,36 @@ TEST_CASE (
     ins(m, 1u, std::string{"before"});
     for (auto& v : m.all_values()) v = "after";
     REQUIRE(m.get(1u)->get() == "after");
+}
+
+TEST_CASE("SparseSet: smriti arena allocator integration", "[SparseSet][mem][arena]") {
+    using Resource = smriti::ManagedResource<smriti::domains::SystemRAMDomain,
+                                            smriti::pools::BumpPool<smriti::domains::SystemRAMDomain>>;
+    Resource res{smriti::domains::SystemRAMDomain{},
+                 smriti::pools::BumpPool<smriti::domains::SystemRAMDomain>{64 * 1024}};
+
+    using DenseAlloc = smriti::SmritiAllocator<std::pair<std::uint32_t, std::monostate>, Resource>;
+    using SparseAlloc = smriti::SmritiAllocator<std::uint32_t, Resource>;
+
+    DenseAlloc da{res};
+    SparseAlloc sa{res};
+
+    SparseSet<std::uint32_t, std::monostate, std::uint32_t, DenseAlloc, SparseAlloc> set(64, da, sa);
+
+    REQUIRE(set.empty());
+    REQUIRE(set.capacity() == 64);
+
+    REQUIRE(set.insert(5u).has_value());
+    REQUIRE(set.insert(12u).has_value());
+    REQUIRE(set.insert(42u).has_value());
+
+    REQUIRE(set.size() == 3);
+    REQUIRE(set.contains(5u));
+    REQUIRE(set.contains(12u));
+    REQUIRE(set.contains(42u));
+    REQUIRE_FALSE(set.contains(99u));
+
+    REQUIRE(set.remove(12u).has_value());
+    REQUIRE(set.size() == 2);
+    REQUIRE_FALSE(set.contains(12u));
 }

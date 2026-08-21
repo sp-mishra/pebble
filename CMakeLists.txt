@@ -103,6 +103,7 @@ set(PEBBLE_DEP_FOLDERS
     liblmdb  "liblmdb"
     highway  "highway"
     spdlog   "spdlog"
+    z3       "z3"
 )
 
 set(MISSING_DEPS "")
@@ -172,6 +173,8 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${CMAKE_SOURCE_DIR}/dependencies/highway)
 include_directories(${CMAKE_SOURCE_DIR}/dependencies/glaze/include)
 include_directories(${CMAKE_SOURCE_DIR}/dependencies/liblmdb)
+include_directories(${CMAKE_SOURCE_DIR}/dependencies/z3/include)
+include_directories(${CMAKE_SOURCE_DIR}/dependencies/z3)
 
 # Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -218,6 +221,79 @@ if (EXISTS "${CMAKE_SOURCE_DIR}/dependencies/liblmdb/mdb.c")
     target_link_libraries(lmdb PUBLIC Threads::Threads)
 endif()
 
+# ===================== Z3 SMT Solver (optimized static library) =========================
+option(BUILD_Z3 "Build with Z3 SMT solver support" ON)
+
+set(HAS_Z3 FALSE)
+if(BUILD_Z3)
+    set(Z3_DIR ${CMAKE_SOURCE_DIR}/dependencies/z3)
+    if(EXISTS ${Z3_DIR}/CMakeLists.txt)
+        set(Z3_BUILD_LIBZ3_SHARED    OFF CACHE BOOL "Build Z3 as static library"         FORCE)
+        set(Z3_BUILD_PYTHON_BINDINGS OFF CACHE BOOL "Disable Z3 Python bindings"          FORCE)
+        set(Z3_BUILD_DOCUMENTATION   OFF CACHE BOOL "Disable Z3 documentation"            FORCE)
+        set(Z3_INCLUDE_GIT_HASH      OFF CACHE BOOL "Disable Z3 git hash in version"      FORCE)
+        set(Z3_INCLUDE_GIT_DESCRIBE  OFF CACHE BOOL "Disable Z3 git describe in version"  FORCE)
+
+        # Build Z3 optimized (Release) even when top-level build type is unset to ensure high performance
+        set(Z3_SAVED_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
+        if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set(CMAKE_BUILD_TYPE Release)
+        endif()
+
+        add_subdirectory(${Z3_DIR} z3_build)
+
+        set(CMAKE_BUILD_TYPE "${Z3_SAVED_BUILD_TYPE}")
+        
+        # Expose C++ and C API headers
+        target_include_directories(libz3 INTERFACE
+            $<BUILD_INTERFACE:${Z3_DIR}/src/api/c++>
+            $<BUILD_INTERFACE:${Z3_DIR}/src/api>
+            $<BUILD_INTERFACE:${Z3_DIR}/include>
+        )
+        set(HAS_Z3 TRUE)
+        add_compile_definitions(HAS_Z3=1)
+        message(STATUS "[pebble] Z3: Building as optimized static library from dependencies/z3 (HAS_Z3=1)")
+    else()
+        # Fallback: check prebuilt static archives or system libs
+        set(Z3_LIB "")
+        if (EXISTS "${Z3_DIR}/libz3.a")
+            set(Z3_LIB "${Z3_DIR}/libz3.a")
+        elseif (EXISTS "${Z3_DIR}/lib/libz3.a")
+            set(Z3_LIB "${Z3_DIR}/lib/libz3.a")
+        elseif (EXISTS "${Z3_DIR}/libz3.dylib")
+            set(Z3_LIB "${Z3_DIR}/libz3.dylib")
+        elseif (EXISTS "${Z3_DIR}/lib/libz3.dylib")
+            set(Z3_LIB "${Z3_DIR}/lib/libz3.dylib")
+        elseif (EXISTS "${Z3_DIR}/libz3.so")
+            set(Z3_LIB "${Z3_DIR}/libz3.so")
+        elseif (EXISTS "${Z3_DIR}/lib/libz3.so")
+            set(Z3_LIB "${Z3_DIR}/lib/libz3.so")
+        endif()
+
+        if (NOT Z3_LIB)
+            find_library(Z3_SYSTEM_LIB NAMES z3 libz3 PATHS /opt/homebrew/lib /usr/local/lib /usr/lib)
+            if (Z3_SYSTEM_LIB)
+                set(Z3_LIB "${Z3_SYSTEM_LIB}")
+            endif()
+        endif()
+
+        if (Z3_LIB)
+            add_library(z3_imported UNKNOWN IMPORTED)
+            set_target_properties(z3_imported PROPERTIES IMPORTED_LOCATION "${Z3_LIB}")
+            if (EXISTS "${Z3_DIR}/include")
+                set_target_properties(z3_imported PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${Z3_DIR}/include")
+            elseif (EXISTS "${Z3_DIR}/src/api/c++")
+                set_target_properties(z3_imported PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${Z3_DIR}/src/api/c++")
+            elseif (EXISTS "${Z3_DIR}")
+                set_target_properties(z3_imported PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${Z3_DIR}")
+            endif()
+            set(HAS_Z3 TRUE)
+            add_compile_definitions(HAS_Z3=1)
+            message(STATUS "[pebble] Z3: Prebuilt library detected: ${Z3_LIB} (HAS_Z3=1)")
+        endif()
+    endif()
+endif()
+
 find_package(Threads REQUIRED)
 
 link_directories(/usr/local/lib)
@@ -254,6 +330,11 @@ if (BUILD_EXECUTABLE)
     if (TARGET lmdb)
         target_link_libraries(${PROJECT_NAME} PRIVATE lmdb)
     endif()
+    if (TARGET libz3)
+        target_link_libraries(${PROJECT_NAME} PRIVATE libz3)
+    elseif (TARGET z3_imported)
+        target_link_libraries(${PROJECT_NAME} PRIVATE z3_imported)
+    endif()
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endif()
@@ -261,7 +342,7 @@ endif()
 
 if (BUILD_TESTS)
     file(
-            GLOB TEST_SOURCE
+            GLOB_RECURSE TEST_SOURCE
             "${CMAKE_SOURCE_DIR}/src/tests/*.cpp"
     )
     add_executable(pebble_tests ${TEST_SOURCE})
@@ -273,6 +354,11 @@ if (BUILD_TESTS)
     )
     if (TARGET lmdb)
         target_link_libraries(pebble_tests PRIVATE lmdb)
+    endif()
+    if (TARGET libz3)
+        target_link_libraries(pebble_tests PRIVATE libz3)
+    elseif (TARGET z3_imported)
+        target_link_libraries(pebble_tests PRIVATE z3_imported)
     endif()
     target_compile_definitions(pebble_tests PRIVATE
         TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

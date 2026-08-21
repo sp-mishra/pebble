@@ -244,6 +244,13 @@ namespace tarka {
             return Term{impl, h};
         }
 
+        [[nodiscard]] Term make_term(Op op,
+                                     Sort sort,
+                                     std::initializer_list<Term> children,
+                                     std::uint64_t payload_hash = 0) {
+            return make_term(op, sort, std::span<const Term>(children.begin(), children.size()), payload_hash);
+        }
+
         // Symbolic variable
         [[nodiscard]] Term make_symbol(std::string_view name, Sort sort) {
             const std::uint64_t ph = symbol_payload_hash(name);

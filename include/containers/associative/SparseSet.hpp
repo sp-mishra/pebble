@@ -128,7 +128,7 @@ namespace sparseset {
         explicit SparseSet(size_type universe_capacity,
                            const DenseAlloc& da = DenseAlloc{},
                            const SparseAlloc& sa = SparseAlloc{})
-            : sparse_(universe_capacity, kInvalid, sa), dense_(da) {}
+            : sparse_(universe_capacity, kInvalid, sa), dense_(DenseAllocRebound{da}) {}
 
         SparseSet(const SparseSet&) = default;
 

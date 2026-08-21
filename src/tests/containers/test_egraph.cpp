@@ -14,6 +14,8 @@
 
 #include "catch_amalgamated.hpp"
 #include "containers/graph/egraph.hpp"
+#include "mem/smriti.hpp"
+#include "mem/arena.hpp"
 
 // ---------------------------------------------------------------------------
 // Helpers: simple test op-ids
@@ -333,4 +335,34 @@ TEST_CASE (
                                    egraph::saturation_limits{.max_iters = 10});
     REQUIRE(report.saturated == true);
     REQUIRE(report.hit_limit == false);
+}
+
+TEST_CASE("e_graph: smriti arena allocator integration", "[egraph][mem][arena]") {
+    using Resource = smriti::ManagedResource<smriti::domains::SystemRAMDomain,
+                                            smriti::pools::BumpPool<smriti::domains::SystemRAMDomain>>;
+    Resource res{smriti::domains::SystemRAMDomain{},
+                 smriti::pools::BumpPool<smriti::domains::SystemRAMDomain>{64 * 1024}};
+
+    using ArenaAlloc = smriti::SmritiAllocator<char, Resource>;
+    using ArenaGraph = egraph::e_graph<std::size_t, std::size_t,
+                                       egraph::default_enode_hash<std::size_t, std::size_t>,
+                                       egraph::default_enode_eq<std::size_t, std::size_t>,
+                                       std::monostate,
+                                       ArenaAlloc>;
+
+    ArenaAlloc alloc{res};
+    ArenaGraph g{alloc};
+
+    auto a = g.add(leaf(10));
+    auto b = g.add(leaf(20));
+    auto sum = g.add(binop(kAdd, a, b));
+
+    REQUIRE(g.find(a) != g.find(b));
+    REQUIRE(g.find(sum) != g.find(a));
+
+    (void)g.merge(a, b);
+    g.rebuild();
+
+    REQUIRE(g.find(a) == g.find(b));
+    REQUIRE(g.class_count_live() == 2);
 }

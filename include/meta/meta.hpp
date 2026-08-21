@@ -196,6 +196,12 @@ namespace meta {
     // ---------------------------------------------------------------------------
     // 1.2 TypeList — heterogeneous type container
     // ---------------------------------------------------------------------------
+#if defined(__clang__)
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wc++26-extensions"
+#  pragma clang diagnostic ignored "-Wunknown-warning-option"
+#endif
+
     template <typename... Ts>
     struct TypeList {
         static constexpr std::size_t size = sizeof...(Ts);
@@ -245,6 +251,10 @@ namespace meta {
         template <std::size_t I>
             requires(I < size)
         using element = std::tuple_element_t<I, std::tuple<Descriptors...>>;
+#endif
+
+#if defined(__clang__)
+#  pragma clang diagnostic pop
 #endif
 
         using as_type_list = TypeList<Descriptors...>;
@@ -441,12 +451,20 @@ namespace meta {
         template <std::size_t I>
             requires(I < size)
         static consteval auto get() noexcept {
+#if defined(__clang__)
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wc++26-extensions"
+#  pragma clang diagnostic ignored "-Wunknown-warning-option"
+#endif
 #if defined(__cpp_pack_indexing) && __cpp_pack_indexing >= 202311L
             return Vs...[I];
 #else
             constexpr auto arr =
                 std::array{static_cast<std::common_type_t<decltype(Vs)...>>(Vs)...};
             return arr[I];
+#endif
+#if defined(__clang__)
+#  pragma clang diagnostic pop
 #endif
         }
     };

@@ -20,7 +20,13 @@
 #include "tarka/backend.hpp"
 #include "tarka/context.hpp"
 
-#if defined(HAS_Z3) && __has_include(<z3++.h>)
+#if !defined(HAS_Z3)
+#  if __has_include(<z3++.h>) || __has_include("z3++.h")
+#    define HAS_Z3 1
+#  endif
+#endif
+
+#if defined(HAS_Z3) && (HAS_Z3 != 0) && (__has_include(<z3++.h>) || __has_include("z3++.h"))
 
 #include <z3++.h>
 #include "containers/cache/kosha.hpp"
@@ -255,10 +261,20 @@ namespace tarka::backend {
             if (s.kind() == SortKind::BitVec) {
                 if (auto bv = t.ctx().bv_literal(ph))
                     return ctx_.bv_val(static_cast<std::uint64_t>(bv->bits), s.scalar_param());
+                return ctx_.bv_val(static_cast<std::uint64_t>(0), s.scalar_param());
             }
 
-            if (s.kind() == SortKind::Int)
+            if (s.kind() == SortKind::Int) {
+                if (auto iv = t.ctx().int_literal(ph))
+                    return ctx_.int_val(static_cast<long long>(*iv));
                 return ctx_.int_val(static_cast<long long>(ph));
+            }
+
+            if (s.kind() == SortKind::Real) {
+                if (auto rv = t.ctx().real_literal(ph))
+                    return ctx_.real_val(static_cast<int>(rv->num), static_cast<int>(rv->den));
+                return ctx_.real_val(0, 1);
+            }
 
             throw z3::exception("z3_backend: unsupported literal sort");
         }
@@ -279,6 +295,12 @@ namespace tarka::backend {
 
             if (sort.kind() == SortKind::Int) {
                 return static_cast<std::int64_t>(e.get_numeral_int64());
+            }
+
+            if (sort.kind() == SortKind::Real) {
+                int num = e.numerator().get_numeral_int();
+                int den = e.denominator().get_numeral_int();
+                return rational{static_cast<std::int64_t>(num), static_cast<std::int64_t>(den)};
             }
 
             // fallback

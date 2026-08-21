@@ -867,3 +867,30 @@ TEST_CASE (
     for (auto& r : readers) r.join();
     REQUIRE(errors.load() == 0);
 }
+
+TEST_CASE("InternPool: arena memory allocation and reset on clear", "[SymbolTable][InternPool][mem]") {
+    InternPool pool;
+    REQUIRE(pool.size() == 0);
+
+    auto r1 = pool.intern("symbol_alpha");
+    auto r2 = pool.intern("symbol_beta");
+    auto r3 = pool.intern("symbol_gamma");
+
+    REQUIRE(r1.has_value());
+    REQUIRE(r2.has_value());
+    REQUIRE(r3.has_value());
+    REQUIRE(pool.size() == 3);
+    REQUIRE(pool.bytes_allocated() > 0);
+
+    // Fast-path lookup does not increase arena bytes
+    const std::size_t bytes_before = pool.bytes_allocated();
+    auto r1_again = pool.intern("symbol_alpha");
+    REQUIRE(r1_again.has_value());
+    REQUIRE(r1_again->data() == r1->data());
+    REQUIRE(pool.bytes_allocated() == bytes_before);
+
+    // Clear resets both the symbol set and the smriti arena
+    pool.clear();
+    REQUIRE(pool.size() == 0);
+    REQUIRE(pool.bytes_allocated() == 0);
+}

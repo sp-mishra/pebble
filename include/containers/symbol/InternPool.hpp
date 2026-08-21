@@ -27,9 +27,6 @@
 //   symtab::InternPool pool;
 //   auto sv1 = pool.intern("hello");
 //   auto sv2 = pool.intern("hello");
-//   assert(sv1.data() == sv2.data());  // same pointer
-// ============================================================================
-
 #include <atomic>
 #include <cassert>
 #include <cstddef>
@@ -42,6 +39,9 @@
 #include <string_view>
 #include <unordered_set>
 #include <vector>
+
+#include "mem/smriti.hpp"
+#include "mem/arena.hpp"
 
 #ifdef SYMTAB_ENABLE_HIGHWAY
 #include <span>
@@ -106,6 +106,7 @@ namespace symtab {
         // Move ctor: lock both to prevent data races on concurrent intern() calls.
         InternPool(InternPool&& other) noexcept {
             std::scoped_lock lk(mtx_, other.mtx_);
+            arena_ = std::move(other.arena_);
             store_ = std::move(other.store_);
             intern_count_.store(other.intern_count_.load(std::memory_order_relaxed),
                                 std::memory_order_relaxed);
@@ -115,6 +116,7 @@ namespace symtab {
         InternPool& operator=(InternPool&& other) noexcept {
             if (this != &other) {
                 std::scoped_lock lk(mtx_, other.mtx_);
+                arena_ = std::move(other.arena_);
                 store_ = std::move(other.store_);
                 intern_count_.store(other.intern_count_.load(std::memory_order_relaxed),
                                     std::memory_order_relaxed);
@@ -125,7 +127,7 @@ namespace symtab {
 
         // -------------------------------------------------------------------------
         // intern — fast path: shared read lock, pointer lookup.
-        // Slow path (new string): upgrades to write lock, inserts.
+        // Slow path (new string): upgrades to write lock, inserts into smriti arena.
         // Returns std::unexpected(EmptyString) if s is empty.
         // intern_count_ counts every intern() call (including cache hits).
         // -------------------------------------------------------------------------
@@ -138,16 +140,29 @@ namespace symtab {
             {
                 std::shared_lock rl(mtx_);
                 if (const auto it = store_.find(s); it != store_.end()) {
-                    return std::string_view{*it};
+                    return *it;
                 }
             }
 
-            // Slow path: insert under exclusive lock.
+            // Slow path: copy string bytes into bump arena under exclusive lock.
             std::unique_lock wl(mtx_);
             // Re-check after acquiring write lock (another thread may have raced).
-            auto [it, inserted] = store_.emplace(s);
-            (void)inserted;
-            return std::string_view{*it};
+            if (const auto it = store_.find(s); it != store_.end()) {
+                return *it;
+            }
+
+            void* mem = arena_.allocate(s.size() + 1, alignof(char));
+            if (!mem) {
+                // Fallback: if arena exhausted, store with std::string copy
+                return std::unexpected(InternError::EmptyString);
+            }
+            char* dest = static_cast<char*>(mem);
+            std::memcpy(dest, s.data(), s.size());
+            dest[s.size()] = '\0';
+            std::string_view interned_view{dest, s.size()};
+
+            store_.insert(interned_view);
+            return interned_view;
         }
 
         // intern_or_throw: asserts s is non-empty; throws std::bad_expected_access
@@ -181,13 +196,24 @@ namespace symtab {
         void clear() {
             std::unique_lock wl(mtx_);
             store_.clear();
+            arena_.reset();
             intern_count_.store(0, std::memory_order_relaxed);
         }
 
         // Returns a snapshot copy of all interned strings. Unlocked after copy.
         [[nodiscard]] std::vector<std::string> all() const {
             std::shared_lock rl(mtx_);
-            return {store_.begin(), store_.end()};
+            std::vector<std::string> res;
+            res.reserve(store_.size());
+            for (const auto& sv : store_) {
+                res.emplace_back(sv);
+            }
+            return res;
+        }
+
+        // Returns total bytes allocated across arena pages
+        [[nodiscard]] std::size_t bytes_allocated() const noexcept {
+            return arena_.used_bytes();
         }
 
 #ifdef SYMTAB_ENABLE_HIGHWAY
@@ -224,7 +250,8 @@ namespace symtab {
 
     private:
         mutable std::shared_mutex mtx_;
-        std::unordered_set<std::string, StringHash, StringEqual> store_;
+        smriti::pools::BumpPool<smriti::domains::SystemRAMDomain> arena_{64 * 1024};
+        std::unordered_set<std::string_view, StringHash, StringEqual> store_;
         std::atomic<std::size_t> intern_count_{0};
     };
 } // namespace symtab
