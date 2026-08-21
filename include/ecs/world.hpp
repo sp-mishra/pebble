@@ -2,14 +2,14 @@
 // ============================================================================
 // ecs/world.hpp — High-Performance Entity-Component-System World Manager
 // ============================================================================
-// Zero-virtual hot path, SparseSet-backed component stores, generation-safe
-// handles, O(min(A, B)) multi-component query joins, and Pravaha multi-threaded
-// parallel view dispatch.
+// Zero-hashing dense array store indexing, rich query filters (With/Without/Optional),
+// generational handles, and Pravaha multi-threaded parallel view execution.
 // ============================================================================
 
 #include "entity.hpp"
 #include "component_store.hpp"
 #include "command_buffer.hpp"
+#include "query.hpp"
 
 #include <algorithm>
 #include <concepts>
@@ -17,8 +17,6 @@
 #include <functional>
 #include <memory>
 #include <tuple>
-#include <typeindex>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -58,9 +56,9 @@ public:
 
     void despawn(Entity e) {
         if (!alive(e)) return;
-        // Erase entity from all component stores
-        for (auto& [ti, store] : stores_) {
-            store->erase_by_index(e.index);
+        // Erase entity from all component stores via direct indexed vector walk
+        for (auto& store : stores_) {
+            if (store) store->erase_by_index(e.index);
         }
         Slot& s = slot(e.index);
         s.alive = false;
@@ -77,7 +75,7 @@ public:
         return (idx >= 1 && idx <= slots_.size()) ? slots_[idx - 1].generation : 0;
     }
 
-    // ── Component Management ─────────────────────────────────────────────────
+    // ── Component Management (Zero-Hashing Flat Vector Lookup) ───────────────
 
     template <Component C>
     void add(Entity e, C c) {
@@ -123,7 +121,6 @@ public:
         return s ? s->try_get(e.index) : nullptr;
     }
 
-    // Unchecked raw index access for fast broadphase/tree queries
     template <Component C>
     [[nodiscard]] C* get_by_index(std::uint32_t idx) noexcept {
         auto* s = try_store<C>();
@@ -138,35 +135,37 @@ public:
 
     template <Component C>
     [[nodiscard]] ComponentStore<C>& store() {
-        const std::type_index ti{typeid(C)};
-        auto it = stores_.find(ti);
-        if (it == stores_.end()) {
-            auto sp = std::make_shared<ComponentStore<C>>(universe_);
-            it = stores_.emplace(ti, sp).first;
+        const std::uint32_t id = ComponentTypeId<C>::id();
+        if (id >= stores_.size()) {
+            stores_.resize(id + 1);
         }
-        return *static_cast<ComponentStore<C>*>(it->second.get());
+        if (!stores_[id]) {
+            stores_[id] = std::make_shared<ComponentStore<C>>(universe_);
+        }
+        return *static_cast<ComponentStore<C>*>(stores_[id].get());
     }
 
     template <Component C>
     [[nodiscard]] const ComponentStore<C>* try_store() const noexcept {
-        auto it = stores_.find(std::type_index{typeid(C)});
-        return it == stores_.end() ? nullptr : static_cast<const ComponentStore<C>*>(it->second.get());
+        const std::uint32_t id = ComponentTypeId<C>::id();
+        if (id >= stores_.size() || !stores_[id]) return nullptr;
+        return static_cast<const ComponentStore<C>*>(stores_[id].get());
     }
 
     template <Component C>
     [[nodiscard]] ComponentStore<C>* try_store() noexcept {
-        auto it = stores_.find(std::type_index{typeid(C)});
-        return it == stores_.end() ? nullptr : static_cast<ComponentStore<C>*>(it->second.get());
+        const std::uint32_t id = ComponentTypeId<C>::id();
+        if (id >= stores_.size() || !stores_[id]) return nullptr;
+        return static_cast<ComponentStore<C>*>(stores_[id].get());
     }
 
-    // ── Single-Threaded Join View ────────────────────────────────────────────
-    // Walks the smallest component store and performs O(1) membership checks on the rest.
+    // ── Simple Join View ─────────────────────────────────────────────────────
+
     template <Component Primary, Component... Rest, typename Fn>
     void view(Fn&& fn) {
         auto* p_store = try_store<Primary>();
         if (!p_store || p_store->empty()) return;
 
-        // If Rest components are present, verify their stores exist
         if constexpr (sizeof...(Rest) > 0) {
             if ((!try_store<Rest>() || ...)) return;
         }
@@ -183,7 +182,6 @@ public:
         }
     }
 
-    // Read-only const view
     template <Component Primary, Component... Rest, typename Fn>
     void view(Fn&& fn) const {
         const auto* p_store = try_store<Primary>();
@@ -205,8 +203,15 @@ public:
         }
     }
 
+    // ── Rich Filtered Query: w.query<With<...>, Without<...>, Optional<...>>() ─
+
+    template <typename WithClause, typename WithoutClause = Without<>, typename OptionalClause = Optional<void>, typename Fn>
+    void query(Fn&& fn) {
+        query_impl(WithClause{}, WithoutClause{}, OptionalClause{}, std::forward<Fn>(fn));
+    }
+
     // ── Parallel View via Executor ───────────────────────────────────────────
-    // Splits the primary component store into chunks and invokes Fn concurrently
+
     template <Component Primary, Component... Rest, typename Executor, typename Fn>
     void par_view(Executor& executor, Fn&& fn, std::size_t chunk_size = 256) {
         auto* p_store = try_store<Primary>();
@@ -254,15 +259,50 @@ private:
         return s && s->has(idx);
     }
 
+    // Query helper implementation
+    template <Component Primary, Component... WithRest, Component... Excludes, typename Opt, typename Fn>
+    void query_impl(With<Primary, WithRest...>, Without<Excludes...>, Optional<Opt>, Fn&& fn) {
+        auto* p_store = try_store<Primary>();
+        if (!p_store || p_store->empty()) return;
+
+        if constexpr (sizeof...(WithRest) > 0) {
+            if ((!try_store<WithRest>() || ...)) return;
+        }
+
+        for (auto&& [idx, primary_comp] : p_store->pairs()) {
+            if constexpr (sizeof...(WithRest) > 0) {
+                if (!(has_idx<WithRest>(idx) && ...)) continue;
+            }
+            if constexpr (sizeof...(Excludes) > 0) {
+                if ((has_idx<Excludes>(idx) || ...)) continue;
+            }
+            Entity e{idx, slots_[idx - 1].generation};
+            if constexpr (std::is_same_v<Opt, void>) {
+                if constexpr (sizeof...(WithRest) > 0) {
+                    fn(e, primary_comp, *try_store<WithRest>()->try_get(idx)...);
+                } else {
+                    fn(e, primary_comp);
+                }
+            } else {
+                Opt* opt_ptr = try_store<Opt>() ? try_store<Opt>()->try_get(idx) : nullptr;
+                if constexpr (sizeof...(WithRest) > 0) {
+                    fn(e, primary_comp, *try_store<WithRest>()->try_get(idx)..., opt_ptr);
+                } else {
+                    fn(e, primary_comp, opt_ptr);
+                }
+            }
+        }
+    }
+
     std::uint32_t universe_;
     std::size_t alive_count_ = 0;
     std::vector<Slot> slots_;
     std::vector<std::uint32_t> free_indices_;
-    std::unordered_map<std::type_index, std::shared_ptr<IComponentStore>> stores_;
+    std::vector<std::shared_ptr<IComponentStore>> stores_; // Flat index by ComponentTypeId
     CommandBuffer cmds_;
 };
 
-// ── CommandBuffer Method Implementations ─────────────────────────────────────
+// ── CommandBuffer & LocalCommandBuffer Method Implementations ───────────────
 
 inline void CommandBuffer::despawn(Entity e) {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -295,5 +335,31 @@ void CommandBuffer::remove(Entity e) {
     });
 }
 
-} // namespace pebble::ecs
+inline void LocalCommandBuffer::despawn(Entity e) {
+    ops_.emplace_back([e](World& w) {
+        w.despawn(e);
+    });
+}
 
+template <typename C>
+void LocalCommandBuffer::add(Entity e, C c) {
+    ops_.emplace_back([e, comp = std::move(c)](World& w) mutable {
+        w.add<C>(e, std::move(comp));
+    });
+}
+
+template <typename C, typename... Args>
+void LocalCommandBuffer::emplace(Entity e, Args&&... args) {
+    ops_.emplace_back([e, ...args = std::forward<Args>(args)](World& w) mutable {
+        w.emplace<C>(e, std::move(args)...);
+    });
+}
+
+template <typename C>
+void LocalCommandBuffer::remove(Entity e) {
+    ops_.emplace_back([e](World& w) {
+        w.remove<C>(e);
+    });
+}
+
+} // namespace pebble::ecs

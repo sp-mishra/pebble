@@ -1,9 +1,9 @@
 #pragma once
 // ============================================================================
-// ecs/command_buffer.hpp — Deferred Structural Mutation Buffer for pebble::ecs
+// ecs/command_buffer.hpp — Deferred & Thread-Partitioned Mutation Buffer
 // ============================================================================
-// Records spawn, despawn, component add, and component remove operations during
-// system execution or parallel views, and flushes them at sync points.
+// Supports thread-local command recording during parallel views with zero lock
+// contention, merging queues during flush.
 // ============================================================================
 
 #include "entity.hpp"
@@ -54,8 +54,44 @@ public:
         ops_.clear();
     }
 
+    // Merge another thread's command queue with zero lock on the worker thread
+    void merge(std::vector<std::function<void(World&)>>&& other_ops) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ops_.insert(ops_.end(),
+                   std::make_move_iterator(other_ops.begin()),
+                   std::make_move_iterator(other_ops.end()));
+    }
+
 private:
     mutable std::mutex mutex_;
+    std::vector<std::function<void(World&)>> ops_;
+};
+
+// Thread-local recording context for parallel workers
+class LocalCommandBuffer {
+public:
+    explicit LocalCommandBuffer(CommandBuffer& global)
+        : global_(global) {}
+
+    ~LocalCommandBuffer() {
+        if (!ops_.empty()) {
+            global_.merge(std::move(ops_));
+        }
+    }
+
+    void despawn(Entity e);
+
+    template <typename C>
+    void add(Entity e, C c);
+
+    template <typename C, typename... Args>
+    void emplace(Entity e, Args&&... args);
+
+    template <typename C>
+    void remove(Entity e);
+
+private:
+    CommandBuffer& global_;
     std::vector<std::function<void(World&)>> ops_;
 };
 

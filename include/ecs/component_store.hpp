@@ -2,11 +2,12 @@
 // ============================================================================
 // ecs/component_store.hpp — SparseSet Component Storage for pebble::ecs
 // ============================================================================
-// Stores components densely in memory while providing O(1) random access
-// and branch-free membership queries keyed by entity index.
+// Stores components densely in memory with O(1) random access and zero-hashing
+// sequential component type IDs.
 // ============================================================================
 
 #include "containers/associative/SparseSet.hpp"
+#include <atomic>
 #include <concepts>
 #include <cstdint>
 #include <cstddef>
@@ -16,6 +17,20 @@ namespace pebble::ecs {
 
 template <typename C>
 concept Component = std::is_destructible_v<C> && !std::is_reference_v<C>;
+
+// Sequential component type ID generator for zero-overhead array indexing
+inline std::uint32_t next_component_type_id() noexcept {
+    static std::atomic<std::uint32_t> counter{0};
+    return counter.fetch_add(1, std::memory_order_relaxed);
+}
+
+template <Component C>
+struct ComponentTypeId {
+    static std::uint32_t id() noexcept {
+        static const std::uint32_t value = next_component_type_id();
+        return value;
+    }
+};
 
 // Base interface for type-erased operations (e.g. bulk entity cleanup)
 class IComponentStore {

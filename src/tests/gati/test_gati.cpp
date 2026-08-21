@@ -1,4 +1,4 @@
-#include <catch_amalgamated.hpp>
+#include "catch_amalgamated.hpp"
 #include "gati/gati.hpp"
 #include <cmath>
 
@@ -83,4 +83,15 @@ TEST_CASE("Gati: Animation Sampling and State Machine", "[gati][anim]") {
     clip.sample_into(tr, 0.5f);
 
     REQUIRE(tr.position[0] == 50.0f);
+}
+
+TEST_CASE("Gati: Game Orchestrator Loop", "[gati][game]") {
+    gati::Game game{gati::ClockConfig{.hz = 60.0f}};
+
+    auto e = game.world().spawn();
+    game.world().add<gati::Transform>(e, {.position = pebble::math::vec2(0.0f, 0.0f)});
+
+    // Update by 1/60th second
+    game.update(1.0f / 60.0f);
+    REQUIRE(game.clock().total_steps() == 1);
 }

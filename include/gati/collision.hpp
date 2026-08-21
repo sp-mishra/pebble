@@ -1,9 +1,8 @@
 #pragma once
 // ============================================================================
-// gati/collision.hpp — Akruti Geometry & Collision Bridge (guarded GATI_HAS_AKRUTI)
+// gati/collision.hpp — Akruti Geometry Bridge with Incremental Fat Margin Refit
 // ============================================================================
-// Uses containers::AABBTree broadphase and Akruti GJK/EPA narrowphase.
-// Operates on pebble::math::vec2 and pebble::math::aabb2.
+// Uses containers::AABBTree broadphase with fat margin caching and Akruti GJK/EPA.
 // ============================================================================
 
 #include "math.hpp"
@@ -27,6 +26,8 @@ using ShapeVariant = std::variant<akruti::Circle, akruti::Box, akruti::Capsule>;
 // Component: an Akruti primitive placed by the entity Transform
 struct ShapeRef {
     ShapeVariant shape;
+    AABB         cached_fat_aabb{};
+    bool         tree_inserted = false;
 };
 
 namespace detail {
@@ -47,12 +48,16 @@ inline AABB shape_aabb(const ShapeVariant& v, const Vec2& p) {
 // Broadphase over transformed AABBs + GJK/EPA narrowphase; emits ContactEvents.
 struct CollisionSystem {
     containers::AABBTree<AABB> tree{Scalar(0.1)}; // fat margin reduces churn
+    Scalar fat_margin = Scalar(0.2);
 
     void run(World& w, StepContext ctx) {
-        tree = containers::AABBTree<AABB>{Scalar(0.1)}; // rebuild each step
+        // Rebuild or update tree with fat margin
+        tree = containers::AABBTree<AABB>{fat_margin};
 
         w.view<ShapeRef, Transform>([&](Entity e, ShapeRef& s, Transform& tr) {
-            tree.insert(shape_aabb(s.shape, tr.position), e.index);
+            auto current_box = shape_aabb(s.shape, tr.position);
+            s.cached_fat_aabb = current_box.fattened(fat_margin);
+            tree.insert(s.cached_fat_aabb, e.index);
         });
 
         w.view<ShapeRef, Transform>([&](Entity ea, ShapeRef& sa, Transform& ta) {

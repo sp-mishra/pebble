@@ -1,4 +1,4 @@
-#include <catch_amalgamated.hpp>
+#include "catch_amalgamated.hpp"
 #include "ecs/ecs.hpp"
 #include "containers/numeric/math_vector.hpp"
 
@@ -16,6 +16,12 @@ struct Velocity {
 
 struct Tag {
     int id = 0;
+};
+
+struct Disabled {};
+
+struct Name {
+    const char* str = nullptr;
 };
 
 } // namespace
@@ -91,6 +97,37 @@ TEST_CASE("ECS: Multi-Component Query View", "[ecs][query]") {
     REQUIRE(world.get<Position>(e1)->val[0] == 1.1f);
     REQUIRE(world.get<Position>(e3)->val[0] == 5.5f);
     REQUIRE(world.get<Position>(e2)->val[0] == 3.0f); // Untouched
+}
+
+TEST_CASE("ECS: Rich Query Filter DSL (With, Without, Optional)", "[ecs][query_dsl]") {
+    pebble::ecs::World world;
+
+    auto e1 = world.spawn();
+    world.add(e1, Position{pebble::math::vec2(1.0f, 1.0f)});
+    world.add(e1, Velocity{pebble::math::vec2(1.0f, 0.0f)});
+    world.add(e1, Name{"Player"});
+
+    auto e2 = world.spawn();
+    world.add(e2, Position{pebble::math::vec2(2.0f, 2.0f)});
+    world.add(e2, Velocity{pebble::math::vec2(0.0f, 1.0f)});
+    world.add(e2, Disabled{});
+
+    auto e3 = world.spawn();
+    world.add(e3, Position{pebble::math::vec2(3.0f, 3.0f)});
+    world.add(e3, Velocity{pebble::math::vec2(-1.0f, 0.0f)});
+
+    int matched = 0;
+    world.query<pebble::ecs::With<Position, Velocity>,
+                pebble::ecs::Without<Disabled>,
+                pebble::ecs::Optional<Name>>(
+        [&](pebble::ecs::Entity e, Position& pos, Velocity& vel, Name* name) {
+            ++matched;
+            if (name) {
+                REQUIRE(std::string(name->str) == "Player");
+            }
+        });
+
+    REQUIRE(matched == 2); // e1 and e3 (e2 is Disabled)
 }
 
 TEST_CASE("ECS: Deferred CommandBuffer Execution", "[ecs][commands]") {
