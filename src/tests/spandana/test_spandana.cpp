@@ -155,6 +155,12 @@ TEST_CASE("Spandana: Verlet Secondary Cloth Dynamics", "[spandana][cloth]") {
     REQUIRE(particles[0].pos[0] == 0.0f);
     REQUIRE(particles[0].pos[1] == 100.0f); // Pinned anchor
     REQUIRE(particles[4].pos[1] < 100.0f);  // Draped downward under gravity
+
+    // Convert to Akruti ChainShape for collision/rendering
+    auto chain = cloth.to_chain<8>(0.5f);
+    REQUIRE(chain.verts.size() == 5);
+    REQUIRE(chain.radius == 0.5f);
+    REQUIRE_FALSE(chain.is_loop);
 }
 
 

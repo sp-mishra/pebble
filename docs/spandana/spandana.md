@@ -79,22 +79,23 @@ flowchart TD
 1. **Automatic Dependency & Parallelism Inference (`ResourceKey`)**:
    - Actions targeting different entities/components automatically run concurrently.
    - Actions targeting the same component field automatically serialize in sequence.
-2. **Contract-Based Concepts**:
-   - `EasingFunction`: 30+ Robert Penner mathematical easings and cubic-bezier curves.
-   - `SpringSolver`: Exact closed-form analytical damped harmonic oscillator with zero numerical instability across variable $dt$.
-   - `IKSolver2D`: Analytical `TwoBoneIK` limb solver and `FABRIK2D` multi-joint chain solver.
-   - `Tweenable`: Concept for any interpolatable type using `pebble::math::lerp`.
-3. **Generic Splines as First-Class Akruti Shapes (`akruti/spline.hpp`)**:
-   - `CubicBezierCurve` and `CatmullRomSpline` implement the full `akruti::Shape` contract (`sdf(p)`, `aabb()`, `support(d)`).
-   - Splines participate seamlessly in **CSG shape arithmetic** (`csg::subtract`, `csg::smooth_union`).
-   - Arc-length parameterization for constant-speed evaluation.
-4. **Procedural 2D Destruction & Voronoi Shattering (`spandana/destruction.hpp`)**:
-   - Slices entities into dynamic Voronoi shards upon impact, computing exact area, centroids, and polar moment of inertia $I_z$, with radial impulse velocities.
+## 1. Core Modules
+
+1. **Easing & Springs (`spandana/easing.hpp`, `spandana/spring.hpp`)**:
+   - 32 Robert Penner easing equations (`in_quad`, `out_elastic`, `in_out_bounce`, etc.).
+   - Analytical damped harmonic oscillator (`AnalyticalSpringDamper`) with critical, underdamped, and overdamped modes.
+2. **Inverse Kinematics (`spandana/ik.hpp`)**:
+   - Analytical 2-Bone trigonometric IK solver with reach clamping and elbow flip flags.
+3. **Soft-Body Verlet Dynamics (`spandana/cloth.hpp`)**:
+   - 2D distance-constrained cloth, hair, and cape dynamics.
+   - Conversion to `akruti::ChainShape<N>` via `cloth.to_chain<N>()` for continuous collision & rendering.
+4. **Procedural Voronoi Destruction (`spandana/destruction.hpp`)**:
+   - Dynamic Voronoi polygon fracture using Akruti clipping with automatic `gati::ShapeRef` and exact mass/inertia tensor computations.
 5. **Parametric 2D Directional Blend Spaces (`spandana/blend_space.hpp`)**:
-   - `BlendSpace2D` maps velocity vectors $(v_x, v_y)$ to weighted multi-clip animation samples (Walk, Run, Strafe, Turn) with footstep phase synchronization.
-6. **Continuous Material Thermodynamics & Phase Changes (`gati/material.hpp`, `spandana/edsl/material_edsl.hpp`)**:
-   - Continuous 4-fraction phase model (`solid`, `plastic`, `liquid`, `gas`).
-   - Dynamic melting, boiling, burning, contact thermal diffusion, molten welding/fusion, and brittle fracture on collision.
+   - Barycentric velocity interpolation between multiple animation clips with phase synchronization.
+6. **Declarative Universal EDSL & Timeline (`spandana/edsl/`, `spandana/timeline.hpp`)**:
+   - Natural, unified syntax: `tween()`, `follow_path()`, `shake_screen()`, `play_sound()`, `particle_burst()`.
+   - Automatic resource dependency inference (concurrent execution of disjoint resources, sequential chaining of shared keys).and brittle fracture on collision.
 7. **Elemental & Chemical Reaction Matrix (`gati/elemental.hpp`)**:
    - Automated elemental resolution: Water + Lava $\to$ Obsidian + Steam, Fire + Wood $\to$ Ignition, Acid + Metal $\to$ Corrosion, Electricity + Water $\to$ Shockwaves.
 8. **2D Skeletal Hierarchy & Linear Blend Skinning (`spandana/skeleton.hpp`)**:

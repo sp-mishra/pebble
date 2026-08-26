@@ -1,3 +1,4 @@
+#define GATI_ENABLE_AKRUTI 1
 #include "catch_amalgamated.hpp"
 #include "spandana/destruction.hpp"
 #include "spandana/blend_space.hpp"
@@ -56,6 +57,13 @@ TEST_CASE("Spandana: World Entity Shattering", "[spandana][destruction][ecs]") {
 
     // Dynamic shard entities should now be alive in the world
     REQUIRE(world.entity_count() >= 3);
+
+    // Verify ShapeRef was attached to shards
+    int shard_shapes = 0;
+    world.view<gati::Transform, gati::ShapeRef>([&](pebble::ecs::Entity, gati::Transform&, gati::ShapeRef&) {
+        ++shard_shapes;
+    });
+    REQUIRE(shard_shapes >= 3);
 }
 
 TEST_CASE("Spandana: Parametric 2D Directional Blend Space", "[spandana][blend_space]") {

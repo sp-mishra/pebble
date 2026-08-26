@@ -11,6 +11,7 @@
 #include "akruti/khanda.hpp"
 #include "ecs/ecs.hpp"
 #include "gati/transform.hpp"
+#include "gati/collision.hpp"
 #include "containers/numeric/math_vector.hpp"
 #include <vector>
 #include <cmath>
@@ -142,6 +143,17 @@ public:
                 .position = shard.centroid,
                 .prev_position = shard.centroid
             });
+
+#if defined(GATI_HAS_AKRUTI)
+            if (shard.polygon.size() <= 8) {
+                akruti::ConvexPoly<8> cp;
+                for (const auto& v : shard.polygon) {
+                    // Local relative coordinates to centroid
+                    (void)cp.verts.push_back(akruti::Vec{v.x - shard.centroid[0], v.y - shard.centroid[1]});
+                }
+                world.add<gati::ShapeRef>(shard_entity, {.shape = cp});
+            }
+#endif
         }
     }
 };

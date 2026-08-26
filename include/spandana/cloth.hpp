@@ -10,6 +10,7 @@
 
 #include "containers/static/static_vector.hpp"
 #include "containers/numeric/math_vector.hpp"
+#include "akruti/primitives.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -81,10 +82,22 @@ public:
         return particles_;
     }
 
+    // Convert verlet particles into an Akruti ChainShape for terrain/rope collision
+    template <std::size_t N = 32>
+    [[nodiscard]] auto to_chain(float radius = 0.5f) const noexcept {
+        akruti::ChainShape<N> chain;
+        chain.radius = radius;
+        chain.is_loop = false;
+        for (const auto& pt : particles_) {
+            (void)chain.verts.push_back(akruti::Vec(pt.pos));
+        }
+        return chain;
+    }
+
 private:
-    float                                      segment_length_ = 6.0f;
-    pebble::math::vec2                         gravity_{0.0f, -98.0f};
-    float                                      drag_ = 0.02f;
+    float                                           segment_length_ = 6.0f;
+    pebble::math::vec2                              gravity_{0.0f, -98.0f};
+    float                                           drag_ = 0.02f;
     containers::static_vector<VerletParticle2D, 32> particles_;
 };
 
