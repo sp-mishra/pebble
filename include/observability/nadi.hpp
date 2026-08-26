@@ -275,12 +275,12 @@ namespace utils::nadi {
     // custom clock (e.g. TscCycleClockPolicy for cycle-count profiling).
 
     template <typename ClockPolicy, SinkPolicy Sink, FixedString Category, typename... Fields>
-    struct BasicPulseScope {
+    struct active_pulse_scope {
         using BeginPulse = Pulse<Category, Fields...>;
         using EndPulse = Pulse<Category>;
 
         // source_location captured at constructor call site; wrapping disables location capture.
-        explicit BasicPulseScope (
+        explicit active_pulse_scope(
             Fields
         ...
         fields
@@ -328,7 +328,7 @@ namespace utils::nadi {
             });
         }
 
-        ~BasicPulseScope() noexcept {
+        ~active_pulse_scope() noexcept {
             route_pulse<Sink>(EndPulse{
                 .id = id_,
                 .phase = PulsePhase::End,
@@ -339,13 +339,13 @@ namespace utils::nadi {
             detail::current_lineage = previous_lineage_;
         }
 
-        BasicPulseScope(const BasicPulseScope&) = delete;
+        active_pulse_scope(const active_pulse_scope&) = delete;
 
-        BasicPulseScope& operator=(const BasicPulseScope&) = delete;
+        active_pulse_scope& operator=(const active_pulse_scope&) = delete;
 
-        BasicPulseScope(BasicPulseScope&&) = delete;
+        active_pulse_scope(active_pulse_scope&&) = delete;
 
-        BasicPulseScope& operator=(BasicPulseScope&&) = delete;
+        active_pulse_scope& operator=(active_pulse_scope&&) = delete;
 
     private:
         static std::tuple<Fields...> fill_loc(
@@ -385,6 +385,41 @@ namespace utils::nadi {
         std::uint64_t parent_id_;
         std::tuple<Fields...> payload_;
     };
+
+    // A disabled sink still participates in lineage: callers may use NoSink to
+    // propagate trace context without emitting pulses. It performs no clock read
+    // or sink routing; its only work is the event-id and thread-local lineage
+    // transition required by capture_lineage().
+    template <typename ClockPolicy, SinkPolicy Sink, FixedString Category, typename... Fields>
+    struct disabled_pulse_scope {
+        explicit disabled_pulse_scope(
+            Fields... /*fields*/,
+            std::source_location /*loc*/ = std::source_location::current()) noexcept
+            : previous_lineage_{detail::current_lineage}, id_{generate_event_id()} {
+            const auto parent_scope_id = previous_lineage_.trace_id.value;
+            const auto root_scope_id = parent_scope_id == 0
+                ? id_.value
+                : previous_lineage_.root_id.value;
+            detail::current_lineage = LineageToken{
+                id_, EventId{parent_scope_id}, EventId{root_scope_id}};
+        }
+
+        ~disabled_pulse_scope() noexcept { detail::current_lineage = previous_lineage_; }
+
+        disabled_pulse_scope(const disabled_pulse_scope&) = delete;
+        disabled_pulse_scope& operator=(const disabled_pulse_scope&) = delete;
+        disabled_pulse_scope(disabled_pulse_scope&&) = delete;
+        disabled_pulse_scope& operator=(disabled_pulse_scope&&) = delete;
+
+    private:
+        LineageToken previous_lineage_;
+        EventId id_;
+    };
+
+    template <typename ClockPolicy, SinkPolicy Sink, FixedString Category, typename... Fields>
+    using BasicPulseScope = std::conditional_t<Sink::enabled,
+                                                active_pulse_scope<ClockPolicy, Sink, Category, Fields...>,
+                                                disabled_pulse_scope<ClockPolicy, Sink, Category, Fields...>>;
 
     // PulseScope — convenience alias using SteadyClockPolicy.
     // PulseScope<Sink, Category, Fields...> is equivalent to

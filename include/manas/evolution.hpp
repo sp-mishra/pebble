@@ -4,6 +4,7 @@
 #include "metrics.hpp"
 #include <algorithm>
 #include <functional>
+#include <future>
 #include <limits>
 #include <numeric>
 #include <stdexcept>
@@ -31,23 +32,42 @@ public:
     const std::vector<BrainGenome>& population() const noexcept { return population_; }
 
     // Run one full generation:
-    //   1. Evaluate fitness of current population.
+    //   1. Evaluate fitness of current population (optionally parallelized).
     //   2. Select parents via SelectionPolicy.
     //   3. Produce children via CrossoverOp.
     //   4. Mutate children via MutationOp.
     //   5. Evaluate children fitness.
     //   6. Merge children into population (replace weakest).
     //   7. Track best genome seen so far.
-    void run_generation(const FitnessFn& fitness_fn) {
+    void run_generation(const FitnessFn& fitness_fn, size_t num_threads = 1) {
         if (population_.empty()) {
             throw std::runtime_error("EvolutionaryProcess: population is empty");
         }
 
         // --- 1. Evaluate current population ---
-        std::vector<FitnessMetrics> scores;
-        scores.reserve(population_.size());
-        for (const auto& g : population_) {
-            scores.push_back(fitness_fn(g));
+        std::vector<FitnessMetrics> scores(population_.size());
+        if (num_threads > 1 && population_.size() > 1) {
+            const size_t n = population_.size();
+            const size_t chunk = (n + num_threads - 1) / num_threads;
+            std::vector<std::future<void>> futures;
+            for (size_t t = 0; t < num_threads; ++t) {
+                size_t start = t * chunk;
+                size_t end = std::min(start + chunk, n);
+                if (start < end) {
+                    futures.push_back(std::async(std::launch::async, [this, &fitness_fn, &scores, start, end]() {
+                        for (size_t i = start; i < end; ++i) {
+                            scores[i] = fitness_fn(population_[i]);
+                        }
+                    }));
+                }
+            }
+            for (auto& f : futures) {
+                f.get();
+            }
+        } else {
+            for (size_t i = 0; i < population_.size(); ++i) {
+                scores[i] = fitness_fn(population_[i]);
+            }
         }
 
         // Track best genome (highest fitness score).

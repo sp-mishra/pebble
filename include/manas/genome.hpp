@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 #include "../containers/tensor/tensor.hpp"
+#include "activation.hpp"
 #include "brain.hpp"
 #include "topology.hpp"
 
@@ -14,6 +15,7 @@ struct BrainGenome {
     // Per-layer tensors for multi-layer topologies (FeedForward, etc.)
     std::vector<ts::tensor<float>> layer_weights;
     std::vector<ts::tensor<float>> layer_biases;
+    std::vector<ActivationType> layer_activations;
 
     // Flat weight/bias tensors kept for single-layer (Reactive) convenience
     ts::tensor<float> weights;

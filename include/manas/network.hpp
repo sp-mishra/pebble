@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 #include "../containers/tensor/tensor.hpp"
+#include "activation.hpp"
 #include "genome.hpp"
 #include "topology.hpp"
 
@@ -23,6 +24,16 @@ public:
             // linear: activation = W * activation + b
             activation = ts::dot(genome_.layer_weights[i], activation)
                        + genome_.layer_biases[i];
+
+            // Apply activation function if specified for this layer
+            if (i < genome_.layer_activations.size()) {
+                const auto act_type = genome_.layer_activations[i];
+                if (act_type != ActivationType::Identity) {
+                    for (size_t k = 0; k < activation.size(); ++k) {
+                        activation({k}) = apply_activation(act_type, activation({k}));
+                    }
+                }
+            }
         }
         return activation;
     }

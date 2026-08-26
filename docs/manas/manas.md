@@ -105,6 +105,7 @@ graph LR
     Manas --> Tensor["Tensor (Numerics)"]
     Manas --> Jeeva["Jeeva (Evolution)"]
     Manas --> Pravaha["Pravaha (Parallel)"]
+    Manas --> Petika["Petika (Durable Archival & MVCC Lineage)"]
     Manas --> Akruti["Akruti (Morphology)"]
     Manas --> Visual["LiteGraph (Visualization)"]
 ```
@@ -112,18 +113,20 @@ graph LR
 ## Development Status
 ```mermaid
 pie title Implementation Progress
-    "Implemented" : 45
-    "Prototyped" : 25
-    "Planned" : 30
+    "Implemented" : 70
+    "Prototyped" : 15
+    "Planned" : 15
 ```
 
 ## Future Roadmap
-1. Neural network forward pass implementation
-2. NEAT-inspired evolvable topology
-3. Pravaha-based parallel evolution
-4. LiteGraph-powered brain visualization
-5. BPlusTree genome archival
-6. Thermodynamic memory models
+1. Neural network forward pass implementation (Implemented)
+2. Non-linear activation functions (Implemented)
+3. Policy-based evolutionary loop with selection, mutation, crossover (Implemented)
+4. Petika-backed durable genome archival & lineage snapshots (Implemented)
+5. Pravaha-based parallel evolution (Implemented)
+6. NEAT-inspired evolvable dynamic topology
+7. LiteGraph-powered brain visualization
+8. Thermodynamic memory models
 
 ## Example Evolutionary Simulation
 ```cpp
