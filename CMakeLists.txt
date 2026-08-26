@@ -591,3 +591,51 @@ if (EXISTS "${CMAKE_SOURCE_DIR}/src/app/main.cpp")
         TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endif()
 
+# ---------------------------------------------------------------------------
+# Pebs Executable (new compilation unit)
+# ---------------------------------------------------------------------------
+if (EXISTS "${CMAKE_SOURCE_DIR}/src/pebs/main.cpp")
+
+    set(PEBBLE_PEBS_SOURCES
+        src/pebs/main.cpp
+    )
+
+    add_executable(pebs ${PEBBLE_PEBS_SOURCES})
+
+    target_link_libraries(pebs PRIVATE
+        pebble::ecs
+        pebble::pravaha
+        pebble::akruti
+        pebble::prakriti
+        pebble::gati
+        pebble::spandana
+        pebble::dhvani
+        pebble::kalpana
+        spdlog::spdlog_header_only
+        hwy
+        crc32c
+    )
+
+    if (TARGET lmdb)
+        target_link_libraries(pebs PRIVATE lmdb)
+    endif()
+
+    if (TARGET libz3)
+        target_link_libraries(pebs PRIVATE libz3)
+    elseif (TARGET z3_imported)
+        target_link_libraries(pebs PRIVATE z3_imported)
+    endif()
+
+    if (HAS_MLX AND TARGET mlx)
+        target_link_libraries(pebs PRIVATE mlx)
+    endif()
+
+    if (HAS_METAL_CPP)
+        target_link_libraries(pebs PRIVATE
+            ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK} ${QUARTZCORE_FRAMEWORK})
+    endif()
+
+    target_compile_definitions(pebs PRIVATE
+        TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+endif()

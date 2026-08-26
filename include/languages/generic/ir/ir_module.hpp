@@ -75,6 +75,14 @@ namespace lang {
             return id;
         }
 
+        // Optional capacity planning for a frontend which can estimate its
+        // flat-node and child-edge counts before construction.
+        void reserve(const std::size_t node_capacity,
+                     const std::size_t child_capacity = 0) {
+            nodes_.reserve(node_capacity);
+            child_ids_.reserve(child_capacity);
+        }
+
         // Append child ids for the node at `node_id`, returning first_child offset.
         node_handle append_children(node_handle node_id,
                                     std::span<const ir_node_id> kids)

@@ -60,6 +60,13 @@ namespace lang {
             return id;
         }
 
+        // Reserve node storage when a frontend has a reliable capacity hint.
+        // This is opt-in: callers that do not provide one retain the original
+        // zero-extra-work growth behaviour.
+        void reserve(const std::size_t node_capacity) {
+            nodes_.reserve(node_capacity);
+        }
+
         [[nodiscard]] const NodeVariant& operator[](ast_node_id id) const {
             return nodes_[id];
         }

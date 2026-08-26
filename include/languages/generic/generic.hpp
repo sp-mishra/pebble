@@ -24,6 +24,7 @@
 #include "languages/generic/core/source_location.hpp"
 #include "languages/generic/core/rich_diagnostic.hpp"
 #include "languages/generic/core/parse_stats.hpp"
+#include "languages/generic/observability/phase.hpp"
 #include "languages/generic/tree/spans.hpp"
 #include "languages/generic/tree/event_log.hpp"
 #include "languages/generic/tree/green_arena.hpp"

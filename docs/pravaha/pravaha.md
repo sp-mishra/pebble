@@ -1135,8 +1135,19 @@ struct metal_gpu_backend {
 };
 ```
 
-**Memory rule:** every metal-cpp `new*` returns +1 retain; release explicitly. Buffers released per-dispatch; PSO
-released by caller (or by Part-4 cache on eviction).
+**Memory rule:** every metal-cpp `new*` returns +1 retain; release explicitly. The ordinary dispatch API releases
+its transient buffers per call; PSOs are released by the caller (or by the Part-4 cache on eviction).
+
+For repeated work, `metal_buffer_set<T, K>` owns `K` shared input buffers plus
+one output buffer and grows only when capacity is insufficient. Upload, submit,
+wait, and download are separate steps. `dispatch_multi_async` returns a
+move-only `metal_submission`; call `wait()` before reusing or destroying its
+buffer set. This is opt-in, so one-shot dispatches retain their small API and
+pay no persistent-buffer cost.
+
+`dispatch_device_multi_async` is the lower-level no-copy form: it binds
+caller-owned Metal buffers directly and is intended for an upper layer that
+owns device-resident values. It does not provide implicit upload or download.
 
 **Zero-copy path:** `newBuffer(ptr, bytes, StorageModeShared, nullptr)` wraps host pointer directly — valid on Apple
 unified memory when pointer is 4 KB page-aligned. Fallback: `newBuffer(bytes) + memcpy` in/out.
@@ -1174,6 +1185,12 @@ using pipeline_cache =
 template <typename E>
 [[nodiscard]] Outcome<pipeline_ptr>
 get_or_compile(const E& expr, compute::data_element_type elem);
+
+// The same bounded cache for generated source kernels, including consumers
+// such as Lithe that hold only a semantic source identity and MSL payload.
+[[nodiscard]] Outcome<pipeline_ptr>
+get_or_compile_source(std::uint64_t key, std::string_view msl,
+                      std::string_view function_name);
 ```
 
 Key: `structural_hash(expr)` (topology-only, Invariant 1). Second call with identical tree → hit; same `pipeline_ptr`

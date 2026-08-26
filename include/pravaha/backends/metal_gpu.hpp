@@ -9,8 +9,12 @@
 #include "containers/cache/kosha.hpp"
 
 #include <sstream>
+#include <array>
+#include <cstring>
+#include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <iomanip>
 #include <cassert>
 namespace pravaha::backends { namespace lithe = ::vakya; }
@@ -333,6 +337,126 @@ namespace pravaha::backends::metal {
 namespace pravaha::backends::metal {
     inline constexpr std::size_t kReduceTG = 256;
 
+    // An owned command-buffer completion token.  It is deliberately explicit:
+    // callers can overlap independent CPU work before calling wait(), while the
+    // ordinary dispatch APIs retain their synchronous, simple semantics.
+    struct metal_submission {
+        MTL::CommandBuffer* command_buffer = nullptr;
+
+        metal_submission() = default;
+        explicit metal_submission(MTL::CommandBuffer* value) noexcept : command_buffer(value) {}
+        metal_submission(const metal_submission&) = delete;
+        metal_submission& operator=(const metal_submission&) = delete;
+        metal_submission(metal_submission&& other) noexcept
+            : command_buffer(std::exchange(other.command_buffer, nullptr)) {}
+        metal_submission& operator=(metal_submission&& other) noexcept {
+            if (this != std::addressof(other)) {
+                reset();
+                command_buffer = std::exchange(other.command_buffer, nullptr);
+            }
+            return *this;
+        }
+        ~metal_submission() { reset(); }
+
+        [[nodiscard]] explicit operator bool() const noexcept { return command_buffer != nullptr; }
+
+        [[nodiscard]] Outcome<void> wait() const {
+            if (!command_buffer)
+                return std::unexpected(PravahaError::make(
+                    ErrorKind::ExecutorUnavailable, "metal: empty submission"));
+            command_buffer->waitUntilCompleted();
+            if (auto* error = command_buffer->error(); error != nullptr)
+                return std::unexpected(PravahaError::make(
+                    ErrorKind::InternalError, error->localizedDescription()->utf8String()));
+            return {};
+        }
+
+    private:
+        void reset() noexcept {
+            if (command_buffer) command_buffer->release();
+            command_buffer = nullptr;
+        }
+    };
+
+    // Reusable shared-memory buffers for repeated host-to-device elementwise
+    // dispatches.  Buffer lifetime is caller-owned, so no allocation occurs
+    // after capacity is established.  A caller must wait for a submission before
+    // reusing or destroying this set.
+    template <typename T, std::size_t K>
+    struct metal_buffer_set {
+        std::array<MTL::Buffer*, K> inputs{};
+        MTL::Buffer* output = nullptr;
+        std::size_t capacity = 0;
+
+        metal_buffer_set() = default;
+        metal_buffer_set(const metal_buffer_set&) = delete;
+        metal_buffer_set& operator=(const metal_buffer_set&) = delete;
+        ~metal_buffer_set() { reset(); }
+
+        [[nodiscard]] Outcome<void> reserve(MTL::Device* device, const std::size_t count) {
+            if (count == 0) return {};
+            if (count <= capacity && output != nullptr) return {};
+            if (!device)
+                return std::unexpected(PravahaError::make(
+                    ErrorKind::ExecutorUnavailable, "metal: no device for buffer allocation"));
+            const auto bytes = count * sizeof(T);
+            std::array<MTL::Buffer*, K> new_inputs{};
+            for (auto& buffer : new_inputs) {
+                buffer = device->newBuffer(bytes, MTL::ResourceStorageModeShared);
+                if (!buffer) {
+                    for (auto* allocated : new_inputs) if (allocated) allocated->release();
+                    return std::unexpected(PravahaError::make(
+                        ErrorKind::InternalError, "metal: input buffer allocation failed"));
+                }
+            }
+            auto* new_output = device->newBuffer(bytes, MTL::ResourceStorageModeShared);
+            if (!new_output) {
+                for (auto* allocated : new_inputs) allocated->release();
+                return std::unexpected(PravahaError::make(
+                    ErrorKind::InternalError, "metal: output buffer allocation failed"));
+            }
+            reset();
+            inputs = new_inputs;
+            output = new_output;
+            capacity = count;
+            return {};
+        }
+
+        [[nodiscard]] Outcome<void> upload(
+            const std::array<std::span<const T>, K>& source, const std::size_t count) const {
+            if (count > capacity)
+                return std::unexpected(PravahaError::make(
+                    ErrorKind::InternalError, "metal: buffer set capacity is too small"));
+            for (std::size_t i = 0; i < K; ++i) {
+                if (source[i].size() < count)
+                    return std::unexpected(PravahaError::make(
+                        ErrorKind::InternalError, "metal: input span is shorter than dispatch domain"));
+                std::memcpy(inputs[i]->contents(), source[i].data(), count * sizeof(T));
+            }
+            return {};
+        }
+
+        [[nodiscard]] Outcome<void> download(const std::span<T> destination,
+                                              const std::size_t count) const {
+            if (count > capacity || destination.size() < count)
+                return std::unexpected(PravahaError::make(
+                    ErrorKind::InternalError, "metal: output span is shorter than dispatch domain"));
+            std::memcpy(destination.data(), output->contents(), count * sizeof(T));
+            return {};
+        }
+
+    private:
+        void reset() noexcept {
+            for (auto*& buffer : inputs) {
+                if (buffer) buffer->release();
+                buffer = nullptr;
+            }
+            if (output) output->release();
+            output = nullptr;
+            capacity = 0;
+        }
+    };
+
     struct metal_gpu_backend {
         MTL::Device* device = nullptr;
         MTL::CommandQueue* queue = nullptr;
@@ -391,6 +515,79 @@ namespace pravaha::backends::metal {
                         ? err->localizedDescription()->utf8String()
                         : "metal: newComputePipelineState failed"));
             return pso;
+        }
+
+        template <typename T, std::size_t K>
+        [[nodiscard]] Outcome<metal_submission> dispatch_multi_async(
+            MTL::ComputePipelineState* pso,
+            const metal_buffer_set<T, K>& buffers,
+            const std::size_t count,
+            const hetero::compute_grid_descriptor& grid) {
+            if (!available() || !pso || count > buffers.capacity)
+                return std::unexpected(PravahaError::make(
+                    ErrorKind::ExecutorUnavailable, "metal: asynchronous dispatch is unavailable"));
+            auto* command_buffer = queue->commandBuffer();
+            auto* encoder = command_buffer->computeCommandEncoder();
+            encoder->setComputePipelineState(pso);
+            for (std::size_t i = 0; i < K; ++i) encoder->setBuffer(buffers.inputs[i], 0, i);
+            encoder->setBuffer(buffers.output, 0, K);
+            const auto n = static_cast<std::uint32_t>(count);
+            encoder->setBytes(&n, sizeof(n), K + 1);
+            const auto threads = std::min<NS::UInteger>(pso->maxTotalThreadsPerThreadgroup(),
+                grid.local_size[0] ? grid.local_size[0] : 256);
+            encoder->dispatchThreads(MTL::Size(n, 1, 1), MTL::Size(threads, 1, 1));
+            encoder->endEncoding();
+            command_buffer->commit();
+            return metal_submission{command_buffer};
+        }
+
+        // Device-resident variant: callers own the Metal buffers and can feed
+        // one kernel's output directly into another kernel's input.  It performs
+        // no host allocation and no host/device copy.
+        template <std::size_t K>
+        [[nodiscard]] Outcome<metal_submission> dispatch_device_multi_async(
+            MTL::ComputePipelineState* pso,
+            MTL::Buffer* output,
+            const std::array<MTL::Buffer*, K>& inputs,
+            const std::size_t count,
+            const hetero::compute_grid_descriptor& grid) {
+            if (!available() || !pso || !output || count == 0
+                || std::ranges::any_of(inputs, [](const auto* buffer) { return buffer == nullptr; }))
+                return std::unexpected(PravahaError::make(
+                    ErrorKind::ExecutorUnavailable, "metal: device-resident dispatch is unavailable"));
+            auto* command_buffer = queue->commandBuffer();
+            auto* encoder = command_buffer->computeCommandEncoder();
+            encoder->setComputePipelineState(pso);
+            for (std::size_t i = 0; i < K; ++i) encoder->setBuffer(inputs[i], 0, i);
+            encoder->setBuffer(output, 0, K);
+            const auto n = static_cast<std::uint32_t>(count);
+            encoder->setBytes(&n, sizeof(n), K + 1);
+            const auto threads = std::min<NS::UInteger>(pso->maxTotalThreadsPerThreadgroup(),
+                grid.local_size[0] ? grid.local_size[0] : 256);
+            encoder->dispatchThreads(MTL::Size(n, 1, 1), MTL::Size(threads, 1, 1));
+            encoder->endEncoding();
+            command_buffer->commit();
+            return metal_submission{command_buffer};
+        }
+
+        template <typename T, std::size_t K>
+        [[nodiscard]] Outcome<void> dispatch_multi(
+            MTL::ComputePipelineState* pso,
+            metal_buffer_set<T, K>& buffers,
+            const std::span<T> destination,
+            const std::array<std::span<const T>, K>& source,
+            const hetero::compute_grid_descriptor& grid) {
+            const auto count = source.front().size();
+            if (count == 0) return {};
+            if (destination.size() < count)
+                return std::unexpected(PravahaError::make(
+                    ErrorKind::InternalError, "metal: output span is shorter than dispatch domain"));
+            if (const auto reserved = buffers.reserve(device, count); !reserved) return reserved;
+            if (const auto uploaded = buffers.upload(source, count); !uploaded) return uploaded;
+            auto submission = dispatch_multi_async(pso, buffers, count, grid);
+            if (!submission) return std::unexpected(submission.error());
+            if (const auto completed = submission->wait(); !completed) return completed;
+            return buffers.download(destination, count);
         }
 
         template <typename T>
@@ -687,6 +884,27 @@ namespace pravaha::backends::metal {
     [[nodiscard]] inline pipeline_cache& kernel_cache() {
         static pipeline_cache cache{256};
         return cache;
+    }
+
+    // Source kernels (including Lithe's shared HL-MIR lowering) use the same
+    // bounded Kosha cache as Pravaha expression kernels.  The caller supplies a
+    // stable semantic key, so this does not make source text or Metal handles
+    // part of Lithe's persistent artifact format.
+    [[nodiscard]] inline Outcome<pipeline_ptr>
+    get_or_compile_source(const std::uint64_t key,
+                          const std::string_view msl_source,
+                          const std::string_view function_name) {
+        if (auto hit = kernel_cache().peek(key); hit.has_value()) {
+            hetero::emit_cache_event(true, key);
+            return *hit;
+        }
+        hetero::emit_cache_event(false, key);
+        auto compiled = metal_gpu_backend::instance().compile(
+            std::string(msl_source), function_name);
+        if (!compiled) return std::unexpected(compiled.error());
+        pipeline_ptr pipeline = NS::TransferPtr(*compiled);
+        [[maybe_unused]] auto inserted = kernel_cache().put(key, pipeline);
+        return pipeline;
     }
 
     template <typename E>

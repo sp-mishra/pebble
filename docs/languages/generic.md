@@ -96,6 +96,7 @@ include/languages/generic/
 ├─ module/                      (file & artifact resolution)
 │  ├─ module_system.hpp        (module descriptor, kind, version, config)
 │  └─ import_resolver.hpp      (9-tier resolver, dependency graph, cycles)
+│  └─ parallel_compile.hpp     (opt-in Pravaha batch compilation)
 │
 ├─ semantic/                    (scoping & constraints)
 │  ├─ symbol_table.hpp         (scope stacks, pluggable visibility)
@@ -123,6 +124,23 @@ For minimal compilation, include only what you need:
 ```cpp
 #include "languages/generic/core/identity.hpp"      // Just IDs
 #include "languages/generic/module/module_system.hpp"  // Just modules
+```
+
+### Optional parallel module compilation
+
+`module/parallel_compile.hpp` is an explicit integration header for independent,
+already dependency-ordered modules. It is intentionally excluded from
+`generic.hpp`: sequential users neither include Pravaha nor create worker
+threads. `compile_modules_pravaha` uses bounded contiguous tasks and returns
+results in input order; callers retain ownership of module-local diagnostics and
+merge them in source order after compilation.
+
+```cpp
+#include "languages/generic/module/parallel_compile.hpp"
+
+pravaha::JThreadBackend workers{4};
+auto result = lang::module::compile_modules_pravaha(
+    modules, compile_one_module, workers);
 ```
 
 ---

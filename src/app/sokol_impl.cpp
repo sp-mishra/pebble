@@ -5,11 +5,14 @@
 // uses -x objective-c++ via COMPILE_OPTIONS).
 // ============================================================================
 
-// Pick Metal backend on Apple platforms, GL everywhere else.
 #if defined(__APPLE__)
-#  define SOKOL_METAL
+#  if !defined(SOKOL_METAL)
+#    define SOKOL_METAL
+#  endif
 #else
-#  define SOKOL_GLCORE
+#  if !defined(SOKOL_GLCORE)
+#    define SOKOL_GLCORE
+#  endif
 #endif
 
 #define SOKOL_IMPL
@@ -19,6 +22,8 @@
 #pragma clang diagnostic ignored "-Wunused-parameter"
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #pragma clang diagnostic ignored "-Wunused-function"
+#pragma clang diagnostic ignored "-Wenum-enum-conversion"
+#pragma clang diagnostic ignored "-Wmacro-redefined"
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "sokol_glue.h"

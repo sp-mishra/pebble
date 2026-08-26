@@ -1357,6 +1357,108 @@ namespace profiler {
         );
     }
 
+    // Execution labels keep benchmark reports honest when comparing native code,
+    // JIT, host boundaries, and intentionally non-equivalent interpreter probes.
+    enum class execution_mechanism {
+        native_cpp,
+        native_jit,
+        typed_host_trampoline,
+        physical_mir_interpreter,
+        full_lowering_and_interpretation,
+        simd,
+        metal,
+        vulkan,
+    };
+
+    [[nodiscard]] constexpr std::string_view to_string(
+        const execution_mechanism mechanism) noexcept {
+        switch (mechanism) {
+        case execution_mechanism::native_cpp: return "native C++";
+        case execution_mechanism::native_jit: return "native JIT";
+        case execution_mechanism::typed_host_trampoline: return "typed host trampoline";
+        case execution_mechanism::physical_mir_interpreter: return "physical-MIR interpreter";
+        case execution_mechanism::full_lowering_and_interpretation:
+            return "lowering plus physical-MIR interpretation";
+        case execution_mechanism::simd: return "SIMD";
+        case execution_mechanism::metal: return "Metal";
+        case execution_mechanism::vulkan: return "Vulkan";
+        }
+        return "unknown";
+    }
+
+    struct execution_comparison {
+        std::string_view workload;
+        std::string_view equivalence;
+        execution_mechanism baseline{execution_mechanism::native_cpp};
+        execution_mechanism candidate{execution_mechanism::native_cpp};
+    };
+
+    [[nodiscard]] inline std::string format_execution_comparison(
+        const execution_comparison& description,
+        const ProfileResult& baseline,
+        const ProfileResult& candidate) {
+        const auto comparison = compare(baseline, candidate);
+        const auto baseline_median = static_cast<double>(baseline.median().count());
+        const auto candidate_median = static_cast<double>(candidate.median().count());
+        const auto median_delta_percent = baseline_median == 0.0
+            ? 0.0
+            : ((candidate_median / baseline_median) - 1.0) * 100.0;
+        const auto baseline_cv = baseline.coefficient_of_variation();
+        const auto candidate_cv = candidate.coefficient_of_variation();
+        constexpr double unstable_cv = 0.10;
+        const bool unstable = std::max(baseline_cv, candidate_cv) >= unstable_cv;
+        const auto conclusion = unstable
+            ? std::format(
+                "Statistical Test: p={:.4f} (advisory; sample stability is low)\n"
+                "Verdict: Measurement unstable; use the median delta and rerun under Release/RelWithDebInfo.\n",
+                comparison.p_value)
+            : format_comparison(comparison);
+
+        return std::format(
+            "Benchmark: {}\n"
+            "Work equivalence: {}\n"
+            "Baseline [{}]: avg={:.2f} us median={:.2f} us p95={:.2f} us CV={:.3f}\n"
+            "Candidate [{}]: avg={:.2f} us median={:.2f} us p95={:.2f} us CV={:.3f}\n"
+            "Median delta: {:+.2f}% (candidate relative to baseline)\n"
+            "Stability: {}\n"
+            "{}",
+            description.workload,
+            description.equivalence,
+            to_string(description.baseline),
+            static_cast<double>(baseline.average_duration.count()) / 1000.0,
+            static_cast<double>(baseline.median().count()) / 1000.0,
+            static_cast<double>(baseline.percentile(95.0).count()) / 1000.0,
+            baseline_cv,
+            to_string(description.candidate),
+            static_cast<double>(candidate.average_duration.count()) / 1000.0,
+            static_cast<double>(candidate.median().count()) / 1000.0,
+            static_cast<double>(candidate.percentile(95.0).count()) / 1000.0,
+            candidate_cv,
+            median_delta_percent,
+            unstable ? "unstable; tail metrics are diagnostic" : "stable",
+            conclusion);
+    }
+
+    [[nodiscard]] inline std::string format_execution_probe(
+        const std::string_view workload,
+        const execution_mechanism mechanism,
+        const ProfileResult& result,
+        const std::string_view scope) {
+        return std::format(
+            "Execution probe: {}\n"
+            "Mechanism: {}\n"
+            "Scope: {}\n"
+            "Result: avg={:.2f} us median={:.2f} us p95={:.2f} us CV={:.3f}\n"
+            "Comparison: intentionally omitted; this probe does not perform an equivalent baseline workload.",
+            workload,
+            to_string(mechanism),
+            scope,
+            static_cast<double>(result.average_duration.count()) / 1000.0,
+            static_cast<double>(result.median().count()) / 1000.0,
+            static_cast<double>(result.percentile(95.0).count()) / 1000.0,
+            result.coefficient_of_variation());
+    }
+
     // --- Scoped Profiler (RAII) ---
 
     /**
