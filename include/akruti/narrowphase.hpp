@@ -108,6 +108,158 @@ struct Manifold {
     }
 }
 
+[[nodiscard]] inline Manifold collide_capsule_capsule(const Capsule& a, const Capsule& b) noexcept {
+    // 1. Find closest points between segment A (a.a -> a.b) and segment B (b.a -> b.b)
+    const Vec d1 = a.b - a.a;
+    const Vec d2 = b.b - b.a;
+    const Vec r = a.a - b.a;
+
+    const Scalar a_len2 = d1.len2();
+    const Scalar b_len2 = d2.len2();
+    const Scalar f = d2.dot(r);
+
+    Scalar s = 0.0f, t = 0.0f;
+    if (a_len2 <= 1e-6f && b_len2 <= 1e-6f) {
+        s = t = 0.0f;
+    } else if (a_len2 <= 1e-6f) {
+        s = 0.0f;
+        t = std::clamp(f / b_len2, 0.0f, 1.0f);
+    } else {
+        const Scalar c = d1.dot(r);
+        if (b_len2 <= 1e-6f) {
+            t = 0.0f;
+            s = std::clamp(-c / a_len2, 0.0f, 1.0f);
+        } else {
+            const Scalar b_dot = d1.dot(d2);
+            const Scalar denom = a_len2 * b_len2 - b_dot * b_dot;
+            if (denom > 1e-6f) {
+                s = std::clamp((b_dot * f - c * b_len2) / denom, 0.0f, 1.0f);
+            } else {
+                s = 0.0f;
+            }
+            t = (b_dot * s + f) / b_len2;
+            if (t < 0.0f) {
+                t = 0.0f;
+                s = std::clamp(-c / a_len2, 0.0f, 1.0f);
+            } else if (t > 1.0f) {
+                t = 1.0f;
+                s = std::clamp((b_dot - c) / a_len2, 0.0f, 1.0f);
+            }
+        }
+    }
+
+    const Vec pA = a.a + d1 * s;
+    const Vec pB = b.a + d2 * t;
+    const Vec diff = pB - pA;
+    const Scalar dist2 = diff.len2();
+    const Scalar r_sum = a.radius + b.radius;
+
+    if (dist2 >= r_sum * r_sum) return Manifold{};
+
+    const Scalar dist = std::sqrt(std::max(dist2, 0.0f));
+    Vec n = (dist > 1e-6f) ? (diff / dist) : Vec{0, 1};
+    const Scalar depth = r_sum - dist;
+
+    Manifold m;
+    m.hit = true;
+    m.normal = n;
+    m.depth = depth;
+
+    // Check if segments are roughly parallel for a 2-point manifold
+    const Scalar parallel_tol = 0.98f;
+    const bool parallel = (std::fabs(d1.normalized().dot(d2.normalized())) > parallel_tol) &&
+                          (a_len2 > 1e-4f) && (b_len2 > 1e-4f);
+
+    if (parallel) {
+        // Project endpoints of A onto B
+        const Vec d2_norm = d2.normalized();
+        const Scalar t_a = std::clamp((a.a - b.a).dot(d2_norm) / std::sqrt(b_len2), 0.0f, 1.0f);
+        const Vec proj_a = b.a + d2 * t_a;
+        const Scalar d_a = (proj_a - a.a).len();
+
+        const Scalar t_b = std::clamp((a.b - b.a).dot(d2_norm) / std::sqrt(b_len2), 0.0f, 1.0f);
+        const Vec proj_b = b.a + d2 * t_b;
+        const Scalar d_b = (proj_b - a.b).len();
+
+        if (d_a < r_sum) {
+            (void)m.points.push_back(ContactPoint{a.a + n * (a.radius - (r_sum - d_a) * 0.5f), r_sum - d_a});
+        }
+        if (d_b < r_sum && m.points.size() < 2) {
+            (void)m.points.push_back(ContactPoint{a.b + n * (a.radius - (r_sum - d_b) * 0.5f), r_sum - d_b});
+        }
+    }
+
+    if (m.points.empty()) {
+        const Vec cp = pA + n * (a.radius - depth * 0.5f);
+        (void)m.points.push_back(ContactPoint{cp, depth});
+    }
+
+    return m;
+}
+
+[[nodiscard]] inline Manifold collide_capsule_obb(const Capsule& a, const OrientedBox& b) noexcept {
+    // Transform capsule endpoints to local box coordinates
+    const Vec diff_a = a.a - b.center;
+    const Vec local_a{b.rot.m00 * diff_a.x + b.rot.m10 * diff_a.y,
+                      b.rot.m01 * diff_a.x + diff_a.y * b.rot.m11};
+
+    const Vec diff_b = a.b - b.center;
+    const Vec local_b{b.rot.m00 * diff_b.x + b.rot.m10 * diff_b.y,
+                      b.rot.m01 * diff_b.x + diff_b.y * b.rot.m11};
+
+    // Test both endpoints against local AABB
+    const Circle c_a{a.a, a.radius};
+    const Circle c_b{a.b, a.radius};
+    const Box local_box{{0, 0}, b.half};
+
+    const Circle local_ca{local_a, a.radius};
+    const Circle local_cb{local_b, a.radius};
+
+    const Manifold m_a = collide_circle_box(local_ca, local_box);
+    const Manifold m_b = collide_circle_box(local_cb, local_box);
+
+    if (!m_a.hit && !m_b.hit) {
+        // Also check capsule midpoint for long capsules straddling box corners
+        const Vec local_mid = (local_a + local_b) * 0.5f;
+        const Circle local_cm{local_mid, a.radius};
+        const Manifold m_m = collide_circle_box(local_cm, local_box);
+        if (!m_m.hit) return Manifold{};
+
+        Manifold world_m;
+        world_m.hit = true;
+        world_m.normal = b.rot * m_m.normal;
+        world_m.depth = m_m.depth;
+        (void)world_m.points.push_back(ContactPoint{b.center + b.rot * m_m.points[0].point, m_m.depth});
+        return world_m;
+    }
+
+    Manifold world_m;
+    world_m.hit = true;
+    Scalar max_depth = 0.0f;
+
+    if (m_a.hit) {
+        world_m.normal = b.rot * m_a.normal;
+        world_m.depth = m_a.depth;
+        max_depth = m_a.depth;
+        (void)world_m.points.push_back(ContactPoint{b.center + b.rot * m_a.points[0].point, m_a.depth});
+    }
+
+    if (m_b.hit) {
+        const Vec norm_b = b.rot * m_b.normal;
+        if (world_m.points.empty()) {
+            world_m.normal = norm_b;
+            world_m.depth = m_b.depth;
+        } else {
+            // Average normal if both collide
+            world_m.normal = (world_m.normal + norm_b).normalized();
+            world_m.depth = std::max(world_m.depth, m_b.depth);
+        }
+        (void)world_m.points.push_back(ContactPoint{b.center + b.rot * m_b.points[0].point, m_b.depth});
+    }
+
+    return world_m;
+}
+
 // ── 2. Separating Axis Theorem (SAT) with 2-Point Edge Clipping ───────────────────
 
 namespace detail {

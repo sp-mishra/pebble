@@ -21,7 +21,16 @@
 
 namespace gati {
 
-using ShapeVariant = std::variant<akruti::Circle, akruti::Box, akruti::Capsule>;
+using ShapeVariant = std::variant<
+    akruti::Circle,
+    akruti::Box,
+    akruti::Capsule,
+    akruti::OrientedBox,
+    akruti::Triangle,
+    akruti::RoundedBox,
+    akruti::Sector,
+    akruti::ConvexPoly<8>
+>;
 
 // Component: an Akruti primitive placed by the entity Transform
 struct ShapeRef {
@@ -31,9 +40,19 @@ struct ShapeRef {
 };
 
 namespace detail {
-inline void translate(akruti::Circle& c, const Vec2& p)  { c.center = c.center + p; }
-inline void translate(akruti::Box& b, const Vec2& p)     { b.center = b.center + p; }
-inline void translate(akruti::Capsule& c, const Vec2& p) { c.a = c.a + p; c.b = c.b + p; }
+inline void translate(akruti::Circle& c, const Vec2& p)      { c.center = c.center + p; }
+inline void translate(akruti::Box& b, const Vec2& p)         { b.center = b.center + p; }
+inline void translate(akruti::Capsule& c, const Vec2& p)     { c.a = c.a + p; c.b = c.b + p; }
+inline void translate(akruti::OrientedBox& o, const Vec2& p) { o.center = o.center + p; }
+inline void translate(akruti::Triangle& t, const Vec2& p)    { t.a = t.a + p; t.b = t.b + p; t.c = t.c + p; }
+inline void translate(akruti::RoundedBox& r, const Vec2& p)  { r.center = r.center + p; }
+inline void translate(akruti::Sector& s, const Vec2& p)      { s.center = s.center + p; }
+template <std::size_t N>
+inline void translate(akruti::ConvexPoly<N>& poly, const Vec2& p) {
+    for (auto& v : poly.verts) {
+        v = v + p;
+    }
+}
 } // namespace detail
 
 // World AABB of a shape placed at p
@@ -118,5 +137,48 @@ struct RaycastResult {
     return best;
 }
 
+// Continuous Collision Detection (CCD) Sweep Query between moving entity and static world
+struct SweepResult {
+    Entity            entity = null_entity;
+    akruti::TOIResult toi{};
+};
+
+[[nodiscard]] inline SweepResult sweep_test(World& w, CollisionSystem& cs,
+                                            const ShapeVariant& moving_shape,
+                                            const Vec2& start_pos, const Vec2& delta_pos) {
+    SweepResult best;
+    best.toi.t = Scalar(1.0f);
+
+    // Compute broadphase swept AABB
+    AABB box_start = shape_aabb(moving_shape, start_pos);
+    AABB box_end   = shape_aabb(moving_shape, start_pos + delta_pos);
+    AABB swept_box{
+        {std::min(box_start.lo.x, box_end.lo.x), std::min(box_start.lo.y, box_end.lo.y)},
+        {std::max(box_start.hi.x, box_end.hi.x), std::max(box_start.hi.y, box_end.hi.y)}
+    };
+
+    cs.tree.query(swept_box, [&](std::uint32_t other_idx) {
+        ShapeRef*  other_s = w.get_by_index<ShapeRef>(other_idx);
+        Transform* other_t = w.get_by_index<Transform>(other_idx);
+        if (!other_s || !other_t) return;
+
+        std::visit([&](auto static_prim) {
+            std::visit([&](auto mover_prim) {
+                detail::translate(static_prim, other_t->position);
+                detail::translate(mover_prim, start_pos);
+
+                auto res = akruti::time_of_impact(static_prim, mover_prim, delta_pos);
+                if (res.hit && res.t < best.toi.t) {
+                    best.toi = res;
+                    best.entity = Entity{other_idx, w.generation_of(other_idx)};
+                }
+            }, moving_shape);
+        }, other_s->shape);
+    });
+
+    return best;
+}
+
 } // namespace gati
 #endif // GATI_HAS_AKRUTI
+

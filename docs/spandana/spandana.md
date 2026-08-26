@@ -5,9 +5,76 @@ Spandana is the high-level declarative visual, physical, and motion language for
 
 Include: `#include <spandana/spandana.hpp>`
 
+## Table of Contents
+1. [Subsystem Ecosystem & Dependencies](#1-subsystem-ecosystem--dependencies)
+2. [Core Strengths](#2-core-strengths)
+3. [Core Architecture](#3-core-architecture)
+4. [Quick Start Example](#4-quick-start-example)
+
 ---
 
-## 1. Core Architecture
+## 1. Subsystem Ecosystem & Dependencies
+
+Spandana sits as the high-level orchestration, declarative EDSL, and motion language uniting Pebble's foundational math, geometry, physics, graphics, and runtime systems:
+
+```mermaid
+flowchart TD
+    %% Base foundation
+    subgraph Foundation ["0. Foundational Base"]
+        PebbleBase["Pebble Math & Core Primitives<br><code>pebble::math::vec2, mat2, aabb2, AABBTree, union_find</code>"]
+    end
+
+    %% Core Geometry & Physics
+    subgraph Engines ["1. Core Simulation Engines"]
+        Akruti["<b>Akruti (आकृति)</b><br>Shapes · SAT · GJK · CCD · CSG · Splines"]
+        Prakriti["<b>Prakriti (प्रकृति)</b><br>Thermodynamics · XPBD · PBF · Damage/Plasticity"]
+    end
+
+    %% Mid-level presentation & runtime
+    subgraph RuntimeGraphics ["2. Runtime & Rendering"]
+        Kalpana["<b>Kalpana (कल्पना)</b><br>Vector Paths · Kubelka-Munk Spectral Pigments · Backends"]
+        Gati["<b>Gati (गति)</b><br>Deterministic Game Loop · Fixed-Step ECS · State Interpolation"]
+    end
+
+    %% Top-level orchestrator
+    subgraph HighLevel ["3. High-Level Declarative EDSL"]
+        Spandana["<b>Spandana (स्पन्दन)</b><br>Declarative Motion · Springs · IK · Blend Spaces · World EDSL"]
+    end
+
+    %% Foundations
+    Foundation --> Akruti
+    Foundation --> Prakriti
+    Foundation --> Kalpana
+    Foundation --> Gati
+
+    %% Inter-dependencies
+    Akruti -.->|Obstacle / Joint contact| Prakriti
+    Akruti -->|Splines & Polygons imported into Paths| Kalpana
+    Akruti -->|Shapes, Broad/Narrowphase, Raycast, CCD| Gati
+    Prakriti -->|Particle physics & continuum states| Gati
+
+    %% Spandana integration
+    Akruti -->|Splines as Shapes, CSG Morphs, Sharding| Spandana
+    Prakriti -->|Impulses, Thermodynamics & Phase Laws| Spandana
+    Gati -->|ECS entities, Materials, Elemental reactions| Spandana
+    Kalpana -.->|Vector contours, visual effects| Spandana
+```
+
+---
+
+## 2. Core Strengths
+
+| Library | Sanskrit Meaning | Domain / Core Strength | Key Capabilities |
+| :---| :---| :---| :---|
+| **`Akruti`** | आकृति (*Shape / Form*) | **2D Geometry, Collision Narrowphase & CSG** | • Zero-heap analytical SDFs & 2-point SAT contact manifolds for stacking.<br>• Zero-heap Expression EDSL CSG (`\|`, `&`, `-`) & Flat AST Arena.<br>• Google Highway SIMD sweeps & Voronoi fracture/tear pipeline (*Khanda*). |
+| **`Prakriti`** | प्रकृति (*Matter / Nature*) | **Continuum Multi-Physics & Material-State Simulation** | • Hybrid Lagrangian particle-field simulator.<br>• Continuous 4-fraction thermodynamics `{solid, plastic, liquid, gas}` + Tait EOS.<br>• XPBD mechanics, Position-Based Fluids (PBF), graph-Laplacian heat diffusion, strain damage/plasticity.<br>• Stride-1 SoA columns with SIMD & Pravaha multi-core task graphs. |
+| **`Kalpana`** | कल्पना (*Imagination / Visual Art*) | **2D Vector Graphics & Spectral Pigment Mixing** | • **Kubelka-Munk subtractive spectral mixing** (physically accurate pigment mixing vs. muddy RGB).<br>• Vector paths (`CubicBezierCurve`, `CatmullRomSpline`, `Poly` interop) & brush dynamics.<br>• Headless software rasterizer, GPU (Sokol), and terminal (Notcurses) backends. |
+| **`Gati`** | गति (*Motion / Gait*) | **Deterministic Game Loop & ECS Runtime Orchestration** | • Fixed-step scheduler with presentation render interpolation (`alpha`).<br>• Manages gameplay systems over `pebble::ecs`.<br>• Bridges geometry (Akruti) and physics (Prakriti) into game entities. |
+| **`Spandana`** | स्पन्दन (*Pulse / Vibration*) | **Universal Visual, Motion, Effect & World EDSL** | • Automatic action dependency inference & parallel execution scheduling (`ResourceKey`).<br>• Analytical spring solvers, 2D IK (`TwoBoneIK`, `FABRIK2D`), skeletal FK/LBS, directional blend spaces.<br>• Declarative unified EDSL for motion, particles, camera trauma, thermodynamics, and Voronoi destruction. |
+
+---
+
+## 3. Core Architecture
 
 1. **Automatic Dependency & Parallelism Inference (`ResourceKey`)**:
    - Actions targeting different entities/components automatically run concurrently.
@@ -43,7 +110,7 @@ Include: `#include <spandana/spandana.hpp>`
 
 ---
 
-## 2. Quick Start Example
+## 4. Quick Start Example
 
 ```cpp
 #include <spandana/spandana.hpp>

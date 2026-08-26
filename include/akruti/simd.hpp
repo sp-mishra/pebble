@@ -149,4 +149,55 @@ inline RayHit4 packet_raycast_aabb(const Ray4& rays, const AABB<Scalar>& box) no
     return res;
 }
 
+// ── 4. Vectorized Polygon Support Point Sweep ─────────────────────────────────────
+
+template <std::size_t N>
+inline Vec2<Scalar> vectorized_support_poly(const ConvexPoly<N>& poly, Vec2<Scalar> d) noexcept {
+    const std::size_t n = poly.verts.size();
+    if (n == 0) return Vec2<Scalar>{};
+
+#if defined(AKRUTI_HAS_HIGHWAY)
+    namespace hn = hwy::HWY_NAMESPACE;
+    const hn::ScalableTag<float> tag;
+    const std::size_t lanes = hn::Lanes(tag);
+
+    const auto dx = hn::Set(tag, d.x);
+    const auto dy = hn::Set(tag, d.y);
+
+    Scalar max_dot = -1e18f;
+    std::size_t best_idx = 0;
+
+    std::size_t i = 0;
+    for (; i + lanes <= n; i += lanes) {
+        alignas(64) float vx_buf[64], vy_buf[64];
+        for (std::size_t k = 0; k < lanes; ++k) {
+            vx_buf[k] = poly.verts[i + k].x;
+            vy_buf[k] = poly.verts[i + k].y;
+        }
+        const auto vx = hn::Load(tag, vx_buf);
+        const auto vy = hn::Load(tag, vy_buf);
+        const auto dot_v = hn::MulAdd(vx, dx, hn::Mul(vy, dy));
+
+        alignas(64) float dot_res[64];
+        hn::Store(dot_v, tag, dot_res);
+        for (std::size_t k = 0; k < lanes; ++k) {
+            if (dot_res[k] > max_dot) {
+                max_dot = dot_res[k];
+                best_idx = i + k;
+            }
+        }
+    }
+    for (; i < n; ++i) {
+        const Scalar dot_s = d.dot(poly.verts[i]);
+        if (dot_s > max_dot) {
+            max_dot = dot_s;
+            best_idx = i;
+        }
+    }
+    return poly.verts[best_idx];
+#else
+    return poly.support(d);
+#endif
+}
+
 } // namespace akruti::simd

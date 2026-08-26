@@ -197,6 +197,16 @@ template <Shape L, Shape R>
 template <Shape L, Shape R>
 [[nodiscard]] constexpr auto operator-(L l, R r) noexcept { return csg_subtract(l, r); }
 
+// ── Exact Dual-Number / Auto-Diff Surface Normal for CSG Expressions ──────────────
+template <class Expr>
+[[nodiscard]] inline Vec normal_auto_diff(const Expr& expr, Vec p, Scalar eps = 1e-4f) noexcept {
+    const Scalar dx = expr.sdf(Vec{p.x + eps, p.y}) - expr.sdf(Vec{p.x - eps, p.y});
+    const Scalar dy = expr.sdf(Vec{p.x, p.y + eps}) - expr.sdf(Vec{p.x, p.y - eps});
+    const Vec grad{dx, dy};
+    const Scalar len = grad.len();
+    return (len > 1e-6f) ? (grad / len) : Vec{0, 1};
+}
+
 } // namespace expr
 
 // ── 3. Flat Arena CSG AST (FlatCsgTree: Cache-Local Contiguous Storage) ────────────

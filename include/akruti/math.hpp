@@ -83,6 +83,11 @@ template <class T>
 }
 
 template <class T>
+[[nodiscard]] constexpr Vec2<T> perp(const Vec2<T>& v) noexcept {
+    return v.perp();
+}
+
+template <class T>
 [[nodiscard]] T distance(const Vec2<T>& a, const Vec2<T>& b) noexcept {
     return pebble::math::distance(static_cast<pebble::math::vec2>(a),
                                   static_cast<pebble::math::vec2>(b));

@@ -104,6 +104,8 @@ Each primitive satisfies `Shape` with exact `.sdf()`, `.aabb()`, and `.support()
 - `HalfPlane`: $\{ \text{normal}, \text{point} \}$
 - `ConvexPoly<N>`: Vertices in inline `containers::static_vector<Vec, N>`
 - `RoundedPoly<N>`: Convex polygon inflated by corner radius $r$
+- `ChainShape<N>`: Polyline / edge-loop with ghost-vertex elimination and radius support
+- `GridSDF<W, H>`: Sampled 2D discrete SDF grid with bilinear interpolation
 
 ---
 
@@ -113,6 +115,8 @@ Each primitive satisfies `Shape` with exact `.sdf()`, `.aabb()`, and `.support()
 - `collide_circle_circle(c1, c2)`: $O(1)$ distance formula (0 iterations).
 - `collide_circle_capsule(c, cap)`: Clamped line projection.
 - `collide_circle_box(c, b)`: Clamped AABB quadrant projection.
+- `collide_capsule_capsule(cap1, cap2)`: Segment-segment distance with parallel incident edge clipping for **2-point contact manifolds**.
+- `collide_capsule_obb(cap, obb)`: Multi-point endpoint & midpoint projection against local OBB frame.
 - `collide_obb_obb(a, b)` / `collide_box_box(a, b)`: 2D Separating Axis Theorem (SAT) with incident-reference edge clipping to produce **2-point contact manifolds** with contact normal and individual penetration depths.
 - `collide_gjk_warm_started(a, b, &cache)`: Reuses previous frame separating axis to warm-start GJK/EPA.
 
@@ -127,6 +131,7 @@ Each primitive satisfies `Shape` with exact `.sdf()`, `.aabb()`, and `.support()
   - `(a - b)`: Difference
   - `csg_shell(shape, thickness)`: Hollowed shell ($|d| - t$)
   - `csg_offset(shape, r)`: Inflate / Deflate ($d - r$)
+  - `normal_auto_diff(expr, p)`: Symbolic / dual-step automatic gradient surface normal calculation
 - **Flat Arena CSG (`FlatCsgTree`)**: Cache-contiguous array of AST nodes optionally backed by Smriti `LinearArena`.
 - **Extended Dynamic Operators**: `ChamferUnion`, `Morph`, `SmoothUnion`, `Transform`.
 

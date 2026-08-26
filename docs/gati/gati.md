@@ -29,12 +29,18 @@ Prakriti            Akruti                 the two independent engines (unaware 
 
 ---
 
-## 2. Direct Pebble Math Integration
+## 2. Direct Pebble Math & Geometry Integration
 
 Gati completely avoids math duplication or conversion layers. It uses `pebble::math` types directly:
 - `gati::Vec2` = `pebble::math::vec2`
 - `gati::Mat2` = `pebble::math::mat2`
 - `gati::AABB` = `pebble::math::aabb2`
+
+When `GATI_ENABLE_AKRUTI` is active, Gati reuses Akruti for:
+- **Broadphase + Narrowphase Collision**: `AABBTree` fat-margin spatial indexing with `akruti::gjk_overlap` and `akruti::epa` contact manifold generation.
+- **Rich 2D Primitives in `ShapeRef`**: `akruti::Circle`, `akruti::Box`, `akruti::Capsule`, `akruti::OrientedBox` (OBB), `akruti::Triangle`, `akruti::RoundedBox`, `akruti::Sector` (FOV cones), and `akruti::ConvexPoly<8>`.
+- **Continuous Collision Detection (CCD)**: `gati::sweep_test()` utilizing `akruti::time_of_impact()` to prevent tunneling for fast-moving projectiles.
+- **Raycasting**: `gati::raycast()` broadphase acceleration delegating exact intersection to `akruti::raycast()`.
 
 ---
 
@@ -51,6 +57,7 @@ Game game;
 
 Entity player = game.world().spawn();
 game.world().add<Transform>(player, {.position = pebble::math::vec2(0.0f, 10.0f)});
+game.world().add<ShapeRef>(player, {.shape = akruti::Circle{{0.0f, 0.0f}, 1.0f}});
 
 while (running) {
     game.update(real_dt);                  // Runs 0..N fixed steps, flushes deferred commands
@@ -63,3 +70,4 @@ while (running) {
     });
 }
 ```
+

@@ -283,6 +283,123 @@ struct RoundedPoly {
     }
 };
 
+// ── Chain / Polyline (with ghost vertices to prevent edge snagging) ───────────────
+template <std::size_t N = 16>
+struct ChainShape {
+    containers::static_vector<Vec, N> verts{};
+    Vec                               prev_ghost{};   // Ghost vertex before verts[0] (for smooth boundary normal)
+    Vec                               next_ghost{};   // Ghost vertex after verts.back()
+    bool                              has_prev_ghost{false};
+    bool                              has_next_ghost{false};
+    bool                              is_loop{false}; // If true, verts.back() connects to verts[0]
+    Scalar                            radius{0.0f};   // Optional stroke radius
+
+    [[nodiscard]] Scalar sdf(Vec p) const noexcept {
+        const std::size_t n = verts.size();
+        if (n < 2) return Scalar(1e18);
+
+        Scalar min_d2 = Scalar(1e18);
+        const std::size_t seg_count = is_loop ? n : (n - 1);
+
+        for (std::size_t i = 0; i < seg_count; ++i) {
+            const Vec v0 = verts[i];
+            const Vec v1 = verts[(i + 1) % n];
+            const Vec e = v1 - v0;
+            const Vec w = p - v0;
+            const Scalar t = std::clamp(w.dot(e) / std::max(e.len2(), Scalar(1e-12)), Scalar(0), Scalar(1));
+            const Vec proj = w - e * t;
+            min_d2 = std::min(min_d2, proj.len2());
+        }
+        return std::sqrt(min_d2) - radius;
+    }
+
+    [[nodiscard]] Box2 aabb() const noexcept {
+        if (verts.empty()) return Box2{};
+        Box2 b{verts[0], verts[0]};
+        for (std::size_t i = 1; i < verts.size(); ++i) b.expand(verts[i]);
+        return radius > 0 ? b.fattened(radius) : b;
+    }
+
+    [[nodiscard]] Vec support(Vec d) const noexcept {
+        if (verts.empty()) return Vec{};
+        std::size_t best = 0;
+        Scalar bestDot = d.dot(verts[0]);
+        for (std::size_t i = 1; i < verts.size(); ++i) {
+            const Scalar dp = d.dot(verts[i]);
+            if (dp > bestDot) { bestDot = dp; best = i; }
+        }
+        const Vec sup = verts[best];
+        return (radius > 0) ? (sup + d.normalized() * radius) : sup;
+    }
+
+    // Ghost-vertex corrected edge normal for edge index `i` (from verts[i] to verts[(i+1)%n])
+    [[nodiscard]] Vec edge_normal(std::size_t i) const noexcept {
+        const std::size_t n = verts.size();
+        if (n < 2 || i >= (is_loop ? n : (n - 1))) return Vec{0, 1};
+        const Vec v0 = verts[i];
+        const Vec v1 = verts[(i + 1) % n];
+        const Vec e = v1 - v0;
+        return perp(e).normalized(); // Outward CCW 90-degree normal
+    }
+};
+
+// ── GridSDF / Discrete 2D Texture Signed Distance Field ──────────────────────────
+template <std::size_t Width = 16, std::size_t Height = 16>
+struct GridSDF {
+    Box2                                                   bounds{}; // World-space domain bounding box
+    std::array<Scalar, Width * Height>                     grid{};   // Row-major discrete distance values
+
+    [[nodiscard]] Scalar sample(std::size_t x, std::size_t y) const noexcept {
+        return grid[y * Width + x];
+    }
+
+    [[nodiscard]] Scalar sdf(Vec p) const noexcept {
+        const Vec extent = Vec(bounds.extent());
+        const Vec center = Vec(bounds.center());
+        if (extent.x <= 1e-6f || extent.y <= 1e-6f || Width < 2 || Height < 2) {
+            return (p - center).len();
+        }
+
+        // Normalized [0, 1] UV
+        const Scalar u = (p.x - bounds.lo[0]) / extent.x;
+        const Scalar v = (p.y - bounds.lo[1]) / extent.y;
+
+        // Grid coordinates
+        const Scalar gx = u * static_cast<Scalar>(Width - 1);
+        const Scalar gy = v * static_cast<Scalar>(Height - 1);
+
+        const auto x0 = static_cast<std::size_t>(std::clamp(std::floor(gx), 0.0f, static_cast<Scalar>(Width - 2)));
+        const auto y0 = static_cast<std::size_t>(std::clamp(std::floor(gy), 0.0f, static_cast<Scalar>(Height - 2)));
+        const std::size_t x1 = x0 + 1;
+        const std::size_t y1 = y0 + 1;
+
+        const Scalar tx = std::clamp(gx - static_cast<Scalar>(x0), 0.0f, 1.0f);
+        const Scalar ty = std::clamp(gy - static_cast<Scalar>(y0), 0.0f, 1.0f);
+
+        // Bilinear interpolation
+        const Scalar d00 = sample(x0, y0);
+        const Scalar d10 = sample(x1, y0);
+        const Scalar d01 = sample(x0, y1);
+        const Scalar d11 = sample(x1, y1);
+
+        const Scalar d0 = d00 * (1.0f - tx) + d10 * tx;
+        const Scalar d1 = d01 * (1.0f - tx) + d11 * tx;
+        const Scalar val = d0 * (1.0f - ty) + d1 * ty;
+
+        // Add distance to bounding box if point is outside domain
+        const Box box{center, extent * 0.5f};
+        const Scalar box_dist = box.sdf(p);
+        return (box_dist > 0.0f) ? (box_dist + std::max(0.0f, val)) : val;
+    }
+
+    [[nodiscard]] Box2 aabb() const noexcept { return bounds; }
+
+    [[nodiscard]] Vec support(Vec d) const noexcept {
+        const Box box{Vec(bounds.center()), Vec(bounds.extent()) * 0.5f};
+        return box.support(d);
+    }
+};
+
 static_assert(Shape<Circle>);
 static_assert(Shape<Segment>);
 static_assert(Shape<Capsule>);
@@ -294,5 +411,7 @@ static_assert(Shape<Sector>);
 static_assert(Shape<HalfPlane>);
 static_assert(Shape<ConvexPoly<8>>);
 static_assert(Shape<RoundedPoly<8>>);
+static_assert(Shape<ChainShape<8>>);
+static_assert(Shape<GridSDF<4, 4>>);
 
 } // namespace akruti
