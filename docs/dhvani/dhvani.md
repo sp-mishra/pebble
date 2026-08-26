@@ -22,6 +22,10 @@ Include: `#include <dhvani/dhvani.hpp>` and `#include <dhvani/edsl.hpp>`
          audio_cue(sound_bus, "dash_woosh.wav").pitch(1.2f).volume(0.8f)
      );
      ```
+4. **Gati ECS Audio Components & Spatial Dispatch (`gati/reactive_cues.hpp`)**:
+   - `gati::AudioEmitter` component binding sound cue names, volumes, and triggers to entity `Transform`.
+   - `gati::AudioListener` component defining 2D ear position and heading.
+   - `gati::SpatialAudioSystem` executing automated spatial sound dispatch to `SoundBus`.
 
 ---
 
@@ -30,6 +34,7 @@ Include: `#include <dhvani/dhvani.hpp>` and `#include <dhvani/edsl.hpp>`
 ```cpp
 #include <dhvani/dhvani.hpp>
 #include <dhvani/spatial.hpp>
+#include <gati/reactive_cues.hpp>
 
 pebble::dhvani::SoundBus sound_bus;
 
@@ -50,3 +55,4 @@ sound_bus.drain([](const pebble::dhvani::SoundCue& cue) {
     // Send to hardware audio mixer
 });
 ```
+

@@ -1662,6 +1662,104 @@ namespace pravaha::backends::vulkan {
         return {};
     }
 
+    // Move-only, process-local Vulkan storage for a typed compute chain. The
+    // data plane stays in Pravaha; callers never receive raw Vulkan handles.
+    template <typename T>
+    class vulkan_device_tensor {
+    public:
+        vulkan_device_tensor() = default;
+        vulkan_device_tensor(const vulkan_device_tensor&) = delete;
+        vulkan_device_tensor& operator=(const vulkan_device_tensor&) = delete;
+        vulkan_device_tensor(vulkan_device_tensor&&) noexcept = default;
+        vulkan_device_tensor& operator=(vulkan_device_tensor&&) noexcept = default;
+
+        [[nodiscard]] static std::optional<vulkan_device_tensor> allocate(const std::size_t count) {
+            auto context = device().context();
+            if (!context || !context->valid() || count == 0) return std::nullopt;
+            auto allocation = alloc_vk_buffer(context->device, context->phys_dev,
+                                              count * sizeof(T), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+            if (!allocation || !allocation->valid()) return std::nullopt;
+            return vulkan_device_tensor{std::move(*allocation), count};
+        }
+
+        [[nodiscard]] static std::optional<vulkan_device_tensor>
+        from_host(const std::span<const T> source) {
+            auto tensor = allocate(source.size());
+            if (!tensor || !tensor->upload(source)) return std::nullopt;
+            return tensor;
+        }
+
+        [[nodiscard]] bool upload(const std::span<const T> source) const noexcept {
+            if (source.size() != count_) return false;
+            void* mapped = allocation_.map();
+            if (!mapped) return false;
+            std::memcpy(mapped, source.data(), byte_size());
+            allocation_.unmap();
+            return true;
+        }
+
+        [[nodiscard]] bool download(const std::span<T> destination) const noexcept {
+            if (destination.size() != count_) return false;
+            void* mapped = allocation_.map();
+            if (!mapped) return false;
+            std::memcpy(destination.data(), mapped, byte_size());
+            allocation_.unmap();
+            return true;
+        }
+
+        [[nodiscard]] bool valid() const noexcept { return allocation_.valid() && count_ != 0; }
+        [[nodiscard]] std::size_t size() const noexcept { return count_; }
+        [[nodiscard]] std::size_t byte_size() const noexcept { return count_ * sizeof(T); }
+        [[nodiscard]] VkBuffer buffer() const noexcept { return allocation_.buffer; }
+
+    private:
+        explicit vulkan_device_tensor(VkBufferAlloc allocation, const std::size_t count) noexcept
+            : allocation_(std::move(allocation)), count_(count) {}
+
+        VkBufferAlloc allocation_;
+        std::size_t count_ = 0;
+    };
+
+    // Execute a binary elementwise kernel entirely over caller-owned device
+    // tensors. Blocking completion permits the same descriptor set to be rebound
+    // safely by the next node while avoiding any intermediate host materialization.
+    template <typename T, std::size_t K>
+    [[nodiscard]] Outcome<void>
+    dispatch_elementwise_device(std::uint64_t key,
+                                const lithe::codegen::backends::spirv_module& module,
+                                vulkan_device_tensor<T>& destination,
+                                const std::array<const vulkan_device_tensor<T>*, K>& sources,
+                                const std::uint32_t local_x) {
+        if (!destination.valid())
+            return std::unexpected(PravahaError::make(ErrorKind::ResourceExhausted,
+                "vulkan: invalid device destination"));
+        for (const auto* source : sources) {
+            if (!source || !source->valid() || source->size() != destination.size())
+                return std::unexpected(PravahaError::make(ErrorKind::InvalidArgument,
+                    "vulkan: incompatible device source"));
+        }
+        auto resource = get_or_reuse_resource(key, module, static_cast<std::uint32_t>(K + 1));
+        if (!resource || !resource->valid())
+            return std::unexpected(PravahaError::make(ErrorKind::InternalError,
+                "vulkan: device resource build failed"));
+        std::array<lithe::execution::storage_buffer_binding, K + 1> bindings{};
+        for (std::size_t index = 0; index < K; ++index)
+            bindings[index] = {sources[index]->buffer(), 0, sources[index]->byte_size()};
+        bindings[K] = {destination.buffer(), 0, destination.byte_size()};
+        if (auto bound = resource->bind_storage_buffers(bindings); !bound)
+            return std::unexpected(PravahaError::make(ErrorKind::InternalError,
+                "vulkan: device descriptor bind failed"));
+        lithe::execution::kernel_launch launch{};
+        launch.grid_x = static_cast<std::uint32_t>((destination.size() + local_x - 1) / local_x);
+        launch.grid_y = 1;
+        launch.block_x = local_x;
+        launch.block_y = 1;
+        if (auto dispatched = resource->dispatch_sync(launch); !dispatched)
+            return std::unexpected(PravahaError::make(ErrorKind::InternalError,
+                "vulkan: device dispatch failed"));
+        return {};
+    }
+
     // get_or_compile: returns the cached (or freshly emitted+compiled) spirv_module.
     template <typename E>
     [[nodiscard]] std::optional<lithe::codegen::backends::spirv_module>

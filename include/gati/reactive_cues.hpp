@@ -11,6 +11,11 @@
 #include <functional>
 #include <vector>
 
+#if __has_include("dhvani/dhvani.hpp")
+#include "dhvani/dhvani.hpp"
+#include "dhvani/spatial.hpp"
+#endif
+
 namespace gati {
 
 struct ImpactCueTrigger {
@@ -44,9 +49,6 @@ private:
 };
 
 #if __has_include("dhvani/dhvani.hpp")
-#include "dhvani/dhvani.hpp"
-#include "dhvani/spatial.hpp"
-
 // ECS Audio Emitter Component
 struct AudioEmitter {
     std::string_view name;
@@ -67,7 +69,7 @@ struct SpatialAudioSystem {
         // 1. Locate active listener in world if available
         pebble::dhvani::AudioListener2D active_listener;
         bool has_listener = false;
-        world.view<AudioListener>([&](pebble::ecs::Entity, AudioListener& al) {
+        world.view<AudioListener>([&](Entity, AudioListener& al) {
             if (!has_listener) {
                 active_listener = al.listener;
                 has_listener = true;
@@ -75,7 +77,7 @@ struct SpatialAudioSystem {
         });
 
         // 2. Dispatch audio cues from emitters
-        world.view<Transform, AudioEmitter>([&](pebble::ecs::Entity, Transform& tr, AudioEmitter& ae) {
+        world.view<Transform, AudioEmitter>([&](Entity, Transform& tr, AudioEmitter& ae) {
             if (ae.trigger_play) {
                 if (ae.is_spatial && has_listener) {
                     sound_bus.play_spatial(ae.name, tr.position, active_listener, ae.volume, ae.pitch);

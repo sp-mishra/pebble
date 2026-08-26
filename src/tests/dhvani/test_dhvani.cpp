@@ -72,3 +72,56 @@ TEST_CASE("Dhvani: Spandana Timeline EDSL Audio Cues", "[dhvani][edsl]") {
     timeline.update(0.1f);
     REQUIRE(sound_bus.pending_count() == 1);
 }
+
+#include "gati/reactive_cues.hpp"
+#include "gati/transform.hpp"
+
+TEST_CASE("Dhvani: Gati AudioEmitter Component & SpatialAudioSystem Dispatch", "[dhvani][gati][ecs]") {
+    pebble::ecs::World world;
+    pebble::dhvani::SoundBus sound_bus;
+    gati::SpatialAudioSystem audio_sys;
+
+    // 1. Spawn AudioListener entity
+    auto listener_ent = world.spawn();
+    world.add<gati::AudioListener>(listener_ent, {
+        .listener = pebble::dhvani::AudioListener2D{
+            .position = {0.0f, 0.0f},
+            .forward = {0.0f, 1.0f},
+            .max_distance = 600.0f,
+            .ref_distance = 50.0f
+        }
+    });
+
+    // 2. Spawn AudioEmitter entity at (100, 0)
+    auto emitter_ent = world.spawn();
+    world.add<gati::Transform>(emitter_ent, {.position = {100.0f, 0.0f}});
+    world.add<gati::AudioEmitter>(emitter_ent, {
+        .name = "laser_blast.wav",
+        .volume = 1.0f,
+        .pitch = 1.0f,
+        .trigger_play = true,
+        .is_spatial = true
+    });
+
+    gati::EventBus bus;
+    smriti::pools::LinearArena scratch(1024);
+    gati::ParallelExecutor executor;
+    gati::StepContext ctx{1.0f / 60.0f, 0, bus, scratch, executor};
+
+    // Step spatial audio system
+    audio_sys.run(world, ctx, sound_bus);
+
+    REQUIRE(sound_bus.pending_count() == 1);
+
+    // Verify cue properties
+    sound_bus.drain([](const pebble::dhvani::SoundCue& cue) {
+        REQUIRE(cue.name == "laser_blast.wav");
+        REQUIRE(cue.is_spatial);
+        REQUIRE(cue.volume > 0.0f);
+    });
+
+    // Trigger should have been reset
+    auto* ae = world.get<gati::AudioEmitter>(emitter_ent);
+    REQUIRE_FALSE(ae->trigger_play);
+}
+

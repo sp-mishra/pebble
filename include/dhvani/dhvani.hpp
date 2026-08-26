@@ -14,11 +14,11 @@
 namespace pebble::dhvani {
 
 struct SoundCue {
-    std::string_view   name;
-    float              volume = 1.0f;
-    float              pitch = 1.0f;
-    pebble::math::vec2 position{0.0f, 0.0f};
-    bool               is_spatial = false;
+    std::string_view     name;
+    float                volume = 1.0f;
+    float                pitch = 1.0f;
+    ::pebble::math::vec2 position{0.0f, 0.0f};
+    bool                 is_spatial = false;
 };
 
 class SoundBus {
@@ -35,7 +35,7 @@ public:
         });
     }
 
-    void play_spatial(std::string_view name, const pebble::math::vec2& emitter_pos,
+    void play_spatial(std::string_view name, const ::pebble::math::vec2& emitter_pos,
                       const AudioListener2D& listener, float volume = 1.0f, float pitch = 1.0f) {
         auto spatial_out = compute_spatial_audio(emitter_pos, listener, volume);
         if (spatial_out.attenuation > 0.0f) {

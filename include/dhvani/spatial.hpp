@@ -12,11 +12,11 @@
 namespace pebble::dhvani {
 
 struct AudioListener2D {
-    pebble::math::vec2 position{0.0f, 0.0f};
-    pebble::math::vec2 forward{0.0f, 1.0f}; // Heading direction
-    float              max_distance = 600.0f;
-    float              ref_distance = 50.0f;
-    float              rolloff = 1.0f;
+    ::pebble::math::vec2 position{0.0f, 0.0f};
+    ::pebble::math::vec2 forward{0.0f, 1.0f}; // Heading direction
+    float                max_distance = 600.0f;
+    float                ref_distance = 50.0f;
+    float                rolloff = 1.0f;
 };
 
 struct SpatialAudioOutput {
@@ -28,7 +28,7 @@ struct SpatialAudioOutput {
 
 // Calculate 2D distance attenuation & stereo panning
 [[nodiscard]] inline SpatialAudioOutput compute_spatial_audio(
-    const pebble::math::vec2& emitter_pos,
+    const ::pebble::math::vec2& emitter_pos,
     const AudioListener2D& listener,
     float base_volume = 1.0f) noexcept {
 
