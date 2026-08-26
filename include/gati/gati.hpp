@@ -51,6 +51,10 @@ struct DefaultSystems {
 #if defined(GATI_HAS_JOINTS)
         joints.run(w, ctx);
 #endif
+
+        // Process material reactions and environmental thermodynamics
+        // Note: do not drain here so external listeners / ContactStateTracker can observe ContactEvent
+        MaterialReactionSystem::step_thermodynamics(w, ctx.dt);
     }
 };
 

@@ -29,7 +29,9 @@ using ShapeVariant = std::variant<
     akruti::Triangle,
     akruti::RoundedBox,
     akruti::Sector,
-    akruti::ConvexPoly<8>
+    akruti::ConvexPoly<8>,
+    akruti::ChainShape<16>,
+    akruti::GridSDF<16, 16>
 >;
 
 // Component: an Akruti primitive placed by the entity Transform
@@ -40,18 +42,32 @@ struct ShapeRef {
 };
 
 namespace detail {
-inline void translate(akruti::Circle& c, const Vec2& p)      { c.center = c.center + p; }
-inline void translate(akruti::Box& b, const Vec2& p)         { b.center = b.center + p; }
-inline void translate(akruti::Capsule& c, const Vec2& p)     { c.a = c.a + p; c.b = c.b + p; }
-inline void translate(akruti::OrientedBox& o, const Vec2& p) { o.center = o.center + p; }
-inline void translate(akruti::Triangle& t, const Vec2& p)    { t.a = t.a + p; t.b = t.b + p; t.c = t.c + p; }
-inline void translate(akruti::RoundedBox& r, const Vec2& p)  { r.center = r.center + p; }
-inline void translate(akruti::Sector& s, const Vec2& p)      { s.center = s.center + p; }
+inline void translate(akruti::Circle& c, const Vec2& p)      { const akruti::Vec ap(p); c.center = c.center + ap; }
+inline void translate(akruti::Box& b, const Vec2& p)         { const akruti::Vec ap(p); b.center = b.center + ap; }
+inline void translate(akruti::Capsule& c, const Vec2& p)     { const akruti::Vec ap(p); c.a = c.a + ap; c.b = c.b + ap; }
+inline void translate(akruti::OrientedBox& o, const Vec2& p) { const akruti::Vec ap(p); o.center = o.center + ap; }
+inline void translate(akruti::Triangle& t, const Vec2& p)    { const akruti::Vec ap(p); t.a = t.a + ap; t.b = t.b + ap; t.c = t.c + ap; }
+inline void translate(akruti::RoundedBox& r, const Vec2& p)  { const akruti::Vec ap(p); r.center = r.center + ap; }
+inline void translate(akruti::Sector& s, const Vec2& p)      { const akruti::Vec ap(p); s.center = s.center + ap; }
 template <std::size_t N>
 inline void translate(akruti::ConvexPoly<N>& poly, const Vec2& p) {
+    const akruti::Vec ap(p);
     for (auto& v : poly.verts) {
-        v = v + p;
+        v = v + ap;
     }
+}
+template <std::size_t N>
+inline void translate(akruti::ChainShape<N>& chain, const Vec2& p) {
+    const akruti::Vec ap(p);
+    for (auto& v : chain.verts) {
+        v = v + ap;
+    }
+    if (chain.has_prev_ghost) chain.prev_ghost = chain.prev_ghost + ap;
+    if (chain.has_next_ghost) chain.next_ghost = chain.next_ghost + ap;
+}
+template <std::size_t W, std::size_t H>
+inline void translate(akruti::GridSDF<W, H>& grid, const Vec2& p) {
+    grid.bounds = AABB(grid.bounds.lo + p, grid.bounds.hi + p);
 }
 } // namespace detail
 
@@ -66,8 +82,9 @@ inline AABB shape_aabb(const ShapeVariant& v, const Vec2& p) {
 
 // Broadphase over transformed AABBs + GJK/EPA narrowphase; emits ContactEvents.
 struct CollisionSystem {
-    containers::AABBTree<AABB> tree{Scalar(0.1)}; // fat margin reduces churn
-    Scalar fat_margin = Scalar(0.2);
+    containers::AABBTree<AABB>                       tree{Scalar(0.1)}; // fat margin reduces churn
+    Scalar                                           fat_margin = Scalar(0.2);
+    std::unordered_map<std::uint64_t, akruti::SimplexCache> simplex_caches_{};
 
     void run(World& w, StepContext ctx) {
         // Rebuild or update tree with fat margin
@@ -86,7 +103,10 @@ struct CollisionSystem {
                 ShapeRef*  sb = w.get_by_index<ShapeRef>(other);
                 Transform* tb = w.get_by_index<Transform>(other);
                 if (!sb || !tb) return;
-                narrow(ctx, ea.index, other, sa.shape, ta.position, sb->shape, tb->position);
+
+                const std::uint64_t key = (static_cast<std::uint64_t>(ea.index) << 32) | static_cast<std::uint64_t>(other);
+                auto& cache = simplex_caches_[key];
+                narrow(ctx, ea.index, other, sa.shape, ta.position, sb->shape, tb->position, cache);
             });
         });
     }
@@ -94,16 +114,16 @@ struct CollisionSystem {
 private:
     static void narrow(StepContext& ctx, std::uint32_t a, std::uint32_t b,
                        const ShapeVariant& va, const Vec2& pa,
-                       const ShapeVariant& vb, const Vec2& pb) {
+                       const ShapeVariant& vb, const Vec2& pb,
+                       akruti::SimplexCache& cache) {
         std::visit([&](auto sa) {
             std::visit([&](auto sb) {
                 detail::translate(sa, pa);
                 detail::translate(sb, pb);
-                if (akruti::gjk_overlap(sa, sb)) {
-                    const akruti::Contact c = akruti::epa(sa, sb);
-                    if (c.hit) {
-                        ctx.events.publish(ContactEvent{a, b, {c.normal.x, c.normal.y}, c.depth});
-                    }
+                akruti::Manifold m = akruti::collide_gjk_warm_started(sa, sb, &cache);
+                if (m.hit) {
+                    const Vec2 cp = m.points.empty() ? Vec2{0.0f, 0.0f} : Vec2{m.points[0].point.x, m.points[0].point.y};
+                    ctx.events.publish(ContactEvent{a, b, {m.normal.x, m.normal.y}, m.depth, cp});
                 }
             }, vb);
         }, va);
@@ -153,8 +173,8 @@ struct SweepResult {
     AABB box_start = shape_aabb(moving_shape, start_pos);
     AABB box_end   = shape_aabb(moving_shape, start_pos + delta_pos);
     AABB swept_box{
-        {std::min(box_start.lo.x, box_end.lo.x), std::min(box_start.lo.y, box_end.lo.y)},
-        {std::max(box_start.hi.x, box_end.hi.x), std::max(box_start.hi.y, box_end.hi.y)}
+        {std::min(box_start.lo[0], box_end.lo[0]), std::min(box_start.lo[1], box_end.lo[1])},
+        {std::max(box_start.hi[0], box_end.hi[0]), std::max(box_start.hi[1], box_end.hi[1])}
     };
 
     cs.tree.query(swept_box, [&](std::uint32_t other_idx) {

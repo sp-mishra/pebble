@@ -162,4 +162,21 @@ inline void to_linear_rgb(const Spectrum& s, float& r, float& g, float& b) noexc
     return mix(std::span<const std::pair<Color, float>>(ps, 2));
 }
 
+// Multi-stop spectral gradient evaluation
+[[nodiscard]] inline Color sample_gradient(std::span<const std::pair<float, Color>> stops, float t) noexcept {
+    if (stops.empty()) return colors::transparent();
+    if (stops.size() == 1 || t <= stops.front().first) return stops.front().second;
+    if (t >= stops.back().first) return stops.back().second;
+
+    for (std::size_t i = 0; i < stops.size() - 1; ++i) {
+        const float t0 = stops[i].first;
+        const float t1 = stops[i + 1].first;
+        if (t >= t0 && t <= t1) {
+            const float factor = (t1 - t0 > 1e-6f) ? ((t - t0) / (t1 - t0)) : 0.0f;
+            return mix(stops[i].second, stops[i + 1].second, factor);
+        }
+    }
+    return stops.back().second;
+}
+
 } // namespace kalpana::spectral

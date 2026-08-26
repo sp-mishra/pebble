@@ -79,9 +79,10 @@ namespace containers {
         template <class Fn>
         void raycast(const Vec& origin, const Vec& dir, Scalar tmax, Fn&& fn) const {
             if (root_ == null_node) return;
+            const Scalar dx = get_x(dir), dy = get_y(dir);
             const Vec inv{
-                Scalar(1) / (dir.x != Scalar(0) ? dir.x : Scalar(1e-30)),
-                Scalar(1) / (dir.y != Scalar(0) ? dir.y : Scalar(1e-30))
+                Scalar(1) / (dx != Scalar(0) ? dx : Scalar(1e-30)),
+                Scalar(1) / (dy != Scalar(0) ? dy : Scalar(1e-30))
             };
             std::uint32_t stack[64];
             int sp = 0;

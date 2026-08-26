@@ -11,9 +11,10 @@ Include: `#include <kalpana/kalpana.hpp>`
 
 1. **Subtractive Kubelka–Munk Spectral Mixing (`kalpana/color/spectral.hpp`)**:
    - Replaces muddy linear RGB blending ($B + Y \to \text{Grey}$) with physically realistic spectral reflectance mixing ($B + Y \to \text{Vibrant Green}$).
+   - Multi-stop spectral gradient sampler (`sample_gradient(stops, t)`).
 2. **Vector Paths & Akruti Interop (`kalpana/geom/path.hpp`)**:
    - Flat command verbs (`move_to`, `line_to`, `cubic_to`, `quad_to`, `close`).
-   - Seamless import from `akruti::CubicBezierCurve`, `akruti::CatmullRomSpline`, and `akruti::Poly`.
+   - Seamless import from `akruti::CubicBezierCurve`, `akruti::CatmullRomSpline`, `akruti::ChainShape`, and `akruti::Poly`.
 3. **Paint, Gradients & Blend Modes (`kalpana/paint/paint.hpp`)**:
    - Multi-stop Linear & Radial gradients, customizable strokes (caps/joins/miter), and 12 Porter-Duff / Photoshop blend modes.
 4. **Realtime Brush Dynamics (`kalpana/brush/brush.hpp`)**:

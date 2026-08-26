@@ -111,6 +111,29 @@ public:
         return p;
     }
 
+    static Path from_catmull_rom(const akruti::CatmullRomSpline& spline) {
+        Path p;
+        if (spline.points.empty()) return p;
+        p.move_to(spline.points[0].x, spline.points[0].y);
+        for (std::size_t i = 1; i < spline.points.size(); ++i) {
+            p.line_to(spline.points[i].x, spline.points[i].y);
+        }
+        if (spline.closed) p.close();
+        return p;
+    }
+
+    template <std::size_t N>
+    static Path from_chain(const akruti::ChainShape<N>& chain) {
+        Path p;
+        if (chain.verts.empty()) return p;
+        p.move_to(chain.verts[0].x, chain.verts[0].y);
+        for (std::size_t i = 1; i < chain.verts.size(); ++i) {
+            p.line_to(chain.verts[i].x, chain.verts[i].y);
+        }
+        if (chain.is_loop) p.close();
+        return p;
+    }
+
     static Path from_poly(const akruti::Poly& poly) {
         Path p;
         if (poly.empty()) return p;

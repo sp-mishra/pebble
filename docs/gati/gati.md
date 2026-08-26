@@ -38,9 +38,11 @@ Gati completely avoids math duplication or conversion layers. It uses `pebble::m
 
 When `GATI_ENABLE_AKRUTI` is active, Gati reuses Akruti for:
 - **Broadphase + Narrowphase Collision**: `AABBTree` fat-margin spatial indexing with `akruti::gjk_overlap` and `akruti::epa` contact manifold generation.
-- **Rich 2D Primitives in `ShapeRef`**: `akruti::Circle`, `akruti::Box`, `akruti::Capsule`, `akruti::OrientedBox` (OBB), `akruti::Triangle`, `akruti::RoundedBox`, `akruti::Sector` (FOV cones), and `akruti::ConvexPoly<8>`.
+- **Rich 2D Primitives in `ShapeRef`**: `akruti::Circle`, `akruti::Box`, `akruti::Capsule`, `akruti::OrientedBox` (OBB), `akruti::Triangle`, `akruti::RoundedBox`, `akruti::Sector` (FOV cones), `akruti::ConvexPoly<8>`, `akruti::ChainShape<16>` (terrain/tilemaps), and `akruti::GridSDF<16, 16>` (discrete raster SDFs).
 - **Continuous Collision Detection (CCD)**: `gati::sweep_test()` utilizing `akruti::time_of_impact()` to prevent tunneling for fast-moving projectiles.
 - **Raycasting**: `gati::raycast()` broadphase acceleration delegating exact intersection to `akruti::raycast()`.
+- **Contact Lifecycle Management (`ContactStateTracker`)**: Dispatches stateful `ContactPhase::Enter`, `ContactPhase::Stay`, and `ContactPhase::Exit` events across frames.
+- **Continuous Material Reactions**: Automatic thermal diffusion, contact fusion, and brittle fracture evaluation during fixed steps.
 
 ---
 
