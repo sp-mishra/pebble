@@ -66,6 +66,16 @@ public:
         p.eos_B = Scalar(2e5);
         return p;
     }
+    [[nodiscard]] static MaterialParams dry_ice() noexcept {
+        MaterialParams p;
+        p.rest_density = Scalar(1560); p.heat_capacity = Scalar(1.2);
+        p.conductivity = Scalar(0.02); p.melt_temp = Scalar(-78.5); p.boil_temp = Scalar(-78.5); // Sublimes directly at -78.5 C
+        p.latent_heat_fusion = Scalar(0); p.latent_heat_vapor = Scalar(571); // Sublimation enthalpy
+        p.yield_strain = Scalar(0.01); p.ultimate_strain = Scalar(0.02);
+        p.youngs_modulus = Scalar(1e9);
+        p.alpha = {Scalar(1e-7), Scalar(1e-4), Scalar(1e-2), Scalar(1)};
+        return p;
+    }
 
 private:
     std::vector<MaterialParams> params_;

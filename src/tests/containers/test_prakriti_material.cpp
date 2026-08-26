@@ -59,3 +59,15 @@ TEST_CASE("DefaultMaterialLaw coefficients", "[prakriti][material]") {
     PhaseFractions gas; gas.f = {0, 0, 0, 1};
     REQUIRE(law.target_density(p, gas) < law.target_density(p, liquid));
 }
+
+TEST_CASE("dry ice sublimates directly from solid to gas", "[prakriti][material][sublimation]") {
+    auto dry_ice = MaterialRegistry::dry_ice();
+    auto cold = phase_from_temperature(-100, dry_ice);
+    REQUIRE(cold.solid() > 0.9f);
+    REQUIRE(cold.liquid() == Catch::Approx(0.0f));
+
+    auto warm = phase_from_temperature(20, dry_ice);
+    REQUIRE(warm.gas() > 0.9f);
+    REQUIRE(warm.liquid() == Catch::Approx(0.0f));
+}
+

@@ -117,6 +117,41 @@ struct HighwayBackend {
             out[i] = std::min(std::max(out[i], lo), hi);
         }
     }
+
+    [[nodiscard]] Scalar kinetic_energy(CSpan vx, CSpan vy, CSpan inv_mass) const noexcept {
+        const std::size_t n = vx.size();
+        namespace hn = hwy::HWY_NAMESPACE;
+        const hn::ScalableTag<float> d;
+        const std::size_t N = hn::Lanes(d);
+
+        auto sum_vec = hn::Zero(d);
+        const auto half = hn::Set(d, 0.5f);
+        const auto one = hn::Set(d, 1.0f);
+        const auto zero = hn::Zero(d);
+
+        std::size_t i = 0;
+        for (; i + N <= n; i += N) {
+            const auto v_vx = hn::LoadU(d, &vx[i]);
+            const auto v_vy = hn::LoadU(d, &vy[i]);
+            const auto v_im = hn::LoadU(d, &inv_mass[i]);
+
+            // mask where inv_mass > 0
+            const auto is_dyn = hn::Gt(v_im, zero);
+            const auto v_m = hn::Div(one, hn::Max(v_im, hn::Set(d, 1e-12f)));
+            const auto v2 = hn::MulAdd(v_vx, v_vx, hn::Mul(v_vy, v_vy));
+            const auto ke_lanes = hn::Mul(hn::Mul(half, v_m), v2);
+            sum_vec = hn::Add(sum_vec, hn::IfThenElseZero(is_dyn, ke_lanes));
+        }
+
+        Scalar total = hn::ReduceSum(d, sum_vec);
+        for (; i < n; ++i) {
+            if (inv_mass[i] > Scalar(0)) {
+                const Scalar m = Scalar(1) / inv_mass[i];
+                total += Scalar(0.5) * m * (vx[i] * vx[i] + vy[i] * vy[i]);
+            }
+        }
+        return total;
+    }
 };
 
 static_assert(ComputeBackend<HighwayBackend>);

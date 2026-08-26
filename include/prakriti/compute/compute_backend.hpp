@@ -29,6 +29,8 @@ concept ComputeBackend = requires(B b, MSpan out, CSpan a, CSpan mask, CSpan v, 
     b.copy(out, a);
     // out[i] = clamp(out[i], lo, hi)     (boundary, per axis)
     b.clamp(out, lo, hi);
+    // Sum 0.5 * m * (vx^2 + vy^2)        (SIMD kinetic energy reduction)
+    { b.kinetic_energy(v, a, mask) } -> std::convertible_to<Scalar>;
 };
 
 } // namespace prakriti

@@ -64,6 +64,12 @@ TEST_CASE("HighwayBackend matches ScalarBackend", "[prakriti][compute][highway]"
     const auto ref = run_all(ScalarBackend{}, in, 0.017f);
     const auto got = run_all(HighwayBackend{}, in, 0.017f);
     REQUIRE(max_abs_diff(ref, got) < 1e-4f);
+
+    // Vectorized kinetic energy reduction test
+    Scalar ke_scalar = ScalarBackend{}.kinetic_energy({in.v.data(), in.v.size()}, {in.s.data(), in.s.size()}, {in.mask.data(), in.mask.size()});
+    Scalar ke_hwy    = HighwayBackend{}.kinetic_energy({in.v.data(), in.v.size()}, {in.s.data(), in.s.size()}, {in.mask.data(), in.mask.size()});
+    REQUIRE(ke_scalar > 0.0f);
+    REQUIRE(std::abs(ke_scalar - ke_hwy) < 1e-3f);
 }
 #endif
 
@@ -73,5 +79,11 @@ TEST_CASE("PravahaBackend matches ScalarBackend", "[prakriti][compute][pravaha]"
     const auto ref = run_all(ScalarBackend{}, in, 0.017f);
     const auto got = run_all(PravahaBackend{2, 256}, in, 0.017f);
     REQUIRE(max_abs_diff(ref, got) < 1e-4f);
+
+    Scalar ke_scalar  = ScalarBackend{}.kinetic_energy({in.v.data(), in.v.size()}, {in.s.data(), in.s.size()}, {in.mask.data(), in.mask.size()});
+    Scalar ke_pravaha = PravahaBackend{2, 256}.kinetic_energy({in.v.data(), in.v.size()}, {in.s.data(), in.s.size()}, {in.mask.data(), in.mask.size()});
+    REQUIRE(ke_scalar > 0.0f);
+    REQUIRE(std::abs(ke_scalar - ke_pravaha) < 1e-3f);
 }
 #endif
+

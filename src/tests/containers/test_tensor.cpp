@@ -40,6 +40,12 @@ TEST_CASE("tensor: CPU tensor basic ops", "[tensor][cpu][basic]") {
         REQUIRE(m == Catch::Approx(7.5f));
         float mx = ts::max(t2);
         REQUIRE(mx == Catch::Approx(30.0f));
+
+        // Format to string test
+        std::string s_formatted = ts::tensor_to_string(t1);
+        REQUIRE_FALSE(s_formatted.empty());
+        REQUIRE(s_formatted.front() == '[');
+        REQUIRE(s_formatted.back() == ']');
     }
 }
 

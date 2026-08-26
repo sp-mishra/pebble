@@ -111,7 +111,7 @@ state is stored as **split scalar columns** (`pos_x[]`/`pos_y[]` separately), no
 ## 6. Material Law Layer
 
 - **`phase.hpp`** — continuous 4-fraction model `{solid, plastic, liquid, gas}` summing to 1.
-  `phase_from_temperature()` maps temperature through smooth melt/boil ramps; `phase_blend()` is the
+  `phase_from_temperature()` maps temperature through smooth melt/boil/sublimation ramps; `phase_blend()` is the
   barycentric mix used for all effective coefficients.
 - **`eos.hpp`** — `tait_pressure()`: `P = B((ρ/ρ₀)^γ − 1) + R·f_gas·T`, optional negative clamp for
   free surfaces.

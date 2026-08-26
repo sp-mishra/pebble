@@ -70,14 +70,12 @@ public:
 
     // ── diagnostics ─────────────────────────────────────────────────────────
     [[nodiscard]] Scalar kinetic_energy() const noexcept {
-        Scalar ke = Scalar(0);
-        for (Index i = 0; i < particles_.size(); ++i) {
-            if (particles_.inv_mass[i] <= Scalar(0)) continue;
-            const Scalar m = Scalar(1) / particles_.inv_mass[i];
-            const Scalar vx = particles_.vel_x[i], vy = particles_.vel_y[i];
-            ke += Scalar(0.5) * m * (vx * vx + vy * vy);
-        }
-        return ke;
+        const Index n = particles_.size();
+        return compute_.kinetic_energy(
+            {particles_.vel_x.data(), n},
+            {particles_.vel_y.data(), n},
+            {particles_.inv_mass.data(), n}
+        );
     }
 
 private:

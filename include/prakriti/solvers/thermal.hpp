@@ -54,7 +54,7 @@ struct ThermalSolver {
 
 private:
     // Latent-heat buffering: near a transition, absorb energy into internal_energy until the
-    // latent budget is filled, then release into temperature. Simplified single-buffer model.
+    // latent budget is filled, then release into temperature. Supports fusion, vaporization & sublimation.
     static void apply_energy(ParticleStore& P, Index i, const MaterialParams& p,
                              Scalar c, Scalar dE) noexcept {
         const bool near_melt = P.temperature[i] >= p.melt_temp - Scalar(1) &&
@@ -71,6 +71,22 @@ private:
             }
             return;
         }
+
+        const bool near_boil = P.temperature[i] >= p.boil_temp - Scalar(1) &&
+                               P.temperature[i] <= p.boil_temp + Scalar(1);
+        if (near_boil && p.latent_heat_vapor > Scalar(0)) {
+            P.internal_energy[i] += dE;
+            if (P.internal_energy[i] >= p.latent_heat_vapor) {
+                const Scalar spill = P.internal_energy[i] - p.latent_heat_vapor;
+                P.internal_energy[i] = p.latent_heat_vapor;
+                P.temperature[i] += spill / c;
+            } else if (P.internal_energy[i] < Scalar(0)) {
+                P.temperature[i] += P.internal_energy[i] / c;
+                P.internal_energy[i] = Scalar(0);
+            }
+            return;
+        }
+
         P.temperature[i] += dE / c;
     }
 

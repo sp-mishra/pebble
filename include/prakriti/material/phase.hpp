@@ -34,11 +34,21 @@ phase_blend(const std::array<Scalar, kPhaseCount>& per_phase, const PhaseFractio
     return u * u * (Scalar(3) - Scalar(2) * u); // smoothstep
 }
 
-// Map temperature to phase fractions through melt/boil transitions.
+// Map temperature to phase fractions through melt/boil/sublimation transitions.
 // A small transition band around each threshold gives continuous (not binary) fractions.
 [[nodiscard]] inline PhaseFractions
 phase_from_temperature(Scalar temp, const MaterialParams& p,
                        Scalar plastic_band = Scalar(0.15)) noexcept {
+    // If melt_temp >= boil_temp or sublimation is requested, handle direct sublimation (e.g. Dry Ice)
+    if (p.melt_temp >= p.boil_temp) {
+        const Scalar sub_band = std::max(Scalar(1), std::abs(p.boil_temp) * Scalar(0.05));
+        const Scalar gas_amt  = smoothramp(temp, p.boil_temp, p.boil_temp + sub_band);
+        const Scalar solid_amt = Scalar(1) - gas_amt;
+        PhaseFractions pf;
+        pf.f = {solid_amt, Scalar(0), Scalar(0), gas_amt};
+        return pf;
+    }
+
     const Scalar melt_band = std::max(Scalar(1), (p.boil_temp - p.melt_temp) * Scalar(0.05));
     const Scalar boil_band = std::max(Scalar(1), (p.boil_temp - p.melt_temp) * Scalar(0.05));
 

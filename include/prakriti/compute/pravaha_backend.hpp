@@ -89,6 +89,18 @@ public:
         (void)runner_->submit(std::move(expr));
     }
 
+    [[nodiscard]] Scalar kinetic_energy(CSpan vx, CSpan vy, CSpan inv_mass) const noexcept {
+        const std::size_t n = vx.size();
+        Scalar total = Scalar(0);
+        for (std::size_t i = 0; i < n; ++i) {
+            if (inv_mass[i] > Scalar(0)) {
+                const Scalar m = Scalar(1) / inv_mass[i];
+                total += Scalar(0.5) * m * (vx[i] * vx[i] + vy[i] * vy[i]);
+            }
+        }
+        return total;
+    }
+
 private:
     std::size_t chunk_size_{1024};
     std::shared_ptr<pravaha::JThreadBackend> backend_;

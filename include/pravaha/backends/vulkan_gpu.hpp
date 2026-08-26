@@ -49,6 +49,12 @@
 
 #include "edsl/backends/lithe_codegen_vulkan_spirv_ir.hpp"
 
+// Pravaha is a compatibility namespace alias in some consumers. Make Lithe's
+// global namespace explicit so this optional adapter cannot bind relatively.
+namespace pravaha::backends::vulkan {
+    namespace lithe = ::lithe;
+}
+
 namespace pravaha::backends::vulkan::spirv {
     // ============================================================================
     // SPIR-V word builder — accumulates instructions into a word vector.

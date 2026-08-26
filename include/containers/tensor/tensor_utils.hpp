@@ -53,10 +53,43 @@ namespace ts {
         std::cout << scalar << std::endl;
     }
 
+    template<typename E, typename T, typename S, typename C>
+    [[nodiscard]] std::string tensor_to_string(const TensorExpression<E, T, S, C> &expr) {
+        const auto &tensor = expr.self();
+        auto shape = get_shape(tensor);
+        if (shape.empty()) {
+            return std::to_string(tensor(std::vector<size_t>{}));
+        }
+        std::string result;
+        std::vector<size_t> idx(shape.size(), 0);
+        auto format_rec = [&](auto &self, size_t dim) -> void {
+            if (dim == shape.size() - 1) {
+                result += "[";
+                for (size_t i = 0; i < shape[dim]; ++i) {
+                    idx[dim] = i;
+                    result += std::to_string(tensor(idx));
+                    if (i + 1 < shape[dim]) result += ", ";
+                }
+                result += "]";
+            } else {
+                result += "[";
+                for (size_t i = 0; i < shape[dim]; ++i) {
+                    idx[dim] = i;
+                    self(self, dim + 1);
+                    if (i + 1 < shape[dim]) result += ", ";
+                }
+                result += "]";
+            }
+        };
+        format_rec(format_rec, 0);
+        return result;
+    }
+
 } // namespace ts
 
 namespace containers::tensor {
     using ts::print_tensor;
+    using ts::tensor_to_string;
 }
 
 #endif // PEBBLE_CONTAINERS_TENSOR_UTILS_HPP
