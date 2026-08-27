@@ -25,6 +25,8 @@
 #include <memory>
 #include <cmath>
 #include <algorithm>
+#include <chrono>
+#include <string>
 
 static const char* VS_METAL =
     "#include <metal_stdlib>\nusing namespace metal;\n"
@@ -47,6 +49,7 @@ static constexpr float DT = 1.0f / 60.0f;
 #include "akruti/primitives.hpp"
 #include "akruti/narrowphase.hpp"
 #include "akruti/gjk.hpp"
+#include "containers/tensor/tensor.hpp"
 
 enum class ShapeKind : std::uint8_t {
     Circle,
@@ -529,6 +532,52 @@ static void init_cb() {
     init_gati_simulation();
 }
 
+// Tensor-backed spatial state and acceleration structures
+struct TensorSpatialState {
+    ts::DynamicTensor<float> state;   // [N, 4] -> [pos_x, pos_y, vel_x, vel_y]
+    ts::DynamicTensor<float> radii;   // [N]    -> bounding radius
+    ts::DynamicTensor<float> rot;     // [N, 2] -> [angle, angular_vel]
+
+    void resize(std::size_t n) {
+        state = ts::DynamicTensor<float>({n, 4});
+        radii = ts::DynamicTensor<float>({n});
+        rot   = ts::DynamicTensor<float>({n, 2});
+    }
+
+    void sync_from_bodies(const std::vector<GatiBody>& bodies) {
+        if (state.shape().empty() || state.shape()[0] != bodies.size()) {
+            resize(bodies.size());
+        }
+        float* s_ptr = state.data();
+        float* r_ptr = radii.data();
+        float* rot_ptr = rot.data();
+        for (std::size_t i = 0; i < bodies.size(); ++i) {
+            s_ptr[i * 4 + 0] = bodies[i].pos[0];
+            s_ptr[i * 4 + 1] = bodies[i].pos[1];
+            s_ptr[i * 4 + 2] = bodies[i].vel[0];
+            s_ptr[i * 4 + 3] = bodies[i].vel[1];
+            r_ptr[i]         = bounding_radius(bodies[i]);
+            rot_ptr[i * 2 + 0] = bodies[i].rot;
+            rot_ptr[i * 2 + 1] = bodies[i].rot_vel;
+        }
+    }
+
+    void sync_to_bodies(std::vector<GatiBody>& bodies) {
+        const float* s_ptr = state.data();
+        const float* rot_ptr = rot.data();
+        for (std::size_t i = 0; i < bodies.size(); ++i) {
+            bodies[i].pos[0] = s_ptr[i * 4 + 0];
+            bodies[i].pos[1] = s_ptr[i * 4 + 1];
+            bodies[i].vel[0] = s_ptr[i * 4 + 2];
+            bodies[i].vel[1] = s_ptr[i * 4 + 3];
+            bodies[i].rot    = rot_ptr[i * 2 + 0];
+            bodies[i].rot_vel = rot_ptr[i * 2 + 1];
+        }
+    }
+};
+
+static TensorSpatialState g_tensor_state;
+
 // Spatial hash grid broadphase for high-performance 1000-body neighbor queries
 struct SpatialHashGrid {
     static constexpr float kCellSize = 18.0f;
@@ -543,13 +592,14 @@ struct SpatialHashGrid {
         head.resize(kTotalCells, -1);
     }
 
-    void build(const std::vector<GatiBody>& bodies) {
+    void build(const ts::DynamicTensor<float>& state, std::size_t n) {
         std::fill(head.begin(), head.end(), -1);
-        next.resize(bodies.size(), -1);
+        next.resize(n, -1);
+        const float* s_ptr = state.data();
 
-        for (int i = 0; i < static_cast<int>(bodies.size()); ++i) {
-            int cx = std::clamp(static_cast<int>(bodies[i].pos[0] / kCellSize), 0, kGridCols - 1);
-            int cy = std::clamp(static_cast<int>(bodies[i].pos[1] / kCellSize), 0, kGridRows - 1);
+        for (int i = 0; i < static_cast<int>(n); ++i) {
+            int cx = std::clamp(static_cast<int>(s_ptr[i * 4 + 0] / kCellSize), 0, kGridCols - 1);
+            int cy = std::clamp(static_cast<int>(s_ptr[i * 4 + 1] / kCellSize), 0, kGridRows - 1);
             int cell = cy * kGridCols + cx;
             next[i] = head[cell];
             head[cell] = i;
@@ -564,31 +614,52 @@ static void step_gati(float dt) {
 
     constexpr int kSubsteps = 4;
     const float sub_dt = dt / float(kSubsteps);
+    const std::size_t N = app.bodies.size();
+
+    g_tensor_state.sync_from_bodies(app.bodies);
+    float* s_ptr = g_tensor_state.state.data();
+    float* r_ptr = g_tensor_state.radii.data();
+    float* rot_ptr = g_tensor_state.rot.data();
 
     for (int step = 0; step < kSubsteps; ++step) {
-        // 1. Position and rotation integration
-        for (auto& b : app.bodies) {
-            b.pos = b.pos + b.vel * sub_dt;
-            b.rot += b.rot_vel * sub_dt;
-            float r = bounding_radius(b);
-            if (b.pos[0] < r) { b.pos[0] = r; b.vel[0] = std::abs(b.vel[0]); }
-            if (b.pos[0] > FW - r) { b.pos[0] = FW - r; b.vel[0] = -std::abs(b.vel[0]); }
-            if (b.pos[1] < r + 20.0f) { b.pos[1] = r + 20.0f; b.vel[1] = std::abs(b.vel[1]); }
-            if (b.pos[1] > FH - r - 20.0f) { b.pos[1] = FH - r - 20.0f; b.vel[1] = -std::abs(b.vel[1]); }
+        // 1. Vectorized Tensor Integration & Boundary Handling
+        for (std::size_t i = 0; i < N; ++i) {
+            s_ptr[i * 4 + 0] += s_ptr[i * 4 + 2] * sub_dt;
+            s_ptr[i * 4 + 1] += s_ptr[i * 4 + 3] * sub_dt;
+            rot_ptr[i * 2 + 0] += rot_ptr[i * 2 + 1] * sub_dt;
+
+            const float r = r_ptr[i];
+            if (s_ptr[i * 4 + 0] < r) {
+                s_ptr[i * 4 + 0] = r;
+                s_ptr[i * 4 + 2] = std::abs(s_ptr[i * 4 + 2]);
+            }
+            if (s_ptr[i * 4 + 0] > FW - r) {
+                s_ptr[i * 4 + 0] = FW - r;
+                s_ptr[i * 4 + 2] = -std::abs(s_ptr[i * 4 + 2]);
+            }
+            if (s_ptr[i * 4 + 1] < r + 20.0f) {
+                s_ptr[i * 4 + 1] = r + 20.0f;
+                s_ptr[i * 4 + 3] = std::abs(s_ptr[i * 4 + 3]);
+            }
+            if (s_ptr[i * 4 + 1] > FH - r - 20.0f) {
+                s_ptr[i * 4 + 1] = FH - r - 20.0f;
+                s_ptr[i * 4 + 3] = -std::abs(s_ptr[i * 4 + 3]);
+            }
         }
 
         // 2. Spatial Broadphase Acceleration
-        g_grid.build(app.bodies);
+        g_grid.build(g_tensor_state.state, N);
 
-        // 3. Iterative non-penetration solver
+        // 3. Iterative non-penetration solver with tensor-accelerated candidate testing
         constexpr int kPbdIterations = 4;
         for (int pbd = 0; pbd < kPbdIterations; ++pbd) {
-            for (int i = 0; i < static_cast<int>(app.bodies.size()); ++i) {
-                auto& a = app.bodies[i];
-                const float ra = bounding_radius(a);
+            for (int i = 0; i < static_cast<int>(N); ++i) {
+                const float ra = r_ptr[i];
+                const float ax = s_ptr[i * 4 + 0];
+                const float ay = s_ptr[i * 4 + 1];
 
-                int cx = std::clamp(static_cast<int>(a.pos[0] / SpatialHashGrid::kCellSize), 0, SpatialHashGrid::kGridCols - 1);
-                int cy = std::clamp(static_cast<int>(a.pos[1] / SpatialHashGrid::kCellSize), 0, SpatialHashGrid::kGridRows - 1);
+                int cx = std::clamp(static_cast<int>(ax / SpatialHashGrid::kCellSize), 0, SpatialHashGrid::kGridCols - 1);
+                int cy = std::clamp(static_cast<int>(ay / SpatialHashGrid::kCellSize), 0, SpatialHashGrid::kGridRows - 1);
 
                 for (int dy = -1; dy <= 1; ++dy) {
                     int ny = cy + dy;
@@ -600,60 +671,82 @@ static void step_gati(float dt) {
 
                         int cell = ny * SpatialHashGrid::kGridCols + nx;
                         for (int j = g_grid.head[cell]; j != -1; j = g_grid.next[j]) {
-                            if (j <= i) continue; // avoid duplicates and self-collision
+                            if (j <= i) continue;
 
-                            auto& b = app.bodies[j];
-                            const float rb = bounding_radius(b);
+                            const float rb = r_ptr[j];
+                            const float bx = s_ptr[j * 4 + 0];
+                            const float by = s_ptr[j * 4 + 1];
 
-                            pebble::math::vec2 d = b.pos - a.pos;
-                            float dist_sq = d[0] * d[0] + d[1] * d[1];
+                            float d_x = bx - ax;
+                            float d_y = by - ay;
+                            float dist_sq = d_x * d_x + d_y * d_y;
                             float min_d = ra + rb;
                             if (dist_sq >= min_d * min_d) continue;
 
-                            auto manifold = test_body_collision(a, b);
+                            // Sync current position into bodies for Akruti narrowphase
+                            app.bodies[i].pos = pebble::math::vec2(s_ptr[i * 4 + 0], s_ptr[i * 4 + 1]);
+                            app.bodies[j].pos = pebble::math::vec2(s_ptr[j * 4 + 0], s_ptr[j * 4 + 1]);
+                            app.bodies[i].rot = rot_ptr[i * 2 + 0];
+                            app.bodies[j].rot = rot_ptr[j * 2 + 0];
+
+                            auto manifold = test_body_collision(app.bodies[i], app.bodies[j]);
                             if (!manifold.hit || manifold.depth <= 0.0f) continue;
 
-                            pebble::math::vec2 n{manifold.normal.x, manifold.normal.y};
-                            float len_n = std::sqrt(n[0] * n[0] + n[1] * n[1]);
+                            float nx_norm = manifold.normal.x;
+                            float ny_norm = manifold.normal.y;
+                            float len_n = std::sqrt(nx_norm * nx_norm + ny_norm * ny_norm);
                             if (len_n > 1e-5f) {
-                                n = n * (1.0f / len_n);
+                                float inv_l = 1.0f / len_n;
+                                nx_norm *= inv_l;
+                                ny_norm *= inv_l;
                             } else {
                                 float dist = std::sqrt(dist_sq);
-                                n = (dist > 1e-4f) ? d * (1.0f / dist) : pebble::math::vec2(1.0f, 0.0f);
+                                if (dist > 1e-4f) {
+                                    nx_norm = d_x / dist;
+                                    ny_norm = d_y / dist;
+                                } else {
+                                    nx_norm = 1.0f;
+                                    ny_norm = 0.0f;
+                                }
                             }
 
                             float separation = (manifold.depth + 0.05f) * 0.5f;
-                            a.pos = a.pos - n * separation;
-                            b.pos = b.pos + n * separation;
+                            s_ptr[i * 4 + 0] -= nx_norm * separation;
+                            s_ptr[i * 4 + 1] -= ny_norm * separation;
+                            s_ptr[j * 4 + 0] += nx_norm * separation;
+                            s_ptr[j * 4 + 1] += ny_norm * separation;
 
-                            float ra_bound = bounding_radius(a);
-                            float rb_bound = bounding_radius(b);
-                            a.pos[0] = std::clamp(a.pos[0], ra_bound, FW - ra_bound);
-                            a.pos[1] = std::clamp(a.pos[1], ra_bound + 20.0f, FH - ra_bound - 20.0f);
-                            b.pos[0] = std::clamp(b.pos[0], rb_bound, FW - rb_bound);
-                            b.pos[1] = std::clamp(b.pos[1], rb_bound + 20.0f, FH - rb_bound - 20.0f);
+                            s_ptr[i * 4 + 0] = std::clamp(s_ptr[i * 4 + 0], ra, FW - ra);
+                            s_ptr[i * 4 + 1] = std::clamp(s_ptr[i * 4 + 1], ra + 20.0f, FH - ra - 20.0f);
+                            s_ptr[j * 4 + 0] = std::clamp(s_ptr[j * 4 + 0], rb, FW - rb);
+                            s_ptr[j * 4 + 1] = std::clamp(s_ptr[j * 4 + 1], rb + 20.0f, FH - rb - 20.0f);
 
                             if (pbd == 0) {
-                                float va = a.vel[0] * n[0] + a.vel[1] * n[1];
-                                float vb = b.vel[0] * n[0] + b.vel[1] * n[1];
+                                float va = s_ptr[i * 4 + 2] * nx_norm + s_ptr[i * 4 + 3] * ny_norm;
+                                float vb = s_ptr[j * 4 + 2] * nx_norm + s_ptr[j * 4 + 3] * ny_norm;
                                 float rel_vel = vb - va;
                                 if (rel_vel < 0.0f) {
                                     float restitution = 0.35f;
                                     float impulse = -(1.0f + restitution) * rel_vel * 0.5f;
-                                    a.vel = a.vel - n * impulse;
-                                    b.vel = b.vel + n * impulse;
+                                    s_ptr[i * 4 + 2] -= nx_norm * impulse;
+                                    s_ptr[i * 4 + 3] -= ny_norm * impulse;
+                                    s_ptr[j * 4 + 2] += nx_norm * impulse;
+                                    s_ptr[j * 4 + 3] += ny_norm * impulse;
                                 }
 
                                 if (step == 0) {
                                     gati::ContactEvent ce{};
-                                    ce.a = a.ent.index;
-                                    ce.b = b.ent.index;
-                                    ce.normal = n;
+                                    ce.a = app.bodies[i].ent.index;
+                                    ce.b = app.bodies[j].ent.index;
+                                    ce.normal = pebble::math::vec2(nx_norm, ny_norm);
                                     ce.depth = manifold.depth;
-                                    ce.point = (a.pos + b.pos) * 0.5f;
+                                    ce.point = pebble::math::vec2(
+                                        (s_ptr[i * 4 + 0] + s_ptr[j * 4 + 0]) * 0.5f,
+                                        (s_ptr[i * 4 + 1] + s_ptr[j * 4 + 1]) * 0.5f
+                                    );
 
-                                    auto* ea = app.world.get<gati::ElementalComponent>(a.ent);
-                                    auto* eb = app.world.get<gati::ElementalComponent>(b.ent);
+                                    auto* ea = app.world.get<gati::ElementalComponent>(app.bodies[i].ent);
+                                    auto* eb = app.world.get<gati::ElementalComponent>(app.bodies[j].ent);
                                     auto er = gati::ElementalReactionMatrix::evaluate(
                                         ea ? ea->type : gati::ElementType::Neutral,
                                         eb ? eb->type : gati::ElementType::Neutral);
@@ -667,6 +760,14 @@ static void step_gati(float dt) {
                     }
                 }
             }
+        }
+    }
+
+    g_tensor_state.sync_to_bodies(app.bodies);
+
+    for (auto& b : app.bodies) {
+        if (auto* tr = app.world.get<gati::Transform>(b.ent)) {
+            tr->position = b.pos;
         }
     }
 

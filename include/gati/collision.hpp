@@ -80,14 +80,159 @@ inline AABB shape_aabb(const ShapeVariant& v, const Vec2& p) {
     }, v);
 }
 
-// Broadphase over transformed AABBs + GJK/EPA narrowphase; emits ContactEvents.
-struct CollisionSystem {
-    containers::AABBTree<AABB>                       tree{Scalar(0.1)}; // fat margin reduces churn
-    Scalar                                           fat_margin = Scalar(0.2);
+#include "containers/tensor/tensor.hpp"
+
+// Platform-adaptive default policy detection
+#if defined(__APPLE__) && defined(__aarch64__) && defined(PEBBLE_ENABLE_MLX)
+#include "containers/tensor/mlx_storage_policy.hpp"
+#include "containers/tensor/mlx_computation_policy.hpp"
+namespace detail {
+    using DefaultGatiStoragePolicy = ts::mlx_storage_policy;
+    using DefaultGatiCompPolicy    = ts::mlx_computation_policy;
+}
+#elif defined(PEBBLE_ENABLE_HIGHWAY)
+#include "containers/tensor/highway_computation_policy.hpp"
+namespace detail {
+    using DefaultGatiStoragePolicy = ts::DefaultStoragePolicy;
+    using DefaultGatiCompPolicy    = ts::highway_computation_policy;
+}
+#else
+namespace detail {
+    using DefaultGatiStoragePolicy = ts::DefaultStoragePolicy;
+    using DefaultGatiCompPolicy    = ts::DefaultComputationPolicy;
+}
+#endif
+
+// Tensor-accelerated broadphase state for large entity counts
+template<typename StoragePolicy = detail::DefaultGatiStoragePolicy,
+         typename CompPolicy    = detail::DefaultGatiCompPolicy>
+struct BasicTensorBroadphase {
+    using TensorType = ts::DynamicTensor<float, StoragePolicy, CompPolicy>;
+    TensorType state; // [N, 4] -> [x, y, vx, vy]
+    TensorType radii; // [N]    -> radius
+    std::vector<std::uint32_t> entity_indices;
+
+    static constexpr float kCellSize = 18.0f;
+    std::vector<int> head;
+    std::vector<int> next;
+
+    void update(World& w) {
+        std::size_t count = 0;
+        w.view<ShapeRef, Transform>([&](Entity, ShapeRef&, Transform&) {
+            ++count;
+        });
+
+        if (count == 0) return;
+        if (state.shape().empty() || state.shape()[0] != count) {
+            state = TensorType({count, 4});
+            radii = TensorType({count});
+            entity_indices.resize(count);
+        }
+
+        float* s_ptr = state.data();
+        float* r_ptr = radii.data();
+        std::size_t idx = 0;
+
+        w.view<ShapeRef, Transform>([&](Entity e, ShapeRef& s, Transform& tr) {
+            s_ptr[idx * 4 + 0] = tr.position.x;
+            s_ptr[idx * 4 + 1] = tr.position.y;
+            s_ptr[idx * 4 + 2] = 0.0f;
+            s_ptr[idx * 4 + 3] = 0.0f;
+            auto box = shape_aabb(s.shape, tr.position);
+            r_ptr[idx] = std::max(box.hi.x - box.lo.x, box.hi.y - box.lo.y) * 0.5f;
+            entity_indices[idx] = e.index;
+            ++idx;
+        });
+    }
+};
+
+using TensorBroadphase = BasicTensorBroadphase<>;
+
+// Broadphase over transformed AABBs / Tensor spatial bins + GJK/EPA narrowphase; emits ContactEvents.
+template<typename StoragePolicy = detail::DefaultGatiStoragePolicy,
+         typename CompPolicy    = detail::DefaultGatiCompPolicy>
+struct BasicCollisionSystem {
+    containers::AABBTree<AABB>                               tree{Scalar(0.1)}; // fat margin reduces churn
+    Scalar                                                   fat_margin = Scalar(0.2);
     std::unordered_map<std::uint64_t, akruti::SimplexCache> simplex_caches_{};
+    BasicTensorBroadphase<StoragePolicy, CompPolicy>         tensor_broadphase_{};
 
     void run(World& w, StepContext ctx) {
-        // Rebuild or update tree with fat margin
+        // Automatic platform & workload threshold: for > 200 entities, leverage TensorBroadphase
+        std::size_t entity_count = 0;
+        w.view<ShapeRef, Transform>([&](Entity, ShapeRef&, Transform&) { ++entity_count; });
+
+        if (entity_count > 200) {
+            tensor_broadphase_.update(w);
+            const float* s_ptr = tensor_broadphase_.state.data();
+            const float* r_ptr = tensor_broadphase_.radii.data();
+            const auto& indices = tensor_broadphase_.entity_indices;
+            const std::size_t N = indices.size();
+
+            // Dynamic grid dimensions
+            constexpr float cs = TensorBroadphase::kCellSize;
+            int g_cols = 80, g_rows = 60;
+            int total_cells = g_cols * g_rows;
+            if (tensor_broadphase_.head.size() != static_cast<std::size_t>(total_cells)) {
+                tensor_broadphase_.head.resize(total_cells, -1);
+            }
+            std::fill(tensor_broadphase_.head.begin(), tensor_broadphase_.head.end(), -1);
+            tensor_broadphase_.next.resize(N, -1);
+
+            for (std::size_t i = 0; i < N; ++i) {
+                int cx = std::clamp(static_cast<int>(s_ptr[i * 4 + 0] / cs), 0, g_cols - 1);
+                int cy = std::clamp(static_cast<int>(s_ptr[i * 4 + 1] / cs), 0, g_rows - 1);
+                int cell = cy * g_cols + cx;
+                tensor_broadphase_.next[i] = tensor_broadphase_.head[cell];
+                tensor_broadphase_.head[cell] = static_cast<int>(i);
+            }
+
+            for (std::size_t i = 0; i < N; ++i) {
+                const float ra = r_ptr[i];
+                const float ax = s_ptr[i * 4 + 0];
+                const float ay = s_ptr[i * 4 + 1];
+                std::uint32_t ea_idx = indices[i];
+                ShapeRef* sa = w.get_by_index<ShapeRef>(ea_idx);
+                Transform* ta = w.get_by_index<Transform>(ea_idx);
+                if (!sa || !ta) continue;
+
+                int cx = std::clamp(static_cast<int>(ax / cs), 0, g_cols - 1);
+                int cy = std::clamp(static_cast<int>(ay / cs), 0, g_rows - 1);
+
+                for (int dy = -1; dy <= 1; ++dy) {
+                    int ny = cy + dy;
+                    if (ny < 0 || ny >= g_rows) continue;
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        int nx = cx + dx;
+                        if (nx < 0 || nx >= g_cols) continue;
+
+                        int cell = ny * g_cols + nx;
+                        for (int j = tensor_broadphase_.head[cell]; j != -1; j = tensor_broadphase_.next[j]) {
+                            if (static_cast<std::size_t>(j) <= i) continue;
+
+                            const float rb = r_ptr[j];
+                            const float bx = s_ptr[j * 4 + 0];
+                            const float by = s_ptr[j * 4 + 1];
+                            float dist_sq = (bx - ax) * (bx - ax) + (by - ay) * (by - ay);
+                            float min_d = ra + rb;
+                            if (dist_sq >= min_d * min_d) continue;
+
+                            std::uint32_t eb_idx = indices[j];
+                            ShapeRef* sb = w.get_by_index<ShapeRef>(eb_idx);
+                            Transform* tb = w.get_by_index<Transform>(eb_idx);
+                            if (!sb || !tb) continue;
+
+                            const std::uint64_t key = (static_cast<std::uint64_t>(ea_idx) << 32) | static_cast<std::uint64_t>(eb_idx);
+                            auto& cache = simplex_caches_[key];
+                            narrow(ctx, ea_idx, eb_idx, sa->shape, ta->position, sb->shape, tb->position, cache);
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
+        // Standard AABBTree broadphase for low/medium entity counts
         tree = containers::AABBTree<AABB>{fat_margin};
 
         w.view<ShapeRef, Transform>([&](Entity e, ShapeRef& s, Transform& tr) {
@@ -129,6 +274,8 @@ private:
         }, va);
     }
 };
+
+using CollisionSystem = BasicCollisionSystem<>;
 
 // Broadphase-accelerated raycast: nearest entity hit + Akruti RayHit
 struct RaycastResult {
