@@ -101,6 +101,20 @@ public:
         return total;
     }
 
+    // Parallel 4-color checkerboard bucket dispatch via Pravaha task-graph execution
+    template <typename Fn>
+    void parallel_for_color(const std::vector<Index>& color_bucket, Fn&& fn) const {
+        const std::size_t n = color_bucket.size();
+        if (n < chunk_size_) {
+            for (std::size_t idx = 0; idx < n; ++idx) fn(color_bucket[idx]);
+            return;
+        }
+        auto r = std::views::iota(std::size_t{0}, n);
+        auto expr = pravaha::lazy_parallel_for(
+            r, [&color_bucket, fn = std::forward<Fn>(fn)](std::size_t idx) { fn(color_bucket[idx]); }, chunk_size_);
+        (void)runner_->submit(std::move(expr));
+    }
+
 private:
     std::size_t chunk_size_{1024};
     std::shared_ptr<pravaha::JThreadBackend> backend_;

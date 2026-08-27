@@ -162,4 +162,4 @@ Each primitive satisfies `Shape` with exact `.sdf()`, `.aabb()`, and `.support()
 `akruti/body.hpp`:
 - `DynamicBody<Shape>`: Encapsulates dynamic 6-DOF (2D translation + rotation) motion with mass, moment of inertia, and linear/angular velocity.
 - Integrates with Prakriti continuum particle solvers: particles exert continuous contact reaction forces and hydrodynamic pressure impulses against `DynamicBody` surfaces, enabling floating, sinking, buoyancy, and mechanical deflection.
-- World-space evaluation of `sdf(p)`, `aabb()`, and `support(d)` for any underlying Akruti Shape (including compound CSG and deformed shapes).
+- World-space evaluation of `sdf(p)`, `aabb()`, `support(d)`, and continuous collision detection (CCD) `raycast(ray_start, ray_dir)` for any underlying Akruti Shape (including compound CSG and deformed shapes).

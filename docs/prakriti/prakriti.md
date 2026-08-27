@@ -212,8 +212,8 @@ Three interchangeable tiers, all producing identical physics (parity-tested to 1
 | Tier | Backend | Header | Description |
 |------|---------|--------|-------------|
 | 1 | `ScalarBackend` (default) | `compute/scalar_backend.hpp` | Plain stride-1 loops over split columns; autovectorizes; zero dependencies. |
-| 2 | `HighwayBackend` | `compute/highway_backend.hpp` | Google Highway portable SIMD (NEON on Apple Silicon, AVX2/AVX-512 on x86) with `simd_sph_poly6`. |
-| 3 | `PravahaBackend` | `compute/pravaha_backend.hpp` | Pravaha parallel task graph execution across CPU cores for large particle batches. |
+| 2 | `HighwayBackend` | `compute/highway_backend.hpp` | Google Highway portable SIMD (NEON on Apple Silicon, AVX2/AVX-512 on x86) with `simd_sph_poly6`, `simd_sph_poly6_dxdy`, and `simd_sph_spiky_grad`. |
+| 3 | `PravahaBackend` | `compute/pravaha_backend.hpp` | Pravaha parallel task graph execution across CPU cores for large particle batches with 4-color checkerboard domain decomposition (`parallel_for_color`). |
 
 ## 12. Pebble Subsystem Reuse
 

@@ -189,6 +189,98 @@ struct HighwayBackend {
             }
         }
     }
+
+    // SIMD Vectorized SPH Poly6 Kernel evaluation directly from dx and dy displacement vectors
+    static void simd_sph_poly6_dxdy(const float* dx_lanes, const float* dy_lanes,
+                                    float* out_w, float h, std::size_t count) noexcept {
+        namespace hn = hwy::HWY_NAMESPACE;
+        const hn::ScalableTag<float> d;
+        const std::size_t N = hn::Lanes(d);
+
+        const float h2 = h * h;
+        const float h4 = h2 * h2;
+        const float h8 = h4 * h4;
+        const float coeff_val = 4.0f / (3.141592653589793f * h8);
+
+        const auto vh2 = hn::Set(d, h2);
+        const auto vcoeff = hn::Set(d, coeff_val);
+        const auto vzero = hn::Zero(d);
+
+        std::size_t i = 0;
+        for (; i + N <= count; i += N) {
+            const auto vdx = hn::LoadU(d, &dx_lanes[i]);
+            const auto vdy = hn::LoadU(d, &dy_lanes[i]);
+            const auto vr2 = hn::MulAdd(vdx, vdx, hn::Mul(vdy, vdy));
+            const auto mask = hn::Lt(vr2, vh2);
+            const auto diff = hn::Max(hn::Sub(vh2, vr2), vzero);
+            const auto diff2 = hn::Mul(diff, diff);
+            const auto diff3 = hn::Mul(diff2, diff);
+            const auto w = hn::Mul(vcoeff, diff3);
+            const auto res = hn::IfThenElseZero(mask, w);
+            hn::StoreU(res, d, &out_w[i]);
+        }
+        for (; i < count; ++i) {
+            const float r2 = dx_lanes[i] * dx_lanes[i] + dy_lanes[i] * dy_lanes[i];
+            if (r2 < h2) {
+                float diff = h2 - r2;
+                out_w[i] = coeff_val * (diff * diff * diff);
+            } else {
+                out_w[i] = 0.0f;
+            }
+        }
+    }
+
+    // SIMD Vectorized SPH Spiky Gradient Kernel evaluation
+    // Computes ∇W(r, h) = -10 / (pi * h^5) * (h - r)^3 * (r_vec / r)
+    static void simd_sph_spiky_grad(const float* dx_lanes, const float* dy_lanes,
+                                    float* out_gx, float* out_gy,
+                                    float h, std::size_t count) noexcept {
+        namespace hn = hwy::HWY_NAMESPACE;
+        const hn::ScalableTag<float> d;
+        const std::size_t N = hn::Lanes(d);
+
+        const float h2 = h * h;
+        const float h5 = h2 * h2 * h;
+        const float coeff_val = -10.0f / (3.141592653589793f * h5);
+
+        const auto vh = hn::Set(d, h);
+        const auto vh2 = hn::Set(d, h2);
+        const auto vcoeff = hn::Set(d, coeff_val);
+        const auto veps = hn::Set(d, 1e-6f);
+
+        std::size_t i = 0;
+        for (; i + N <= count; i += N) {
+            const auto vdx = hn::LoadU(d, &dx_lanes[i]);
+            const auto vdy = hn::LoadU(d, &dy_lanes[i]);
+            const auto vr2 = hn::MulAdd(vdx, vdx, hn::Mul(vdy, vdy));
+            const auto mask = hn::Lt(vr2, vh2);
+
+            const auto vr = hn::Sqrt(vr2);
+            const auto diff = hn::Max(hn::Sub(vh, vr), hn::Zero(d));
+            const auto diff3 = hn::Mul(diff, hn::Mul(diff, diff));
+            const auto inv_r = hn::Div(hn::Set(d, 1.0f), hn::Max(vr, veps));
+            const auto scale = hn::Mul(vcoeff, hn::Mul(diff3, inv_r));
+
+            const auto gx = hn::IfThenElseZero(mask, hn::Mul(vdx, scale));
+            const auto gy = hn::IfThenElseZero(mask, hn::Mul(vdy, scale));
+
+            hn::StoreU(gx, d, &out_gx[i]);
+            hn::StoreU(gy, d, &out_gy[i]);
+        }
+        for (; i < count; ++i) {
+            const float r2 = dx_lanes[i] * dx_lanes[i] + dy_lanes[i] * dy_lanes[i];
+            if (r2 < h2 && r2 > 1e-12f) {
+                const float r = std::sqrt(r2);
+                const float diff = h - r;
+                const float factor = coeff_val * (diff * diff * diff) / r;
+                out_gx[i] = dx_lanes[i] * factor;
+                out_gy[i] = dy_lanes[i] * factor;
+            } else {
+                out_gx[i] = 0.0f;
+                out_gy[i] = 0.0f;
+            }
+        }
+    }
 };
 
 static_assert(ComputeBackend<HighwayBackend>);

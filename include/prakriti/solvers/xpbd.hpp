@@ -56,7 +56,9 @@ struct XpbdSolver {
             const Scalar alpha = ctx.law.structural_alpha(base_alpha, E.damage[e]) * inv_dt2;
 
             // Warm-start Lagrange multiplier from active manifold cache
-            const std::uint64_t edge_key = (static_cast<std::uint64_t>(ia) << 32) | static_cast<std::uint64_t>(ib);
+            const std::uint64_t min_i = std::min<std::uint64_t>(ia, ib);
+            const std::uint64_t max_i = std::max<std::uint64_t>(ia, ib);
+            const std::uint64_t edge_key = (min_i << 32) | max_i;
             Scalar prev_lambda = Scalar(0);
             if (auto cached = warm_start_cache_.get(edge_key)) {
                 prev_lambda = *cached * Scalar(0.85); // Warm-start relaxation factor

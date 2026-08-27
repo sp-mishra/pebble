@@ -127,7 +127,8 @@ struct PrakritiStressApp {
     bool mouse_down = false;
     bool heat_emitter = false;
     bool cold_emitter = false;
-    bool fluid_emitter = false; // [F] Key live fluid nozzle
+    bool fluid_emitter = false;  // [F] Key live fluid nozzle
+    bool waterfall_mode = true;  // [W] Key continuous waterfall cascade
 };
 
 static PrakritiStressApp g_app;
@@ -136,52 +137,71 @@ static void init_prakriti_world() {
     auto& app = g_app;
     prakriti::WorldConfig cfg{};
     cfg.bounds = {{30.0f, 30.0f}, {FW - 30.0f, FH - 30.0f}};
-    cfg.gravity = {0.0f, 260.0f};
-    cfg.substeps = 2;       // 2 high-rate substeps
-    cfg.solver_iters = 3;   // 3 solver iterations for snappy performance
-    cfg.cell_size = 14.0f;
+    cfg.gravity = {0.0f, 750.0f}; // Snappy natural downward acceleration
+    cfg.substeps = 2;              // 2 high-rate substeps
+    cfg.solver_iters = 2;          // 2 fast solver iterations
+    cfg.cell_size = 18.0f;         // Optimal grid cell width
 
-    // 1. Setup Static Obstacles — Plinko field & angled sluice ramps
+    // 1. Setup Static Obstacles — Multi-tier Waterfall Cascades & Sluice Ramps
     app.obstacles.circles.clear();
     app.obstacles.boxes.clear();
     app.obstacles.capsules.clear();
 
-    // Multi-tier Galton board / Plinko deflector grid
-    constexpr int kPegRows = 3;
+    // Multi-tier Waterfall Ledges & Angled Sluices
+    app.obstacles.capsules.push_back(akruti::Capsule{
+        pebble::math::vec2(50.0f, 120.0f),
+        pebble::math::vec2(320.0f, 160.0f),
+        12.0f
+    });
+    app.obstacles.capsules.push_back(akruti::Capsule{
+        pebble::math::vec2(FW - 50.0f, 120.0f),
+        pebble::math::vec2(FW - 320.0f, 160.0f),
+        12.0f
+    });
+
+    // Tier 2: Mid-level waterfall spillway baffles
+    app.obstacles.capsules.push_back(akruti::Capsule{
+        pebble::math::vec2(360.0f, 240.0f),
+        pebble::math::vec2(150.0f, 290.0f),
+        12.0f
+    });
+    app.obstacles.capsules.push_back(akruti::Capsule{
+        pebble::math::vec2(FW - 360.0f, 240.0f),
+        pebble::math::vec2(FW - 150.0f, 290.0f),
+        12.0f
+    });
+
+    // Multi-tier Galton board / Plinko deflector grid beneath the falls
+    constexpr int kPegRows = 2;
     for (int pr = 0; pr < kPegRows; ++pr) {
         int count = 5 + (pr % 2);
         float spacing = FW / float(count + 1);
-        float y = 240.0f + float(pr) * 75.0f;
+        float y = 350.0f + float(pr) * 60.0f;
         for (int pc = 1; pc <= count; ++pc) {
             float x = float(pc) * spacing + ((pr % 2) ? (spacing * 0.5f) : 0.0f);
             if (x > 80.0f && x < FW - 80.0f) {
-                app.obstacles.circles.push_back(akruti::Circle{pebble::math::vec2(x, y), 14.0f});
+                app.obstacles.circles.push_back(akruti::Circle{pebble::math::vec2(x, y), 12.0f});
             }
         }
     }
 
-    // Angled Funnel Guides & Center Bouncer
-    app.obstacles.circles.push_back(akruti::Circle{pebble::math::vec2(FW * 0.50f, 500.0f), 32.0f});
-    app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(80.0f, 160.0f),
-        pebble::math::vec2(280.0f, 220.0f),
-        10.0f
-    });
-    app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(FW - 80.0f, 160.0f),
-        pebble::math::vec2(FW - 280.0f, 220.0f),
-        10.0f
-    });
+    // Central splash boulder
+    app.obstacles.circles.push_back(akruti::Circle{pebble::math::vec2(FW * 0.50f, 540.0f), 28.0f});
 
     prakriti::ObstacleConfig obs_cfg{};
+    obs_cfg.friction = 0.10f;
+    obs_cfg.restitution = 0.40f;
+    obs_cfg.contact_offset = 0.0f;
     obs_cfg.contact_stiffness = 1.0f;
-    obs_cfg.restitution = 0.45f;
-    obs_cfg.friction = 0.12f;
+
+    prakriti::DensitySolver density_solver;
+    density_solver.cfg.smoothing_h = 16.0f;
+    density_solver.cfg.rest_density = 1.5f;
 
     ShowcaseMechanics mechanics_stack{
         std::make_tuple(
             prakriti::XpbdSolver{},
-            prakriti::DensitySolver{},
+            density_solver,
             prakriti::ObstacleSolver<ShowcaseObstacles>{app.obstacles, obs_cfg}
         )
     };
@@ -206,18 +226,18 @@ static void init_prakriti_world() {
     jelly_params.yield_strain = 0.35f;
     jelly_params.ultimate_strain = 0.85f;
     jelly_params.alpha = {5e-4f, 1e-3f, 1e-1f, 1.0f};
-    jelly_params.visc = {0.1f, 0.25f, 0.5f, 0.01f};
+    jelly_params.visc = {0.05f, 0.1f, 0.1f, 0.01f};
     prakriti::MaterialId mat_jelly = app.world->materials().add(jelly_params);
 
     // 2. High-Density Dual Fluid Dam Breaks (Water on left, Superheated Magma on right)
-    // Left: Cool Water Reservoir (450 particles)
-    for (int r = 0; r < 18; ++r) {
+    // Left: Cool Water Reservoir (500 particles)
+    for (int r = 0; r < 20; ++r) {
         for (int c = 0; c < 25; ++c) {
-            float px = 45.0f + float(c) * 9.0f;
-            float py = 45.0f + float(r) * 9.0f;
+            float px = 40.0f + float(c) * 10.0f;
+            float py = 45.0f + float(r) * 10.0f;
             app.world->particles().add({
                 .position = pebble::math::vec2(px, py),
-                .velocity = {10.0f, 0.0f},
+                .velocity = {40.0f, 0.0f},
                 .mass = 1.0f,
                 .temperature = 16.0f,
                 .material = app.mat_water,
@@ -226,14 +246,14 @@ static void init_prakriti_world() {
         }
     }
 
-    // Right: Superheated Molten Lava Column (450 particles)
-    for (int r = 0; r < 18; ++r) {
+    // Right: Superheated Molten Lava Column (500 particles)
+    for (int r = 0; r < 20; ++r) {
         for (int c = 0; c < 25; ++c) {
-            float px = FW - 270.0f + float(c) * 9.0f;
-            float py = 45.0f + float(r) * 9.0f;
+            float px = FW - 290.0f + float(c) * 10.0f;
+            float py = 45.0f + float(r) * 10.0f;
             app.world->particles().add({
                 .position = pebble::math::vec2(px, py),
-                .velocity = {-10.0f, 0.0f},
+                .velocity = {-40.0f, 0.0f},
                 .mass = 2.2f,
                 .temperature = 950.0f, // Glowing hot magma!
                 .material = app.mat_lava,
@@ -629,6 +649,45 @@ static void frame_cb() {
             }
         }
 
+        // Continuous Top Waterfall Inflow & Recycling (Cascading streams from left & right cliffs)
+        if (app.waterfall_mode && app.world) {
+            auto& P = app.world->particles();
+            const std::size_t N = P.size();
+
+            // 1. Recycle water particles that reach the bottom basin back to the top cliff waterfalls
+            for (std::size_t i = 0; i < N; ++i) {
+                if (P.material[i] == app.mat_water && P.pos_y[i] > FH - 45.0f && (std::rand() % 100 < 15)) {
+                    // Re-emit from top left or right waterfall chute
+                    bool left_chute = (std::rand() % 2 == 0);
+                    float wx = left_chute ? (70.0f + float(std::rand() % 40)) : (FW - 110.0f + float(std::rand() % 40));
+                    P.pos_x[i] = wx;
+                    P.pos_y[i] = 40.0f + float(std::rand() % 25);
+                    P.pred_x[i] = P.pos_x[i];
+                    P.pred_y[i] = P.pos_y[i];
+                    P.vel_x[i] = left_chute ? 35.0f : -35.0f;
+                    P.vel_y[i] = 60.0f + float(std::rand() % 40);
+                    P.temperature[i] = 16.0f;
+                }
+            }
+
+            // 2. Steady Waterfall Fountain Inflow (Capacity up to 2,000 particles)
+            if (P.size() < 2000 && (app.frame % 3 == 0)) {
+                for (int w = 0; w < 3; ++w) {
+                    bool left_chute = (w % 2 == 0);
+                    float wx = left_chute ? (75.0f + float(std::rand() % 40)) : (FW - 115.0f + float(std::rand() % 40));
+                    float wy = 38.0f + float(std::rand() % 15);
+                    app.world->particles().add({
+                        .position = pebble::math::vec2(wx, wy),
+                        .velocity = {left_chute ? 80.0f : -80.0f, 220.0f + float(std::rand() % 80)},
+                        .mass = 1.0f,
+                        .temperature = 16.0f,
+                        .material = app.mat_water,
+                        .f_solid = 0.0f, .f_plastic = 0.0f, .f_liquid = 1.0f, .f_gas = 0.0f
+                    });
+                }
+            }
+        }
+
         // Measure substep execution time for Nadi Telemetry
         auto step_start = std::chrono::high_resolution_clock::now();
         app.world->step();
@@ -699,6 +758,9 @@ static void event_cb(const sapp_event* ev) {
             case SAPP_KEYCODE_F:
                 app.fluid_emitter = !app.fluid_emitter;
                 break;
+            case SAPP_KEYCODE_W:
+                app.waterfall_mode = !app.waterfall_mode;
+                break;
             case SAPP_KEYCODE_T:
                 app.telemetry.telemetry_overlay = !app.telemetry.telemetry_overlay;
                 break;
@@ -720,7 +782,7 @@ sapp_desc sokol_main(int /*argc*/, char** /*argv*/) {
     d.cleanup_cb = cleanup_cb;
     d.width = W;
     d.height = H;
-    d.window_title = "Pebble Prakriti Multiphysics — [L-Click] Vortex | [F] Fluid Spray | [H] Heat | [C] Cryo | [T] Telemetry | [R] Reset";
+    d.window_title = "Pebble Prakriti Multiphysics — [W] Waterfall | [F] Fluid Spray | [H] Heat | [C] Cryo | [T] Telemetry | [R] Reset";
     d.icon.sokol_default = true;
     d.logger.func = slog_func;
     return d;

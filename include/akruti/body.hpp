@@ -9,6 +9,7 @@
 // ============================================================================
 #include "shape.hpp"
 #include "math.hpp"
+#include "query.hpp"
 #include <containers/numeric/math_vector.hpp>
 #include <cmath>
 #include <algorithm>
@@ -98,6 +99,37 @@ struct DynamicBody {
         linear_vel = linear_vel + impulse * inv_mass;
         pebble::math::vec2 r = world_pt - position;
         torque += (r[0] * impulse[1] - r[1] * impulse[0]);
+    }
+
+    // World-space continuous collision detection (CCD) raycast against underlying shape
+    [[nodiscard]] RayHit raycast(pebble::math::vec2 ray_start, pebble::math::vec2 ray_dir) const noexcept {
+        const Scalar c = std::cos(-angle);
+        const Scalar s = std::sin(-angle);
+        const pebble::math::vec2 local_start = ray_start - position;
+        const Vec rot_start{
+            local_start[0] * c - local_start[1] * s,
+            local_start[0] * s + local_start[1] * c
+        };
+        const Vec rot_dir{
+            ray_dir[0] * c - ray_dir[1] * s,
+            ray_dir[0] * s + ray_dir[1] * c
+        };
+        RayHit hit = akruti::raycast(shape, rot_start, rot_dir);
+        if (hit.hit) {
+            const Scalar rc = std::cos(angle);
+            const Scalar rs = std::sin(angle);
+            const Vec hit_norm = hit.normal;
+            hit.normal = Vec{
+                hit_norm.x * rc - hit_norm.y * rs,
+                hit_norm.x * rs + hit_norm.y * rc
+            };
+            const Vec hit_pt = hit.point;
+            hit.point = Vec{
+                position[0] + (hit_pt.x * rc - hit_pt.y * rs),
+                position[1] + (hit_pt.x * rs + hit_pt.y * rc)
+            };
+        }
+        return hit;
     }
 };
 

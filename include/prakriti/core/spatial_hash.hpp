@@ -56,6 +56,31 @@ public:
         return cell_color(cx, cy);
     }
 
+    // Partition particles into 4 color buckets for lock-free parallel execution
+    void build_color_buckets(std::vector<Index> color_buckets[4]) const {
+        for (int c = 0; c < 4; ++c) color_buckets[c].clear();
+        const std::size_t n = cell_of_.size();
+        for (Index i = 0; i < n; ++i) {
+            const std::uint32_t col = particle_color(i);
+            color_buckets[col].push_back(i);
+        }
+    }
+
+    // Morton Z-order sorting permutation for spatial memory locality and cache contiguity
+    void reorder_indices(std::span<const Scalar> px, std::span<const Scalar> py, std::vector<Index>& permutation) const {
+        const Index n = static_cast<Index>(px.size());
+        permutation.resize(n);
+        for (Index i = 0; i < n; ++i) permutation[i] = i;
+
+        std::sort(permutation.begin(), permutation.end(), [&](Index a, Index b) {
+            const auto ca = cell_coord(px[a], py[a]);
+            const auto cb = cell_coord(px[b], py[b]);
+            const std::uint32_t ma = morton2d(static_cast<std::uint32_t>(ca.x), static_cast<std::uint32_t>(ca.y));
+            const std::uint32_t mb = morton2d(static_cast<std::uint32_t>(cb.x), static_cast<std::uint32_t>(cb.y));
+            return ma < mb;
+        });
+    }
+
     // Fast 3x3 neighbor traversal with zero hash table lookups
     template <class Fn>
     void for_each_neighbor(Scalar px, Scalar py, Scalar radius, Fn&& fn) const {
