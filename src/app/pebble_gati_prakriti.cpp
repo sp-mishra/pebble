@@ -460,6 +460,7 @@ static void update_thermodynamics_and_phase(float dt) {
 // ----------------------------------------------------------------------------
 static void build_scene(kalpana::Scene& scene) {
     auto& app = g_app;
+    app.instanced_particles.begin(); // Reset GPU particle instance stream every frame
     scene.clear_color(kalpana::Color{0.03f, 0.04f, 0.06f, 1.0f});
 
     const float cx = app.pot_cx;
