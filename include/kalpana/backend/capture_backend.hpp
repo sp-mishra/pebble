@@ -31,27 +31,167 @@ public:
 
     void draw_shape(const Path& path, const Paint& paint, Transform xf) {
         log_.push_back("draw_shape(verbs=" + std::to_string(path.verbs().size()) + ")");
+        if (path.empty() || width_ == 0 || height_ == 0) return;
 
-        if (paint.has_fill() && !path.points().empty()) {
-            const std::uint32_t fill_argb = paint.fill_color().to_argb8888();
-            // Fill bounding box approximation for headless testing
-            float min_x = 1e9f, min_y = 1e9f, max_x = -1e9f, max_y = -1e9f;
-            for (const auto& pt : path.points()) {
-                auto tf_pt = xf.apply(pt);
-                min_x = std::min(min_x, tf_pt[0]);
-                min_y = std::min(min_y, tf_pt[1]);
-                max_x = std::max(max_x, tf_pt[0]);
-                max_y = std::max(max_y, tf_pt[1]);
+        // Flatten path into line segments with transform applied
+        struct LineSeg { float x0, y0, x1, y1; };
+        std::vector<LineSeg> segs;
+        std::vector<pebble::math::vec2> poly_pts;
+
+        const auto& verbs = path.verbs();
+        const auto& pts = path.points();
+        std::size_t pt_idx = 0;
+        pebble::math::vec2 curr{0.0f, 0.0f};
+        pebble::math::vec2 start_pt{0.0f, 0.0f};
+
+        for (auto v : verbs) {
+            switch (v) {
+                case PathVerb::Move: {
+                    if (pt_idx < pts.size()) {
+                        curr = xf.apply(pts[pt_idx++]);
+                        start_pt = curr;
+                        poly_pts.push_back(curr);
+                    }
+                    break;
+                }
+                case PathVerb::Line: {
+                    if (pt_idx < pts.size()) {
+                        pebble::math::vec2 next = xf.apply(pts[pt_idx++]);
+                        segs.push_back({curr[0], curr[1], next[0], next[1]});
+                        curr = next;
+                        poly_pts.push_back(curr);
+                    }
+                    break;
+                }
+                case PathVerb::Quad: {
+                    if (pt_idx + 1 < pts.size()) {
+                        pebble::math::vec2 cp = xf.apply(pts[pt_idx++]);
+                        pebble::math::vec2 end = xf.apply(pts[pt_idx++]);
+                        constexpr int kSteps = 6;
+                        for (int i = 1; i <= kSteps; ++i) {
+                            float t = float(i) / float(kSteps);
+                            float inv = 1.0f - t;
+                            pebble::math::vec2 next{
+                                inv * inv * curr[0] + 2.0f * inv * t * cp[0] + t * t * end[0],
+                                inv * inv * curr[1] + 2.0f * inv * t * cp[1] + t * t * end[1]
+                            };
+                            segs.push_back({curr[0], curr[1], next[0], next[1]});
+                            curr = next;
+                            poly_pts.push_back(curr);
+                        }
+                    }
+                    break;
+                }
+                case PathVerb::Cubic: {
+                    if (pt_idx + 2 < pts.size()) {
+                        pebble::math::vec2 cp1 = xf.apply(pts[pt_idx++]);
+                        pebble::math::vec2 cp2 = xf.apply(pts[pt_idx++]);
+                        pebble::math::vec2 end = xf.apply(pts[pt_idx++]);
+                        constexpr int kSteps = 10;
+                        for (int i = 1; i <= kSteps; ++i) {
+                            float t = float(i) / float(kSteps);
+                            float inv = 1.0f - t;
+                            pebble::math::vec2 next{
+                                inv*inv*inv * curr[0] + 3.0f*inv*inv*t * cp1[0] + 3.0f*inv*t*t * cp2[0] + t*t*t * end[0],
+                                inv*inv*inv * curr[1] + 3.0f*inv*inv*t * cp1[1] + 3.0f*inv*t*t * cp2[1] + t*t*t * end[1]
+                            };
+                            segs.push_back({curr[0], curr[1], next[0], next[1]});
+                            curr = next;
+                            poly_pts.push_back(curr);
+                        }
+                    }
+                    break;
+                }
+                case PathVerb::Close: {
+                    if (curr[0] != start_pt[0] || curr[1] != start_pt[1]) {
+                        segs.push_back({curr[0], curr[1], start_pt[0], start_pt[1]});
+                        curr = start_pt;
+                    }
+                    break;
+                }
             }
+        }
 
-            const int x0 = std::clamp(static_cast<int>(min_x), 0, static_cast<int>(width_));
-            const int y0 = std::clamp(static_cast<int>(min_y), 0, static_cast<int>(height_));
-            const int x1 = std::clamp(static_cast<int>(max_x), 0, static_cast<int>(width_));
-            const int y1 = std::clamp(static_cast<int>(max_y), 0, static_cast<int>(height_));
+        // Bounding box of geometry
+        float min_x = 1e9f, min_y = 1e9f, max_x = -1e9f, max_y = -1e9f;
+        for (const auto& s : segs) {
+            min_x = std::min({min_x, s.x0, s.x1});
+            min_y = std::min({min_y, s.y0, s.y1});
+            max_x = std::max({max_x, s.x0, s.x1});
+            max_y = std::max({max_y, s.y0, s.y1});
+        }
+        for (const auto& p : poly_pts) {
+            min_x = std::min(min_x, p[0]);
+            min_y = std::min(min_y, p[1]);
+            max_x = std::max(max_x, p[0]);
+            max_y = std::max(max_y, p[1]);
+        }
 
-            for (int y = y0; y < y1; ++y) {
-                for (int x = x0; x < x1; ++x) {
-                    pixels_[static_cast<std::size_t>(y) * width_ + x] = fill_argb;
+        const int y_start = std::clamp(static_cast<int>(std::floor(min_y)), 0, static_cast<int>(height_));
+        const int y_end   = std::clamp(static_cast<int>(std::ceil(max_y)),   0, static_cast<int>(height_));
+
+        // 1. Even-Odd Polygon Fill Scanline Rasterizer
+        if (paint.has_fill() && !segs.empty()) {
+            const std::uint32_t fill_argb = paint.fill_color().to_argb8888();
+            std::vector<float> node_x;
+            node_x.reserve(32);
+
+            for (int y = y_start; y < y_end; ++y) {
+                const float py = float(y) + 0.5f;
+                node_x.clear();
+
+                for (const auto& s : segs) {
+                    if ((s.y0 <= py && s.y1 > py) || (s.y1 <= py && s.y0 > py)) {
+                        float t = (py - s.y0) / (s.y1 - s.y0);
+                        node_x.push_back(s.x0 + t * (s.x1 - s.x0));
+                    }
+                }
+
+                std::sort(node_x.begin(), node_x.end());
+
+                for (std::size_t i = 0; i + 1 < node_x.size(); i += 2) {
+                    int x0 = std::clamp(static_cast<int>(std::floor(node_x[i])), 0, static_cast<int>(width_));
+                    int x1 = std::clamp(static_cast<int>(std::ceil(node_x[i + 1])), 0, static_cast<int>(width_));
+                    for (int x = x0; x < x1; ++x) {
+                        pixels_[static_cast<std::size_t>(y) * width_ + x] = fill_argb;
+                    }
+                }
+            }
+        }
+
+        // 2. Stroke Contour Rasterizer
+        if (paint.has_stroke() && !segs.empty()) {
+            const std::uint32_t stroke_argb = paint.stroke().color.to_argb8888();
+            const float half_w = std::max(0.75f, paint.stroke().width * 0.5f);
+            const float half_w_sq = half_w * half_w;
+
+            for (const auto& s : segs) {
+                float seg_min_x = std::clamp(std::min(s.x0, s.x1) - half_w - 1.0f, 0.0f, float(width_));
+                float seg_max_x = std::clamp(std::max(s.x0, s.x1) + half_w + 1.0f, 0.0f, float(width_));
+                float seg_min_y = std::clamp(std::min(s.y0, s.y1) - half_w - 1.0f, 0.0f, float(height_));
+                float seg_max_y = std::clamp(std::max(s.y0, s.y1) + half_w + 1.0f, 0.0f, float(height_));
+
+                const float dx = s.x1 - s.x0;
+                const float dy = s.y1 - s.y0;
+                const float len_sq = std::max(1e-6f, dx * dx + dy * dy);
+
+                int ix0 = static_cast<int>(seg_min_x);
+                int ix1 = static_cast<int>(seg_max_x);
+                int iy0 = static_cast<int>(seg_min_y);
+                int iy1 = static_cast<int>(seg_max_y);
+
+                for (int y = iy0; y < iy1; ++y) {
+                    for (int x = ix0; x < ix1; ++x) {
+                        float px = float(x) + 0.5f;
+                        float py = float(y) + 0.5f;
+                        float t = std::clamp(((px - s.x0) * dx + (py - s.y0) * dy) / len_sq, 0.0f, 1.0f);
+                        float qx = s.x0 + t * dx;
+                        float qy = s.y0 + t * dy;
+                        float dist_sq = (px - qx) * (px - qx) + (py - qy) * (py - qy);
+                        if (dist_sq <= half_w_sq) {
+                            pixels_[static_cast<std::size_t>(y) * width_ + x] = stroke_argb;
+                        }
+                    }
                 }
             }
         }

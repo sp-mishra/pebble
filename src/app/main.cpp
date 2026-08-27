@@ -25,6 +25,7 @@
 #include "gati/material.hpp"
 #include "gati/elemental.hpp"
 #include "gati/material_reaction.hpp"
+#include "prakriti/prakriti.hpp"
 #include "kalpana/kalpana.hpp"
 #include "kalpana/backend/capture_backend.hpp"
 
@@ -75,13 +76,29 @@ struct Star {
     float phase;
 };
 
-enum class ShapeKind : std::uint8_t { Circle, Box, Capsule, Triangle, RoundedBox, OrientedBox, Sector, ConvexBlob, StarPoly };
+enum class ShapeKind : std::uint8_t {
+    Circle,
+    Box,
+    Capsule,
+    Triangle,
+    RoundedBox,
+    OrientedBox,
+    Sector,
+    Segment,
+    Pentagon,
+    Hexagon,
+    Trapezoid,
+    ConvexBlob,
+    StarPoly
+};
 
-// Shape pool the simulation can spawn; extend to add new ShapeKinds to the mix.
+// Shape pool the simulation can spawn; all supported Akruti shapes.
 static constexpr ShapeKind kSpawnKinds[] = {
     ShapeKind::Circle,     ShapeKind::Box,        ShapeKind::Capsule,
     ShapeKind::Triangle,   ShapeKind::RoundedBox, ShapeKind::OrientedBox,
-    ShapeKind::Sector,     ShapeKind::ConvexBlob, ShapeKind::StarPoly,
+    ShapeKind::Sector,     ShapeKind::Segment,    ShapeKind::Pentagon,
+    ShapeKind::Hexagon,    ShapeKind::Trapezoid,  ShapeKind::ConvexBlob,
+    ShapeKind::StarPoly
 };
 static constexpr std::size_t kPolyMax = 12; // max verts for procedural polys
 
@@ -93,7 +110,7 @@ struct SimBody {
     float                size = 16.0f;
     float                rot = 0.0f;
     bool                 alive = true;
-    // Cached local-space verts for procedural polygon shapes (ConvexBlob/StarPoly);
+    // Cached local-space verts for procedural polygon shapes;
     // mapped to world space via poly_verts() using pos/rot each frame.
     std::array<akruti::Vec, kPolyMax> poly{};
     int poly_n = 0;
@@ -123,22 +140,41 @@ static kalpana::Color brighten(kalpana::Color c, float factor) {
 // even as the body translates/rotates; poly_verts() maps local -> world on demand.
 static void init_poly_verts(SimBody& b) {
     if (b.kind == ShapeKind::ConvexBlob) {
-        // 2x-oversampled star points around a disc; convex_hull keeps the outer silhouette.
-        constexpr int kSamples = kPolyMax;
+        // Regular pentagon/hexagon with slight jitter passed through Andrew's monotone chain convex hull
         containers::static_vector<akruti::Vec, kPolyMax> pts;
+        constexpr int kSamples = 6;
         for (int i = 0; i < kSamples; ++i) {
             const float a = float(i) / float(kSamples) * 6.2831853f;
-            const float r = randf(0.42f, 1.0f) * b.size;
+            const float r = randf(0.75f, 1.0f) * b.size;
             (void)pts.push_back({std::cos(a) * r, std::sin(a) * r});
         }
         auto hull = akruti::convex_hull<kPolyMax>(pts);
         b.poly_n = int(hull.verts.size());
         for (int i = 0; i < b.poly_n; ++i) b.poly[i] = hull.verts[i];
-    } else { // StarPoly — flat-top hexagon inflated to a rounded star by `corner`.
+    } else if (b.kind == ShapeKind::Pentagon) {
+        b.poly_n = 5;
+        for (int i = 0; i < 5; ++i) {
+            const float a = float(i) / 5.0f * 6.2831853f - 1.5707963f;
+            b.poly[i] = {std::cos(a) * b.size, std::sin(a) * b.size};
+        }
+    } else if (b.kind == ShapeKind::Hexagon) {
+        b.poly_n = 6;
+        for (int i = 0; i < 6; ++i) {
+            const float a = float(i) / 6.0f * 6.2831853f;
+            b.poly[i] = {std::cos(a) * b.size, std::sin(a) * b.size};
+        }
+    } else if (b.kind == ShapeKind::Trapezoid) {
+        b.poly_n = 4;
+        const float s = b.size;
+        b.poly[0] = {-s * 1.1f,  s * 0.7f};
+        b.poly[1] = { s * 1.1f,  s * 0.7f};
+        b.poly[2] = { s * 0.6f, -s * 0.7f};
+        b.poly[3] = {-s * 0.6f, -s * 0.7f};
+    } else { // StarPoly — convex regular hexagon base with corner rounding
         b.poly_n = 6;
         for (int i = 0; i < b.poly_n; ++i) {
-            const float a = 3.14159265f / 6.0f + float(i) * 1.0471975f;
-            b.poly[i] = {std::cos(a) * b.size, std::sin(a) * b.size};
+            const float a = float(i) / 6.0f * 6.2831853f;
+            b.poly[i] = {std::cos(a) * (b.size * 0.85f), std::sin(a) * (b.size * 0.85f)};
         }
         b.corner = b.size * 0.25f;
     }
@@ -203,6 +239,12 @@ struct AppState {
     float csg_heat = 0.0f;
     std::array<LiquidPool, 3> liquids{};
 
+    // Prakriti continuum simulator integration
+    std::unique_ptr<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::ScalarBackend>> prakriti_world;
+    prakriti::MaterialId mat_water = 0;
+    prakriti::MaterialId mat_steel = 0;
+    prakriti::MaterialId mat_dry_ice = 0;
+
     float t = 0.0f;
     int frame = 0;
 };
@@ -255,11 +297,41 @@ static kalpana::Path body_shape_path(const SimBody& b, float sx, float sy) {
     const float x = b.pos[0] + sx;
     const float y = b.pos[1] + sy;
     const float s = b.size;
+    const float c = std::cos(b.rot);
+    const float sn = std::sin(b.rot);
+
     switch (b.kind) {
         case ShapeKind::Circle: p.circle(x, y, s); break;
-        case ShapeKind::Box: p.rect(x - s, y - s, s * 2.0f, s * 2.0f); break;
-        case ShapeKind::RoundedBox: p.round_rect(x - s, y - s, s * 2.0f, s * 2.0f, s * 0.35f, s * 0.35f); break;
-        case ShapeKind::Capsule: p.round_rect(x - s * 1.3f, y - s * 0.6f, s * 2.6f, s * 1.2f, s * 0.6f, s * 0.6f); break;
+        case ShapeKind::Box: {
+            auto pt = [&](float lx, float ly) {
+                return std::pair<float, float>{x + lx * c - ly * sn, y + lx * sn + ly * c};
+            };
+            auto [x0, y0] = pt(-s, -s);
+            auto [x1, y1] = pt(s, -s);
+            auto [x2, y2] = pt(s, s);
+            auto [x3, y3] = pt(-s, s);
+            p.move_to(x0, y0); p.line_to(x1, y1); p.line_to(x2, y2); p.line_to(x3, y3); p.close();
+            break;
+        }
+        case ShapeKind::RoundedBox: {
+            p.round_rect(x - s, y - s, s * 2.0f, s * 2.0f, s * 0.35f, s * 0.35f);
+            break;
+        }
+        case ShapeKind::Capsule: {
+            // Symmetrical capsule oriented with rotation
+            const float cap_len = s * 0.7f;
+            const float cap_r = s * 0.6f;
+            const float ax = x - cap_len * c, ay = y - cap_len * sn;
+            const float bx = x + cap_len * c, by = y + cap_len * sn;
+            const float nx = -sn * cap_r, ny = c * cap_r;
+
+            p.move_to(ax + nx, ay + ny);
+            p.line_to(bx + nx, by + ny);
+            p.line_to(bx - nx, by - ny);
+            p.line_to(ax - nx, ay - ny);
+            p.close();
+            break;
+        }
         case ShapeKind::Triangle: {
             p.move_to(x + std::cos(b.rot) * s, y + std::sin(b.rot) * s);
             p.line_to(x + std::cos(b.rot + 2.0944f) * s, y + std::sin(b.rot + 2.0944f) * s);
@@ -268,7 +340,6 @@ static kalpana::Path body_shape_path(const SimBody& b, float sx, float sy) {
             break;
         }
         case ShapeKind::OrientedBox: {
-            const float c = std::cos(b.rot), sn = std::sin(b.rot);
             auto pt = [&](float lx, float ly) {
                 return std::pair<float, float>{x + lx * c - ly * sn, y + lx * sn + ly * c};
             };
@@ -292,6 +363,20 @@ static kalpana::Path body_shape_path(const SimBody& b, float sx, float sy) {
             p.close();
             break;
         }
+        case ShapeKind::Segment: {
+            const float ax = x - s * c, ay = y - s * sn;
+            const float bx = x + s * c, by = y + s * sn;
+            const float nx = -sn * 2.5f, ny = c * 2.5f;
+            p.move_to(ax + nx + sx, ay + ny + sy);
+            p.line_to(bx + nx + sx, by + ny + sy);
+            p.line_to(bx - nx + sx, by - ny + sy);
+            p.line_to(ax - nx + sx, ay - ny + sy);
+            p.close();
+            break;
+        }
+        case ShapeKind::Pentagon:
+        case ShapeKind::Hexagon:
+        case ShapeKind::Trapezoid:
         case ShapeKind::ConvexBlob:
         case ShapeKind::StarPoly: {
             std::array<akruti::Vec, kPolyMax> wv{};
@@ -312,20 +397,106 @@ static void init_sim_bodies() {
     auto& app = g_app;
     app.bodies.clear();
     app.reactions = 0;
-    constexpr int kBodies = 20;
-    for (int i = 0; i < kBodies; ++i) {
-        SimBody b;
-        b.ent = app.world.spawn();
-        b.kind = kSpawnKinds[i % (sizeof(kSpawnKinds) / sizeof(kSpawnKinds[0]))];
-        b.size = randf(11.0f, 18.0f);
-        b.rot = randf(0.0f, 6.2832f);
-        b.pos = pebble::math::vec2(randf(60.0f, ARENA_W - 60.0f), randf(ARENA_Y0 + 60.0f, ARENA_H - 60.0f));
-        b.vel = pebble::math::vec2(randf(-90.0f, 90.0f), randf(-90.0f, 90.0f));
-        if (b.kind == ShapeKind::ConvexBlob || b.kind == ShapeKind::StarPoly) init_poly_verts(b);
-        app.world.add<gati::Transform>(b.ent, {.position = b.pos, .prev_position = b.pos});
-        app.world.add<gati::MaterialComponent>(b.ent, material_for_index(i));
-        app.world.add<gati::ElementalComponent>(b.ent, {.type = element_for_index(i)});
-        app.bodies.push_back(b);
+    constexpr int kCols = 6;
+    constexpr int kRows = 4;
+    constexpr int kBodies = kCols * kRows; // 24 well-spaced multi-shape bodies
+
+    const float cell_w = (ARENA_W - 100.0f) / float(kCols);
+    const float cell_h = (ARENA_H - ARENA_Y0 - 100.0f) / float(kRows);
+
+    int idx = 0;
+    for (int r = 0; r < kRows; ++r) {
+        for (int c = 0; c < kCols; ++c, ++idx) {
+            SimBody b;
+            b.ent = app.world.spawn();
+            b.kind = kSpawnKinds[idx % (sizeof(kSpawnKinds) / sizeof(kSpawnKinds[0]))];
+            b.size = randf(12.0f, 16.0f);
+            b.rot = randf(0.0f, 6.2832f);
+
+            float cx = 50.0f + (float(c) + 0.5f) * cell_w + randf(-6.0f, 6.0f);
+            float cy = ARENA_Y0 + 50.0f + (float(r) + 0.5f) * cell_h + randf(-6.0f, 6.0f);
+
+            b.pos = pebble::math::vec2(cx, cy);
+            b.vel = pebble::math::vec2(randf(-60.0f, 60.0f), randf(-60.0f, 60.0f));
+            if (b.kind == ShapeKind::ConvexBlob || b.kind == ShapeKind::StarPoly ||
+                b.kind == ShapeKind::Pentagon || b.kind == ShapeKind::Hexagon ||
+                b.kind == ShapeKind::Trapezoid) {
+                init_poly_verts(b);
+            }
+            app.world.add<gati::Transform>(b.ent, {.position = b.pos, .prev_position = b.pos});
+            app.world.add<gati::MaterialComponent>(b.ent, material_for_index(idx));
+            app.world.add<gati::ElementalComponent>(b.ent, {.type = element_for_index(idx)});
+            app.bodies.push_back(b);
+        }
+    }
+}
+
+static void init_prakriti_continuum() {
+    auto& app = g_app;
+    prakriti::WorldConfig pcfg{};
+    pcfg.bounds = {{20.0f, ARENA_Y0 + 20.0f}, {ARENA_W - 20.0f, ARENA_H - 20.0f}};
+    pcfg.gravity = {0.0f, 250.0f};
+    pcfg.substeps = 4;
+    pcfg.solver_iters = 4;
+    pcfg.cell_size = 14.0f;
+
+    app.prakriti_world = std::make_unique<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::ScalarBackend>>(pcfg);
+    app.mat_steel   = app.prakriti_world->materials().add(prakriti::MaterialRegistry::steel());
+    app.mat_water   = app.prakriti_world->materials().add(prakriti::MaterialRegistry::water());
+    app.mat_dry_ice = app.prakriti_world->materials().add(prakriti::MaterialRegistry::dry_ice());
+
+    // 1. Continuum Fluid Block (Macklin-Muller PBF + Modified Tait EOS)
+    constexpr int kFluidCols = 10;
+    constexpr int kFluidRows = 7;
+    const float start_x = 80.0f;
+    const float start_y = ARENA_Y0 + 80.0f;
+    const float spacing = 11.0f;
+
+    for (int r = 0; r < kFluidRows; ++r) {
+        for (int c = 0; c < kFluidCols; ++c) {
+            app.prakriti_world->particles().add({
+                .position = pebble::math::vec2(start_x + float(c) * spacing, start_y + float(r) * spacing),
+                .velocity = pebble::math::vec2(randf(-5.0f, 5.0f), randf(-5.0f, 5.0f)),
+                .mass = 1.0f,
+                .temperature = 22.0f,
+                .material = app.mat_water,
+                .f_solid = 0.0f, .f_plastic = 0.0f, .f_liquid = 1.0f, .f_gas = 0.0f
+            });
+        }
+    }
+
+    // 2. Dry Ice Sublimating Cluster (Direct Solid -> Gas Phase Transition)
+    for (int i = 0; i < 10; ++i) {
+        app.prakriti_world->particles().add({
+            .position = pebble::math::vec2(ARENA_W - 140.0f + randf(-20.0f, 20.0f), ARENA_Y0 + 120.0f + randf(-15.0f, 15.0f)),
+            .velocity = pebble::math::vec2(randf(-10.0f, 10.0f), randf(-10.0f, 10.0f)),
+            .mass = 1.2f,
+            .temperature = -50.0f + float(i) * 5.0f,
+            .material = app.mat_dry_ice,
+            .f_solid = 1.0f, .f_plastic = 0.0f, .f_liquid = 0.0f, .f_gas = 0.0f
+        });
+    }
+
+    // 3. XPBD Elastic Bonded Chain / Beam
+    constexpr int kBeamNodes = 7;
+    const float beam_x = ARENA_W * 0.5f - 70.0f;
+    const float beam_y = ARENA_Y0 + 200.0f;
+    std::vector<prakriti::Index> beam_indices;
+
+    for (int i = 0; i < kBeamNodes; ++i) {
+        auto idx = app.prakriti_world->particles().add({
+            .position = pebble::math::vec2(beam_x + float(i) * 22.0f, beam_y),
+            .velocity = {0.0f, 0.0f},
+            .mass = (i == 0 || i == kBeamNodes - 1) ? 0.0f : 2.0f, // Pinned endpoints
+            .temperature = 20.0f,
+            .material = app.mat_steel,
+            .f_solid = 1.0f, .f_plastic = 0.0f, .f_liquid = 0.0f, .f_gas = 0.0f
+        });
+        beam_indices.push_back(idx);
+    }
+
+    for (std::size_t i = 1; i < beam_indices.size(); ++i) {
+        app.prakriti_world->edges().add(beam_indices[i - 1], beam_indices[i], 22.0f);
     }
 }
 
@@ -342,13 +513,13 @@ static void init_liquids() {
         p.base = palette[i];
         p.r = 7.0f + float(i) * 1.2f;
         p.viscosity = 0.987f - float(i) * 0.006f;
-        constexpr int kDrops = 36;
+        constexpr int kDrops = 20;
         p.drops.reserve(kDrops);
         float cx = randf(100.0f, ARENA_W - 100.0f);
         float cy = randf(ARENA_Y0 + 100.0f, ARENA_H - 100.0f);
         for (int d = 0; d < kDrops; ++d) {
             LiquidDrop ld;
-            ld.pos = pebble::math::vec2(cx + randf(-34.0f, 34.0f), cy + randf(-24.0f, 24.0f));
+            ld.pos = pebble::math::vec2(cx + randf(-25.0f, 25.0f), cy + randf(-20.0f, 20.0f));
             ld.vel = pebble::math::vec2(randf(-20.0f, 20.0f), randf(-20.0f, 20.0f));
             ld.col = p.base;
             p.drops.push_back(ld);
@@ -429,10 +600,14 @@ static void step_liquids(float dt) {
 static float bounding_radius(const SimBody& b) {
     switch (b.kind) {
         case ShapeKind::Circle: return b.size;
+        case ShapeKind::Segment: return b.size * 1.1f;
         case ShapeKind::Capsule: return b.size * 1.3f;
         case ShapeKind::Sector: return b.size * 1.4f;
         case ShapeKind::ConvexBlob:
-        case ShapeKind::StarPoly: {
+        case ShapeKind::StarPoly:
+        case ShapeKind::Pentagon:
+        case ShapeKind::Hexagon:
+        case ShapeKind::Trapezoid: {
             float m2 = 0.0f;
             for (int i = 0; i < b.poly_n; ++i) m2 = std::max(m2, b.poly[i].x * b.poly[i].x + b.poly[i].y * b.poly[i].y);
             return std::sqrt(m2) + b.corner;
@@ -441,7 +616,7 @@ static float bounding_radius(const SimBody& b) {
     }
 }
 
-using AkrutiShapeVar = std::variant<akruti::Circle, akruti::Box, akruti::OrientedBox, akruti::Capsule, akruti::Triangle, akruti::RoundedBox, akruti::Sector, akruti::ConvexPoly<kPolyMax>, akruti::RoundedPoly<kPolyMax>>;
+using AkrutiShapeVar = std::variant<akruti::Circle, akruti::Box, akruti::OrientedBox, akruti::Capsule, akruti::Triangle, akruti::RoundedBox, akruti::Sector, akruti::Segment, akruti::ConvexPoly<kPolyMax>, akruti::RoundedPoly<kPolyMax>>;
 
 static AkrutiShapeVar get_akruti_shape(const SimBody& b) {
     const akruti::Vec pos{b.pos[0], b.pos[1]};
@@ -449,23 +624,39 @@ static AkrutiShapeVar get_akruti_shape(const SimBody& b) {
     switch (b.kind) {
         case ShapeKind::Circle:
             return akruti::Circle{pos, s};
+        case ShapeKind::Segment: {
+            const float c = std::cos(b.rot), sn = std::sin(b.rot);
+            return akruti::Segment{
+                akruti::Vec{pos.x - s * c, pos.y - s * sn},
+                akruti::Vec{pos.x + s * c, pos.y + s * sn}
+            };
+        }
         case ShapeKind::Box:
             return akruti::Box{pos, akruti::Vec{s, s}};
         case ShapeKind::RoundedBox:
             return akruti::RoundedBox{pos, akruti::Vec{s, s}, s * 0.35f};
         case ShapeKind::Capsule: {
+            const float c = std::cos(b.rot);
+            const float sn = std::sin(b.rot);
+            const float cap_len = s * 0.7f;
             return akruti::Capsule{
-                akruti::Vec{pos.x - s * 0.7f, pos.y},
-                akruti::Vec{pos.x + s * 0.7f, pos.y},
+                akruti::Vec{pos.x - cap_len * c, pos.y - cap_len * sn},
+                akruti::Vec{pos.x + cap_len * c, pos.y + cap_len * sn},
                 s * 0.6f
             };
         }
         case ShapeKind::Triangle: {
-            return akruti::Triangle{
-                akruti::Vec{pos.x + std::cos(b.rot) * s, pos.y + std::sin(b.rot) * s},
-                akruti::Vec{pos.x + std::cos(b.rot + 2.0944f) * s, pos.y + std::sin(b.rot + 2.0944f) * s},
-                akruti::Vec{pos.x + std::cos(b.rot + 4.1888f) * s, pos.y + std::sin(b.rot + 4.1888f) * s}
-            };
+            const float c = std::cos(b.rot), sn = std::sin(b.rot);
+            const float c1 = std::cos(b.rot + 2.0943951f), s1 = std::sin(b.rot + 2.0943951f);
+            const float c2 = std::cos(b.rot + 4.1887902f), s2 = std::sin(b.rot + 4.1887902f);
+            // Ensure CCW winding in world space
+            akruti::Vec v0{pos.x + c * s, pos.y + sn * s};
+            akruti::Vec v1{pos.x + c1 * s, pos.y + s1 * s};
+            akruti::Vec v2{pos.x + c2 * s, pos.y + s2 * s};
+            if ((v1.x - v0.x) * (v2.y - v0.y) - (v1.y - v0.y) * (v2.x - v0.x) < 0) {
+                std::swap(v1, v2);
+            }
+            return akruti::Triangle{v0, v1, v2};
         }
         case ShapeKind::OrientedBox: {
             return akruti::OrientedBox::from_angle(pos, akruti::Vec{s, s * 0.75f}, b.rot);
@@ -474,16 +665,21 @@ static AkrutiShapeVar get_akruti_shape(const SimBody& b) {
             const akruti::Vec dir{std::cos(b.rot), std::sin(b.rot)};
             return akruti::Sector::from_direction(pos, s * 1.4f, 0.7f, dir);
         }
-        case ShapeKind::ConvexBlob:
+        case ShapeKind::Pentagon:
+        case ShapeKind::Hexagon:
+        case ShapeKind::Trapezoid:
+        case ShapeKind::ConvexBlob: {
+            std::array<akruti::Vec, kPolyMax> wv{};
+            int n = 0;
+            poly_verts(b, wv, n);
+            akruti::ConvexPoly<kPolyMax> cp;
+            for (int i = 0; i < n; ++i) (void)cp.verts.push_back(wv[i]);
+            return cp;
+        }
         case ShapeKind::StarPoly: {
             std::array<akruti::Vec, kPolyMax> wv{};
             int n = 0;
             poly_verts(b, wv, n);
-            if (b.kind == ShapeKind::ConvexBlob) {
-                akruti::ConvexPoly<kPolyMax> cp;
-                for (int i = 0; i < n; ++i) (void)cp.verts.push_back(wv[i]);
-                return cp;
-            }
             akruti::RoundedPoly<kPolyMax> rp;
             rp.radius = b.corner;
             for (int i = 0; i < n; ++i) (void)rp.base.verts.push_back(wv[i]);
@@ -518,8 +714,24 @@ static akruti::Manifold test_body_collision(const SimBody& a, const SimBody& b) 
                 return akruti::collide_obb_obb(shape_a, shape_b);
             } else if constexpr (std::is_same_v<TypeA, akruti::Box> && std::is_same_v<TypeB, akruti::Box>) {
                 return akruti::collide_box_box(shape_a, shape_b);
+            } else if constexpr (std::is_same_v<TypeA, akruti::Capsule> && std::is_same_v<TypeB, akruti::Capsule>) {
+                return akruti::collide_capsule_capsule(shape_a, shape_b);
+            } else if constexpr (std::is_same_v<TypeA, akruti::Capsule> && std::is_same_v<TypeB, akruti::OrientedBox>) {
+                return akruti::collide_capsule_obb(shape_a, shape_b);
+            } else if constexpr (std::is_same_v<TypeA, akruti::OrientedBox> && std::is_same_v<TypeB, akruti::Capsule>) {
+                auto m = akruti::collide_capsule_obb(shape_b, shape_a);
+                if (m.hit) m.normal = -m.normal;
+                return m;
             } else {
-                return akruti::collide_gjk_warm_started(shape_a, shape_b);
+                auto m = akruti::collide_gjk_warm_started(shape_a, shape_b);
+                if (m.hit && m.depth > 0.0f) {
+                    // Ensure normal is oriented from shape_a toward shape_b
+                    pebble::math::vec2 delta = b.pos - a.pos;
+                    if (m.normal.x * delta[0] + m.normal.y * delta[1] < 0.0f) {
+                        m.normal = -m.normal;
+                    }
+                }
+                return m;
             }
         }, sb);
     }, sa);
@@ -527,114 +739,133 @@ static akruti::Manifold test_body_collision(const SimBody& a, const SimBody& b) 
 
 static void step_sim_bodies(float dt) {
     auto& app = g_app;
-    for (auto& b : app.bodies) {
-        b.alive = app.world.alive(b.ent);
-        if (!b.alive) continue;
-        b.pos = b.pos + b.vel * dt;
-        b.rot += dt * 0.9f;
-        float r = bounding_radius(b);
-        if (b.pos[0] < r) { b.pos[0] = r; b.vel[0] = std::abs(b.vel[0]); }
-        if (b.pos[0] > ARENA_W - r) { b.pos[0] = ARENA_W - r; b.vel[0] = -std::abs(b.vel[0]); }
-        if (b.pos[1] < ARENA_Y0 + r) { b.pos[1] = ARENA_Y0 + r; b.vel[1] = std::abs(b.vel[1]); }
-        if (b.pos[1] > ARENA_H - r) { b.pos[1] = ARENA_H - r; b.vel[1] = -std::abs(b.vel[1]); }
-        if (auto* tr = app.world.get<gati::Transform>(b.ent)) {
-            tr->prev_position = tr->position;
-            tr->position = b.pos;
+
+    // Substepping physics integration for absolute non-penetration stability
+    constexpr int kSubsteps = 8;
+    const float sub_dt = dt / float(kSubsteps);
+
+    for (int step = 0; step < kSubsteps; ++step) {
+        // 1. Integrate velocities and predict positions
+        for (auto& b : app.bodies) {
+            b.alive = app.world.alive(b.ent);
+            if (!b.alive) continue;
+            b.pos = b.pos + b.vel * sub_dt;
+            b.rot += sub_dt * 0.7f;
+            float r = bounding_radius(b);
+            if (b.pos[0] < r) { b.pos[0] = r; b.vel[0] = std::abs(b.vel[0]); }
+            if (b.pos[0] > ARENA_W - r) { b.pos[0] = ARENA_W - r; b.vel[0] = -std::abs(b.vel[0]); }
+            if (b.pos[1] < ARENA_Y0 + r) { b.pos[1] = ARENA_Y0 + r; b.vel[1] = std::abs(b.vel[1]); }
+            if (b.pos[1] > ARENA_H - r) { b.pos[1] = ARENA_H - r; b.vel[1] = -std::abs(b.vel[1]); }
+        }
+
+        // 2. Iterative non-penetration solver (Position-Based Dynamics loop)
+        constexpr int kPbdIterations = 12;
+        for (int pbd = 0; pbd < kPbdIterations; ++pbd) {
+            for (std::size_t i = 0; i < app.bodies.size(); ++i) {
+                auto& a = app.bodies[i];
+                if (!a.alive) continue;
+                for (std::size_t j = i + 1; j < app.bodies.size(); ++j) {
+                    auto& b = app.bodies[j];
+                    if (!b.alive) continue;
+
+                    // Broadphase bounding circle rejection
+                    const float ra = bounding_radius(a);
+                    const float rb = bounding_radius(b);
+                    pebble::math::vec2 d = b.pos - a.pos;
+                    float dist_sq = d[0] * d[0] + d[1] * d[1];
+                    float min_d = ra + rb;
+                    if (dist_sq >= min_d * min_d) continue;
+
+                    // Exact Akruti narrowphase (Analytic SAT / GJK-EPA)
+                    auto manifold = test_body_collision(a, b);
+                    if (!manifold.hit || manifold.depth <= 0.0f) continue;
+
+                    pebble::math::vec2 n{manifold.normal.x, manifold.normal.y};
+                    float len_n = std::sqrt(n[0] * n[0] + n[1] * n[1]);
+                    if (len_n > 1e-5f) {
+                        n = n * (1.0f / len_n);
+                    } else {
+                        float dist = std::sqrt(dist_sq);
+                        n = (dist > 1e-4f) ? d * (1.0f / dist) : pebble::math::vec2(1.0f, 0.0f);
+                    }
+
+                    // Strict non-penetration projection (100% split equally between bodies)
+                    float separation = (manifold.depth + 0.1f) * 0.5f;
+                    a.pos = a.pos - n * separation;
+                    b.pos = b.pos + n * separation;
+
+                    // Boundary clamping with strict radius clearance
+                    float ra_bound = bounding_radius(a);
+                    float rb_bound = bounding_radius(b);
+                    a.pos[0] = std::clamp(a.pos[0], ra_bound, ARENA_W - ra_bound);
+                    a.pos[1] = std::clamp(a.pos[1], ARENA_Y0 + ra_bound, ARENA_H - ra_bound);
+                    b.pos[0] = std::clamp(b.pos[0], rb_bound, ARENA_W - rb_bound);
+                    b.pos[1] = std::clamp(b.pos[1], ARENA_Y0 + rb_bound, ARENA_H - rb_bound);
+
+                    // Update ECS transform immediately
+                    if (auto* tr_a = app.world.get<gati::Transform>(a.ent)) tr_a->position = a.pos;
+                    if (auto* tr_b = app.world.get<gati::Transform>(b.ent)) tr_b->position = b.pos;
+
+                    // Apply velocity reflection on first relaxation pass
+                    if (pbd == 0) {
+                        float va = a.vel[0] * n[0] + a.vel[1] * n[1];
+                        float vb = b.vel[0] * n[0] + b.vel[1] * n[1];
+                        float rel_vel = vb - va;
+                        if (rel_vel < 0.0f) {
+                            float restitution = 0.4f;
+                            float impulse = -(1.0f + restitution) * rel_vel * 0.5f;
+                            a.vel = a.vel - n * impulse;
+                            b.vel = b.vel + n * impulse;
+                        }
+
+                        if (step == 0) {
+                            float impact = std::abs(rel_vel);
+                            if (impact > 170.0f) {
+                                for (auto* body_ptr : std::array<SimBody*, 2>{&a, &b}) {
+                                    auto* mat = app.world.get<gati::MaterialComponent>(body_ptr->ent);
+                                    if (!mat || !app.world.alive(body_ptr->ent)) continue;
+                                    bool brittle = mat->phase_fractions.solid() > 0.7f && mat->params.ultimate_strain < 0.01f;
+                                    bool weakened = mat->damage > 0.55f;
+                                    if (brittle || weakened) {
+                                        spawn_break_shards(body_ptr->pos);
+                                        app.world.despawn(body_ptr->ent);
+                                        body_ptr->alive = false;
+                                    }
+                                }
+                            }
+
+                            gati::ContactEvent ce{};
+                            ce.a = a.ent.index;
+                            ce.b = b.ent.index;
+                            ce.normal = n;
+                            ce.depth = manifold.depth;
+                            if (!manifold.points.empty()) {
+                                ce.point = pebble::math::vec2(manifold.points[0].point.x, manifold.points[0].point.y);
+                            } else {
+                                ce.point = (a.pos + b.pos) * 0.5f;
+                            }
+
+                            auto* ea = app.world.get<gati::ElementalComponent>(a.ent);
+                            auto* eb = app.world.get<gati::ElementalComponent>(b.ent);
+                            auto er = gati::ElementalReactionMatrix::evaluate(
+                                ea ? ea->type : gati::ElementType::Neutral,
+                                eb ? eb->type : gati::ElementType::Neutral);
+                            if (er.reacted) ++app.reactions;
+
+                            gati::ElementalReactionMatrix::process_contact(app.world, ce);
+                            gati::MaterialReactionSystem::evaluate_reactions(app.world, ce);
+                        }
+                    }
+                }
+            }
         }
     }
 
-    // 4 iterative position/velocity constraint relaxation passes using Akruti SAT/GJK
-    constexpr int kSolverIterations = 4;
-    for (int iter = 0; iter < kSolverIterations; ++iter) {
-        for (std::size_t i = 0; i < app.bodies.size(); ++i) {
-            auto& a = app.bodies[i];
-            if (!a.alive) continue;
-            for (std::size_t j = i + 1; j < app.bodies.size(); ++j) {
-                auto& b = app.bodies[j];
-                if (!b.alive) continue;
-
-                // Broadphase bounding circle rejection
-                const float ra = bounding_radius(a);
-                const float rb = bounding_radius(b);
-                pebble::math::vec2 d = b.pos - a.pos;
-                float dist_sq = d[0] * d[0] + d[1] * d[1];
-                float min_d = ra + rb;
-                if (dist_sq >= min_d * min_d) continue;
-
-                // Exact Akruti narrowphase (SAT 2-point / analytic / warm-started GJK-EPA)
-                auto manifold = test_body_collision(a, b);
-                if (!manifold.hit || manifold.depth <= 0.0f) continue;
-
-                pebble::math::vec2 n{manifold.normal.x, manifold.normal.y};
-                float len_n = std::sqrt(n[0] * n[0] + n[1] * n[1]);
-                if (len_n > 1e-5f) {
-                    n = n * (1.0f / len_n);
-                } else {
-                    n = pebble::math::vec2(1.0f, 0.0f);
-                }
-
-                // Positional separation (hard anti-penetration projection)
-                float separation = manifold.depth * 0.55f;
-                a.pos = a.pos - n * separation;
-                b.pos = b.pos + n * separation;
-
-                // Boundary clamping after separation
-                float ra_bound = bounding_radius(a);
-                float rb_bound = bounding_radius(b);
-                a.pos[0] = std::clamp(a.pos[0], ra_bound, ARENA_W - ra_bound);
-                a.pos[1] = std::clamp(a.pos[1], ARENA_Y0 + ra_bound, ARENA_H - ra_bound);
-                b.pos[0] = std::clamp(b.pos[0], rb_bound, ARENA_W - rb_bound);
-                b.pos[1] = std::clamp(b.pos[1], ARENA_Y0 + rb_bound, ARENA_H - rb_bound);
-
-                // Velocity impulse reflection along contact normal
-                float va = a.vel[0] * n[0] + a.vel[1] * n[1];
-                float vb = b.vel[0] * n[0] + b.vel[1] * n[1];
-                float rel_vel = vb - va;
-                if (rel_vel < 0.0f) {
-                    float restitution = 0.85f;
-                    float impulse = -(1.0f + restitution) * rel_vel * 0.5f;
-                    a.vel = a.vel - n * impulse;
-                    b.vel = b.vel + n * impulse;
-                }
-
-                if (iter == 0) {
-                    float impact = std::abs(rel_vel);
-                    if (impact > 170.0f) {
-                        for (auto* body_ptr : std::array<SimBody*, 2>{&a, &b}) {
-                            auto* mat = app.world.get<gati::MaterialComponent>(body_ptr->ent);
-                            if (!mat || !app.world.alive(body_ptr->ent)) continue;
-                            bool brittle = mat->phase_fractions.solid() > 0.7f && mat->params.ultimate_strain < 0.01f;
-                            bool weakened = mat->damage > 0.55f;
-                            if (brittle || weakened) {
-                                spawn_break_shards(body_ptr->pos);
-                                app.world.despawn(body_ptr->ent);
-                                body_ptr->alive = false;
-                            }
-                        }
-                    }
-
-                    gati::ContactEvent ce{};
-                    ce.a = a.ent.index;
-                    ce.b = b.ent.index;
-                    ce.normal = n;
-                    ce.depth = manifold.depth;
-                    if (!manifold.points.empty()) {
-                        ce.point = pebble::math::vec2(manifold.points[0].point.x, manifold.points[0].point.y);
-                    } else {
-                        ce.point = (a.pos + b.pos) * 0.5f;
-                    }
-
-                    auto* ea = app.world.get<gati::ElementalComponent>(a.ent);
-                    auto* eb = app.world.get<gati::ElementalComponent>(b.ent);
-                    auto er = gati::ElementalReactionMatrix::evaluate(
-                        ea ? ea->type : gati::ElementType::Neutral,
-                        eb ? eb->type : gati::ElementType::Neutral);
-                    if (er.reacted) ++app.reactions;
-
-                    gati::ElementalReactionMatrix::process_contact(app.world, ce);
-                    gati::MaterialReactionSystem::evaluate_reactions(app.world, ce);
-                }
-            }
+    for (auto& b : app.bodies) {
+        if (!b.alive) continue;
+        if (auto* tr = app.world.get<gati::Transform>(b.ent)) {
+            tr->prev_position = tr->position;
+            tr->position = b.pos;
         }
     }
 
@@ -807,32 +1038,11 @@ static void build_scene(kalpana::Scene& scene) {
         }
     }
 
-    // Render liquid blobs + bridges.
+    // Render liquid blobs
     for (const auto& pool : app.liquids) {
         for (std::size_t i = 0; i < pool.drops.size(); ++i) {
             const auto& a = pool.drops[i];
             if (!a.alive) continue;
-            for (std::size_t j = i + 1; j < pool.drops.size(); ++j) {
-                const auto& b = pool.drops[j];
-                if (!b.alive) continue;
-                float dx = b.pos[0] - a.pos[0];
-                float dy = b.pos[1] - a.pos[1];
-                float dist = std::sqrt(dx * dx + dy * dy);
-                if (dist > pool.r * 3.2f) continue;
-                float mx = (a.pos[0] + b.pos[0]) * 0.5f + sx;
-                float my = (a.pos[1] + b.pos[1]) * 0.5f + sy;
-                kalpana::Path bridge;
-                bridge.round_rect(mx - dist * 0.28f, my - pool.r * 0.42f, dist * 0.56f, pool.r * 0.84f, pool.r * 0.4f, pool.r * 0.4f);
-                kalpana::Color bc = a.col;
-                bc.a *= 0.35f;
-                scene.add(kalpana::Node::shape(bridge, kalpana::Paint::fill(bc)));
-            }
-            kalpana::Path g;
-            g.circle(a.pos[0] + sx, a.pos[1] + sy, pool.r * 1.45f);
-            kalpana::Color gc = a.col;
-            gc.a = 0.24f;
-            scene.add(kalpana::Node::shape(g, kalpana::Paint::fill(gc)));
-
             kalpana::Path d;
             d.circle(a.pos[0] + sx, a.pos[1] + sy, pool.r);
             scene.add(kalpana::Node::shape(d, kalpana::Paint::fill(a.col)));
@@ -853,6 +1063,70 @@ static void build_scene(kalpana::Scene& scene) {
 
         auto path = body_shape_path(b, sx, sy);
         scene.add(kalpana::Node::shape(path, kalpana::Paint::filled_outlined(fill, rim, 1.5f)));
+    }
+
+    // ── Prakriti Continuum Particles, Phases & XPBD Elastic Bonds ────────────
+    if (app.prakriti_world) {
+        auto& pw = *app.prakriti_world;
+        const auto& P = pw.particles();
+        const auto& E = pw.edges();
+
+        // 1. Render XPBD structural elastic bonds
+        for (std::size_t e = 0; e < E.size(); ++e) {
+            if (!E.active[e]) continue;
+            auto ia = E.a[e];
+            auto ib = E.b[e];
+            float x0 = P.pos_x[ia] + sx;
+            float y0 = P.pos_y[ia] + sy;
+            float x1 = P.pos_x[ib] + sx;
+            float y1 = P.pos_y[ib] + sy;
+
+            float strain_val = std::clamp(std::abs(E.strain[e]) * 20.0f, 0.0f, 1.0f);
+            kalpana::Color bond_col = kalpana::spectral::mix(
+                kalpana::Color{0.7f, 0.85f, 1.0f, 0.85f},
+                kalpana::Color{1.0f, 0.2f, 0.2f, 0.95f},
+                strain_val
+            );
+
+            kalpana::Path bond_line;
+            bond_line.move_to(x0, y0);
+            bond_line.line_to(x1, y1);
+            scene.add(kalpana::Node::shape(bond_line, kalpana::Paint::stroke(bond_col, 3.5f)));
+        }
+
+        // 2. Render Continuum Particles with continuous 4-fraction spectral pigment blending
+        for (prakriti::Index i = 0; i < P.size(); ++i) {
+            float x = P.pos_x[i] + sx;
+            float y = P.pos_y[i] + sy;
+            float temp = P.temperature[i];
+
+            kalpana::Color pcol;
+            float pr = 5.0f;
+
+            if (P.f_gas[i] > 0.4f) {
+                // Vapor / gas expansion
+                pcol = kalpana::Color{0.8f, 0.85f, 1.0f, 0.4f * P.f_gas[i]};
+                pr = 7.5f;
+            } else if (P.f_liquid[i] > 0.5f) {
+                // Liquid droplets (Macklin-Müller PBF)
+                float heat_frac = std::clamp((temp - 20.0f) / 100.0f, 0.0f, 1.0f);
+                pcol = kalpana::spectral::mix(kalpana::Color{0.0f, 0.75f, 1.0f, 0.85f}, kalpana::Color{1.0f, 0.4f, 0.1f, 0.9f}, heat_frac);
+                pr = 5.5f;
+            } else {
+                // Solid / plastic structural matter (XPBD)
+                if (P.material[i] == app.mat_dry_ice) {
+                    pcol = kalpana::Color{0.92f, 0.96f, 1.0f, 0.95f}; // Dry ice frosty solid
+                    pr = 6.0f;
+                } else {
+                    pcol = kalpana::Color{0.8f, 0.82f, 0.9f, 1.0f}; // Steel
+                    pr = 5.0f;
+                }
+            }
+
+            kalpana::Path pdot;
+            pdot.circle(x, y, pr);
+            scene.add(kalpana::Node::shape(pdot, kalpana::Paint::fill(pcol)));
+        }
     }
 
     {
@@ -1012,6 +1286,7 @@ static void init_cb() {
 
     init_sim_bodies();
     init_liquids();
+    init_prakriti_continuum();
 
     rebuild_timeline();
 }
@@ -1028,6 +1303,11 @@ static void frame_cb() {
     app.timeline.update(DT);
     step_sim_bodies(DT);
     step_liquids(DT);
+
+    // Step Prakriti Continuum Multiphysics World
+    if (app.prakriti_world) {
+        app.prakriti_world->step();
+    }
 
     if (auto* tr = app.world.get<gati::Transform>(app.actor)) {
         tr->prev_position = tr->position;
@@ -1109,6 +1389,7 @@ static void event_cb(const sapp_event* ev) {
                 rebuild_timeline();
                 init_sim_bodies();
                 init_liquids();
+                init_prakriti_continuum();
                 break;
             default:
                 break;
@@ -1128,7 +1409,7 @@ sapp_desc sokol_main(int /*argc*/, char** /*argv*/) {
     d.cleanup_cb = cleanup_cb;
     d.width = W;
     d.height = H;
-    d.window_title = "Pebble Spandana Demo  [R]/[SPC] restart  [ESC] quit";
+    d.window_title = "Pebble Multiphysics & Continuum Showcase (Prakriti, Akruti, Gati, Spandana, Kalpana) [R]/[SPC] reset";
     d.icon.sokol_default = true;
     d.logger.func = slog_func;
     return d;

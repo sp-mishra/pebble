@@ -22,11 +22,12 @@ struct Contact {
 };
 
 namespace detail {
-// Origin-containing triangle test / simplex evolution for 2D GJK.
+// Vector perpendicular to ab pointing toward ao (2D cross(ab, ao) cross ab)
 inline Vec2<Scalar> triple_perp(Vec2<Scalar> ab, Vec2<Scalar> ao) noexcept {
-    // Vector perpendicular to ab, pointing toward ao (2D triple product ab x ao x ab).
-    const Scalar z = cross(ab, ao);
-    return {-ab.y * z, ab.x * z};
+    // cross(ab, ao) = ab.x * ao.y - ab.y * ao.x
+    const Scalar z = ab.x * ao.y - ab.y * ao.x;
+    // (0, 0, z) x (ab.x, ab.y, 0) = (-z * ab.y, z * ab.x, 0)
+    return {-z * ab.y, z * ab.x};
 }
 } // namespace detail
 
@@ -35,35 +36,59 @@ template <Shape A, Shape B>
 [[nodiscard]] inline bool gjk_overlap(const A& a, const B& b,
                                       containers::static_vector<Vec2<Scalar>, 3>* out_simplex = nullptr) noexcept {
     using V = Vec2<Scalar>;
-    V d{1, 0};
+    // Initial direction: vector from shape A center toward shape B center
+    V d = b.support(V{1, 0}) - a.support(V{-1, 0});
+    if (d.len2() < Scalar(1e-12)) d = V{1, 0};
+
     containers::static_vector<V, 3> simplex;
     (void)simplex.push_back(support_diff(a, b, d));
-    d = -simplex[0];
+    d = -simplex[0]; // Point toward origin
+
     for (int iter = 0; iter < 32; ++iter) {
-        if (d.len2() < Scalar(1e-18)) { d = V{1, 0}; }
+        if (d.len2() < Scalar(1e-12)) {
+            // Origin is exactly on simplex vertex
+            if (out_simplex) { *out_simplex = simplex; }
+            return true;
+        }
         const V p = support_diff(a, b, d);
-        if (p.dot(d) < 0) return false; // no overlap: passed the origin
+        if (p.dot(d) < 0) return false; // No overlap: support point did not cross origin
         (void)simplex.push_back(p);
-        // Evolve simplex toward the origin.
-        const V ao = -simplex.back();
+
+        // Simplex evolution:
         if (simplex.size() == 2) {
-            const V ab = simplex[0] - simplex[1];
+            // Line segment A (newest = simplex[1]) -> B (simplex[0])
+            const V a_pt = simplex[1];
+            const V b_pt = simplex[0];
+            const V ab = b_pt - a_pt;
+            const V ao = -a_pt;
             d = detail::triple_perp(ab, ao);
-            if (d.len2() < Scalar(1e-18)) d = ab.perp();
-        } else { // triangle
-            const V a2 = simplex[2], b2 = simplex[1], c2 = simplex[0];
-            const V ab = b2 - a2, ac = c2 - a2, aoo = -a2;
-            const V abp = detail::triple_perp(ab, -ac);
-            const V acp = detail::triple_perp(ac, -ab);
-            if (abp.dot(aoo) > 0) {
-                simplex.clear(); (void)simplex.push_back(c2); (void)simplex.push_back(b2);
-                d = abp;
-            } else if (acp.dot(aoo) > 0) {
-                simplex.clear(); (void)simplex.push_back(c2); (void)simplex.push_back(a2);
-                d = acp;
+            if (d.len2() < Scalar(1e-12)) d = ab.perp();
+        } else { // Triangle: A (newest = simplex[2]), B (simplex[1]), C (simplex[0])
+            const V a_pt = simplex[2];
+            const V b_pt = simplex[1];
+            const V c_pt = simplex[0];
+            const V ab = b_pt - a_pt;
+            const V ac = c_pt - a_pt;
+            const V ao = -a_pt;
+
+            // Outward normal of AB away from C: triple_perp(ab, -ac)
+            const V ab_perp = detail::triple_perp(ab, -ac);
+            // Outward normal of AC away from B: triple_perp(ac, -ab)
+            const V ac_perp = detail::triple_perp(ac, -ab);
+
+            if (ab_perp.dot(ao) > 0) {
+                simplex.clear();
+                (void)simplex.push_back(b_pt);
+                (void)simplex.push_back(a_pt);
+                d = ab_perp;
+            } else if (ac_perp.dot(ao) > 0) {
+                simplex.clear();
+                (void)simplex.push_back(c_pt);
+                (void)simplex.push_back(a_pt);
+                d = ac_perp;
             } else {
                 if (out_simplex) { *out_simplex = simplex; }
-                return true; // origin enclosed
+                return true; // Origin enclosed in triangle
             }
         }
     }
@@ -78,31 +103,54 @@ template <Shape A, Shape B>
     containers::static_vector<V, 3> simp;
     if (!gjk_overlap(a, b, &simp) || simp.size() < 3) return Contact{};
 
-    // Polytope as a growable vertex ring.
+    // Ensure CCW winding for the initial simplex
+    if ((simp[1].x - simp[0].x) * (simp[2].y - simp[0].y) - (simp[1].y - simp[0].y) * (simp[2].x - simp[0].x) < 0) {
+        std::swap(simp[1], simp[2]);
+    }
+
+    // Polytope as a growable vertex ring in CCW order
     containers::static_vector<V, 64> poly;
     for (std::size_t i = 0; i < simp.size(); ++i) (void)poly.push_back(simp[i]);
 
     for (int iter = 0; iter < 48; ++iter) {
-        // Find the closest edge of the current polytope to the origin.
+        // Find the closest edge of the CCW polytope to the origin.
         Scalar best_dist = Scalar(1e18);
         std::size_t best_i = 0;
         V best_normal{};
         const std::size_t n = poly.size();
+
         for (std::size_t i = 0; i < n; ++i) {
             const std::size_t j = (i + 1) % n;
             const V e = poly[j] - poly[i];
-            V nrm{e.y, -e.x};                 // outward-ish edge normal
-            nrm = nrm.normalized();
+            // In CCW order, the outward right-hand normal is (e.y, -e.x)
+            V nrm{e.y, -e.x};
+            Scalar len_n = nrm.len();
+            if (len_n < Scalar(1e-12)) continue;
+            nrm = nrm / len_n;
+
             Scalar dist = nrm.dot(poly[i]);
-            if (dist < 0) { nrm = -nrm; dist = -dist; }
-            if (dist < best_dist) { best_dist = dist; best_i = i; best_normal = nrm; }
+            if (dist < 0) {
+                // If distance is negative, origin is outside this edge due to numerical precision
+                dist = 0;
+            }
+            if (dist < best_dist) {
+                best_dist = dist;
+                best_i = i;
+                best_normal = nrm;
+            }
         }
+
+        if (best_dist >= Scalar(1e17)) break;
+
         const V p = support_diff(a, b, best_normal);
         const Scalar d = p.dot(best_normal);
+
         if (d - best_dist < Scalar(1e-4) || poly.size() >= 63) {
+            // best_normal points outward from Minkowski difference (A - B), which means from A toward B.
             return Contact{true, best_dist, best_normal};
         }
-        // Insert new support point between best_i and best_i+1.
+
+        // Insert new support point between best_i and (best_i+1)%n maintaining CCW order.
         containers::static_vector<V, 64> next;
         for (std::size_t i = 0; i < poly.size(); ++i) {
             (void)next.push_back(poly[i]);

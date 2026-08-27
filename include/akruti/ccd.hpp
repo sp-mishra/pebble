@@ -48,10 +48,15 @@ template <Shape A, Shape B>
         Translated<B> bt{b, motion * t};
         const Separation sep = gjk_distance(a, bt);
         if (sep.distance <= target_gap) return TOIResult{true, t, i + 1};
-        // Closing speed along the separation direction bounds how far we can safely advance.
-        const Scalar closing = std::fabs(motion.dot(sep.dir));
-        if (closing < Scalar(1e-9)) return TOIResult{false, 1, i + 1}; // motion parallel to surfaces
+
+        // sep.dir points from A toward B.
+        // For B to approach A, motion must point opposite sep.dir, meaning closing = -motion.dot(sep.dir).
+        // Upper bound on closing speed is `speed`.
+        const Scalar closing_proj = -motion.dot(sep.dir);
+        const Scalar closing = (closing_proj > Scalar(1e-6)) ? closing_proj : speed;
+
         const Scalar dt = (sep.distance - target_gap) / closing;
+        if (dt <= Scalar(1e-6)) return TOIResult{true, t, i + 1};
         t += dt;
         if (t >= Scalar(1)) return TOIResult{false, 1, i + 1};
     }

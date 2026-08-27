@@ -74,13 +74,15 @@ struct Manifold {
         // Circle center is outside box
         if (d2 >= a.radius * a.radius) return Manifold{};
         const Scalar d = std::sqrt(d2);
-        const Vec n = diff / d;
+        // diff points from clamped (box surface) toward circle center (a.center)
+        // therefore (clamped - a.center) / d = -diff / d points from circle into box.
+        const Vec n = -(diff / d);
         const Scalar depth = a.radius - d;
         const Vec cp = clamped;
 
         Manifold m;
         m.hit = true;
-        m.normal = -n; // from circle into box: -n points toward box center
+        m.normal = n; // from circle into box
         m.depth = depth;
         (void)m.points.push_back(ContactPoint{cp, depth});
         return m;
@@ -92,10 +94,11 @@ struct Manifold {
         Vec n{};
         Scalar depth = 0;
         if (dx < dy) {
-            n = Vec{a.center.x > b.center.x ? -1.0f : 1.0f, 0.0f};
+            // Circle center is inside box, normal points from circle towards box center
+            n = Vec{a.center.x >= b.center.x ? -1.0f : 1.0f, 0.0f};
             depth = dx + a.radius;
         } else {
-            n = Vec{0.0f, a.center.y > b.center.y ? -1.0f : 1.0f};
+            n = Vec{0.0f, a.center.y >= b.center.y ? -1.0f : 1.0f};
             depth = dy + a.radius;
         }
 
@@ -318,7 +321,7 @@ inline void clip_segment_to_line(std::array<Vec, 2>& out_pts, int& out_count,
         }
     }
 
-    // Ensure normal points from A to B
+    // Ensure best_axis points from A toward B
     if (best_axis.dot(diff) < 0.0f) best_axis = -best_axis;
 
     // Build 2-point manifold via incident-reference edge clipping
@@ -336,11 +339,14 @@ inline void clip_segment_to_line(std::array<Vec, 2>& out_pts, int& out_count,
         b.center + bx * b.half.x - by * b.half.y
     };
 
-    // Find reference face on A (normal closest to best_axis)
+    // Find reference face on A (outward normal closest to best_axis)
     int ref_idx = 0;
     Scalar max_dot = -1e18f;
     for (int i = 0; i < 4; ++i) {
-        const Vec e = a_verts[static_cast<std::size_t>((i + 1) % 4)] - a_verts[static_cast<std::size_t>(i)];
+        const Vec v_curr = a_verts[static_cast<std::size_t>(i)];
+        const Vec v_next = a_verts[static_cast<std::size_t>((i + 1) % 4)];
+        const Vec e = v_next - v_curr;
+        // In CCW order, outward normal is (e.y, -e.x)
         const Vec n = Vec{e.y, -e.x}.normalized();
         const Scalar dot = n.dot(best_axis);
         if (dot > max_dot) {
@@ -351,13 +357,15 @@ inline void clip_segment_to_line(std::array<Vec, 2>& out_pts, int& out_count,
     const Vec ref_v1 = a_verts[static_cast<std::size_t>(ref_idx)];
     const Vec ref_v2 = a_verts[static_cast<std::size_t>((ref_idx + 1) % 4)];
     const Vec ref_tangent = (ref_v2 - ref_v1).normalized();
-    const Vec ref_normal = Vec{ref_tangent.y, -ref_tangent.x};
+    const Vec ref_normal = Vec{ref_tangent.y, -ref_tangent.x}.normalized();
 
-    // Find incident face on B (normal most anti-parallel to ref_normal)
+    // Find incident face on B (outward normal most anti-parallel to ref_normal)
     int inc_idx = 0;
     Scalar min_inc_dot = 1e18f;
     for (int i = 0; i < 4; ++i) {
-        const Vec e = b_verts[static_cast<std::size_t>((i + 1) % 4)] - b_verts[static_cast<std::size_t>(i)];
+        const Vec v_curr = b_verts[static_cast<std::size_t>(i)];
+        const Vec v_next = b_verts[static_cast<std::size_t>((i + 1) % 4)];
+        const Vec e = v_next - v_curr;
         const Vec n = Vec{e.y, -e.x}.normalized();
         const Scalar dot = n.dot(ref_normal);
         if (dot < min_inc_dot) {

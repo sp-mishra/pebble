@@ -1587,6 +1587,9 @@ namespace pravaha::backends::vulkan {
                               const std::array<compute::compute_view<const T>, K>& srcs,
                               std::uint32_t local_x) {
         auto& be = device();
+        if (!be.ensure_device())
+            return std::unexpected(PravahaError::make(
+                ErrorKind::ExecutorUnavailable, "vulkan: device initialization failed"));
         auto ctx = be.context();
         if (!ctx || !ctx->valid())
             return std::unexpected(PravahaError::make(
@@ -1674,7 +1677,9 @@ namespace pravaha::backends::vulkan {
         vulkan_device_tensor& operator=(vulkan_device_tensor&&) noexcept = default;
 
         [[nodiscard]] static std::optional<vulkan_device_tensor> allocate(const std::size_t count) {
-            auto context = device().context();
+            auto& backend = device();
+            if (!backend.ensure_device()) return std::nullopt;
+            auto context = backend.context();
             if (!context || !context->valid() || count == 0) return std::nullopt;
             auto allocation = alloc_vk_buffer(context->device, context->phys_dev,
                                               count * sizeof(T), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
@@ -1857,6 +1862,9 @@ namespace pravaha::backends::vulkan {
                               std::vector<T>& partials,
                               T identity) {
         auto& be = device();
+        if (!be.ensure_device())
+            return std::unexpected(PravahaError::make(
+                ErrorKind::ExecutorUnavailable, "vulkan: device initialization failed"));
         auto ctx = be.context();
         if (!ctx || !ctx->valid())
             return std::unexpected(PravahaError::make(

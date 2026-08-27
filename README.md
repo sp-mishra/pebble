@@ -262,6 +262,9 @@ CMake automatically detects missing dependencies during configuration and seamle
 * **Executable Targets**:
   - `pebble_tests`: Catch2 unit test suite runner.
   - `pebble_app`: Master end-to-end simulation showcase executable (`src/app/main.cpp`).
+  - `pebble_akriti`: Akruti geometry & Kalpana vector effects showcase (`src/app/pebble_akriti.cpp`).
+  - `pebble_gati`: Gati realtime ECS, elemental chemistry & thermodynamics showcase (`src/app/pebble_gati.cpp`).
+  - `pebble_prakriti`: Prakriti multiphysics, continuum fluids & XPBD showcase (`src/app/pebble_prakriti.cpp`).
 
 ---
 

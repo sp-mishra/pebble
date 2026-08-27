@@ -767,6 +767,16 @@ namespace lg {
             }
         }
 
+        // Explicit process-boundary flush for short-lived tools and examples.
+        // Normal library code remains fully asynchronous and pays nothing extra.
+        inline void flush() noexcept {
+            if constexpr (enabled) {
+#if TT_LOG_ENABLED
+                detail::global_logger()->flush();
+#endif
+            }
+        }
+
         // Attach an additional spdlog sink (e.g. file sink, network sink).
         inline void add_sink(
 #if TT_LOG_ENABLED

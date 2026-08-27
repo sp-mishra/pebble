@@ -383,17 +383,17 @@ target_include_directories(pebble_anukrama INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_compile_features(pebble_anukrama INTERFACE cxx_std_23)
 
-add_library(pebble_akruti INTERFACE)
-add_library(pebble::akruti ALIAS pebble_akruti)
-target_include_directories(pebble_akruti INTERFACE
+add_library(pebble_akruti_lib INTERFACE)
+add_library(pebble::akruti ALIAS pebble_akruti_lib)
+target_include_directories(pebble_akruti_lib INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-target_compile_features(pebble_akruti INTERFACE cxx_std_23)
+target_compile_features(pebble_akruti_lib INTERFACE cxx_std_23)
 
-add_library(pebble_prakriti INTERFACE)
-add_library(pebble::prakriti ALIAS pebble_prakriti)
-target_include_directories(pebble_prakriti INTERFACE
+add_library(pebble_prakriti_lib INTERFACE)
+add_library(pebble::prakriti ALIAS pebble_prakriti_lib)
+target_include_directories(pebble_prakriti_lib INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-target_compile_features(pebble_prakriti INTERFACE cxx_std_23)
+target_compile_features(pebble_prakriti_lib INTERFACE cxx_std_23)
 add_library(pebble_ecs INTERFACE)
 add_library(pebble::ecs ALIAS pebble_ecs)
 target_include_directories(pebble_ecs INTERFACE
@@ -401,34 +401,34 @@ target_include_directories(pebble_ecs INTERFACE
 target_compile_features(pebble_ecs INTERFACE cxx_std_23)
 target_link_libraries(pebble_ecs INTERFACE pebble::pravaha)
 
-add_library(pebble_gati INTERFACE)
-add_library(pebble::gati ALIAS pebble_gati)
-target_include_directories(pebble_gati INTERFACE
+add_library(pebble_gati_lib INTERFACE)
+add_library(pebble::gati ALIAS pebble_gati_lib)
+target_include_directories(pebble_gati_lib INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-target_compile_features(pebble_gati INTERFACE cxx_std_23)
-target_link_libraries(pebble_gati INTERFACE pebble::ecs pebble::akruti pebble::prakriti pebble::pravaha)
+target_compile_features(pebble_gati_lib INTERFACE cxx_std_23)
+target_link_libraries(pebble_gati_lib INTERFACE pebble::ecs pebble::akruti pebble::prakriti pebble::pravaha)
 
-add_library(pebble_spandana INTERFACE)
-add_library(pebble::spandana ALIAS pebble_spandana)
-target_include_directories(pebble_spandana INTERFACE
+add_library(pebble_spandana_lib INTERFACE)
+add_library(pebble::spandana ALIAS pebble_spandana_lib)
+target_include_directories(pebble_spandana_lib INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-target_compile_features(pebble_spandana INTERFACE cxx_std_23)
-target_link_libraries(pebble_spandana INTERFACE pebble::ecs pebble::akruti pebble::prakriti pebble::pravaha)
+target_compile_features(pebble_spandana_lib INTERFACE cxx_std_23)
+target_link_libraries(pebble_spandana_lib INTERFACE pebble::ecs pebble::akruti pebble::prakriti pebble::pravaha)
 
-add_library(pebble_dhvani INTERFACE)
-add_library(pebble::dhvani ALIAS pebble_dhvani)
-target_include_directories(pebble_dhvani INTERFACE
+add_library(pebble_dhvani_lib INTERFACE)
+add_library(pebble::dhvani ALIAS pebble_dhvani_lib)
+target_include_directories(pebble_dhvani_lib INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-target_compile_features(pebble_dhvani INTERFACE cxx_std_23)
+target_compile_features(pebble_dhvani_lib INTERFACE cxx_std_23)
 
-add_library(pebble_kalpana INTERFACE)
-add_library(pebble::kalpana ALIAS pebble_kalpana)
-target_include_directories(pebble_kalpana INTERFACE
+add_library(pebble_kalpana_lib INTERFACE)
+add_library(pebble::kalpana ALIAS pebble_kalpana_lib)
+target_include_directories(pebble_kalpana_lib INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/dependencies/sokol>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/dependencies/notcurses/include>)
-target_compile_features(pebble_kalpana INTERFACE cxx_std_23)
-target_link_libraries(pebble_kalpana INTERFACE pebble::akruti pebble::pravaha)
+target_compile_features(pebble_kalpana_lib INTERFACE cxx_std_23)
+target_link_libraries(pebble_kalpana_lib INTERFACE pebble::akruti pebble::pravaha)
 
 
 
@@ -592,50 +592,44 @@ if (EXISTS "${CMAKE_SOURCE_DIR}/src/app/main.cpp")
 endif()
 
 # ---------------------------------------------------------------------------
-# Pebs Executable (new compilation unit)
+# Standalone Showcase Executables
 # ---------------------------------------------------------------------------
-if (EXISTS "${CMAKE_SOURCE_DIR}/src/pebs/main.cpp")
-
-    set(PEBBLE_PEBS_SOURCES
-        src/pebs/main.cpp
-    )
-
-    add_executable(pebs ${PEBBLE_PEBS_SOURCES})
-
-    target_link_libraries(pebs PRIVATE
-        pebble::ecs
-        pebble::pravaha
-        pebble::akruti
-        pebble::prakriti
-        pebble::gati
-        pebble::spandana
-        pebble::dhvani
-        pebble::kalpana
-        spdlog::spdlog_header_only
-        hwy
-        crc32c
-    )
-
-    if (TARGET lmdb)
-        target_link_libraries(pebs PRIVATE lmdb)
+foreach(_showcase pebble_akriti pebble_gati pebble_prakriti)
+    if (EXISTS "${CMAKE_SOURCE_DIR}/src/app/${_showcase}.cpp")
+        set(_showcase_srcs
+            src/app/${_showcase}.cpp
+            src/app/sokol_impl.cpp
+        )
+        add_executable(${_showcase} ${_showcase_srcs})
+        target_link_libraries(${_showcase} PRIVATE
+            pebble::ecs
+            pebble::akruti
+            pebble::prakriti
+            pebble::pravaha
+            pebble::gati
+            pebble::spandana
+            pebble::kalpana
+            pebble::dhvani
+            spdlog::spdlog_header_only
+        )
+        if (APPLE)
+            set_source_files_properties(
+                src/app/${_showcase}.cpp
+                PROPERTIES COMPILE_OPTIONS "-x;objective-c++"
+            )
+            target_compile_definitions(${_showcase} PRIVATE SOKOL_METAL)
+            target_link_libraries(${_showcase} PRIVATE
+                ${FW_METAL} ${FW_FOUNDATION} ${FW_QUARTZ} ${FW_APPKIT} ${FW_IOKIT})
+        elseif (UNIX)
+            target_compile_definitions(${_showcase} PRIVATE SOKOL_GLCORE)
+            target_link_libraries(${_showcase} PRIVATE GL dl m)
+        endif()
+        if (HAS_METAL_CPP)
+            target_link_libraries(${_showcase} PRIVATE
+                ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK} ${QUARTZCORE_FRAMEWORK})
+        endif()
+        target_compile_definitions(${_showcase} PRIVATE
+            TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
     endif()
+endforeach()
 
-    if (TARGET libz3)
-        target_link_libraries(pebs PRIVATE libz3)
-    elseif (TARGET z3_imported)
-        target_link_libraries(pebs PRIVATE z3_imported)
-    endif()
-
-    if (HAS_MLX AND TARGET mlx)
-        target_link_libraries(pebs PRIVATE mlx)
-    endif()
-
-    if (HAS_METAL_CPP)
-        target_link_libraries(pebs PRIVATE
-            ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK} ${QUARTZCORE_FRAMEWORK})
-    endif()
-
-    target_compile_definitions(pebs PRIVATE
-        TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-
-endif()

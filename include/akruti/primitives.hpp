@@ -208,8 +208,38 @@ struct Sector {
     }
 
     [[nodiscard]] Vec support(Vec d) const noexcept {
-        const Vec nd = d.normalized();
-        return center + nd * radius;
+        // Transform direction d into local coordinate system of the sector
+        const Vec local_d{rot.m00 * d.x + rot.m10 * d.y,
+                          rot.m01 * d.x + d.y * rot.m11};
+
+        // Candidate 1: Apex (center)
+        Vec best_p{0, 0};
+        Scalar best_dot = 0.0f; // Apex dot local_d is 0
+
+        // Candidate 2: Arc extremes at -half_angle and +half_angle
+        const Scalar cos_h = std::cos(half_angle);
+        const Scalar sin_h = std::sin(half_angle);
+        const Vec p_left{radius * cos_h, radius * -sin_h};
+        const Vec p_right{radius * cos_h, radius * sin_h};
+
+        const Scalar dot_l = p_left.dot(local_d);
+        const Scalar dot_r = p_right.dot(local_d);
+        if (dot_l > best_dot) { best_dot = dot_l; best_p = p_left; }
+        if (dot_r > best_dot) { best_dot = dot_r; best_p = p_right; }
+
+        // Candidate 3: Continuous arc boundary if local_d falls within [-half_angle, half_angle]
+        if (local_d.x > 0.0f) {
+            const Scalar ang = std::atan2(local_d.y, local_d.x);
+            if (std::fabs(ang) <= half_angle) {
+                const Vec p_arc = local_d.normalized() * radius;
+                const Scalar dot_arc = p_arc.dot(local_d);
+                if (dot_arc > best_dot) { best_dot = dot_arc; best_p = p_arc; }
+            }
+        }
+
+        // Transform best point back to world coordinates
+        return center + Vec{rot.m00 * best_p.x + rot.m01 * best_p.y,
+                            rot.m10 * best_p.x + rot.m11 * best_p.y};
     }
 };
 
