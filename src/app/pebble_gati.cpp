@@ -431,11 +431,11 @@ static void init_gati_simulation() {
     app.bodies.clear();
     app.reactions = 0;
 
-    // 54 interactive multi-shape bodies in a clean 9x6 grid layout
-    constexpr int kCols = 9;
-    constexpr int kRows = 6;
-    const float cell_w = (FW - 100.0f) / float(kCols);
-    const float cell_h = (FH - 140.0f) / float(kRows);
+    // 1000 interactive multi-shape bodies in a 40x25 stress-test layout
+    constexpr int kCols = 40;
+    constexpr int kRows = 25;
+    const float cell_w = (FW - 60.0f) / float(kCols);
+    const float cell_h = (FH - 100.0f) / float(kRows);
 
     int idx = 0;
     for (int r = 0; r < kRows; ++r) {
@@ -443,16 +443,16 @@ static void init_gati_simulation() {
             GatiBody b;
             b.ent = app.world.spawn();
             b.kind = kAllKinds[idx % (sizeof(kAllKinds) / sizeof(kAllKinds[0]))];
-            b.size = randf(11.0f, 15.0f);
+            b.size = randf(4.5f, 6.5f);
             b.rot = randf(0.0f, 6.2832f);
-            b.rot_vel = randf(-1.5f, 1.5f);
+            b.rot_vel = randf(-2.5f, 2.5f);
 
-            float cx = 50.0f + (float(c) + 0.5f) * cell_w + randf(-4.0f, 4.0f);
-            float cy = 70.0f + (float(r) + 0.5f) * cell_h + randf(-4.0f, 4.0f);
+            float cx = 30.0f + (float(c) + 0.5f) * cell_w + randf(-2.0f, 2.0f);
+            float cy = 50.0f + (float(r) + 0.5f) * cell_h + randf(-2.0f, 2.0f);
             b.pos = pebble::math::vec2(cx, cy);
 
             float ang = randf(0.0f, 6.2832f);
-            float spd = randf(40.0f, 85.0f);
+            float spd = randf(25.0f, 70.0f);
             b.vel = pebble::math::vec2(std::cos(ang) * spd, std::sin(ang) * spd);
 
             if (b.kind == ShapeKind::ConvexBlob || b.kind == ShapeKind::StarPoly ||
@@ -556,10 +556,40 @@ static void init_cb() {
     init_gati_simulation();
 }
 
+// Spatial hash grid broadphase for high-performance 1000-body neighbor queries
+struct SpatialHashGrid {
+    static constexpr float kCellSize = 18.0f;
+    static constexpr int kGridCols = static_cast<int>(FW / kCellSize) + 2;
+    static constexpr int kGridRows = static_cast<int>(FH / kCellSize) + 2;
+    static constexpr int kTotalCells = kGridCols * kGridRows;
+
+    std::vector<int> head;
+    std::vector<int> next;
+
+    SpatialHashGrid() {
+        head.resize(kTotalCells, -1);
+    }
+
+    void build(const std::vector<GatiBody>& bodies) {
+        std::fill(head.begin(), head.end(), -1);
+        next.resize(bodies.size(), -1);
+
+        for (int i = 0; i < static_cast<int>(bodies.size()); ++i) {
+            int cx = std::clamp(static_cast<int>(bodies[i].pos[0] / kCellSize), 0, kGridCols - 1);
+            int cy = std::clamp(static_cast<int>(bodies[i].pos[1] / kCellSize), 0, kGridRows - 1);
+            int cell = cy * kGridCols + cx;
+            next[i] = head[cell];
+            head[cell] = i;
+        }
+    }
+};
+
+static SpatialHashGrid g_grid;
+
 static void step_gati(float dt) {
     auto& app = g_app;
 
-    constexpr int kSubsteps = 8;
+    constexpr int kSubsteps = 4;
     const float sub_dt = dt / float(kSubsteps);
 
     for (int step = 0; step < kSubsteps; ++step) {
@@ -574,75 +604,92 @@ static void step_gati(float dt) {
             if (b.pos[1] > FH - r - 20.0f) { b.pos[1] = FH - r - 20.0f; b.vel[1] = -std::abs(b.vel[1]); }
         }
 
-        // 2. Iterative non-penetration solver
-        constexpr int kPbdIterations = 10;
+        // 2. Spatial Broadphase Acceleration
+        g_grid.build(app.bodies);
+
+        // 3. Iterative non-penetration solver
+        constexpr int kPbdIterations = 4;
         for (int pbd = 0; pbd < kPbdIterations; ++pbd) {
-            for (std::size_t i = 0; i < app.bodies.size(); ++i) {
+            for (int i = 0; i < static_cast<int>(app.bodies.size()); ++i) {
                 auto& a = app.bodies[i];
-                for (std::size_t j = i + 1; j < app.bodies.size(); ++j) {
-                    auto& b = app.bodies[j];
+                const float ra = bounding_radius(a);
 
-                    const float ra = bounding_radius(a);
-                    const float rb = bounding_radius(b);
-                    pebble::math::vec2 d = b.pos - a.pos;
-                    float dist_sq = d[0] * d[0] + d[1] * d[1];
-                    float min_d = ra + rb;
-                    if (dist_sq >= min_d * min_d) continue;
+                int cx = std::clamp(static_cast<int>(a.pos[0] / SpatialHashGrid::kCellSize), 0, SpatialHashGrid::kGridCols - 1);
+                int cy = std::clamp(static_cast<int>(a.pos[1] / SpatialHashGrid::kCellSize), 0, SpatialHashGrid::kGridRows - 1);
 
-                    auto manifold = test_body_collision(a, b);
-                    if (!manifold.hit || manifold.depth <= 0.0f) continue;
+                for (int dy = -1; dy <= 1; ++dy) {
+                    int ny = cy + dy;
+                    if (ny < 0 || ny >= SpatialHashGrid::kGridRows) continue;
 
-                    pebble::math::vec2 n{manifold.normal.x, manifold.normal.y};
-                    float len_n = std::sqrt(n[0] * n[0] + n[1] * n[1]);
-                    if (len_n > 1e-5f) {
-                        n = n * (1.0f / len_n);
-                    } else {
-                        float dist = std::sqrt(dist_sq);
-                        n = (dist > 1e-4f) ? d * (1.0f / dist) : pebble::math::vec2(1.0f, 0.0f);
-                    }
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        int nx = cx + dx;
+                        if (nx < 0 || nx >= SpatialHashGrid::kGridCols) continue;
 
-                    float separation = (manifold.depth + 0.1f) * 0.5f;
-                    a.pos = a.pos - n * separation;
-                    b.pos = b.pos + n * separation;
+                        int cell = ny * SpatialHashGrid::kGridCols + nx;
+                        for (int j = g_grid.head[cell]; j != -1; j = g_grid.next[j]) {
+                            if (j <= i) continue; // avoid duplicates and self-collision
 
-                    float ra_bound = bounding_radius(a);
-                    float rb_bound = bounding_radius(b);
-                    a.pos[0] = std::clamp(a.pos[0], ra_bound, FW - ra_bound);
-                    a.pos[1] = std::clamp(a.pos[1], ra_bound + 20.0f, FH - ra_bound - 20.0f);
-                    b.pos[0] = std::clamp(b.pos[0], rb_bound, FW - rb_bound);
-                    b.pos[1] = std::clamp(b.pos[1], rb_bound + 20.0f, FH - rb_bound - 20.0f);
+                            auto& b = app.bodies[j];
+                            const float rb = bounding_radius(b);
 
-                    if (auto* tr_a = app.world.get<gati::Transform>(a.ent)) tr_a->position = a.pos;
-                    if (auto* tr_b = app.world.get<gati::Transform>(b.ent)) tr_b->position = b.pos;
+                            pebble::math::vec2 d = b.pos - a.pos;
+                            float dist_sq = d[0] * d[0] + d[1] * d[1];
+                            float min_d = ra + rb;
+                            if (dist_sq >= min_d * min_d) continue;
 
-                    if (pbd == 0) {
-                        float va = a.vel[0] * n[0] + a.vel[1] * n[1];
-                        float vb = b.vel[0] * n[0] + b.vel[1] * n[1];
-                        float rel_vel = vb - va;
-                        if (rel_vel < 0.0f) {
-                            float restitution = 0.45f;
-                            float impulse = -(1.0f + restitution) * rel_vel * 0.5f;
-                            a.vel = a.vel - n * impulse;
-                            b.vel = b.vel + n * impulse;
-                        }
+                            auto manifold = test_body_collision(a, b);
+                            if (!manifold.hit || manifold.depth <= 0.0f) continue;
 
-                        if (step == 0) {
-                            gati::ContactEvent ce{};
-                            ce.a = a.ent.index;
-                            ce.b = b.ent.index;
-                            ce.normal = n;
-                            ce.depth = manifold.depth;
-                            ce.point = (a.pos + b.pos) * 0.5f;
+                            pebble::math::vec2 n{manifold.normal.x, manifold.normal.y};
+                            float len_n = std::sqrt(n[0] * n[0] + n[1] * n[1]);
+                            if (len_n > 1e-5f) {
+                                n = n * (1.0f / len_n);
+                            } else {
+                                float dist = std::sqrt(dist_sq);
+                                n = (dist > 1e-4f) ? d * (1.0f / dist) : pebble::math::vec2(1.0f, 0.0f);
+                            }
 
-                            auto* ea = app.world.get<gati::ElementalComponent>(a.ent);
-                            auto* eb = app.world.get<gati::ElementalComponent>(b.ent);
-                            auto er = gati::ElementalReactionMatrix::evaluate(
-                                ea ? ea->type : gati::ElementType::Neutral,
-                                eb ? eb->type : gati::ElementType::Neutral);
-                            if (er.reacted) ++app.reactions;
+                            float separation = (manifold.depth + 0.05f) * 0.5f;
+                            a.pos = a.pos - n * separation;
+                            b.pos = b.pos + n * separation;
 
-                            gati::ElementalReactionMatrix::process_contact(app.world, ce);
-                            gati::MaterialReactionSystem::evaluate_reactions(app.world, ce);
+                            float ra_bound = bounding_radius(a);
+                            float rb_bound = bounding_radius(b);
+                            a.pos[0] = std::clamp(a.pos[0], ra_bound, FW - ra_bound);
+                            a.pos[1] = std::clamp(a.pos[1], ra_bound + 20.0f, FH - ra_bound - 20.0f);
+                            b.pos[0] = std::clamp(b.pos[0], rb_bound, FW - rb_bound);
+                            b.pos[1] = std::clamp(b.pos[1], rb_bound + 20.0f, FH - rb_bound - 20.0f);
+
+                            if (pbd == 0) {
+                                float va = a.vel[0] * n[0] + a.vel[1] * n[1];
+                                float vb = b.vel[0] * n[0] + b.vel[1] * n[1];
+                                float rel_vel = vb - va;
+                                if (rel_vel < 0.0f) {
+                                    float restitution = 0.35f;
+                                    float impulse = -(1.0f + restitution) * rel_vel * 0.5f;
+                                    a.vel = a.vel - n * impulse;
+                                    b.vel = b.vel + n * impulse;
+                                }
+
+                                if (step == 0) {
+                                    gati::ContactEvent ce{};
+                                    ce.a = a.ent.index;
+                                    ce.b = b.ent.index;
+                                    ce.normal = n;
+                                    ce.depth = manifold.depth;
+                                    ce.point = (a.pos + b.pos) * 0.5f;
+
+                                    auto* ea = app.world.get<gati::ElementalComponent>(a.ent);
+                                    auto* eb = app.world.get<gati::ElementalComponent>(b.ent);
+                                    auto er = gati::ElementalReactionMatrix::evaluate(
+                                        ea ? ea->type : gati::ElementType::Neutral,
+                                        eb ? eb->type : gati::ElementType::Neutral);
+                                    if (er.reacted) ++app.reactions;
+
+                                    gati::ElementalReactionMatrix::process_contact(app.world, ce);
+                                    gati::MaterialReactionSystem::evaluate_reactions(app.world, ce);
+                                }
+                            }
                         }
                     }
                 }
