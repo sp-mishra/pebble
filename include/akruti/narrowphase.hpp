@@ -455,4 +455,120 @@ template <Shape A, Shape B>
     return m;
 }
 
+// ── 4. Direct Static Narrowphase Matrix Dispatch Table ───────────────────────────
+
+enum class ShapeType : std::uint8_t {
+    Circle = 0,
+    Box,
+    Capsule,
+    OrientedBox,
+    Triangle,
+    RoundedBox,
+    Sector,
+    Segment,
+    ConvexPoly,
+    RoundedPoly,
+    Count
+};
+
+inline constexpr std::size_t kShapeTypeCount = static_cast<std::size_t>(ShapeType::Count);
+
+using NarrowphaseFn = Manifold (*)(const void*, const void*, SimplexCache*) noexcept;
+
+namespace detail {
+
+template<typename A, typename B>
+inline Manifold dispatch_narrow(const void* a_ptr, const void* b_ptr, SimplexCache* cache) noexcept {
+    const auto& a = *static_cast<const A*>(a_ptr);
+    const auto& b = *static_cast<const B*>(b_ptr);
+
+    if constexpr (std::is_same_v<A, Circle> && std::is_same_v<B, Circle>) {
+        return collide_circle_circle(a, b);
+    } else if constexpr (std::is_same_v<A, Circle> && std::is_same_v<B, Capsule>) {
+        return collide_circle_capsule(a, b);
+    } else if constexpr (std::is_same_v<A, Capsule> && std::is_same_v<B, Circle>) {
+        auto m = collide_circle_capsule(b, a);
+        if (m.hit) m.normal = -m.normal;
+        return m;
+    } else if constexpr (std::is_same_v<A, Circle> && std::is_same_v<B, Box>) {
+        return collide_circle_box(a, b);
+    } else if constexpr (std::is_same_v<A, Box> && std::is_same_v<B, Circle>) {
+        auto m = collide_circle_box(b, a);
+        if (m.hit) m.normal = -m.normal;
+        return m;
+    } else if constexpr (std::is_same_v<A, Box> && std::is_same_v<B, Box>) {
+        return collide_box_box(a, b);
+    } else if constexpr (std::is_same_v<A, OrientedBox> && std::is_same_v<B, OrientedBox>) {
+        return collide_obb_obb(a, b);
+    } else if constexpr (std::is_same_v<A, Capsule> && std::is_same_v<B, Capsule>) {
+        return collide_capsule_capsule(a, b);
+    } else if constexpr (std::is_same_v<A, Capsule> && std::is_same_v<B, OrientedBox>) {
+        return collide_capsule_obb(a, b);
+    } else if constexpr (std::is_same_v<A, OrientedBox> && std::is_same_v<B, Capsule>) {
+        auto m = collide_capsule_obb(b, a);
+        if (m.hit) m.normal = -m.normal;
+        return m;
+    } else {
+        return collide_gjk_warm_started(a, b, cache);
+    }
+}
+
+template<std::size_t PolyVerts = 8>
+struct NarrowphaseMatrixTable {
+    NarrowphaseFn table[kShapeTypeCount][kShapeTypeCount]{};
+
+    constexpr NarrowphaseMatrixTable() {
+        populate<Circle, 0>();
+        populate<Box, 1>();
+        populate<Capsule, 2>();
+        populate<OrientedBox, 3>();
+        populate<Triangle, 4>();
+        populate<RoundedBox, 5>();
+        populate<Sector, 6>();
+        populate<Segment, 7>();
+        populate<ConvexPoly<PolyVerts>, 8>();
+        populate<RoundedPoly<PolyVerts>, 9>();
+    }
+
+private:
+    template<typename A, std::size_t Row>
+    constexpr void populate() {
+        populate_col<A, Circle, Row, 0>();
+        populate_col<A, Box, Row, 1>();
+        populate_col<A, Capsule, Row, 2>();
+        populate_col<A, OrientedBox, Row, 3>();
+        populate_col<A, Triangle, Row, 4>();
+        populate_col<A, RoundedBox, Row, 5>();
+        populate_col<A, Sector, Row, 6>();
+        populate_col<A, Segment, Row, 7>();
+        populate_col<A, ConvexPoly<PolyVerts>, Row, 8>();
+        populate_col<A, RoundedPoly<PolyVerts>, Row, 9>();
+    }
+
+    template<typename A, typename B, std::size_t Row, std::size_t Col>
+    constexpr void populate_col() {
+        table[Row][Col] = &dispatch_narrow<A, B>;
+    }
+};
+
+} // namespace detail
+
+template<std::size_t PolyVerts = 8>
+inline const detail::NarrowphaseMatrixTable<PolyVerts>& narrowphase_matrix() noexcept {
+    static const detail::NarrowphaseMatrixTable<PolyVerts> kTable{};
+    return kTable;
+}
+
+// O(1) Matrix Dispatch narrowphase with warm-started GJK/EPA simplex caching
+template<std::size_t PolyVerts = 8>
+[[nodiscard]] inline Manifold collide_matrix(ShapeType type_a, const void* shape_a,
+                                             ShapeType type_b, const void* shape_b,
+                                             SimplexCache* cache = nullptr) noexcept {
+    const auto idx_a = static_cast<std::size_t>(type_a);
+    const auto idx_b = static_cast<std::size_t>(type_b);
+    if (idx_a >= kShapeTypeCount || idx_b >= kShapeTypeCount) return Manifold{};
+    return narrowphase_matrix<PolyVerts>().table[idx_a][idx_b](shape_a, shape_b, cache);
+}
+
 } // namespace akruti
+

@@ -38,3 +38,30 @@ TEST_CASE("Akruti: Capsule vs OBB Manifold", "[akruti][narrowphase]") {
     REQUIRE(m.depth == Catch::Approx(0.2f).margin(1e-3f));
     REQUIRE(m.points.size() >= 1);
 }
+
+TEST_CASE("Akruti: Direct Static Narrowphase Matrix & Warm-Started SimplexCache", "[akruti][narrowphase][matrix]") {
+    akruti::Circle circle{{0.0f, 0.0f}, 1.0f};
+    akruti::Box box{{0.0f, 1.5f}, {1.0f, 1.0f}};
+
+    akruti::SimplexCache cache{};
+    REQUIRE_FALSE(cache.valid);
+
+    // Frame 1: Matrix dispatch initial evaluation
+    akruti::Manifold m1 = akruti::collide_matrix(
+        akruti::ShapeType::Circle, &circle,
+        akruti::ShapeType::Box, &box,
+        &cache);
+
+    REQUIRE(m1.hit == true);
+    REQUIRE(m1.depth == Catch::Approx(0.5f).margin(1e-3f));
+
+    // Frame 2: Continuous evaluation with warm-started cache
+    akruti::Manifold m2 = akruti::collide_matrix(
+        akruti::ShapeType::Circle, &circle,
+        akruti::ShapeType::Box, &box,
+        &cache);
+
+    REQUIRE(m2.hit == true);
+    REQUIRE(m2.depth == Catch::Approx(0.5f).margin(1e-3f));
+}
+

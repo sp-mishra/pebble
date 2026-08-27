@@ -10,6 +10,10 @@
 #include "transform.hpp"
 #include "system.hpp"
 #include "event.hpp"
+#include "containers/cache/kosha.hpp"
+#include "containers/tensor/tensor.hpp"
+#include "containers/dynamic/SmallVector.hpp"
+#include "mem/arena.hpp"
 
 #if defined(GATI_ENABLE_AKRUTI) && __has_include("akruti/akruti.hpp")
 #define GATI_HAS_AKRUTI 1
@@ -18,6 +22,7 @@
 
 #include <variant>
 #include <vector>
+#include <memory>
 
 namespace gati {
 
@@ -80,8 +85,6 @@ inline AABB shape_aabb(const ShapeVariant& v, const Vec2& p) {
     }, v);
 }
 
-#include "containers/tensor/tensor.hpp"
-
 // Platform-adaptive default policy detection
 #if defined(__APPLE__) && defined(__aarch64__) && defined(PEBBLE_ENABLE_MLX)
 #include "containers/tensor/mlx_storage_policy.hpp"
@@ -103,18 +106,18 @@ namespace detail {
 }
 #endif
 
-// Tensor-accelerated broadphase state for large entity counts
+// Tensor-accelerated broadphase state for large entity counts (zero-allocation bump/arena friendly)
 template<typename StoragePolicy = detail::DefaultGatiStoragePolicy,
          typename CompPolicy    = detail::DefaultGatiCompPolicy>
 struct BasicTensorBroadphase {
     using TensorType = ts::DynamicTensor<float, StoragePolicy, CompPolicy>;
     TensorType state; // [N, 4] -> [x, y, vx, vy]
     TensorType radii; // [N]    -> radius
-    std::vector<std::uint32_t> entity_indices;
+    containers::dynamic::SmallVector<std::uint32_t, 1024> entity_indices;
 
     static constexpr float kCellSize = 18.0f;
-    std::vector<int> head;
-    std::vector<int> next;
+    containers::dynamic::SmallVector<int, 4096> head;
+    containers::dynamic::SmallVector<int, 1024> next;
 
     void update(World& w) {
         std::size_t count = 0;
@@ -146,16 +149,16 @@ struct BasicTensorBroadphase {
     }
 };
 
-using TensorBroadphase = BasicTensorBroadphase<>;
-
 // Broadphase over transformed AABBs / Tensor spatial bins + GJK/EPA narrowphase; emits ContactEvents.
 template<typename StoragePolicy = detail::DefaultGatiStoragePolicy,
          typename CompPolicy    = detail::DefaultGatiCompPolicy>
 struct BasicCollisionSystem {
+    using TensorBroadphaseType = BasicTensorBroadphase<StoragePolicy, CompPolicy>;
+
     containers::AABBTree<AABB>                               tree{Scalar(0.1)}; // fat margin reduces churn
     Scalar                                                   fat_margin = Scalar(0.2);
-    std::unordered_map<std::uint64_t, akruti::SimplexCache> simplex_caches_{};
-    BasicTensorBroadphase<StoragePolicy, CompPolicy>         tensor_broadphase_{};
+    kosha::LRUCache<std::uint64_t, akruti::SimplexCache>     simplex_caches_{8192};
+    TensorBroadphaseType                                     tensor_broadphase_{};
 
     void run(World& w, StepContext ctx) {
         // Automatic platform & workload threshold: for > 200 entities, leverage TensorBroadphase
@@ -170,7 +173,7 @@ struct BasicCollisionSystem {
             const std::size_t N = indices.size();
 
             // Dynamic grid dimensions
-            constexpr float cs = TensorBroadphase::kCellSize;
+            constexpr float cs = TensorBroadphaseType::kCellSize;
             int g_cols = 80, g_rows = 60;
             int total_cells = g_cols * g_rows;
             if (tensor_broadphase_.head.size() != static_cast<std::size_t>(total_cells)) {
@@ -187,47 +190,69 @@ struct BasicCollisionSystem {
                 tensor_broadphase_.head[cell] = static_cast<int>(i);
             }
 
+            // 4-Color Checkerboard Domain Decomposition for lock-free Pravaha task parallelism
+            // Color formula: (cx % 2) + 2 * (cy % 2) in [0, 3]
+            // Cells of the same color never share boundaries or neighbor links!
+            containers::dynamic::SmallVector<std::uint32_t, 1024> color_buckets[4];
             for (std::size_t i = 0; i < N; ++i) {
-                const float ra = r_ptr[i];
-                const float ax = s_ptr[i * 4 + 0];
-                const float ay = s_ptr[i * 4 + 1];
-                std::uint32_t ea_idx = indices[i];
-                ShapeRef* sa = w.get_by_index<ShapeRef>(ea_idx);
-                Transform* ta = w.get_by_index<Transform>(ea_idx);
-                if (!sa || !ta) continue;
+                int cx = std::clamp(static_cast<int>(s_ptr[i * 4 + 0] / cs), 0, g_cols - 1);
+                int cy = std::clamp(static_cast<int>(s_ptr[i * 4 + 1] / cs), 0, g_rows - 1);
+                int color = (cx & 1) | ((cy & 1) << 1);
+                color_buckets[color].push_back(static_cast<std::uint32_t>(i));
+            }
 
-                int cx = std::clamp(static_cast<int>(ax / cs), 0, g_cols - 1);
-                int cy = std::clamp(static_cast<int>(ay / cs), 0, g_rows - 1);
+            // Execute 4 disjoint non-interfering parallel passes across all CPU cores
+            for (int color = 0; color < 4; ++color) {
+                const auto& bucket = color_buckets[color];
+                if (bucket.empty()) continue;
 
-                for (int dy = -1; dy <= 1; ++dy) {
-                    int ny = cy + dy;
-                    if (ny < 0 || ny >= g_rows) continue;
-                    for (int dx = -1; dx <= 1; ++dx) {
-                        int nx = cx + dx;
-                        if (nx < 0 || nx >= g_cols) continue;
+                ctx.executor.for_range(bucket.size(), [&](std::size_t item_idx) {
+                    std::size_t i = bucket[item_idx];
+                    const float ra = r_ptr[i];
+                    const float ax = s_ptr[i * 4 + 0];
+                    const float ay = s_ptr[i * 4 + 1];
+                    std::uint32_t ea_idx = indices[i];
+                    ShapeRef* sa = w.get_by_index<ShapeRef>(ea_idx);
+                    Transform* ta = w.get_by_index<Transform>(ea_idx);
+                    if (!sa || !ta) return;
 
-                        int cell = ny * g_cols + nx;
-                        for (int j = tensor_broadphase_.head[cell]; j != -1; j = tensor_broadphase_.next[j]) {
-                            if (static_cast<std::size_t>(j) <= i) continue;
+                    int cx = std::clamp(static_cast<int>(ax / cs), 0, g_cols - 1);
+                    int cy = std::clamp(static_cast<int>(ay / cs), 0, g_rows - 1);
 
-                            const float rb = r_ptr[j];
-                            const float bx = s_ptr[j * 4 + 0];
-                            const float by = s_ptr[j * 4 + 1];
-                            float dist_sq = (bx - ax) * (bx - ax) + (by - ay) * (by - ay);
-                            float min_d = ra + rb;
-                            if (dist_sq >= min_d * min_d) continue;
+                    for (int dy = -1; dy <= 1; ++dy) {
+                        int ny = cy + dy;
+                        if (ny < 0 || ny >= g_rows) continue;
+                        for (int dx = -1; dx <= 1; ++dx) {
+                            int nx = cx + dx;
+                            if (nx < 0 || nx >= g_cols) continue;
 
-                            std::uint32_t eb_idx = indices[j];
-                            ShapeRef* sb = w.get_by_index<ShapeRef>(eb_idx);
-                            Transform* tb = w.get_by_index<Transform>(eb_idx);
-                            if (!sb || !tb) continue;
+                            int cell = ny * g_cols + nx;
+                            for (int j = tensor_broadphase_.head[cell]; j != -1; j = tensor_broadphase_.next[j]) {
+                                if (static_cast<std::size_t>(j) <= i) continue;
 
-                            const std::uint64_t key = (static_cast<std::uint64_t>(ea_idx) << 32) | static_cast<std::uint64_t>(eb_idx);
-                            auto& cache = simplex_caches_[key];
-                            narrow(ctx, ea_idx, eb_idx, sa->shape, ta->position, sb->shape, tb->position, cache);
+                                const float rb = r_ptr[j];
+                                const float bx = s_ptr[j * 4 + 0];
+                                const float by = s_ptr[j * 4 + 1];
+                                float dist_sq = (bx - ax) * (bx - ax) + (by - ay) * (by - ay);
+                                float min_d = ra + rb;
+                                if (dist_sq >= min_d * min_d) continue;
+
+                                std::uint32_t eb_idx = indices[j];
+                                ShapeRef* sb = w.get_by_index<ShapeRef>(eb_idx);
+                                Transform* tb = w.get_by_index<Transform>(eb_idx);
+                                if (!sb || !tb) continue;
+
+                                const std::uint64_t key = (static_cast<std::uint64_t>(ea_idx) << 32) | static_cast<std::uint64_t>(eb_idx);
+                                akruti::SimplexCache* cache = simplex_caches_.get_ref(key);
+                                if (!cache) {
+                                    (void)simplex_caches_.put(key, akruti::SimplexCache{});
+                                    cache = simplex_caches_.get_ref(key);
+                                }
+                                narrow(ctx, ea_idx, eb_idx, sa->shape, ta->position, sb->shape, tb->position, cache ? *cache : dummy_cache);
+                            }
                         }
                     }
-                }
+                }, 64);
             }
             return;
         }
@@ -250,11 +275,18 @@ struct BasicCollisionSystem {
                 if (!sb || !tb) return;
 
                 const std::uint64_t key = (static_cast<std::uint64_t>(ea.index) << 32) | static_cast<std::uint64_t>(other);
-                auto& cache = simplex_caches_[key];
-                narrow(ctx, ea.index, other, sa.shape, ta.position, sb->shape, tb->position, cache);
+                akruti::SimplexCache* cache = simplex_caches_.get_ref(key);
+                if (!cache) {
+                    (void)simplex_caches_.put(key, akruti::SimplexCache{});
+                    cache = simplex_caches_.get_ref(key);
+                }
+                narrow(ctx, ea.index, other, sa.shape, ta.position, sb->shape, tb->position, cache ? *cache : dummy_cache);
             });
         });
     }
+
+private:
+    akruti::SimplexCache dummy_cache{};
 
 private:
     static void narrow(StepContext& ctx, std::uint32_t a, std::uint32_t b,

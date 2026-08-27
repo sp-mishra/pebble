@@ -200,36 +200,55 @@ static float bounding_radius(const GatiBody& b) {
     }
 }
 
-using AkrutiShapeVar = std::variant<akruti::Circle, akruti::Box, akruti::OrientedBox, akruti::Capsule, akruti::Triangle, akruti::RoundedBox, akruti::Sector, akruti::Segment, akruti::ConvexPoly<kPolyMax>, akruti::RoundedPoly<kPolyMax>>;
+struct BodyShapeData {
+    akruti::ShapeType type;
+    union {
+        akruti::Circle circle;
+        akruti::Box box;
+        akruti::OrientedBox obb;
+        akruti::Capsule capsule;
+        akruti::Triangle triangle;
+        akruti::RoundedBox rounded_box;
+        akruti::Sector sector;
+        akruti::Segment segment;
+        akruti::ConvexPoly<kPolyMax> poly;
+        akruti::RoundedPoly<kPolyMax> rounded_poly;
+    };
 
-static AkrutiShapeVar get_akruti_shape(const GatiBody& b) {
+    BodyShapeData() : type(akruti::ShapeType::Circle), circle() {}
+};
+
+static BodyShapeData extract_body_shape(const GatiBody& b) {
+    BodyShapeData out;
     const akruti::Vec pos{b.pos[0], b.pos[1]};
     const float s = b.size;
+
     switch (b.kind) {
         case ShapeKind::Circle:
-            return akruti::Circle{pos, s};
-        case ShapeKind::Segment: {
-            const float c = std::cos(b.rot), sn = std::sin(b.rot);
-            return akruti::Segment{
-                akruti::Vec{pos.x - s * c, pos.y - s * sn},
-                akruti::Vec{pos.x + s * c, pos.y + s * sn}
-            };
-        }
+            out.type = akruti::ShapeType::Circle;
+            out.circle = akruti::Circle{pos, s};
+            break;
         case ShapeKind::Box:
-            return akruti::Box{pos, akruti::Vec{s, s}};
-        case ShapeKind::RoundedBox:
-            return akruti::RoundedBox{pos, akruti::Vec{s, s}, s * 0.35f};
+            out.type = akruti::ShapeType::Box;
+            out.box = akruti::Box{pos, akruti::Vec{s, s}};
+            break;
         case ShapeKind::Capsule: {
-            const float c = std::cos(b.rot);
-            const float sn = std::sin(b.rot);
+            out.type = akruti::ShapeType::Capsule;
+            const float c = std::cos(b.rot), sn = std::sin(b.rot);
             const float cap_len = s * 0.7f;
-            return akruti::Capsule{
+            out.capsule = akruti::Capsule{
                 akruti::Vec{pos.x - cap_len * c, pos.y - cap_len * sn},
                 akruti::Vec{pos.x + cap_len * c, pos.y + cap_len * sn},
                 s * 0.6f
             };
+            break;
         }
+        case ShapeKind::OrientedBox:
+            out.type = akruti::ShapeType::OrientedBox;
+            out.obb = akruti::OrientedBox::from_angle(pos, akruti::Vec{s, s * 0.75f}, b.rot);
+            break;
         case ShapeKind::Triangle: {
+            out.type = akruti::ShapeType::Triangle;
             const float c = std::cos(b.rot), sn = std::sin(b.rot);
             const float c1 = std::cos(b.rot + 2.0943951f), s1 = std::sin(b.rot + 2.0943951f);
             const float c2 = std::cos(b.rot + 4.1887902f), s2 = std::sin(b.rot + 4.1887902f);
@@ -239,84 +258,81 @@ static AkrutiShapeVar get_akruti_shape(const GatiBody& b) {
             if ((v1.x - v0.x) * (v2.y - v0.y) - (v1.y - v0.y) * (v2.x - v0.x) < 0) {
                 std::swap(v1, v2);
             }
-            return akruti::Triangle{v0, v1, v2};
+            out.triangle = akruti::Triangle{v0, v1, v2};
+            break;
         }
-        case ShapeKind::OrientedBox: {
-            return akruti::OrientedBox::from_angle(pos, akruti::Vec{s, s * 0.75f}, b.rot);
-        }
+        case ShapeKind::RoundedBox:
+            out.type = akruti::ShapeType::RoundedBox;
+            out.rounded_box = akruti::RoundedBox{pos, akruti::Vec{s, s}, s * 0.35f};
+            break;
         case ShapeKind::Sector: {
+            out.type = akruti::ShapeType::Sector;
             const akruti::Vec dir{std::cos(b.rot), std::sin(b.rot)};
-            return akruti::Sector::from_direction(pos, s * 1.4f, 0.7f, dir);
+            out.sector = akruti::Sector::from_direction(pos, s * 1.4f, 0.7f, dir);
+            break;
+        }
+        case ShapeKind::Segment: {
+            out.type = akruti::ShapeType::Segment;
+            const float c = std::cos(b.rot), sn = std::sin(b.rot);
+            out.segment = akruti::Segment{
+                akruti::Vec{pos.x - s * c, pos.y - s * sn},
+                akruti::Vec{pos.x + s * c, pos.y + s * sn}
+            };
+            break;
         }
         case ShapeKind::Pentagon:
         case ShapeKind::Hexagon:
         case ShapeKind::Trapezoid:
         case ShapeKind::ConvexBlob: {
+            out.type = akruti::ShapeType::ConvexPoly;
             std::array<akruti::Vec, kPolyMax> wv{};
             int n = 0;
             poly_verts(b, wv, n);
-            akruti::ConvexPoly<kPolyMax> cp;
-            for (int i = 0; i < n; ++i) (void)cp.verts.push_back(wv[i]);
-            return cp;
+            out.poly = akruti::ConvexPoly<kPolyMax>{};
+            for (int i = 0; i < n; ++i) (void)out.poly.verts.push_back(wv[i]);
+            break;
         }
         case ShapeKind::StarPoly: {
+            out.type = akruti::ShapeType::RoundedPoly;
             std::array<akruti::Vec, kPolyMax> wv{};
             int n = 0;
             poly_verts(b, wv, n);
-            akruti::RoundedPoly<kPolyMax> rp;
-            rp.radius = b.corner;
-            for (int i = 0; i < n; ++i) (void)rp.base.verts.push_back(wv[i]);
-            return rp;
+            out.rounded_poly = akruti::RoundedPoly<kPolyMax>{};
+            out.rounded_poly.radius = b.corner;
+            for (int i = 0; i < n; ++i) (void)out.rounded_poly.base.verts.push_back(wv[i]);
+            break;
         }
     }
-    return akruti::Circle{pos, s};
+    return out;
 }
 
+#include "containers/cache/kosha.hpp"
+
+// Persistent Robin-Hood LRU simplex caches for warm-started GJK/EPA continuous frame evaluation
+static kosha::LRUCache<std::uint64_t, akruti::SimplexCache> g_simplex_caches{16384};
+
 static akruti::Manifold test_body_collision(const GatiBody& a, const GatiBody& b) {
-    auto sa = get_akruti_shape(a);
-    auto sb = get_akruti_shape(b);
-    return std::visit([&](const auto& shape_a) -> akruti::Manifold {
-        return std::visit([&](const auto& shape_b) -> akruti::Manifold {
-            using TypeA = std::decay_t<decltype(shape_a)>;
-            using TypeB = std::decay_t<decltype(shape_b)>;
-            if constexpr (std::is_same_v<TypeA, akruti::Circle> && std::is_same_v<TypeB, akruti::Circle>) {
-                return akruti::collide_circle_circle(shape_a, shape_b);
-            } else if constexpr (std::is_same_v<TypeA, akruti::Circle> && std::is_same_v<TypeB, akruti::Capsule>) {
-                return akruti::collide_circle_capsule(shape_a, shape_b);
-            } else if constexpr (std::is_same_v<TypeA, akruti::Capsule> && std::is_same_v<TypeB, akruti::Circle>) {
-                auto m = akruti::collide_circle_capsule(shape_b, shape_a);
-                if (m.hit) m.normal = -m.normal;
-                return m;
-            } else if constexpr (std::is_same_v<TypeA, akruti::Circle> && std::is_same_v<TypeB, akruti::Box>) {
-                return akruti::collide_circle_box(shape_a, shape_b);
-            } else if constexpr (std::is_same_v<TypeA, akruti::Box> && std::is_same_v<TypeB, akruti::Circle>) {
-                auto m = akruti::collide_circle_box(shape_b, shape_a);
-                if (m.hit) m.normal = -m.normal;
-                return m;
-            } else if constexpr (std::is_same_v<TypeA, akruti::OrientedBox> && std::is_same_v<TypeB, akruti::OrientedBox>) {
-                return akruti::collide_obb_obb(shape_a, shape_b);
-            } else if constexpr (std::is_same_v<TypeA, akruti::Box> && std::is_same_v<TypeB, akruti::Box>) {
-                return akruti::collide_box_box(shape_a, shape_b);
-            } else if constexpr (std::is_same_v<TypeA, akruti::Capsule> && std::is_same_v<TypeB, akruti::Capsule>) {
-                return akruti::collide_capsule_capsule(shape_a, shape_b);
-            } else if constexpr (std::is_same_v<TypeA, akruti::Capsule> && std::is_same_v<TypeB, akruti::OrientedBox>) {
-                return akruti::collide_capsule_obb(shape_a, shape_b);
-            } else if constexpr (std::is_same_v<TypeA, akruti::OrientedBox> && std::is_same_v<TypeB, akruti::Capsule>) {
-                auto m = akruti::collide_capsule_obb(shape_b, shape_a);
-                if (m.hit) m.normal = -m.normal;
-                return m;
-            } else {
-                auto m = akruti::collide_gjk_warm_started(shape_a, shape_b);
-                if (m.hit && m.depth > 0.0f) {
-                    pebble::math::vec2 delta = b.pos - a.pos;
-                    if (m.normal.x * delta[0] + m.normal.y * delta[1] < 0.0f) {
-                        m.normal = -m.normal;
-                    }
-                }
-                return m;
-            }
-        }, sb);
-    }, sa);
+    const auto sa = extract_body_shape(a);
+    const auto sb = extract_body_shape(b);
+
+    const void* ptr_a = &sa.circle;
+    const void* ptr_b = &sb.circle;
+
+    const std::uint64_t key = (static_cast<std::uint64_t>(a.ent.index) << 32) | static_cast<std::uint64_t>(b.ent.index);
+    akruti::SimplexCache* cache = g_simplex_caches.get_ref(key);
+    if (!cache) {
+        (void)g_simplex_caches.put(key, akruti::SimplexCache{});
+        cache = g_simplex_caches.get_ref(key);
+    }
+
+    auto m = akruti::collide_matrix<kPolyMax>(sa.type, ptr_a, sb.type, ptr_b, cache);
+    if (m.hit && m.depth > 0.0f) {
+        pebble::math::vec2 delta = b.pos - a.pos;
+        if (m.normal.x * delta[0] + m.normal.y * delta[1] < 0.0f) {
+            m.normal = -m.normal;
+        }
+    }
+    return m;
 }
 
 static kalpana::Path body_shape_path(const GatiBody& b) {
@@ -657,65 +673,77 @@ static void step_gati(float dt) {
         // 2. Spatial Broadphase Acceleration
         g_grid.build(g_tensor_state.state, N);
 
-        // 3. Iterative non-penetration solver with tensor-accelerated candidate testing
+        // 3. Domain-Decomposed 4-Color Checkerboard Iterative PBD Solver
+        // Cells of color c = (cx & 1) | ((cy & 1) << 1) are mutually non-adjacent!
+        std::vector<int> color_buckets[4];
+        for (int i = 0; i < static_cast<int>(N); ++i) {
+            int cx = std::clamp(static_cast<int>(s_ptr[i * 4 + 0] / SpatialHashGrid::kCellSize), 0, SpatialHashGrid::kGridCols - 1);
+            int cy = std::clamp(static_cast<int>(s_ptr[i * 4 + 1] / SpatialHashGrid::kCellSize), 0, SpatialHashGrid::kGridRows - 1);
+            int color = (cx & 1) | ((cy & 1) << 1);
+            color_buckets[color].push_back(i);
+        }
+
         constexpr int kPbdIterations = 4;
         for (int pbd = 0; pbd < kPbdIterations; ++pbd) {
-            for (int i = 0; i < static_cast<int>(N); ++i) {
-                const float ra = r_ptr[i];
-                const float ax = s_ptr[i * 4 + 0];
-                const float ay = s_ptr[i * 4 + 1];
+            for (int color = 0; color < 4; ++color) {
+                const auto& bucket = color_buckets[color];
+                for (int idx_k = 0; idx_k < static_cast<int>(bucket.size()); ++idx_k) {
+                    int i = bucket[idx_k];
+                    const float ra = r_ptr[i];
+                    const float ax = s_ptr[i * 4 + 0];
+                    const float ay = s_ptr[i * 4 + 1];
 
-                int cx = std::clamp(static_cast<int>(ax / SpatialHashGrid::kCellSize), 0, SpatialHashGrid::kGridCols - 1);
-                int cy = std::clamp(static_cast<int>(ay / SpatialHashGrid::kCellSize), 0, SpatialHashGrid::kGridRows - 1);
+                    int cx = std::clamp(static_cast<int>(ax / SpatialHashGrid::kCellSize), 0, SpatialHashGrid::kGridCols - 1);
+                    int cy = std::clamp(static_cast<int>(ay / SpatialHashGrid::kCellSize), 0, SpatialHashGrid::kGridRows - 1);
 
-                for (int dy = -1; dy <= 1; ++dy) {
-                    int ny = cy + dy;
-                    if (ny < 0 || ny >= SpatialHashGrid::kGridRows) continue;
+                    for (int dy = -1; dy <= 1; ++dy) {
+                        int ny = cy + dy;
+                        if (ny < 0 || ny >= SpatialHashGrid::kGridRows) continue;
 
-                    for (int dx = -1; dx <= 1; ++dx) {
-                        int nx = cx + dx;
-                        if (nx < 0 || nx >= SpatialHashGrid::kGridCols) continue;
+                        for (int dx = -1; dx <= 1; ++dx) {
+                            int nx = cx + dx;
+                            if (nx < 0 || nx >= SpatialHashGrid::kGridCols) continue;
 
-                        int cell = ny * SpatialHashGrid::kGridCols + nx;
-                        for (int j = g_grid.head[cell]; j != -1; j = g_grid.next[j]) {
-                            if (j <= i) continue;
+                            int cell = ny * SpatialHashGrid::kGridCols + nx;
+                            for (int j = g_grid.head[cell]; j != -1; j = g_grid.next[j]) {
+                                if (j <= i) continue;
 
-                            const float rb = r_ptr[j];
-                            const float bx = s_ptr[j * 4 + 0];
-                            const float by = s_ptr[j * 4 + 1];
+                                const float rb = r_ptr[j];
+                                const float bx = s_ptr[j * 4 + 0];
+                                const float by = s_ptr[j * 4 + 1];
 
-                            float d_x = bx - ax;
-                            float d_y = by - ay;
-                            float dist_sq = d_x * d_x + d_y * d_y;
-                            float min_d = ra + rb;
-                            if (dist_sq >= min_d * min_d) continue;
+                                float d_x = bx - ax;
+                                float d_y = by - ay;
+                                float dist_sq = d_x * d_x + d_y * d_y;
+                                float min_d = ra + rb;
+                                if (dist_sq >= min_d * min_d) continue;
 
-                            // Sync current position into bodies for Akruti narrowphase
-                            app.bodies[i].pos = pebble::math::vec2(s_ptr[i * 4 + 0], s_ptr[i * 4 + 1]);
-                            app.bodies[j].pos = pebble::math::vec2(s_ptr[j * 4 + 0], s_ptr[j * 4 + 1]);
-                            app.bodies[i].rot = rot_ptr[i * 2 + 0];
-                            app.bodies[j].rot = rot_ptr[j * 2 + 0];
+                                // Sync current position into bodies for Akruti narrowphase
+                                app.bodies[i].pos = pebble::math::vec2(s_ptr[i * 4 + 0], s_ptr[i * 4 + 1]);
+                                app.bodies[j].pos = pebble::math::vec2(s_ptr[j * 4 + 0], s_ptr[j * 4 + 1]);
+                                app.bodies[i].rot = rot_ptr[i * 2 + 0];
+                                app.bodies[j].rot = rot_ptr[j * 2 + 0];
 
-                            auto manifold = test_body_collision(app.bodies[i], app.bodies[j]);
-                            if (!manifold.hit || manifold.depth <= 0.0f) continue;
+                                auto manifold = test_body_collision(app.bodies[i], app.bodies[j]);
+                                if (!manifold.hit || manifold.depth <= 0.0f) continue;
 
-                            float nx_norm = manifold.normal.x;
-                            float ny_norm = manifold.normal.y;
-                            float len_n = std::sqrt(nx_norm * nx_norm + ny_norm * ny_norm);
-                            if (len_n > 1e-5f) {
-                                float inv_l = 1.0f / len_n;
-                                nx_norm *= inv_l;
-                                ny_norm *= inv_l;
-                            } else {
-                                float dist = std::sqrt(dist_sq);
-                                if (dist > 1e-4f) {
-                                    nx_norm = d_x / dist;
-                                    ny_norm = d_y / dist;
+                                float nx_norm = manifold.normal.x;
+                                float ny_norm = manifold.normal.y;
+                                float len_n = std::sqrt(nx_norm * nx_norm + ny_norm * ny_norm);
+                                if (len_n > 1e-5f) {
+                                    float inv_l = 1.0f / len_n;
+                                    nx_norm *= inv_l;
+                                    ny_norm *= inv_l;
                                 } else {
-                                    nx_norm = 1.0f;
-                                    ny_norm = 0.0f;
+                                    float dist = std::sqrt(dist_sq);
+                                    if (dist > 1e-4f) {
+                                        nx_norm = d_x / dist;
+                                        ny_norm = d_y / dist;
+                                    } else {
+                                        nx_norm = 1.0f;
+                                        ny_norm = 0.0f;
+                                    }
                                 }
-                            }
 
                             float separation = (manifold.depth + 0.05f) * 0.5f;
                             s_ptr[i * 4 + 0] -= nx_norm * separation;
@@ -768,7 +796,8 @@ static void step_gati(float dt) {
                 }
             }
         }
-    }
+    } // pbd loop
+} // step loop
 
     g_tensor_state.sync_to_bodies(app.bodies);
 
