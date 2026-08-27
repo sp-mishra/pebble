@@ -615,27 +615,21 @@
          */
         template<Float T>
         inline std::array<T, kSize> lRGB_to_R(std::array<T, 3> lRGB, const Config &cfg) noexcept {
-            // JS:
-            // w = min(lRGB)
-            // lRGB -= w
-            // c = min(g,b); m = min(r,b); y = min(r,g)
-            // r = max(0, min(r-b, r-g))
-            // g = max(0, min(g-b, g-r))
-            // b = max(0, min(b-g, b-r))
+            // Canonical subtractive primary/secondary decomposition
             T w = std::min({lRGB[0], lRGB[1], lRGB[2]});
-            T r_rem = lRGB[0] - w;
-            T g_rem = lRGB[1] - w;
-            T b_rem = lRGB[2] - w;
+            T r_rem = std::max(T(0), lRGB[0] - w);
+            T g_rem = std::max(T(0), lRGB[1] - w);
+            T b_rem = std::max(T(0), lRGB[2] - w);
 
-            // Subtractive secondary filters (absorb one primary each)
+            // Secondaries (two channels high, one zero)
             const T c = std::min(g_rem, b_rem);
             const T m = std::min(r_rem, b_rem);
             const T y = std::min(r_rem, g_rem);
 
-            // Primary residuals
-            const T rr = std::max(T(0), r_rem - m - y);
-            const T gg = std::max(T(0), g_rem - c - y);
-            const T bb = std::max(T(0), b_rem - c - m);
+            // Pure single-channel primary residuals
+            const T rr = r_rem - m - y + std::min(m, y);
+            const T gg = g_rem - c - y + std::min(c, y);
+            const T bb = b_rem - c - m + std::min(c, m);
 
             std::array<T, kSize> R{};
             for (std::size_t i = 0; i < kSize; ++i) {
@@ -691,7 +685,6 @@
                 XYZ_ = R_to_XYZ(R_);
             }
 
-            /** Construct directly from reflectance bands (38-band). */
             explicit Color(const std::array<T, kSize> &R, const Config &cfg = {}) : cfg_(cfg), R_(R) {
                 XYZ_ = R_to_XYZ(R_);
                 lRGB_ = XYZ_to_lRGB(XYZ_);

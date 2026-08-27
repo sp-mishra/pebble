@@ -41,63 +41,63 @@ namespace detail {
 // Decomposes any RGB color into Cyan, Magenta, Yellow, Red, Green, Blue, White primaries.
 // Basis spectra across 16 bands (380nm - 730nm) calibrated for pigment reflectance:
 
-[[nodiscard]] inline Spectrum spectrum_c() noexcept { // Cyan (reflects blue+green, absorbs red)
+[[nodiscard]] inline Spectrum spectrum_c() noexcept { // Cyan (green + blue)
     Spectrum s{};
     for (std::size_t i = 0; i < kBands; ++i) {
         float nm = band_nm(i);
-        s[i] = nm <= 560.0f ? 0.92f : 0.04f;
+        s[i] = nm <= 570.0f ? 1.0f : 0.0f;
     }
     return s;
 }
 
-[[nodiscard]] inline Spectrum spectrum_m() noexcept { // Magenta (reflects blue+red, absorbs green)
+[[nodiscard]] inline Spectrum spectrum_m() noexcept { // Magenta (blue + red)
     Spectrum s{};
     for (std::size_t i = 0; i < kBands; ++i) {
         float nm = band_nm(i);
-        s[i] = (nm <= 480.0f || nm >= 600.0f) ? 0.90f : 0.05f;
+        s[i] = (nm <= 485.0f || nm >= 590.0f) ? 1.0f : 0.0f;
     }
     return s;
 }
 
-[[nodiscard]] inline Spectrum spectrum_y() noexcept { // Yellow (reflects green+red, absorbs blue)
+[[nodiscard]] inline Spectrum spectrum_y() noexcept { // Yellow (red + green)
     Spectrum s{};
     for (std::size_t i = 0; i < kBands; ++i) {
         float nm = band_nm(i);
-        s[i] = nm >= 510.0f ? 0.96f : 0.03f;
+        s[i] = nm >= 500.0f ? 1.0f : 0.0f;
     }
     return s;
 }
 
-[[nodiscard]] inline Spectrum spectrum_r() noexcept { // Red (reflects long wavelengths)
+[[nodiscard]] inline Spectrum spectrum_r() noexcept { // Red
     Spectrum s{};
     for (std::size_t i = 0; i < kBands; ++i) {
         float nm = band_nm(i);
-        s[i] = nm >= 595.0f ? 0.94f : 0.02f;
+        s[i] = nm >= 590.0f ? 1.0f : 0.0f;
     }
     return s;
 }
 
-[[nodiscard]] inline Spectrum spectrum_g() noexcept { // Green (reflects mid wavelengths)
+[[nodiscard]] inline Spectrum spectrum_g() noexcept { // Green
     Spectrum s{};
     for (std::size_t i = 0; i < kBands; ++i) {
         float nm = band_nm(i);
-        s[i] = (nm >= 490.0f && nm <= 570.0f) ? 0.92f : 0.03f;
+        s[i] = (nm >= 500.0f && nm <= 570.0f) ? 1.0f : 0.0f;
     }
     return s;
 }
 
-[[nodiscard]] inline Spectrum spectrum_b() noexcept { // Blue (reflects short wavelengths)
+[[nodiscard]] inline Spectrum spectrum_b() noexcept { // Blue
     Spectrum s{};
     for (std::size_t i = 0; i < kBands; ++i) {
         float nm = band_nm(i);
-        s[i] = nm <= 480.0f ? 0.92f : 0.02f;
+        s[i] = nm <= 485.0f ? 1.0f : 0.0f;
     }
     return s;
 }
 
-[[nodiscard]] inline Spectrum spectrum_w() noexcept { // White (full diffuse reflectance)
+[[nodiscard]] inline Spectrum spectrum_w() noexcept { // White
     Spectrum s{};
-    for (std::size_t i = 0; i < kBands; ++i) s[i] = 0.98f;
+    for (std::size_t i = 0; i < kBands; ++i) s[i] = 1.0f;
     return s;
 }
 
@@ -107,39 +107,76 @@ namespace detail {
 
 } // namespace detail
 
-// Converts RGB color to physical Spectral Reflectance Curve using km38 model
+// Converts RGB color to physical Spectral Reflectance Curve using 7-primary decomposition
 [[nodiscard]] inline Spectrum from_linear_rgb(float r, float g, float b) noexcept {
-    akruti::spectral::km38::Config cfg;
-    std::array<double, 3> srgb_255{
-        double(kalpana::detail::clamp01(r) * 255.0f),
-        double(kalpana::detail::clamp01(g) * 255.0f),
-        double(kalpana::detail::clamp01(b) * 255.0f)
-    };
-    akruti::spectral::km38::Color<double> km_color(srgb_255, cfg);
-    const auto& R_38 = km_color.R();
+    r = kalpana::detail::clamp01(r);
+    g = kalpana::detail::clamp01(g);
+    b = kalpana::detail::clamp01(b);
+
+    const float w = std::min({r, g, b});
+    const float r_rem = r - w;
+    const float g_rem = g - w;
+    const float b_rem = b - w;
+
+    // Subtractive secondary filters
+    const float c = std::min(g_rem, b_rem);
+    const float m = std::min(r_rem, b_rem);
+    const float y = std::min(r_rem, g_rem);
+
+    // Primary residuals
+    const float rr = r_rem - m - y + std::min(m, y);
+    const float gg = g_rem - c - y + std::min(c, y);
+    const float bb = b_rem - c - m + std::min(c, m);
+
+    const auto spec_c = detail::spectrum_c();
+    const auto spec_m = detail::spectrum_m();
+    const auto spec_y = detail::spectrum_y();
+    const auto spec_r = detail::spectrum_r();
+    const auto spec_g = detail::spectrum_g();
+    const auto spec_b = detail::spectrum_b();
+    const auto spec_w = detail::spectrum_w();
 
     Spectrum s{};
     for (std::size_t i = 0; i < kBands; ++i) {
-        std::size_t idx = (i * (akruti::spectral::km38::kSize - 1)) / (kBands - 1);
-        s[i] = static_cast<float>(R_38[idx]);
+        float val = w * spec_w[i] +
+                    c * spec_c[i] +
+                    m * spec_m[i] +
+                    y * spec_y[i] +
+                    rr * spec_r[i] +
+                    gg * spec_g[i] +
+                    bb * spec_b[i];
+        s[i] = kalpana::detail::clamp01(val);
     }
     return s;
 }
 
-// Converts Reflectance Spectrum back to RGB via km38 calibrated CMF integration
+// Converts Reflectance Spectrum back to RGB via 16-band tristimulus integration
 inline void to_linear_rgb(const Spectrum& s, float& r, float& g, float& b) noexcept {
-    akruti::spectral::km38::Config cfg;
-    std::array<double, akruti::spectral::km38::kSize> R_38{};
-    for (std::size_t i = 0; i < akruti::spectral::km38::kSize; ++i) {
-        std::size_t idx = (i * (kBands - 1)) / (akruti::spectral::km38::kSize - 1);
-        R_38[i] = static_cast<double>(s[i]);
-    }
-    akruti::spectral::km38::Color<double> km_color(R_38, cfg);
-    const auto& srgb = km_color.sRGB();
+    // Red: average over long wavelength bands (nm >= 590nm)
+    // Green: average over mid wavelength bands (500nm <= nm <= 570nm)
+    // Blue: average over short wavelength bands (nm <= 485nm)
+    float r_acc = 0.0f, g_acc = 0.0f, b_acc = 0.0f;
+    int r_cnt = 0, g_cnt = 0, b_cnt = 0;
 
-    r = kalpana::detail::clamp01(static_cast<float>(srgb[0]) / 255.0f);
-    g = kalpana::detail::clamp01(static_cast<float>(srgb[1]) / 255.0f);
-    b = kalpana::detail::clamp01(static_cast<float>(srgb[2]) / 255.0f);
+    for (std::size_t i = 0; i < kBands; ++i) {
+        float nm = detail::band_nm(i);
+        if (nm >= 590.0f) {
+            r_acc += s[i];
+            r_cnt++;
+        }
+        if (nm >= 500.0f && nm <= 570.0f) {
+            g_acc += s[i];
+            g_cnt++;
+        }
+        if (nm <= 485.0f) {
+            b_acc += s[i];
+            b_cnt++;
+        }
+    }
+
+    r = kalpana::detail::clamp01(r_cnt > 0 ? (r_acc / float(r_cnt)) : 0.0f);
+    g = kalpana::detail::clamp01(g_cnt > 0 ? (g_acc / float(g_cnt)) : 0.0f);
+    b = kalpana::detail::clamp01(b_cnt > 0 ? (b_acc / float(b_cnt)) : 0.0f);
 }
 
 // Kubelka–Munk single-constant absorption/scattering ratio from reflectance.
@@ -169,12 +206,13 @@ inline void to_linear_rgb(const Spectrum& s, float& r, float& g, float& b) noexc
     for (const auto& [c, w] : pigments) {
         wsum += w;
         asum += w * c.a;
-        std::array<double, 3> srgb_255{
-            double(kalpana::detail::clamp01(c.r) * 255.0f),
-            double(kalpana::detail::clamp01(c.g) * 255.0f),
-            double(kalpana::detail::clamp01(c.b) * 255.0f)
+        std::array<double, 3> lrgb{
+            double(kalpana::detail::clamp01(c.r)),
+            double(kalpana::detail::clamp01(c.g)),
+            double(kalpana::detail::clamp01(c.b))
         };
-        colors_storage.emplace_back(srgb_255, cfg);
+        auto R_38 = akruti::spectral::km38::lRGB_to_R(lrgb, cfg);
+        colors_storage.emplace_back(R_38, cfg);
     }
 
     if (wsum <= 0.0f) return colors::transparent();
@@ -187,13 +225,14 @@ inline void to_linear_rgb(const Spectrum& s, float& r, float& g, float& b) noexc
     }
 
     auto out = akruti::spectral::km38::mix<double>(std::span<const akruti::spectral::km38::MixItem<double>>(items.data(), items.size()), cfg);
-    const auto& srgb = out.sRGB();
+    auto xyz = akruti::spectral::km38::R_to_XYZ(out.R());
+    auto lrgb = akruti::spectral::km38::XYZ_to_lRGB(xyz);
 
     float out_a = (wsum > 0.0f) ? (asum / wsum) : 1.0f;
     return Color{
-        kalpana::detail::clamp01(static_cast<float>(srgb[0]) / 255.0f),
-        kalpana::detail::clamp01(static_cast<float>(srgb[1]) / 255.0f),
-        kalpana::detail::clamp01(static_cast<float>(srgb[2]) / 255.0f),
+        kalpana::detail::clamp01(static_cast<float>(lrgb[0])),
+        kalpana::detail::clamp01(static_cast<float>(lrgb[1])),
+        kalpana::detail::clamp01(static_cast<float>(lrgb[2])),
         kalpana::detail::clamp01(out_a)
     };
 }
