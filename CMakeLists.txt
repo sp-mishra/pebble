@@ -594,7 +594,7 @@ endif()
 # ---------------------------------------------------------------------------
 # Standalone Showcase Executables
 # ---------------------------------------------------------------------------
-foreach(_showcase pebble_akriti pebble_gati pebble_prakriti pebble_gati_prakriti)
+foreach(_showcase pebble_akriti pebble_gati pebble_prakriti pebble_gati_prakriti pebble_tanks)
     if (EXISTS "${CMAKE_SOURCE_DIR}/src/app/${_showcase}.cpp")
         set(_showcase_srcs
             src/app/${_showcase}.cpp
