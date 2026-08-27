@@ -108,6 +108,13 @@ struct DensitySolver {
                     dpi = dpi - n_inter * (Scalar(0.04) * h);
                 }
 
+                // Numerical stability: Clamp maximum position delta to prevent explosions
+                const Scalar dp_len_sq = pebble::math::length_sq(dpi);
+                const Scalar max_dp = Scalar(0.5) * h;
+                if (dp_len_sq > max_dp * max_dp) {
+                    dpi = dpi * (max_dp / std::sqrt(dp_len_sq));
+                }
+
                 dp_[i] = dpi;
             }
         }

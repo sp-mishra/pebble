@@ -141,6 +141,19 @@ private:
         compute_.sub_scale({P.vel_y.data(), n}, {P.pred_y.data(), n}, {P.pos_y.data(), n}, inv_dt);
         compute_.mul_col({P.vel_x.data(), n}, dampc);
         compute_.mul_col({P.vel_y.data(), n}, dampc);
+
+        // Velocity magnitude cap to guarantee physical stability under extreme compressive loads
+        constexpr Scalar kMaxSpeed = Scalar(2000.0);
+        constexpr Scalar kMaxSpeedSq = kMaxSpeed * kMaxSpeed;
+        for (Index i = 0; i < n; ++i) {
+            const Scalar spd2 = P.vel_x[i] * P.vel_x[i] + P.vel_y[i] * P.vel_y[i];
+            if (spd2 > kMaxSpeedSq) {
+                const Scalar s = kMaxSpeed / std::sqrt(spd2);
+                P.vel_x[i] *= s;
+                P.vel_y[i] *= s;
+            }
+        }
+
         // commit: pos = pred (static pred already == pos from the masked predict).
         compute_.copy({P.pos_x.data(), n}, {P.pred_x.data(), n});
         compute_.copy({P.pos_y.data(), n}, {P.pred_y.data(), n});
