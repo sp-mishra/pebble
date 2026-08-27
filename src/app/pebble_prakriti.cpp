@@ -128,7 +128,7 @@ struct PrakritiStressApp {
     bool heat_emitter = false;
     bool cold_emitter = false;
     bool fluid_emitter = false;  // [F] Key live fluid nozzle
-    bool waterfall_mode = true;  // [W] Key continuous waterfall cascade
+    bool waterfall_mode = false; // [W] Key continuous waterfall cascade (opt-in)
 };
 
 static PrakritiStressApp g_app;
@@ -137,38 +137,38 @@ static void init_prakriti_world() {
     auto& app = g_app;
     prakriti::WorldConfig cfg{};
     cfg.bounds = {{30.0f, 30.0f}, {FW - 30.0f, FH - 30.0f}};
-    cfg.gravity = {0.0f, 750.0f}; // Snappy natural downward acceleration
-    cfg.substeps = 2;              // 2 high-rate substeps
+    cfg.gravity = {0.0f, 850.0f}; // Natural crisp gravitational acceleration
+    cfg.substeps = 3;              // 3 high-rate substeps (180 Hz precision)
     cfg.solver_iters = 2;          // 2 fast solver iterations
-    cfg.cell_size = 18.0f;         // Optimal grid cell width
+    cfg.cell_size = 16.0f;         // Exact match with smoothing_h for maximum L1/L2 cache locality
 
     // 1. Setup Static Obstacles — Multi-tier Waterfall Cascades & Sluice Ramps
     app.obstacles.circles.clear();
     app.obstacles.boxes.clear();
     app.obstacles.capsules.clear();
 
-    // Multi-tier Waterfall Ledges & Angled Sluices
+    // Multi-tier Waterfall Ledges & Angled Sluices (Steep chutes so fluids cascade rapidly)
     app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(50.0f, 120.0f),
-        pebble::math::vec2(320.0f, 160.0f),
-        12.0f
+        pebble::math::vec2(40.0f, 130.0f),
+        pebble::math::vec2(300.0f, 210.0f),
+        10.0f
     });
     app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(FW - 50.0f, 120.0f),
-        pebble::math::vec2(FW - 320.0f, 160.0f),
-        12.0f
+        pebble::math::vec2(FW - 40.0f, 130.0f),
+        pebble::math::vec2(FW - 300.0f, 210.0f),
+        10.0f
     });
 
     // Tier 2: Mid-level waterfall spillway baffles
     app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(360.0f, 240.0f),
-        pebble::math::vec2(150.0f, 290.0f),
-        12.0f
+        pebble::math::vec2(340.0f, 260.0f),
+        pebble::math::vec2(140.0f, 330.0f),
+        10.0f
     });
     app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(FW - 360.0f, 240.0f),
-        pebble::math::vec2(FW - 150.0f, 290.0f),
-        12.0f
+        pebble::math::vec2(FW - 340.0f, 260.0f),
+        pebble::math::vec2(FW - 140.0f, 330.0f),
+        10.0f
     });
 
     // Multi-tier Galton board / Plinko deflector grid beneath the falls
@@ -189,8 +189,8 @@ static void init_prakriti_world() {
     app.obstacles.circles.push_back(akruti::Circle{pebble::math::vec2(FW * 0.50f, 540.0f), 28.0f});
 
     prakriti::ObstacleConfig obs_cfg{};
-    obs_cfg.friction = 0.10f;
-    obs_cfg.restitution = 0.40f;
+    obs_cfg.friction = 0.02f; // Low kinetic surface friction for slick fluid gliding
+    obs_cfg.restitution = 0.20f;
     obs_cfg.contact_offset = 0.0f;
     obs_cfg.contact_stiffness = 1.0f;
 
@@ -231,14 +231,14 @@ static void init_prakriti_world() {
     prakriti::MaterialId mat_jelly = app.world->materials().add(jelly_params);
 
     // 2. High-Density Dual Fluid Dam Breaks (Water on left, Superheated Magma on right)
-    // Left: Cool Water Reservoir (500 particles)
+    // Left: Cool Water Reservoir (Starts cleanly above the top left chute)
     for (int r = 0; r < 20; ++r) {
-        for (int c = 0; c < 25; ++c) {
-            float px = 40.0f + float(c) * 10.0f;
-            float py = 45.0f + float(r) * 10.0f;
+        for (int c = 0; c < 20; ++c) {
+            float px = 50.0f + float(c) * 9.0f;
+            float py = 38.0f + float(r) * 4.2f;
             app.world->particles().add({
                 .position = pebble::math::vec2(px, py),
-                .velocity = {40.0f, 0.0f},
+                .velocity = {60.0f, 30.0f},
                 .mass = 1.0f,
                 .temperature = 16.0f,
                 .material = app.mat_water,
@@ -247,14 +247,14 @@ static void init_prakriti_world() {
         }
     }
 
-    // Right: Superheated Molten Lava Column (500 particles)
+    // Right: Superheated Molten Lava Column (Starts cleanly above the top right chute)
     for (int r = 0; r < 20; ++r) {
-        for (int c = 0; c < 25; ++c) {
-            float px = FW - 290.0f + float(c) * 10.0f;
-            float py = 45.0f + float(r) * 10.0f;
+        for (int c = 0; c < 20; ++c) {
+            float px = FW - 230.0f + float(c) * 9.0f;
+            float py = 38.0f + float(r) * 4.2f;
             app.world->particles().add({
                 .position = pebble::math::vec2(px, py),
-                .velocity = {-40.0f, 0.0f},
+                .velocity = {-60.0f, 30.0f},
                 .mass = 2.2f,
                 .temperature = 950.0f, // Glowing hot magma!
                 .material = app.mat_lava,

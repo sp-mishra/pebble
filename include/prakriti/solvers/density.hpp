@@ -91,8 +91,11 @@ struct DensitySolver {
                         }
                     }
                     const pebble::math::vec2 g = kernels::spiky_grad(pi_v - pj_v, h);
-                    const Scalar scale = (lambda_[i] + lambda_[j] + scorr) / cfg.rest_density;
-                    dpi = dpi + g * scale;
+                    const Scalar sum_lambda = lambda_[i] + lambda_[j];
+                    if (sum_lambda < Scalar(0)) {
+                        const Scalar scale = (sum_lambda + scorr) / cfg.rest_density;
+                        dpi = dpi + g * scale;
+                    }
 
                     // Multiphase Interfacial Tension: Repel different fluid materials across boundary
                     if (P.material[j] != mi && P.f_liquid[j] > Scalar(0.3)) {
@@ -102,15 +105,16 @@ struct DensitySolver {
 
                 // Apply interfacial surface tension along color field normal
                 const Scalar cg_len_sq = pebble::math::length_sq(color_grad);
-                if (cg_len_sq > Scalar(1e-8)) {
+                if (cg_len_sq > Scalar(1e-6)) {
                     const Scalar cg_len = std::sqrt(cg_len_sq);
                     const pebble::math::vec2 n_inter = color_grad * (Scalar(1) / cg_len);
-                    dpi = dpi - n_inter * (Scalar(0.04) * h);
+                    const Scalar tension = std::min(cg_len * Scalar(0.01) * h, Scalar(0.02) * h);
+                    dpi = dpi - n_inter * tension;
                 }
 
-                // Numerical stability: Clamp maximum position delta to prevent explosions
+                // Numerical stability: Clamp maximum position delta per solver iteration to prevent geyser pops
                 const Scalar dp_len_sq = pebble::math::length_sq(dpi);
-                const Scalar max_dp = Scalar(0.5) * h;
+                const Scalar max_dp = Scalar(0.12) * h; // Gentle physical separation limit (~1.9px at h=16)
                 if (dp_len_sq > max_dp * max_dp) {
                     dpi = dpi * (max_dp / std::sqrt(dp_len_sq));
                 }
@@ -124,6 +128,42 @@ struct DensitySolver {
             if (P.f_liquid[i] < Scalar(0.5) || P.is_static(i)) continue;
             P.pred_x[i] += dp_[i][0];
             P.pred_y[i] += dp_[i][1];
+        }
+
+        // 4. XSPH Artificial Viscosity & 2D Vorticity Confinement (Macklin & Müller 2013)
+        constexpr Scalar c_xsph = Scalar(0.08);
+        constexpr Scalar c_vort = Scalar(0.015);
+        for (Index i = 0; i < n; ++i) {
+            if (P.f_liquid[i] < Scalar(0.5) || P.is_static(i)) continue;
+            pebble::math::vec2 vi = P.vel_v(i);
+            pebble::math::vec2 v_smooth{0.0f, 0.0f};
+            Scalar omega_i = Scalar(0);
+            Scalar w_sum = Scalar(0);
+            const pebble::math::vec2 pi_v = P.pred_v(i);
+
+            ctx.grid.for_each_neighbor(P.pred_x[i], P.pred_y[i], h, [&](Index j, Scalar) {
+                if (j == i) return;
+                const pebble::math::vec2 pj_v = P.pred_v(j);
+                const Scalar r2 = pebble::math::length_sq(pi_v - pj_v);
+                const Scalar w = kernels::poly6(r2, h);
+                const pebble::math::vec2 dv = P.vel_v(j) - vi;
+                v_smooth = v_smooth + dv * w;
+                const pebble::math::vec2 g = kernels::spiky_grad(pi_v - pj_v, h);
+                omega_i += (dv[1] * g[0] - dv[0] * g[1]);
+                w_sum += w;
+            });
+            if (w_sum > Scalar(1e-6)) {
+                const Scalar inv_rest = (cfg.rest_density > Scalar(0) ? Scalar(1) / cfg.rest_density : Scalar(1));
+                vi = vi + v_smooth * (c_xsph * inv_rest);
+                if (std::abs(omega_i) > Scalar(1e-5)) {
+                    const Scalar s = c_vort * omega_i * ctx.dt_sub;
+                    const Scalar vx_old = vi[0];
+                    vi[0] -= vi[1] * s;
+                    vi[1] += vx_old * s;
+                }
+                P.vel_x[i] = vi[0];
+                P.vel_y[i] = vi[1];
+            }
         }
     }
 
