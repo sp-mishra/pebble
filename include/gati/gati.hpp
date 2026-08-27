@@ -24,6 +24,11 @@
 #include "material.hpp"
 #include "material_reaction.hpp"
 #include "elemental.hpp"
+#include "rigid_body.hpp"
+#include "contact_constraint.hpp"
+#include "contact_cache.hpp"
+#include "island_solver.hpp"
+#include "simulation.hpp"
 
 namespace gati {
 

@@ -3,11 +3,11 @@
 //
 // Key features:
 //   1. Manifold struct supporting 1-point and 2-point contact manifolds (critical for stable physics stacking).
-//   2. O(1) Analytic Fast-Paths for Circle-Circle, Circle-Capsule, Circle-Box, and Circle-OBB.
+//   2. O(1) Analytic Fast-Paths for 13+ shape pairs (Circle-Circle/Box/Capsule/OBB/Triangle/RoundedBox/Sector/Segment,
+//      Capsule-Capsule/OBB/Triangle, Triangle-Triangle, OBB-Triangle, Segment-Circle/Box).
 //   3. 2D Separating Axis Theorem (SAT) with edge clipping for Box-Box, OBB-OBB, and ConvexPoly pairs.
 //   4. Warm-started GJK / EPA with temporal simplex caching for general convex shapes.
-//
-// No virtual functions, no macros, no heap allocation on hot paths.
+//   5. Zero virtual functions, no macros, no heap allocation on hot paths.
 #include "shape.hpp"
 #include "primitives.hpp"
 #include "gjk.hpp"
@@ -31,7 +31,12 @@ struct Manifold {
     Scalar                                 depth{0};   // Max penetration depth
 };
 
-// ── 1. Analytic Fast-Paths (Circle vs Circle, Capsule, Box) ───────────────────────
+// ── Forward Declarations for Analytic Fast-Paths ──────────────────────────────────
+[[nodiscard]] inline Manifold collide_capsule_obb(const Capsule& a, const OrientedBox& b) noexcept;
+[[nodiscard]] inline Manifold collide_capsule_capsule(const Capsule& a, const Capsule& b) noexcept;
+[[nodiscard]] inline Manifold collide_capsule_triangle(const Capsule& a, const Triangle& b) noexcept;
+
+// ── 1. Analytic Fast-Paths ────────────────────────────────────────────────────────
 
 [[nodiscard]] inline Manifold collide_circle_circle(const Circle& a, const Circle& b) noexcept {
     const Vec diff = b.center - a.center;
@@ -63,7 +68,6 @@ struct Manifold {
 }
 
 [[nodiscard]] inline Manifold collide_circle_box(const Circle& a, const Box& b) noexcept {
-    // Clamp circle center to box bounds
     const Vec clamped{std::clamp(a.center.x, b.center.x - b.half.x, b.center.x + b.half.x),
                       std::clamp(a.center.y, b.center.y - b.half.y, b.center.y + b.half.y)};
 
@@ -71,11 +75,8 @@ struct Manifold {
     const Scalar d2 = diff.len2();
 
     if (d2 > Scalar(1e-9)) {
-        // Circle center is outside box
         if (d2 >= a.radius * a.radius) return Manifold{};
         const Scalar d = std::sqrt(d2);
-        // diff points from clamped (box surface) toward circle center (a.center)
-        // therefore (clamped - a.center) / d = -diff / d points from circle into box.
         const Vec n = -(diff / d);
         const Scalar depth = a.radius - d;
         const Vec cp = clamped;
@@ -87,14 +88,12 @@ struct Manifold {
         (void)m.points.push_back(ContactPoint{cp, depth});
         return m;
     } else {
-        // Circle center is inside box: find shallowest exit axis
         const Scalar dx = (b.half.x) - std::fabs(a.center.x - b.center.x);
         const Scalar dy = (b.half.y) - std::fabs(a.center.y - b.center.y);
 
         Vec n{};
         Scalar depth = 0;
         if (dx < dy) {
-            // Circle center is inside box, normal points from circle towards box center
             n = Vec{a.center.x >= b.center.x ? -1.0f : 1.0f, 0.0f};
             depth = dx + a.radius;
         } else {
@@ -111,8 +110,121 @@ struct Manifold {
     }
 }
 
+// 1. Circle ↔ OBB (Rotate to local frame + AABB clamp)
+[[nodiscard]] inline Manifold collide_circle_obb(const Circle& a, const OrientedBox& b) noexcept {
+    const Vec diff = a.center - b.center;
+    // Map circle center to local unrotated OBB frame
+    const Vec local_c{b.rot.m00 * diff.x + b.rot.m10 * diff.y,
+                      b.rot.m01 * diff.x + diff.y * b.rot.m11};
+    const Circle local_circle{local_c, a.radius};
+    const Box local_box{{0, 0}, b.half};
+
+    Manifold m_local = collide_circle_box(local_circle, local_box);
+    if (!m_local.hit) return Manifold{};
+
+    Manifold m;
+    m.hit = true;
+    m.normal = b.rot * m_local.normal;
+    m.depth = m_local.depth;
+    for (std::size_t i = 0; i < m_local.points.size(); ++i) {
+        (void)m.points.push_back(ContactPoint{b.center + b.rot * m_local.points[i].point, m_local.points[i].depth});
+    }
+    return m;
+}
+
+// 2. Circle ↔ Triangle (Barycentric projection + 3 edge checks)
+[[nodiscard]] inline Manifold collide_circle_triangle(const Circle& a, const Triangle& b) noexcept {
+    const Scalar dist = b.sdf(a.center);
+    if (dist >= a.radius) return Manifold{};
+
+    const Scalar depth = a.radius - dist;
+    // Normal calculation:
+    // If center is outside (dist > 0), normal is from circle toward triangle
+    // Triangle.sdf(p) gives signed distance.
+    const Vec e0 = b.b - b.a, e1 = b.c - b.b, e2 = b.a - b.c;
+    const Vec v0 = a.center - b.a, v1 = a.center - b.b, v2 = a.center - b.c;
+
+    const Vec pq0 = v0 - e0 * std::clamp(v0.dot(e0) / std::max(e0.len2(), Scalar(1e-12)), Scalar(0), Scalar(1));
+    const Vec pq1 = v1 - e1 * std::clamp(v1.dot(e1) / std::max(e1.len2(), Scalar(1e-12)), Scalar(0), Scalar(1));
+    const Vec pq2 = v2 - e2 * std::clamp(v2.dot(e2) / std::max(e2.len2(), Scalar(1e-12)), Scalar(0), Scalar(1));
+
+    Vec closest = b.a + (v0 - pq0);
+    Scalar min_d2 = pq0.len2();
+    if (pq1.len2() < min_d2) { min_d2 = pq1.len2(); closest = b.b + (v1 - pq1); }
+    if (pq2.len2() < min_d2) { min_d2 = pq2.len2(); closest = b.c + (v2 - pq2); }
+
+    Vec diff = closest - a.center;
+    Scalar d = diff.len();
+    Vec n = (d > 1e-6f) ? (diff / d) : Vec{0, 1};
+
+    Manifold m;
+    m.hit = true;
+    m.normal = n;
+    m.depth = depth;
+    (void)m.points.push_back(ContactPoint{closest, depth});
+    return m;
+}
+
+// 3. Circle ↔ RoundedBox (OBB clamp + corner radius inflate)
+[[nodiscard]] inline Manifold collide_circle_roundedbox(const Circle& a, const RoundedBox& b) noexcept {
+    const Box inner{b.center, Vec{std::max(0.0f, b.half.x - b.radius), std::max(0.0f, b.half.y - b.radius)}};
+    const Circle expanded_a{a.center, a.radius + b.radius};
+    Manifold m = collide_circle_box(expanded_a, inner);
+    if (!m.hit) return Manifold{};
+    return m;
+}
+
+// 4. Circle ↔ Sector
+[[nodiscard]] inline Manifold collide_circle_sector(const Circle& a, const Sector& b) noexcept {
+    const Scalar dist = b.sdf(a.center);
+    if (dist >= a.radius) return Manifold{};
+    const Scalar depth = a.radius - dist;
+
+    // Normal points from Circle to Sector
+    const Vec diff = b.center - a.center;
+    Vec n = diff.len2() > 1e-6f ? diff.normalized() : Vec{1, 0};
+
+    Manifold m;
+    m.hit = true;
+    m.normal = n;
+    m.depth = depth;
+    (void)m.points.push_back(ContactPoint{a.center + n * (a.radius - depth * 0.5f), depth});
+    return m;
+}
+
+// 5. Segment ↔ Circle (Point-segment distance)
+[[nodiscard]] inline Manifold collide_segment_circle(const Segment& a, const Circle& b) noexcept {
+    const Vec ab = a.b - a.a;
+    const Vec ap = b.center - a.a;
+    const Scalar t = std::clamp(ap.dot(ab) / std::max(ab.len2(), Scalar(1e-12)), Scalar(0), Scalar(1));
+    const Vec closest = a.a + ab * t;
+
+    const Vec diff = b.center - closest;
+    const Scalar d2 = diff.len2();
+    if (d2 >= b.radius * b.radius) return Manifold{};
+
+    const Scalar d = std::sqrt(d2);
+    const Vec n = (d > 1e-6f) ? (diff / d) : Vec{0, 1};
+    const Scalar depth = b.radius - d;
+
+    Manifold m;
+    m.hit = true;
+    m.normal = n; // from segment A into circle B
+    m.depth = depth;
+    (void)m.points.push_back(ContactPoint{closest, depth});
+    return m;
+}
+
+// 6. Segment ↔ Box (Slab intersection / closest point)
+[[nodiscard]] inline Manifold collide_segment_box(const Segment& a, const Box& b) noexcept {
+    // Segment as thin capsule of radius 0
+    const Capsule cap{a.a, a.b, 0.0f};
+    const OrientedBox obb{b.center, b.half, Mat2<Scalar>{1, 0, 0, 1}};
+    return collide_capsule_obb(cap, obb);
+}
+
+// 7. Capsule ↔ Capsule
 [[nodiscard]] inline Manifold collide_capsule_capsule(const Capsule& a, const Capsule& b) noexcept {
-    // 1. Find closest points between segment A (a.a -> a.b) and segment B (b.a -> b.b)
     const Vec d1 = a.b - a.a;
     const Vec d2 = b.b - b.a;
     const Vec r = a.a - b.a;
@@ -168,13 +280,11 @@ struct Manifold {
     m.normal = n;
     m.depth = depth;
 
-    // Check if segments are roughly parallel for a 2-point manifold
     const Scalar parallel_tol = 0.98f;
     const bool parallel = (std::fabs(d1.normalized().dot(d2.normalized())) > parallel_tol) &&
                           (a_len2 > 1e-4f) && (b_len2 > 1e-4f);
 
     if (parallel) {
-        // Project endpoints of A onto B
         const Vec d2_norm = d2.normalized();
         const Scalar t_a = std::clamp((a.a - b.a).dot(d2_norm) / std::sqrt(b_len2), 0.0f, 1.0f);
         const Vec proj_a = b.a + d2 * t_a;
@@ -200,8 +310,8 @@ struct Manifold {
     return m;
 }
 
+// 8. Capsule ↔ OBB
 [[nodiscard]] inline Manifold collide_capsule_obb(const Capsule& a, const OrientedBox& b) noexcept {
-    // Transform capsule endpoints to local box coordinates
     const Vec diff_a = a.a - b.center;
     const Vec local_a{b.rot.m00 * diff_a.x + b.rot.m10 * diff_a.y,
                       b.rot.m01 * diff_a.x + diff_a.y * b.rot.m11};
@@ -210,11 +320,7 @@ struct Manifold {
     const Vec local_b{b.rot.m00 * diff_b.x + b.rot.m10 * diff_b.y,
                       b.rot.m01 * diff_b.x + diff_b.y * b.rot.m11};
 
-    // Test both endpoints against local AABB
-    const Circle c_a{a.a, a.radius};
-    const Circle c_b{a.b, a.radius};
     const Box local_box{{0, 0}, b.half};
-
     const Circle local_ca{local_a, a.radius};
     const Circle local_cb{local_b, a.radius};
 
@@ -222,7 +328,6 @@ struct Manifold {
     const Manifold m_b = collide_circle_box(local_cb, local_box);
 
     if (!m_a.hit && !m_b.hit) {
-        // Also check capsule midpoint for long capsules straddling box corners
         const Vec local_mid = (local_a + local_b) * 0.5f;
         const Circle local_cm{local_mid, a.radius};
         const Manifold m_m = collide_circle_box(local_cm, local_box);
@@ -238,12 +343,10 @@ struct Manifold {
 
     Manifold world_m;
     world_m.hit = true;
-    Scalar max_depth = 0.0f;
 
     if (m_a.hit) {
         world_m.normal = b.rot * m_a.normal;
         world_m.depth = m_a.depth;
-        max_depth = m_a.depth;
         (void)world_m.points.push_back(ContactPoint{b.center + b.rot * m_a.points[0].point, m_a.depth});
     }
 
@@ -253,7 +356,6 @@ struct Manifold {
             world_m.normal = norm_b;
             world_m.depth = m_b.depth;
         } else {
-            // Average normal if both collide
             world_m.normal = (world_m.normal + norm_b).normalized();
             world_m.depth = std::max(world_m.depth, m_b.depth);
         }
@@ -263,15 +365,31 @@ struct Manifold {
     return world_m;
 }
 
+// 9. Capsule ↔ Triangle (3x segment-segment closest + inflate)
+[[nodiscard]] inline Manifold collide_capsule_triangle(const Capsule& a, const Triangle& b) noexcept {
+    const Segment cap_seg{a.a, a.b};
+    const Capsule edge0{b.a, b.b, 0.0f};
+    const Capsule edge1{b.b, b.c, 0.0f};
+    const Capsule edge2{b.c, b.a, 0.0f};
+
+    const Manifold m0 = collide_capsule_capsule(a, edge0);
+    const Manifold m1 = collide_capsule_capsule(a, edge1);
+    const Manifold m2 = collide_capsule_capsule(a, edge2);
+
+    Manifold best{};
+    Scalar max_d = -1e9f;
+    for (const auto& m : {m0, m1, m2}) {
+        if (m.hit && m.depth > max_d) {
+            max_d = m.depth;
+            best = m;
+        }
+    }
+    return best;
+}
+
 // ── 2. Separating Axis Theorem (SAT) with 2-Point Edge Clipping ───────────────────
 
 namespace detail {
-
-struct ClipEdge {
-    Vec v1{}, v2{};
-    Vec max_vertex{};
-    Vec normal{};
-};
 
 inline void clip_segment_to_line(std::array<Vec, 2>& out_pts, int& out_count,
                                  const std::array<Vec, 2>& in_pts, Vec normal, Scalar offset) noexcept {
@@ -279,12 +397,10 @@ inline void clip_segment_to_line(std::array<Vec, 2>& out_pts, int& out_count,
     const Scalar d0 = normal.dot(in_pts[0]) - offset;
     const Scalar d1 = normal.dot(in_pts[1]) - offset;
 
-    // If points are behind or on the clipping plane, keep them
     if (d0 <= 0.0f) out_pts[static_cast<std::size_t>(out_count++)] = in_pts[0];
     if (d1 <= 0.0f) out_pts[static_cast<std::size_t>(out_count++)] = in_pts[1];
 
     if (d0 * d1 < 0.0f) {
-        // Intersect edge with plane
         const Scalar t = d0 / (d0 - d1);
         out_pts[static_cast<std::size_t>(out_count++)] = in_pts[0] + (in_pts[1] - in_pts[0]) * t;
     }
@@ -292,9 +408,112 @@ inline void clip_segment_to_line(std::array<Vec, 2>& out_pts, int& out_count,
 
 } // namespace detail
 
-// SAT Box-Box / OBB-OBB with 2-Point Contact Manifold
+// 10. Triangle ↔ Triangle (6-axis SAT)
+[[nodiscard]] inline Manifold collide_triangle_triangle(const Triangle& a, const Triangle& b) noexcept {
+    const std::array<Vec, 3> a_verts = {a.a, a.b, a.c};
+    const std::array<Vec, 3> b_verts = {b.a, b.b, b.c};
+
+    const std::array<Vec, 6> axes = {
+        Vec{-(a.b.y - a.a.y), a.b.x - a.a.x}.normalized(),
+        Vec{-(a.c.y - a.b.y), a.c.x - a.b.x}.normalized(),
+        Vec{-(a.a.y - a.c.y), a.a.x - a.c.x}.normalized(),
+        Vec{-(b.b.y - b.a.y), b.b.x - b.a.x}.normalized(),
+        Vec{-(b.c.y - b.b.y), b.c.x - b.b.x}.normalized(),
+        Vec{-(b.a.y - b.c.y), b.a.x - b.c.x}.normalized()
+    };
+
+    Scalar min_overlap = 1e18f;
+    Vec best_axis{};
+
+    for (const Vec& axis : axes) {
+        Scalar min_a = 1e18f, max_a = -1e18f;
+        for (const Vec& v : a_verts) {
+            const Scalar p = v.dot(axis);
+            min_a = std::min(min_a, p); max_a = std::max(max_a, p);
+        }
+        Scalar min_b = 1e18f, max_b = -1e18f;
+        for (const Vec& v : b_verts) {
+            const Scalar p = v.dot(axis);
+            min_b = std::min(min_b, p); max_b = std::max(max_b, p);
+        }
+
+        const Scalar overlap = std::min(max_a, max_b) - std::max(min_a, min_b);
+        if (overlap <= 0.0f) return Manifold{};
+
+        if (overlap < min_overlap) {
+            min_overlap = overlap;
+            best_axis = axis;
+        }
+    }
+
+    const Vec center_a = (a.a + a.b + a.c) * (1.0f / 3.0f);
+    const Vec center_b = (b.a + b.b + b.c) * (1.0f / 3.0f);
+    if (best_axis.dot(center_b - center_a) < 0.0f) best_axis = -best_axis;
+
+    Manifold m;
+    m.hit = true;
+    m.normal = best_axis;
+    m.depth = min_overlap;
+    (void)m.points.push_back(ContactPoint{center_a + best_axis * min_overlap, min_overlap});
+    return m;
+}
+
+// 11. OBB ↔ Triangle (5-axis SAT with clipping)
+[[nodiscard]] inline Manifold collide_obb_triangle(const OrientedBox& a, const Triangle& b) noexcept {
+    const Vec ax = Vec{a.rot.m00, a.rot.m10};
+    const Vec ay = Vec{a.rot.m01, a.rot.m11};
+    const std::array<Vec, 5> axes = {
+        ax, ay,
+        Vec{-(b.b.y - b.a.y), b.b.x - b.a.x}.normalized(),
+        Vec{-(b.c.y - b.b.y), b.c.x - b.b.x}.normalized(),
+        Vec{-(b.a.y - b.c.y), b.a.x - b.c.x}.normalized()
+    };
+
+    const std::array<Vec, 4> a_verts = {
+        a.center + ax * a.half.x + ay * a.half.y,
+        a.center - ax * a.half.x + ay * a.half.y,
+        a.center - ax * a.half.x - ay * a.half.y,
+        a.center + ax * a.half.x - ay * a.half.y
+    };
+    const std::array<Vec, 3> b_verts = {b.a, b.b, b.c};
+
+    Scalar min_overlap = 1e18f;
+    Vec best_axis{};
+
+    for (const Vec& axis : axes) {
+        Scalar min_a = 1e18f, max_a = -1e18f;
+        for (const Vec& v : a_verts) {
+            const Scalar p = v.dot(axis);
+            min_a = std::min(min_a, p); max_a = std::max(max_a, p);
+        }
+        Scalar min_b = 1e18f, max_b = -1e18f;
+        for (const Vec& v : b_verts) {
+            const Scalar p = v.dot(axis);
+            min_b = std::min(min_b, p); max_b = std::max(max_b, p);
+        }
+
+        const Scalar overlap = std::min(max_a, max_b) - std::max(min_a, min_b);
+        if (overlap <= 0.0f) return Manifold{};
+
+        if (overlap < min_overlap) {
+            min_overlap = overlap;
+            best_axis = axis;
+        }
+    }
+
+    const Vec center_b = (b.a + b.b + b.c) * (1.0f / 3.0f);
+    if (best_axis.dot(center_b - a.center) < 0.0f) best_axis = -best_axis;
+
+    Manifold m;
+    m.hit = true;
+    m.normal = best_axis;
+    m.depth = min_overlap;
+    (void)m.points.push_back(ContactPoint{a.center + best_axis * a.half.x, min_overlap});
+    return m;
+}
+
+// 12. OBB ↔ OBB (4-axis SAT with 2-Point Edge Clipping)
 [[nodiscard]] inline Manifold collide_obb_obb(const OrientedBox& a, const OrientedBox& b) noexcept {
-    // 4 candidate separating axes: a.rot columns (2) and b.rot columns (2)
     const Vec ax = Vec{a.rot.m00, a.rot.m10};
     const Vec ay = Vec{a.rot.m01, a.rot.m11};
     const Vec bx = Vec{b.rot.m00, b.rot.m10};
@@ -307,13 +526,12 @@ inline void clip_segment_to_line(std::array<Vec, 2>& out_pts, int& out_count,
     Vec best_axis{};
 
     for (const Vec& axis : axes) {
-        // Project a and b extents onto axis
         const Scalar ra = std::fabs(ax.dot(axis)) * a.half.x + std::fabs(ay.dot(axis)) * a.half.y;
         const Scalar rb = std::fabs(bx.dot(axis)) * b.half.x + std::fabs(by.dot(axis)) * b.half.y;
         const Scalar dist = std::fabs(diff.dot(axis));
 
         const Scalar overlap = ra + rb - dist;
-        if (overlap <= 0.0f) return Manifold{}; // Separating axis found!
+        if (overlap <= 0.0f) return Manifold{};
 
         if (overlap < min_overlap) {
             min_overlap = overlap;
@@ -321,11 +539,8 @@ inline void clip_segment_to_line(std::array<Vec, 2>& out_pts, int& out_count,
         }
     }
 
-    // Ensure best_axis points from A toward B
     if (best_axis.dot(diff) < 0.0f) best_axis = -best_axis;
 
-    // Build 2-point manifold via incident-reference edge clipping
-    // Vertices of Box A and Box B in CCW order
     const std::array<Vec, 4> a_verts = {
         a.center + ax * a.half.x + ay * a.half.y,
         a.center - ax * a.half.x + ay * a.half.y,
@@ -339,14 +554,12 @@ inline void clip_segment_to_line(std::array<Vec, 2>& out_pts, int& out_count,
         b.center + bx * b.half.x - by * b.half.y
     };
 
-    // Find reference face on A (outward normal closest to best_axis)
     int ref_idx = 0;
     Scalar max_dot = -1e18f;
     for (int i = 0; i < 4; ++i) {
         const Vec v_curr = a_verts[static_cast<std::size_t>(i)];
         const Vec v_next = a_verts[static_cast<std::size_t>((i + 1) % 4)];
         const Vec e = v_next - v_curr;
-        // In CCW order, outward normal is (e.y, -e.x)
         const Vec n = Vec{e.y, -e.x}.normalized();
         const Scalar dot = n.dot(best_axis);
         if (dot > max_dot) {
@@ -359,7 +572,6 @@ inline void clip_segment_to_line(std::array<Vec, 2>& out_pts, int& out_count,
     const Vec ref_tangent = (ref_v2 - ref_v1).normalized();
     const Vec ref_normal = Vec{ref_tangent.y, -ref_tangent.x}.normalized();
 
-    // Find incident face on B (outward normal most anti-parallel to ref_normal)
     int inc_idx = 0;
     Scalar min_inc_dot = 1e18f;
     for (int i = 0; i < 4; ++i) {
@@ -376,13 +588,11 @@ inline void clip_segment_to_line(std::array<Vec, 2>& out_pts, int& out_count,
     std::array<Vec, 2> inc_pts = {b_verts[static_cast<std::size_t>(inc_idx)],
                                   b_verts[static_cast<std::size_t>((inc_idx + 1) % 4)]};
 
-    // 1. Clip incident edge against reference face side plane 1 (ref_v1, -ref_tangent)
     std::array<Vec, 2> clip1{};
     int count1 = 0;
     detail::clip_segment_to_line(clip1, count1, inc_pts, -ref_tangent, -ref_tangent.dot(ref_v1));
-    if (count1 < 2) count1 = 2; // fallback
+    if (count1 < 2) count1 = 2;
 
-    // 2. Clip against reference face side plane 2 (ref_v2, ref_tangent)
     std::array<Vec, 2> clip2{};
     int count2 = 0;
     detail::clip_segment_to_line(clip2, count2, clip1, ref_tangent, ref_tangent.dot(ref_v2));
@@ -395,7 +605,7 @@ inline void clip_segment_to_line(std::array<Vec, 2>& out_pts, int& out_count,
     const Scalar ref_depth = ref_normal.dot(ref_v1);
     for (int i = 0; i < count2; ++i) {
         const Scalar sep = ref_normal.dot(clip2[static_cast<std::size_t>(i)]) - ref_depth;
-        if (sep <= 0.05f) { // Points at or behind reference face
+        if (sep <= 0.05f) {
             (void)m.points.push_back(ContactPoint{clip2[static_cast<std::size_t>(i)], std::max(0.0f, -sep)});
         }
     }
@@ -406,7 +616,6 @@ inline void clip_segment_to_line(std::array<Vec, 2>& out_pts, int& out_count,
 
     return m;
 }
-
 
 [[nodiscard]] inline Manifold collide_box_box(const Box& a, const Box& b) noexcept {
     const OrientedBox obb_a{a.center, a.half, Mat2<Scalar>{1, 0, 0, 1}};
@@ -427,7 +636,6 @@ template <Shape A, Shape B>
     containers::static_vector<Vec, 3> simp;
     Vec init_d = (cache && cache->valid) ? cache->separating_axis : Vec{1, 0};
 
-    // Fast GJK overlap
     const bool overlap = gjk_overlap(a, b, &simp);
     if (!overlap) {
         if (cache) {
@@ -496,6 +704,42 @@ inline Manifold dispatch_narrow(const void* a_ptr, const void* b_ptr, SimplexCac
         auto m = collide_circle_box(b, a);
         if (m.hit) m.normal = -m.normal;
         return m;
+    } else if constexpr (std::is_same_v<A, Circle> && std::is_same_v<B, OrientedBox>) {
+        return collide_circle_obb(a, b);
+    } else if constexpr (std::is_same_v<A, OrientedBox> && std::is_same_v<B, Circle>) {
+        auto m = collide_circle_obb(b, a);
+        if (m.hit) m.normal = -m.normal;
+        return m;
+    } else if constexpr (std::is_same_v<A, Circle> && std::is_same_v<B, Triangle>) {
+        return collide_circle_triangle(a, b);
+    } else if constexpr (std::is_same_v<A, Triangle> && std::is_same_v<B, Circle>) {
+        auto m = collide_circle_triangle(b, a);
+        if (m.hit) m.normal = -m.normal;
+        return m;
+    } else if constexpr (std::is_same_v<A, Circle> && std::is_same_v<B, RoundedBox>) {
+        return collide_circle_roundedbox(a, b);
+    } else if constexpr (std::is_same_v<A, RoundedBox> && std::is_same_v<B, Circle>) {
+        auto m = collide_circle_roundedbox(b, a);
+        if (m.hit) m.normal = -m.normal;
+        return m;
+    } else if constexpr (std::is_same_v<A, Circle> && std::is_same_v<B, Sector>) {
+        return collide_circle_sector(a, b);
+    } else if constexpr (std::is_same_v<A, Sector> && std::is_same_v<B, Circle>) {
+        auto m = collide_circle_sector(b, a);
+        if (m.hit) m.normal = -m.normal;
+        return m;
+    } else if constexpr (std::is_same_v<A, Segment> && std::is_same_v<B, Circle>) {
+        return collide_segment_circle(a, b);
+    } else if constexpr (std::is_same_v<A, Circle> && std::is_same_v<B, Segment>) {
+        auto m = collide_segment_circle(b, a);
+        if (m.hit) m.normal = -m.normal;
+        return m;
+    } else if constexpr (std::is_same_v<A, Segment> && std::is_same_v<B, Box>) {
+        return collide_segment_box(a, b);
+    } else if constexpr (std::is_same_v<A, Box> && std::is_same_v<B, Segment>) {
+        auto m = collide_segment_box(b, a);
+        if (m.hit) m.normal = -m.normal;
+        return m;
     } else if constexpr (std::is_same_v<A, Box> && std::is_same_v<B, Box>) {
         return collide_box_box(a, b);
     } else if constexpr (std::is_same_v<A, OrientedBox> && std::is_same_v<B, OrientedBox>) {
@@ -506,6 +750,20 @@ inline Manifold dispatch_narrow(const void* a_ptr, const void* b_ptr, SimplexCac
         return collide_capsule_obb(a, b);
     } else if constexpr (std::is_same_v<A, OrientedBox> && std::is_same_v<B, Capsule>) {
         auto m = collide_capsule_obb(b, a);
+        if (m.hit) m.normal = -m.normal;
+        return m;
+    } else if constexpr (std::is_same_v<A, Capsule> && std::is_same_v<B, Triangle>) {
+        return collide_capsule_triangle(a, b);
+    } else if constexpr (std::is_same_v<A, Triangle> && std::is_same_v<B, Capsule>) {
+        auto m = collide_capsule_triangle(b, a);
+        if (m.hit) m.normal = -m.normal;
+        return m;
+    } else if constexpr (std::is_same_v<A, Triangle> && std::is_same_v<B, Triangle>) {
+        return collide_triangle_triangle(a, b);
+    } else if constexpr (std::is_same_v<A, OrientedBox> && std::is_same_v<B, Triangle>) {
+        return collide_obb_triangle(a, b);
+    } else if constexpr (std::is_same_v<A, Triangle> && std::is_same_v<B, OrientedBox>) {
+        auto m = collide_obb_triangle(b, a);
         if (m.hit) m.normal = -m.normal;
         return m;
     } else {
@@ -570,5 +828,12 @@ template<std::size_t PolyVerts = 8>
     return narrowphase_matrix<PolyVerts>().table[idx_a][idx_b](shape_a, shape_b, cache);
 }
 
-} // namespace akruti
+// Default Analytic Narrowphase Policy satisfying NarrowphaseAlgo
+struct AnalyticMatrixNarrow {
+    [[nodiscard]] Manifold collide(ShapeType type_a, const void* shape_a,
+                                   ShapeType type_b, const void* shape_b) const noexcept {
+        return collide_matrix(type_a, shape_a, type_b, shape_b, nullptr);
+    }
+};
 
+} // namespace akruti

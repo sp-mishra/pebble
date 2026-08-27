@@ -8,6 +8,7 @@
 // support(). Motion is expressed as a translation of shape B relative to A over t in [0,1].
 #include "shape.hpp"
 #include "gjk.hpp"
+#include "mpr.hpp"
 #include <cmath>
 
 namespace akruti {
@@ -46,16 +47,15 @@ template <Shape A, Shape B>
     Scalar t = 0;
     for (int i = 0; i < max_iter; ++i) {
         Translated<B> bt{b, motion * t};
-        const Separation sep = gjk_distance(a, bt);
-        if (sep.distance <= target_gap) return TOIResult{true, t, i + 1};
+        const MprResult mpr = mpr_collide(a, bt);
+        if (mpr.hit || mpr.distance <= target_gap) return TOIResult{true, t, i + 1};
 
-        // sep.dir points from A toward B.
-        // For B to approach A, motion must point opposite sep.dir, meaning closing = -motion.dot(sep.dir).
-        // Upper bound on closing speed is `speed`.
-        const Scalar closing_proj = -motion.dot(sep.dir);
+        // mpr.normal points from A toward B.
+        // For B to approach A, motion must point opposite mpr.normal:
+        const Scalar closing_proj = -motion.dot(mpr.normal);
         const Scalar closing = (closing_proj > Scalar(1e-6)) ? closing_proj : speed;
 
-        const Scalar dt = (sep.distance - target_gap) / closing;
+        const Scalar dt = (mpr.distance - target_gap) / closing;
         if (dt <= Scalar(1e-6)) return TOIResult{true, t, i + 1};
         t += dt;
         if (t >= Scalar(1)) return TOIResult{false, 1, i + 1};

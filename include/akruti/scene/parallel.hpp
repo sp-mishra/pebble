@@ -7,7 +7,6 @@
 #include "../math.hpp"
 
 #include <cstddef>
-#include <ranges>
 #include <thread>
 
 #if defined(AKRUTI_ENABLE_PRAVAHA) && __has_include("pravaha/pravaha.hpp")
@@ -31,10 +30,19 @@ public:
     template <class BodyFn>
     void for_range(std::size_t count, BodyFn&& body, std::size_t chunk = 256) {
         if (count == 0) return;
-        // std::views::iota is a random-access, sized, [] -indexable range.
-        auto r = std::views::iota(std::size_t{0}, count);
+        const std::size_t num_chunks = (count + chunk - 1) / chunk;
+        std::vector<std::size_t> chunk_indices(num_chunks);
+        for (std::size_t c = 0; c < num_chunks; ++c) chunk_indices[c] = c;
+
         auto expr = pravaha::lazy_parallel_for(
-            r, [body = std::forward<BodyFn>(body)](std::size_t i) { body(i); }, chunk);
+            std::span<const std::size_t>(chunk_indices),
+            [body = std::forward<BodyFn>(body), count, chunk](std::size_t c) {
+                const std::size_t start = c * chunk;
+                const std::size_t end = std::min(start + chunk, count);
+                for (std::size_t i = start; i < end; ++i) {
+                    body(i);
+                }
+            }, 1);
         (void)runner_.submit(std::move(expr));
     }
 

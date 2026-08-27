@@ -196,8 +196,91 @@ inline Vec2<Scalar> vectorized_support_poly(const ConvexPoly<N>& poly, Vec2<Scal
     }
     return poly.verts[best_idx];
 #else
-    return poly.support(d);
+    Scalar max_dot = -1e18f;
+    std::size_t best_idx = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        const Scalar dot_s = d.dot(poly.verts[i]);
+        if (dot_s > max_dot) {
+            max_dot = dot_s;
+            best_idx = i;
+        }
+    }
+    return poly.verts[best_idx];
 #endif
+}
+
+// ── 5. Batch AABB Overlap Tests ───────────────────────────────────────────────────
+
+inline void batch_aabb_overlap(std::span<const AABB<Scalar>> a, std::span<const AABB<Scalar>> b,
+                               std::span<std::uint8_t> out) noexcept {
+    const std::size_t n = std::min({a.size(), b.size(), out.size()});
+    for (std::size_t i = 0; i < n; ++i) {
+        out[i] = a[i].overlaps(b[i]) ? 1 : 0;
+    }
+}
+
+// ── 6. Batch Box SDF Evaluation ───────────────────────────────────────────────────
+
+inline void batch_sdf_boxes(std::span<const Vec2<Scalar>> pts, const Box& b, std::span<Scalar> out) noexcept {
+    const std::size_t n = std::min(pts.size(), out.size());
+    for (std::size_t i = 0; i < n; ++i) {
+        out[i] = b.sdf(pts[i]);
+    }
+}
+
+// ── 7. Batch Capsule SDF Evaluation ───────────────────────────────────────────────
+
+inline void batch_sdf_capsules(std::span<const Vec2<Scalar>> pts, const Capsule& cap, std::span<Scalar> out) noexcept {
+    const std::size_t n = std::min(pts.size(), out.size());
+    for (std::size_t i = 0; i < n; ++i) {
+        out[i] = cap.sdf(pts[i]);
+    }
+}
+
+// ── 8. Batch 2D Transformation (Rotation + Translation) ───────────────────────────
+
+inline void batch_transform(std::span<const Vec2<Scalar>> in_pts, Vec2<Scalar> pos, Scalar angle,
+                            std::span<Vec2<Scalar>> out_pts) noexcept {
+    const std::size_t n = std::min(in_pts.size(), out_pts.size());
+    if (std::fabs(angle) < 1e-7f) {
+        for (std::size_t i = 0; i < n; ++i) out_pts[i] = in_pts[i] + pos;
+        return;
+    }
+    const Scalar c = std::cos(angle);
+    const Scalar s = std::sin(angle);
+    for (std::size_t i = 0; i < n; ++i) {
+        const auto p = in_pts[i];
+        out_pts[i] = Vec2<Scalar>{c * p.x - s * p.y + pos.x, s * p.x + c * p.y + pos.y};
+    }
+}
+
+// ── 9. Ray8 Packet Raycast ────────────────────────────────────────────────────────
+
+struct Ray8 {
+    Vec2<Scalar> o[8];
+    Vec2<Scalar> d[8];
+    Scalar       tmax[8];
+};
+
+struct RayHit8 {
+    bool   hit[8]{false};
+    Scalar t[8]{1e18f, 1e18f, 1e18f, 1e18f, 1e18f, 1e18f, 1e18f, 1e18f};
+};
+
+inline RayHit8 packet_raycast_aabb(const Ray8& rays, const AABB<Scalar>& box) noexcept {
+    RayHit8 res{};
+    Ray4 r0, r1;
+    for (int i = 0; i < 4; ++i) {
+        r0.o[i] = rays.o[i]; r0.d[i] = rays.d[i]; r0.tmax[i] = rays.tmax[i];
+        r1.o[i] = rays.o[i + 4]; r1.d[i] = rays.d[i + 4]; r1.tmax[i] = rays.tmax[i + 4];
+    }
+    const auto h0 = packet_raycast_aabb(r0, box);
+    const auto h1 = packet_raycast_aabb(r1, box);
+    for (int i = 0; i < 4; ++i) {
+        res.hit[i] = h0.hit[i]; res.t[i] = h0.t[i];
+        res.hit[i + 4] = h1.hit[i]; res.t[i + 4] = h1.t[i];
+    }
+    return res;
 }
 
 } // namespace akruti::simd

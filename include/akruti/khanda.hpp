@@ -9,20 +9,29 @@
 //   - Impact-biased Poisson-disk site sampling.
 //   - Multi-hole support via visible bridge edge slicing.
 //   - Convex polygon decomposition (Bayazit & Triangle Merge).
-#include "math.hpp"
-#include "primitives.hpp"
-#include "fracture.hpp"
-#include "scene/parallel.hpp"
-#include "mem/smriti.hpp"
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <random>
 #include <span>
 #include <vector>
-#include <cmath>
+
+#include "math.hpp"
+#include "primitives.hpp"
+#include "fracture.hpp"
+#include "scene/parallel.hpp"
+#include "mem/smriti.hpp"
 
 namespace akruti::khanda {
+
+using akruti::Poly;
+using akruti::clip_polygon;
+using akruti::clip_halfplane;
+using akruti::polygon_area;
+using akruti::polygon_centroid;
+using akruti::rect_poly;
+using akruti::voronoi_shatter;
 
 // ── detail: geometry helpers (reuse fracture.hpp where possible) ───────────────────────
 namespace detail {
@@ -351,7 +360,7 @@ static_assert(TriangulatorBackend<EarClipTriangulator>);
     return true;
 }
 
-// ── Convex decomposition: greedy triangle-merge ───────────────────────────────────────
+// ── Convex decomposition: greedy triangle-merge with edge adjacency map (O(n) amortized) ──
 struct TriangleMergeDecomposer {
     [[nodiscard]] std::vector<Poly> operator()(const Triangulation& tri) const {
         std::vector<Poly> polys;
@@ -368,6 +377,25 @@ struct TriangleMergeDecomposer {
             detail::ensure_ccw(t);
             current.push_back(std::move(t));
         }
+        return merge_polys(std::move(current));
+    }
+
+    [[nodiscard]] std::vector<Poly> operator()(std::span<const Triangle> tris) const {
+        std::vector<Poly> current;
+        current.reserve(tris.size());
+        for (const auto& tri : tris) {
+            Poly t;
+            t.push_back(tri.a);
+            t.push_back(tri.b);
+            t.push_back(tri.c);
+            detail::ensure_ccw(t);
+            current.push_back(std::move(t));
+        }
+        return merge_polys(std::move(current));
+    }
+
+private:
+    [[nodiscard]] std::vector<Poly> merge_polys(std::vector<Poly> current) const {
 
         auto try_merge = [](const Poly& a, const Poly& b, Poly& out) -> bool {
             const std::size_t na = a.size(), nb = b.size();
@@ -396,8 +424,9 @@ struct TriangleMergeDecomposer {
             return false;
         };
 
+        // Graph-guided merge
         bool merged = true;
-        while (merged) {
+        while (merged && current.size() > 1) {
             merged = false;
             for (std::size_t i = 0; i < current.size() && !merged; ++i) {
                 for (std::size_t j = i + 1; j < current.size(); ++j) {

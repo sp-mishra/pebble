@@ -81,7 +81,7 @@ inline void bulk_raycast(Scene& scene, std::span<const Ray> rays, std::span<RayH
         best.t = std::numeric_limits<Scalar>::max();
         scene.tree().raycast(ray.o, ray.d, ray.tmax, [&](std::uint32_t payload) {
             scene.dispatch(payload, [&](const auto& batch, std::uint32_t idx) {
-                const RayHit h = akruti::raycast(batch.get(idx), ray.o, ray.d, ray.tmax);
+                const RayHit h = ::akruti::raycast(batch.get(idx), ray.o, ray.d, ray.tmax);
                 if (h.hit && h.t < best.t) best = h;
             });
         });

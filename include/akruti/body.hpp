@@ -9,13 +9,14 @@
 // ============================================================================
 #include "shape.hpp"
 #include "math.hpp"
-#include "query.hpp"
+#include "transformed.hpp"
 #include <containers/numeric/math_vector.hpp>
 #include <cmath>
 #include <algorithm>
 
 namespace akruti {
 
+// Backward compatibility forwarder: for new code use gati::RigidBody and akruti::TransformedShape
 template <Shape S>
 struct DynamicBody {
     S                  shape{};
@@ -23,8 +24,8 @@ struct DynamicBody {
     pebble::math::vec2 linear_vel{0.0f, 0.0f};
     pebble::math::vec2 force{0.0f, 0.0f};
 
-    Scalar angle = 0.0f;       // Rotation in radians
-    Scalar angular_vel = 0.0f; // rad/s
+    Scalar angle = 0.0f;
+    Scalar angular_vel = 0.0f;
     Scalar torque = 0.0f;
 
     Scalar mass = 1.0f;
@@ -37,99 +38,35 @@ struct DynamicBody {
         : shape(std::move(s)), mass(m), inv_mass(m > 0.0f ? 1.0f / m : 0.0f),
           inertia(i), inv_inertia(i > 0.0f ? 1.0f / i : 0.0f) {}
 
-    // Evaluate signed distance in world coordinates
     [[nodiscard]] Scalar sdf(pebble::math::vec2 p) const noexcept {
-        // Transform world point into local body frame
-        pebble::math::vec2 local_p = p - position;
-        const Scalar c = std::cos(-angle);
-        const Scalar s = std::sin(-angle);
-        pebble::math::vec2 rot_p{
-            local_p[0] * c - local_p[1] * s,
-            local_p[0] * s + local_p[1] * c
-        };
-        return shape.sdf(rot_p);
+        const TransformedShape ts{shape, Vec{position[0], position[1]}, angle};
+        return ts.sdf(Vec{p[0], p[1]});
     }
 
-    // World AABB enclosing rotated shape
     [[nodiscard]] AABB<Scalar> aabb() const noexcept {
-        auto box = shape.aabb();
-        Scalar rad = std::max(std::abs(box.hi[0] - box.lo[0]), std::abs(box.hi[1] - box.lo[1])) * 0.7071f;
-        return AABB<Scalar>{
-            pebble::math::vec2(position[0] - rad, position[1] - rad),
-            pebble::math::vec2(position[0] + rad, position[1] + rad)
-        };
+        const TransformedShape ts{shape, Vec{position[0], position[1]}, angle};
+        return ts.aabb();
     }
 
-    // Support point in world space for GJK/EPA
     [[nodiscard]] Vec2<Scalar> support(Vec2<Scalar> d) const noexcept {
-        const Scalar c = std::cos(-angle);
-        const Scalar s = std::sin(-angle);
-        Vec2<Scalar> local_d{
-            d.x * c - d.y * s,
-            d.x * s + d.y * c
-        };
-        Vec2<Scalar> local_s = shape.support(local_d);
-        const Scalar rc = std::cos(angle);
-        const Scalar rs = std::sin(angle);
-        return Vec2<Scalar>{
-            position[0] + (local_s.x * rc - local_s.y * rs),
-            position[1] + (local_s.x * rs + local_s.y * rc)
-        };
+        const TransformedShape ts{shape, Vec{position[0], position[1]}, angle};
+        return ts.support(d);
     }
 
-    // Integrate forces and update position/orientation over time dt
     void step(Scalar dt, pebble::math::vec2 gravity = {0.0f, 0.0f}) noexcept {
-        if (inv_mass <= 0.0f) return; // Static body
-
-        // Linear velocity integration
+        if (inv_mass <= 0.0f) return;
         linear_vel = linear_vel + (gravity + force * inv_mass) * dt;
         position = position + linear_vel * dt;
-
-        // Angular velocity integration
         angular_vel += (torque * inv_inertia) * dt;
         angle += angular_vel * dt;
-
-        // Reset accumulators
         force = {0.0f, 0.0f};
         torque = 0.0f;
     }
 
-    // Apply world impulse at a specific world contact point
     void apply_impulse(pebble::math::vec2 impulse, pebble::math::vec2 world_pt) noexcept {
         linear_vel = linear_vel + impulse * inv_mass;
         pebble::math::vec2 r = world_pt - position;
         torque += (r[0] * impulse[1] - r[1] * impulse[0]);
-    }
-
-    // World-space continuous collision detection (CCD) raycast against underlying shape
-    [[nodiscard]] RayHit raycast(pebble::math::vec2 ray_start, pebble::math::vec2 ray_dir) const noexcept {
-        const Scalar c = std::cos(-angle);
-        const Scalar s = std::sin(-angle);
-        const pebble::math::vec2 local_start = ray_start - position;
-        const Vec rot_start{
-            local_start[0] * c - local_start[1] * s,
-            local_start[0] * s + local_start[1] * c
-        };
-        const Vec rot_dir{
-            ray_dir[0] * c - ray_dir[1] * s,
-            ray_dir[0] * s + ray_dir[1] * c
-        };
-        RayHit hit = akruti::raycast(shape, rot_start, rot_dir);
-        if (hit.hit) {
-            const Scalar rc = std::cos(angle);
-            const Scalar rs = std::sin(angle);
-            const Vec hit_norm = hit.normal;
-            hit.normal = Vec{
-                hit_norm.x * rc - hit_norm.y * rs,
-                hit_norm.x * rs + hit_norm.y * rc
-            };
-            const Vec hit_pt = hit.point;
-            hit.point = Vec{
-                position[0] + (hit_pt.x * rc - hit_pt.y * rs),
-                position[1] + (hit_pt.x * rs + hit_pt.y * rc)
-            };
-        }
-        return hit;
     }
 };
 

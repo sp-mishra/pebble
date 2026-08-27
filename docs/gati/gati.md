@@ -29,20 +29,13 @@ Prakriti            Akruti                 the two independent engines (unaware 
 
 ---
 
-## 2. Direct Pebble Math & Geometry Integration
-
-Gati completely avoids math duplication or conversion layers. It uses `pebble::math` types directly:
-- `gati::Vec2` = `pebble::math::vec2`
-- `gati::Mat2` = `pebble::math::mat2`
-- `gati::AABB` = `pebble::math::aabb2`
-
-When `GATI_ENABLE_AKRUTI` is active, Gati reuses Akruti for:
-- **Broadphase + Narrowphase Collision**: `AABBTree` fat-margin spatial indexing with `akruti::gjk_overlap` and `akruti::epa` contact manifold generation.
-- **Rich 2D Primitives in `ShapeRef`**: `akruti::Circle`, `akruti::Box`, `akruti::Capsule`, `akruti::OrientedBox` (OBB), `akruti::Triangle`, `akruti::RoundedBox`, `akruti::Sector` (FOV cones), `akruti::ConvexPoly<8>`, `akruti::ChainShape<16>` (terrain/tilemaps), and `akruti::GridSDF<16, 16>` (discrete raster SDFs).
-- **Continuous Collision Detection (CCD)**: `gati::sweep_test()` utilizing `akruti::time_of_impact()` to prevent tunneling for fast-moving projectiles.
-- **Raycasting**: `gati::raycast()` broadphase acceleration delegating exact intersection to `akruti::raycast()`.
-- **Contact Lifecycle Management (`ContactStateTracker`)**: Dispatches stateful `ContactPhase::Enter`, `ContactPhase::Stay`, and `ContactPhase::Exit` events across frames.
-- **Continuous Material Reactions**: Automatic thermal diffusion, contact fusion, and brittle fracture evaluation during fixed steps.
+## 2. Rigid Dynamics, Sequential Impulse & Multi-Body Architecture
+- **Unified Simulation Facade (`gati::Simulation`)**: Single zero-configuration entry point orchestrating the 9-phase physics loop.
+- **Sequential Impulse Solver (`gati::SequentialImpulseSolver`)**: Warm-started accumulated normal & friction impulses with Baumgarte stabilization.
+- **Contact Manifold Cache (`gati::ContactCache`)**: Skips narrowphase queries for resting/stacked bodies; retains separating axes.
+- **Island Partitioning & Sleeping (`gati::UnionFindIslands`)**: Partitions contact graphs with union-find, sleeping stable islands for 5–20× speedup on scenes with resting bodies.
+- **Continuum Two-Way Coupling (`gati::DynamicCouplingBridge`)**: Coupled fluid buoyancy, drag, and boundary penalties with Prakriti.
+- **Plug-and-Play `SimConfig`**: Fully concept-constrained compile-time policy composition with `::with_*` overrides.
 
 ---
 

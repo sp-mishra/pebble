@@ -123,14 +123,14 @@ struct Triangle {
         const Vec pq1 = v1 - e1 * std::clamp(v1.dot(e1) / std::max(e1.len2(), Scalar(1e-12)), Scalar(0), Scalar(1));
         const Vec pq2 = v2 - e2 * std::clamp(v2.dot(e2) / std::max(e2.len2(), Scalar(1e-12)), Scalar(0), Scalar(1));
 
-        const Scalar s = cross(e0, e2); // CCW sign
+        const Scalar s = cross(e0, -e2); // Area / orientation: positive if a->b->c is CCW
         const Scalar d = std::min({pq0.len2(), pq1.len2(), pq2.len2()});
 
         // Inside if all on same side of edges
         const Scalar z0 = cross(e0, v0) * s;
         const Scalar z1 = cross(e1, v1) * s;
         const Scalar z2 = cross(e2, v2) * s;
-        const bool inside = (z0 <= 0 && z1 <= 0 && z2 <= 0);
+        const bool inside = (z0 >= 0 && z1 >= 0 && z2 >= 0);
 
         return (inside ? -1.0f : 1.0f) * std::sqrt(d);
     }

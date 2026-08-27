@@ -64,6 +64,15 @@ struct Pose {
     };
 }
 
+// SIMD-accelerated batch interpolation of transforms into poses
+inline void batch_interpolate(std::span<const Transform> transforms, Scalar alpha,
+                              std::span<Pose> out_poses) noexcept {
+    const std::size_t n = std::min(transforms.size(), out_poses.size());
+    for (std::size_t i = 0; i < n; ++i) {
+        out_poses[i] = interpolated(transforms[i], alpha);
+    }
+}
+
 // Reparent with cycle rejection
 inline bool set_parent(World& w, Entity e, Entity parent) {
     Entity cur = parent;

@@ -23,12 +23,14 @@ Header-only C++23/C++26. No virtual, no macros. Concept-based static dispatch. `
 ## 1. Overview
 
 Akruti (आकृति — "shape/form") is a state-of-the-art 2D shape, geometry, and collision system for Pebble, engineered for **60–240 FPS real-time games** and **100k+ body physical simulations**:
-- **Analytic 2D Fast-Paths & SAT**: $O(1)$ Circle-Circle, Circle-Capsule, Box-Circle, and Box-Box / OBB-OBB Separating Axis Theorem (SAT) generating 2-point contact manifolds for rock-solid rigid stacking.
-- **Warm-Started GJK / EPA**: Simplex caching across consecutive frames to reduce iterations down to 1–2.
+- **Unified World-Space Transform (`TransformedShape<S>`)**: Zero-cost geometric adapter satisfying `Shape` with zero trig overhead on axis-aligned shapes.
+- **Type-Erased `ShapeStore`**: Direct matrix indexed dispatch without `std::visit` or dynamic allocations.
+- **Analytic 2D Fast-Paths & SAT**: $O(1)$ Circle-Circle, Circle-Capsule, Circle-Box, Circle-OBB, Circle-Triangle, Circle-RoundedBox, Circle-Sector, Segment-Circle, Segment-Box, Capsule-Triangle, Triangle-Triangle, and OBB-OBB Separating Axis Theorem (SAT).
+- **Minkowski Portal Refinement (MPR)**: Fast 4–8 iteration distance oracle and continuous collision detection.
+- **Fortune's Sweep-Line Voronoi & CDT**: $O(n \log n)$ Voronoi shatter and Constrained Delaunay Triangulation with native hole support.
+- **Dynamic `SpatialHash` Broadphase**: Morton Z-order indexing with counting-sort contiguous cell construction.
 - **Google Highway SIMD Acceleration**: Multi-lane vectorized batch point membership, packet raycasting, and vertex dot sweeps.
 - **Zero-Heap CSG**: C++23 expression template EDSL (`operator|`, `operator-`, `operator&`) + Flat AST Arena storage.
-- **Khanda Fracture Pipeline**: Voronoi partitioning, ear-clipping triangulation with hole bridging, convex decomposition, exact 2nd moment polar inertia, and optional Pravaha parallel execution.
-- **Scene Orchestrator**: Dynamic `AABBTree` broadphase with `LayerMask` collision filtering and Pravaha task DAG parallelism.
 
 ---
 

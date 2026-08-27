@@ -72,6 +72,29 @@ using Poly = containers::dynamic::SmallVector<Vec2<Scalar>>;
     return a * Scalar(0.5);
 }
 
+// ── Polygon centroid ───────────────────────────────────────────────────────────────
+[[nodiscard]] inline Vec2<Scalar> polygon_centroid(const Poly& p) noexcept {
+    const std::size_t n = p.size();
+    if (n == 0) return Vec2<Scalar>{0, 0};
+    if (n == 1) return p[0];
+    if (n == 2) return (p[0] + p[1]) * Scalar(0.5);
+    const Scalar a = polygon_area(p);
+    if (std::fabs(a) < Scalar(1e-12)) {
+        Vec2<Scalar> c{0, 0};
+        for (std::size_t i = 0; i < n; ++i) c += p[i];
+        return c * (Scalar(1) / static_cast<Scalar>(n));
+    }
+    Vec2<Scalar> c{0, 0};
+    for (std::size_t i = 0; i < n; ++i) {
+        const auto& p0 = p[i];
+        const auto& p1 = p[(i + 1) % n];
+        const Scalar factor = cross(p0, p1);
+        c.x += (p0.x + p1.x) * factor;
+        c.y += (p0.y + p1.y) * factor;
+    }
+    return c / (Scalar(6) * a);
+}
+
 // ── Voronoi shatter: split a convex boundary polygon into one cell per seed. ────────
 //    Each cell = boundary clipped by the bisector half-plane against every other seed.
 //    Returns fragment polygons (some may be empty if a seed is dominated). Areas tile the

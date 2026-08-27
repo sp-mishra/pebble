@@ -11,6 +11,10 @@ namespace akruti {
 // Precision scalar
 using Scalar = float;
 
+// Forward declaration & alias
+template <class T> struct Vec2;
+using Vec = Vec2<Scalar>;
+
 // ── Reusing Pebble Math Types Directly ─────────────────────────────────────────
 using Vec2_base = pebble::math::vec2;
 using Mat2_base = pebble::math::mat2;

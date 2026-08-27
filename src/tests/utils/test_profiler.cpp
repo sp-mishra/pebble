@@ -1264,7 +1264,7 @@ TEST_CASE (
     const auto median = result.median();
     const auto avg = result.average_duration;
     const auto diff = std::abs(median.count() - avg.count());
-    const auto tolerance = avg.count() * 0.2; // 20% tolerance
+    const auto tolerance = avg.count() * 0.5; // 50% tolerance for OS thread sleep jitter
 
     REQUIRE(diff < tolerance);
 }

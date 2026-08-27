@@ -17,6 +17,14 @@
 //   khanda.hpp      Advanced fracture pipeline (triangulation + convex decomp + polar moment + Poisson)
 //   joint.hpp       Joint kinematic frames (Distance, Revolute, Prismatic, Weld, Motor)
 //   scene/          Bulk storage, collision layers, AABBTree broadphase & parallel bulk ops
+#include <cmath>
+#include <algorithm>
+#include <random>
+#include <span>
+#include <vector>
+#include <cstdint>
+#include <limits>
+
 #include "math.hpp"
 #include "shape.hpp"
 #include "primitives.hpp"

@@ -150,13 +150,13 @@ template <Shape A, Shape B>
             return Contact{true, best_dist, best_normal};
         }
 
-        // Insert new support point between best_i and (best_i+1)%n maintaining CCW order.
-        containers::static_vector<V, 64> next;
-        for (std::size_t i = 0; i < poly.size(); ++i) {
-            (void)next.push_back(poly[i]);
-            if (i == best_i) (void)next.push_back(p);
+        // Insert new support point between best_i and (best_i+1)%n maintaining CCW order in-place.
+        const std::size_t insert_idx = best_i + 1;
+        (void)poly.push_back(p); // Grow size by 1
+        for (std::size_t k = poly.size() - 1; k > insert_idx; --k) {
+            poly[k] = poly[k - 1];
         }
-        poly = next;
+        poly[insert_idx] = p;
     }
     return Contact{false, 0, {}};
 }

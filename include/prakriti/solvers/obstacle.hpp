@@ -15,61 +15,16 @@
 #include <cmath>
 #include <algorithm>
 
+#include "akruti/gradient.hpp"
+
 namespace prakriti {
 
 namespace detail {
-// Fast analytical outward normals for core primitives avoiding finite-difference overhead
-inline pebble::math::vec2 sdf_normal(const akruti::Circle& c, const pebble::math::vec2& p, Scalar = 0.0f) noexcept {
-    const akruti::Vec d = akruti::Vec(p) - c.center;
-    const Scalar len = d.len();
-    return len > Scalar(1e-6) ? pebble::math::vec2(d.x / len, d.y / len) : pebble::math::vec2(0.0f, 1.0f);
-}
-
-inline pebble::math::vec2 sdf_normal(const akruti::Capsule& cap, const pebble::math::vec2& p, Scalar = 0.0f) noexcept {
-    const akruti::Vec ap = akruti::Vec(p) - cap.a;
-    const akruti::Vec ab = cap.b - cap.a;
-    const Scalar t = std::clamp(ap.dot(ab) / std::max(ab.len2(), Scalar(1e-12)), Scalar(0), Scalar(1));
-    const akruti::Vec proj = cap.a + ab * t;
-    const akruti::Vec d = akruti::Vec(p) - proj;
-    const Scalar len = d.len();
-    return len > Scalar(1e-6) ? pebble::math::vec2(d.x / len, d.y / len) : pebble::math::vec2(0.0f, 1.0f);
-}
-
-inline pebble::math::vec2 sdf_normal(const akruti::Box& b, const pebble::math::vec2& p, Scalar = 0.0f) noexcept {
-    const akruti::Vec d = akruti::Vec(p) - b.center;
-    const Scalar dx = std::abs(d.x) - b.half.x;
-    const Scalar dy = std::abs(d.y) - b.half.y;
-    const Scalar sx = d.x >= 0.0f ? 1.0f : -1.0f;
-    const Scalar sy = d.y >= 0.0f ? 1.0f : -1.0f;
-    if (dx > dy) {
-        return pebble::math::vec2(sx, 0.0f);
-    } else {
-        return pebble::math::vec2(0.0f, sy);
-    }
-}
-
-inline pebble::math::vec2 sdf_normal(const akruti::OrientedBox& obb, const pebble::math::vec2& p, Scalar = 0.0f) noexcept {
-    const akruti::Vec diff = akruti::Vec(p) - obb.center;
-    const akruti::Vec local_d{obb.rot.m00 * diff.x + obb.rot.m10 * diff.y,
-                              obb.rot.m01 * diff.x + diff.y * obb.rot.m11};
-    const Scalar dx = std::abs(local_d.x) - obb.half.x;
-    const Scalar dy = std::abs(local_d.y) - obb.half.y;
-    const Scalar sx = local_d.x >= 0.0f ? 1.0f : -1.0f;
-    const Scalar sy = local_d.y >= 0.0f ? 1.0f : -1.0f;
-    const akruti::Vec local_n = (dx > dy) ? akruti::Vec(sx, 0.0f) : akruti::Vec(0.0f, sy);
-    const akruti::Vec world_n = obb.rot * local_n;
-    return pebble::math::vec2(world_n.x, world_n.y);
-}
-
-// Fallback finite-difference SDF gradient for arbitrary akruti Shapes.
+// Delegate to Akruti's analytical and FD sdf_gradient
 template <class Shape>
-[[nodiscard]] inline pebble::math::vec2 sdf_normal(const Shape& s,
-                                                   const pebble::math::vec2& p,
-                                                   Scalar h = Scalar(1e-2)) noexcept {
-    const Scalar gx = s.sdf(pebble::math::vec2(p[0] + h, p[1])) - s.sdf(pebble::math::vec2(p[0] - h, p[1]));
-    const Scalar gy = s.sdf(pebble::math::vec2(p[0], p[1] + h)) - s.sdf(pebble::math::vec2(p[0], p[1] - h));
-    const Scalar len = std::sqrt(gx * gx + gy * gy);
-    return len > Scalar(1e-6) ? pebble::math::vec2(gx / len, gy / len) : pebble::math::vec2(0.0f, 1.0f);
+[[nodiscard]] inline pebble::math::vec2 sdf_normal(const Shape& s, const pebble::math::vec2& p) noexcept {
+    const akruti::Vec g = akruti::sdf_gradient(s, akruti::Vec{p[0], p[1]});
+    return pebble::math::vec2(g.x, g.y);
 }
 } // namespace detail
 
