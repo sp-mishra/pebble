@@ -28,14 +28,14 @@
 
 static const char* VS_METAL =
     "#include <metal_stdlib>\nusing namespace metal;\n"
-    "struct In  { float2 pos [[attribute(0)]]; float2 uv [[attribute(1)]]; };\n"
-    "struct Out { float4 pos [[position]]; float2 uv; };\n"
-    "vertex Out vs(In in [[stage_in]]) { Out o; o.pos=float4(in.pos,0,1); o.uv=in.uv; return o; }\n";
+    "struct In  { float2 pos [[attribute(0)]]; float4 col [[attribute(1)]]; };\n"
+    "struct Out { float4 pos [[position]]; float4 col; };\n"
+    "vertex Out vs(In in [[stage_in]]) { Out o; o.pos=float4(in.pos,0,1); o.col=in.col; return o; }\n";
 static const char* FS_METAL =
     "#include <metal_stdlib>\nusing namespace metal;\n"
-    "struct In { float2 uv; };\n"
-    "fragment float4 fs(In in [[stage_in]], texture2d<float> tex [[texture(0)]], sampler s [[sampler(0)]]) {\n"
-    "    return tex.sample(s, in.uv); }\n";
+    "struct In { float4 col; };\n"
+    "fragment float4 fs(In in [[stage_in]]) {\n"
+    "    return in.col; }\n";
 
 static constexpr int W = 1060;
 static constexpr int H = 700;
@@ -85,11 +85,9 @@ struct GatiApp {
     sg_pipeline pip{};
     sg_bindings bind{};
     sg_pass_action pass_action{};
-    sg_image tex_img{};
-    sg_view tex_view{};
-    sg_sampler smp{};
-    std::vector<std::uint32_t> pixels;
-    std::unique_ptr<kalpana::Canvas<kalpana::capture_backend>> canvas;
+    sg_buffer vbuf{};
+    sg_buffer ibuf{};
+    std::unique_ptr<kalpana::Canvas<kalpana::sokol_backend>> canvas;
 
     pebble::ecs::World world;
     std::vector<GatiBody> bodies;
@@ -488,44 +486,24 @@ static void init_cb() {
     gfx.logger.func = slog_func;
     sg_setup(&gfx);
 
-    app.pixels.assign(W * H, 0xFF060610u);
-
-    struct Vert { float x, y, u, v; };
-    static const Vert verts[] = {{-1, -1, 0, 1}, {1, -1, 1, 1}, {1, 1, 1, 0}, {-1, 1, 0, 0}};
-    static const uint16_t idx[] = {0, 1, 2, 0, 2, 3};
+    constexpr std::size_t kMaxVerts = 131072;
+    constexpr std::size_t kMaxIndices = 262144;
 
     {
         sg_buffer_desc d{};
-        d.data = SG_RANGE(verts);
-        app.bind.vertex_buffers[0] = sg_make_buffer(d);
-    }
-    {
-        sg_buffer_desc d{};
-        d.usage.index_buffer = true;
-        d.data = SG_RANGE(idx);
-        app.bind.index_buffer = sg_make_buffer(d);
-    }
-    {
-        sg_image_desc d{};
-        d.width = W;
-        d.height = H;
-        d.pixel_format = SG_PIXELFORMAT_RGBA8;
+        d.size = kMaxVerts * sizeof(kalpana::sokol_backend::Vertex);
         d.usage.stream_update = true;
-        app.tex_img = sg_make_image(d);
+        app.vbuf = sg_make_buffer(d);
+        app.bind.vertex_buffers[0] = app.vbuf;
     }
     {
-        sg_view_desc d{};
-        d.texture.image = app.tex_img;
-        app.tex_view = sg_make_view(d);
+        sg_buffer_desc d{};
+        d.size = kMaxIndices * sizeof(std::uint32_t);
+        d.usage.index_buffer = true;
+        d.usage.stream_update = true;
+        app.ibuf = sg_make_buffer(d);
+        app.bind.index_buffer = app.ibuf;
     }
-    {
-        sg_sampler_desc d{};
-        d.min_filter = SG_FILTER_NEAREST;
-        d.mag_filter = SG_FILTER_NEAREST;
-        app.smp = sg_make_sampler(d);
-    }
-    app.bind.views[0] = app.tex_view;
-    app.bind.samplers[0] = app.smp;
 
     sg_shader_desc shd{};
 #if defined(SOKOL_METAL)
@@ -534,24 +512,19 @@ static void init_cb() {
     shd.fragment_func.source = FS_METAL;
     shd.fragment_func.entry = "fs";
 #endif
-    shd.views[0].texture.stage = SG_SHADERSTAGE_FRAGMENT;
-    shd.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
-    shd.texture_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
-    shd.texture_sampler_pairs[0].view_slot = 0;
-    shd.texture_sampler_pairs[0].sampler_slot = 0;
 
     sg_shader shdr = sg_make_shader(shd);
 
     sg_pipeline_desc pd{};
     pd.shader = shdr;
-    pd.index_type = SG_INDEXTYPE_UINT16;
-    pd.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT2;
-    pd.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT2;
+    pd.index_type = SG_INDEXTYPE_UINT32;
+    pd.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT2; // position
+    pd.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT4; // color
     app.pip = sg_make_pipeline(pd);
 
     app.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
-    app.pass_action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
-    app.canvas = std::make_unique<kalpana::Canvas<kalpana::capture_backend>>(W, H);
+    app.pass_action.colors[0].clear_value = {0.02f, 0.03f, 0.06f, 1.0f};
+    app.canvas = std::make_unique<kalpana::Canvas<kalpana::sokol_backend>>(W, H);
 
     init_gati_simulation();
 }
@@ -758,28 +731,27 @@ static void frame_cb() {
     kalpana::Scene scene;
     build_scene(scene);
     app.canvas->render(scene);
-    auto snap = app.canvas->snapshot();
 
-    for (std::size_t i = 0; i < snap.size(); ++i) {
-        std::uint32_t argb = snap[i];
-        std::uint8_t a = (argb >> 24) & 0xFF;
-        std::uint8_t r = (argb >> 16) & 0xFF;
-        std::uint8_t g = (argb >> 8) & 0xFF;
-        std::uint8_t b = argb & 0xFF;
-        app.pixels[i] = (std::uint32_t(a) << 24) | (std::uint32_t(b) << 16) | (std::uint32_t(g) << 8) | r;
+    const auto& verts = app.canvas->backend().vertices();
+    const auto& indices = app.canvas->backend().indices();
+
+    if (!verts.empty() && !indices.empty()) {
+        sg_range vr = {verts.data(), verts.size() * sizeof(kalpana::sokol_backend::Vertex)};
+        sg_update_buffer(app.vbuf, vr);
+
+        sg_range ir = {indices.data(), indices.size() * sizeof(std::uint32_t)};
+        sg_update_buffer(app.ibuf, ir);
     }
-
-    sg_image_data imgd{};
-    imgd.mip_levels[0] = {app.pixels.data(), app.pixels.size() * sizeof(std::uint32_t)};
-    sg_update_image(app.tex_img, imgd);
 
     sg_pass pass{};
     pass.action = app.pass_action;
     pass.swapchain = sglue_swapchain();
     sg_begin_pass(pass);
-    sg_apply_pipeline(app.pip);
-    sg_apply_bindings(app.bind);
-    sg_draw(0, 6, 1);
+    if (!indices.empty()) {
+        sg_apply_pipeline(app.pip);
+        sg_apply_bindings(app.bind);
+        sg_draw(0, static_cast<int>(indices.size()), 1);
+    }
     sg_end_pass();
     sg_commit();
 }
