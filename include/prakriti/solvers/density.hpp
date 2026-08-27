@@ -28,6 +28,7 @@ struct DensitySolver {
             dp_.resize(n);
         }
         std::fill(lambda_.begin(), lambda_.begin() + n, Scalar(0));
+        std::fill(dp_.begin(), dp_.begin() + n, pebble::math::vec2{Scalar(0), Scalar(0)});
 
         // 1. Density + Lagrange Multiplier Evaluation
         for (Index i = 0; i < n; ++i) {
@@ -41,8 +42,7 @@ struct DensitySolver {
                 const pebble::math::vec2 pj_v = P.pred_v(j);
                 const Scalar r2 = pebble::math::length_sq(pi_v - pj_v);
                 rho += cfg.particle_mass * kernels::poly6(r2, h);
-                const pebble::math::vec2 g = kernels::spiky_grad(pi_v - pj_v, h)
-                                             * (Scalar(1) / cfg.rest_density);
+                const pebble::math::vec2 g = kernels::spiky_grad(pi_v - pj_v, h);
                 grad_i = grad_i + g;
                 if (j != i) sum_grad2 += pebble::math::length_sq(g);
             });
@@ -153,10 +153,10 @@ struct DensitySolver {
                 w_sum += w;
             });
             if (w_sum > Scalar(1e-6)) {
-                const Scalar inv_rest = (cfg.rest_density > Scalar(0) ? Scalar(1) / cfg.rest_density : Scalar(1));
-                vi = vi + v_smooth * (c_xsph * inv_rest);
+                // Normalized XSPH artificial viscosity (c in [0.02, 0.06])
+                vi = vi + (v_smooth * (c_xsph / w_sum));
                 if (std::abs(omega_i) > Scalar(1e-5)) {
-                    const Scalar s = c_vort * omega_i * ctx.dt_sub;
+                    const Scalar s = c_vort * (omega_i / w_sum) * ctx.dt_sub;
                     const Scalar vx_old = vi[0];
                     vi[0] -= vi[1] * s;
                     vi[1] += vx_old * s;

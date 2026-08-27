@@ -27,6 +27,7 @@
 #include "gati/elemental.hpp"
 #include "gati/material_reaction.hpp"
 #include "prakriti/prakriti.hpp"
+#include "prakriti/material/phase_rule.hpp"
 #include "prakriti/solvers/obstacle.hpp"
 #include "akruti/akruti.hpp"
 #include "kalpana/kalpana.hpp"
@@ -110,6 +111,7 @@ struct BoilingSimApp {
     // Prakriti Multiphysics & Continuum World
     CauldronObstacles obstacles;
     std::unique_ptr<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, ShowcaseMechanics>> world;
+    prakriti::PhaseRuleEngine phase_engine;
 
     prakriti::MaterialId mat_water{};
     prakriti::MaterialId mat_iron{};
@@ -133,7 +135,7 @@ struct BoilingSimApp {
     float total_particles = 0;
 
     // Heat source controls
-    float fire_intensity = 1.2f; // [0.0, 3.0]
+    float fire_intensity = 0.5f; // Gentle simmer (0.0 to 3.0)
     bool heat_torch = false;
     bool ice_blast = false;
 
@@ -170,9 +172,9 @@ static void init_boiling_world() {
     cfg.gravity = {0.0f, 750.0f}; // Downward gravity
     cfg.substeps = 3;             // 180 Hz precision
     cfg.solver_iters = 2;
-    cfg.cell_size = 16.0f;
+    cfg.cell_size = 11.0f;        // High-resolution spatial grid for fine fluid simulation
 
-    // 3. Build Cauldron Obstacle Geometry
+    // 3. Build Cauldron Obstacle Geometry (Deep, tall-rimmed U-cauldron)
     app.obstacles.circles.clear();
     app.obstacles.boxes.clear();
     app.obstacles.capsules.clear();
@@ -182,43 +184,43 @@ static void init_boiling_world() {
     const float r  = app.pot_radius;
     const float th = app.pot_wall_thick;
 
-    // Left wall of pot (Curved capsule rim)
+    // Left high rim of pot
     app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(cx - r, cy - 80.0f),
-        pebble::math::vec2(cx - r + 30.0f, cy + 50.0f),
+        pebble::math::vec2(cx - r, cy - 130.0f),
+        pebble::math::vec2(cx - r + 20.0f, cy + 20.0f),
         th
     });
-    // Right wall of pot
+    // Right high rim of pot
     app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(cx + r, cy - 80.0f),
-        pebble::math::vec2(cx + r - 30.0f, cy + 50.0f),
+        pebble::math::vec2(cx + r, cy - 130.0f),
+        pebble::math::vec2(cx + r - 20.0f, cy + 20.0f),
         th
     });
-    // Bottom basin of pot (Segmented curved base)
+    // Bottom curved basin of pot
     app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(cx - r + 30.0f, cy + 50.0f),
-        pebble::math::vec2(cx - 70.0f, cy + 90.0f),
-        th
-    });
-    app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(cx - 70.0f, cy + 90.0f),
-        pebble::math::vec2(cx + 70.0f, cy + 90.0f),
+        pebble::math::vec2(cx - r + 20.0f, cy + 20.0f),
+        pebble::math::vec2(cx - 80.0f, cy + 95.0f),
         th
     });
     app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(cx + 70.0f, cy + 90.0f),
-        pebble::math::vec2(cx + r - 30.0f, cy + 50.0f),
+        pebble::math::vec2(cx - 80.0f, cy + 95.0f),
+        pebble::math::vec2(cx + 80.0f, cy + 95.0f),
+        th
+    });
+    app.obstacles.capsules.push_back(akruti::Capsule{
+        pebble::math::vec2(cx + 80.0f, cy + 95.0f),
+        pebble::math::vec2(cx + r - 20.0f, cy + 20.0f),
         th
     });
 
     // Left and Right Hearth Leg Stands
     app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(cx - 120.0f, cy + 85.0f),
+        pebble::math::vec2(cx - 120.0f, cy + 90.0f),
         pebble::math::vec2(cx - 170.0f, cy + 180.0f),
         10.0f
     });
     app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(cx + 120.0f, cy + 85.0f),
+        pebble::math::vec2(cx + 120.0f, cy + 90.0f),
         pebble::math::vec2(cx + 170.0f, cy + 180.0f),
         10.0f
     });
@@ -230,29 +232,18 @@ static void init_boiling_world() {
         12.0f
     });
 
-    // Top Cold Air Condensation Guide Fins (Upper left & right funnels)
-    app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(80.0f, 130.0f),
-        pebble::math::vec2(cx - 120.0f, 190.0f),
-        8.0f
-    });
-    app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(FW - 80.0f, 130.0f),
-        pebble::math::vec2(cx + 120.0f, 190.0f),
-        8.0f
-    });
-
     prakriti::ObstacleConfig obs_cfg{};
     obs_cfg.friction = 0.02f;
     obs_cfg.restitution = 0.20f;
     obs_cfg.contact_offset = 0.0f;
     obs_cfg.contact_stiffness = 1.0f;
 
-    // 4. Setup Density Solver & SPH Smoothing
+    // 4. Setup Density Solver & Fine SPH Smoothing
     prakriti::DensitySolver density_solver;
-    density_solver.cfg.smoothing_h = 16.0f;
-    density_solver.cfg.rest_density = 0.015f;
+    density_solver.cfg.smoothing_h = 11.0f;     // Crisp high-resolution fluid kernel
+    density_solver.cfg.rest_density = 0.0057f;  // Calibrated Poly6 kernel sum at rest 4.6px particle spacing
     density_solver.cfg.relaxation_eps = 1e-4f;
+    density_solver.cfg.scorr_k = 0.001f;
 
     ShowcaseMechanics mechanics_stack{
         std::make_tuple(
@@ -286,14 +277,19 @@ static void init_boiling_world() {
     fire_mat.heat_capacity = 1.0f;
     app.mat_fire_core = app.world->materials().add(fire_mat);
 
-    // 6. Spawn Initial Water Volume inside the Pot (~500 particles)
-    for (int r = 0; r < 20; ++r) {
-        for (int c = 0; c < 25; ++c) {
-            float px = (cx - 100.0f) + float(c) * 8.2f;
-            float py = (cy - 20.0f) + float(r) * 5.0f;
+    // Register Generic Rule-Based Phase Transformations (Boiling & Condensation)
+    app.phase_engine = prakriti::PhaseRuleEngine{};
+    app.phase_engine.add_rule(prakriti::rules::boiling(app.mat_water, 100.0f, -1400.0f));
+    app.phase_engine.add_rule(prakriti::rules::condensation(app.mat_water, 100.0f));
+
+    // 6. Spawn Densely Sampled Liquid Water resting in the lower cauldron basin (~600 fine particles)
+    for (int row = 0; row < 18; ++row) {
+        for (int col = 0; col < 42; ++col) {
+            float px = (cx - 95.0f) + float(col) * 4.6f;
+            float py = (cy + 15.0f) + float(row) * 4.2f;
             float dx = px - cx;
-            float dy = py - (cy + 20.0f);
-            if (dx * dx + dy * dy < (r - 20.0f) * (r - 20.0f)) {
+            float dy = py - (cy + 25.0f);
+            if (dx * dx + dy * dy < (r - 35.0f) * (r - 35.0f) && py < cy + 85.0f) {
                 app.world->particles().add({
                     .position = pebble::math::vec2(px, py),
                     .velocity = {0.0f, 0.0f},
@@ -341,7 +337,7 @@ static void update_thermodynamics_and_phase(float dt) {
     const std::size_t N = P.size();
     const float cx = app.pot_cx;
     const float cy = app.pot_cy;
-    const float base_y = cy + 85.0f;
+    const float base_y = cy + 90.0f;
 
     // 1. Interactive Heat Torch / Ice Blast from user input
     if (app.mouse_down || app.heat_torch || app.ice_blast) {
@@ -363,10 +359,13 @@ static void update_thermodynamics_and_phase(float dt) {
     }
 
     // 2. Heat conduction from Burner Fire into the Pot Base
-    float flame_heat = 750.0f * app.fire_intensity;
-    app.pot_temp += (flame_heat - app.pot_temp) * (0.8f * dt);
+    float flame_heat = 550.0f * app.fire_intensity;
+    app.pot_temp += (flame_heat - app.pot_temp) * (0.25f * dt);
 
-    // 3. Thermal conduction, Phase Change & Thermal Buoyancy for all particles
+    // 3. Step Rule-Based Phase Transition Engine
+    app.phase_engine.step(P, app.world->materials(), dt);
+
+    // 4. Heat Conduction from Hearth/Pot into Liquid Water, Organic Convection, & Steam Ascent
     float temp_sum = 0.0f;
     float max_temp = 0.0f;
     int water_p_count = 0;
@@ -377,52 +376,45 @@ static void update_thermodynamics_and_phase(float dt) {
         if (P.material[i] != app.mat_water) continue;
         water_p_count++;
 
-        // Heat conduction from Pot bottom into nearby liquid particles
-        float dx_pot = P.pos_x[i] - cx;
-        float dy_pot = P.pos_y[i] - base_y;
-        float dist_base = std::sqrt(dx_pot * dx_pot + dy_pot * dy_pot);
-
-        if (dist_base < 80.0f && P.pos_y[i] > cy) {
-            float heat_flux = (app.pot_temp - P.temperature[i]) * 3.5f * dt;
-            P.temperature[i] += heat_flux;
+        // Conductive heat transfer from cauldron metal walls to liquid water inside pot (Realistic heat capacity rate)
+        if (P.pos_y[i] > cy - 60.0f && std::abs(P.pos_x[i] - cx) < app.pot_radius + 15.0f) {
+            float heat_flux = (app.pot_temp - P.temperature[i]) * 0.45f * dt;
+            P.temperature[i] += std::max(0.0f, heat_flux);
         }
 
         // Ambient thermal dissipation (Cooling at top sky zone)
         float ambient_t = (P.pos_y[i] < 220.0f) ? 12.0f : 24.0f; // Cold sky aloft (12°C)
-        float cooling_rate = (P.pos_y[i] < 220.0f) ? 18.0f : 2.5f;
+        float cooling_rate = (P.pos_y[i] < 220.0f) ? 22.0f : 3.0f;
         P.temperature[i] += (ambient_t - P.temperature[i]) * (cooling_rate * 0.01f) * dt;
 
-        // Phase Transition Logic (Water <-> Steam)
-        if (P.temperature[i] >= 100.0f) {
-            // Boiling! Liquid turns to buoyant Steam Gas
-            float boil_prog = std::clamp((P.temperature[i] - 100.0f) / 10.0f, 0.0f, 1.0f);
-            P.f_liquid[i] = 1.0f - boil_prog;
-            P.f_gas[i]    = boil_prog;
-        } else {
-            // Condensation! Steam cools below 100°C and condenses back into liquid water droplets
-            P.f_liquid[i] = 1.0f;
-            P.f_gas[i]    = 0.0f;
+        // Thermal expansion & organic convection in warm liquid water (T > 25°C)
+        if (P.f_liquid[i] > 0.4f && P.temperature[i] > 25.0f) {
+            float heat_ratio = std::clamp((P.temperature[i] - 20.0f) / 80.0f, 0.0f, 1.0f);
+            
+            // Upward convective acceleration + radial sloshing
+            float convection = -heat_ratio * 220.0f;
+            P.vel_y[i] += convection * dt;
+            
+            float radial = (P.pos_x[i] - cx) * 0.04f * heat_ratio;
+            P.vel_x[i] += radial * dt;
+            
+            // Micro-bubble agitation near boiling
+            if (P.temperature[i] > 85.0f) {
+                P.vel_x[i] += (float(std::rand() % 30) - 15.0f) * 10.0f * dt;
+                P.vel_y[i] -= float(std::rand() % 40) * 8.0f * dt;
+            }
         }
 
-        // Buoyancy Forces:
-        // Steam gas rises rapidly upwards (Thermal Buoyancy Force)
+        // Steam Vapor Buoyancy Ascent & Billowing Plumes (Closed Cycle: Steam rises -> cools aloft -> condenses to rain)
         if (P.f_gas[i] > 0.3f) {
             steam_p_count++;
-            float buoyancy = -1400.0f * P.f_gas[i] * (1.0f + (P.temperature[i] - 100.0f) * 0.02f);
+            float buoyancy = -1200.0f * P.f_gas[i];
             P.vel_y[i] += buoyancy * dt;
 
-            // Thermal steam plume expansion / billowing turbulence
-            float plume_wobble = std::sin(P.pos_y[i] * 0.1f + float(app.frame) * 0.2f);
+            float plume_wobble = std::sin(P.pos_y[i] * 0.08f + float(app.frame) * 0.25f);
             P.vel_x[i] += plume_wobble * 80.0f * dt;
         } else {
             liquid_p_count++;
-        }
-
-        // Micro-bubbling turbulence when near boiling (90°C - 100°C)
-        if (P.temperature[i] > 88.0f && P.temperature[i] < 100.0f && P.pos_y[i] > cy) {
-            float bubble_jolt = (float(std::rand() % 40) - 20.0f);
-            P.vel_x[i] += bubble_jolt * 20.0f * dt;
-            P.vel_y[i] -= float(std::rand() % 60) * 15.0f * dt;
         }
 
         temp_sum += P.temperature[i];
@@ -496,16 +488,7 @@ static void build_scene(kalpana::Scene& scene) {
         scene.add(kalpana::Node::shape(sky, kalpana::Paint::fill(kalpana::Color{0.06f, 0.12f, 0.22f, 0.40f})));
     }
 
-    // 2. Condensation Guide Fins
-    {
-        kalpana::Path fin1, fin2;
-        fin1.move_to(80.0f, 130.0f); fin1.line_to(cx - 120.0f, 190.0f);
-        fin2.move_to(FW - 80.0f, 130.0f); fin2.line_to(cx + 120.0f, 190.0f);
-        scene.add(kalpana::Node::shape(fin1, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.65f, 0.90f, 0.70f}, 4.0f)));
-        scene.add(kalpana::Node::shape(fin2, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.65f, 0.90f, 0.70f}, 4.0f)));
-    }
-
-    // 3. Hearth Stand & Burner Pit Grate
+    // 2. Hearth Stand & Burner Pit Grate
     {
         kalpana::Path stand;
         stand.move_to(cx - 190.0f, cy + 180.0f); stand.line_to(cx + 190.0f, cy + 180.0f);
@@ -540,12 +523,12 @@ static void build_scene(kalpana::Scene& scene) {
     };
 
     kalpana::Path pot_hull;
-    pot_hull.move_to(cx - r, cy - 80.0f);
-    pot_hull.line_to(cx - r + 30.0f, cy + 50.0f);
-    pot_hull.line_to(cx - 70.0f, cy + 90.0f);
-    pot_hull.line_to(cx + 70.0f, cy + 90.0f);
-    pot_hull.line_to(cx + r - 30.0f, cy + 50.0f);
-    pot_hull.line_to(cx + r, cy - 80.0f);
+    pot_hull.move_to(cx - r, cy - 130.0f);
+    pot_hull.line_to(cx - r + 20.0f, cy + 20.0f);
+    pot_hull.line_to(cx - 80.0f, cy + 95.0f);
+    pot_hull.line_to(cx + 80.0f, cy + 95.0f);
+    pot_hull.line_to(cx + r - 20.0f, cy + 20.0f);
+    pot_hull.line_to(cx + r, cy - 130.0f);
     scene.add(kalpana::Node::shape(pot_hull, kalpana::Paint::stroke(pot_iron_col, app.pot_wall_thick)));
     scene.add(kalpana::Node::shape(pot_hull, kalpana::Paint::stroke(kalpana::Color{0.4f, 0.5f, 0.65f, 0.6f}, 2.0f)));
 
@@ -566,6 +549,45 @@ static void build_scene(kalpana::Scene& scene) {
         scene.add(kalpana::Node::shape(t_fill, kalpana::Paint::fill(
             app.avg_water_temp > 98.0f ? kalpana::Color{1.0f, 0.30f, 0.10f, 1.0f} : kalpana::Color{0.15f, 0.70f, 1.0f, 1.0f})));
         scene.add(kalpana::Node::shape(t_bg, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.45f, 0.55f, 0.8f}, 1.0f)));
+    }
+
+    // 7. Render Instanced Water, Bubbles and Steam Clouds
+    if (app.world) {
+        auto& P = app.world->particles();
+        const std::size_t N = P.size();
+
+        for (std::size_t i = 0; i < N; ++i) {
+            float px = P.pos_x[i];
+            float py = P.pos_y[i];
+            float t  = P.temperature[i];
+            float f_gas = P.f_gas[i];
+
+            kalpana::Color p_col;
+            float p_radius = 5.0f;
+
+            if (f_gas > 0.4f) {
+                // STEAM VAPOR: Soft billowing white-cyan mist
+                p_radius = 4.2f + f_gas * 2.6f;
+                float steam_alpha = std::clamp(0.20f + 0.35f * f_gas, 0.15f, 0.60f);
+                p_col = {0.90f, 0.96f, 1.0f, steam_alpha};
+            } else if (t >= 95.0f) {
+                // BOILING FROTH: Micro-bubbly cyan-white
+                p_radius = 3.0f;
+                p_col = {0.90f, 0.98f, 1.0f, 0.95f};
+            } else if (t >= 60.0f) {
+                // HOT WATER: Warm aquamarine
+                float warm_prog = (t - 60.0f) / 35.0f;
+                p_radius = 2.7f;
+                p_col = {0.15f + 0.50f * warm_prog, 0.70f + 0.25f * warm_prog, 0.95f, 0.92f};
+            } else {
+                // COOL LIQUID WATER: Crisp translucent sapphire blue droplet
+                float cool_prog = std::clamp((t - 15.0f) / 45.0f, 0.0f, 1.0f);
+                p_radius = 2.6f;
+                p_col = {0.10f, 0.50f + 0.25f * cool_prog, 0.92f + 0.08f * cool_prog, 0.88f};
+            }
+
+            app.instanced_particles.add_instance(px, py, p_radius, p_col);
+        }
     }
 }
 
@@ -640,45 +662,7 @@ static void frame_cb() {
         app.world->step();
     }
 
-    // 2. Prepare Particle Instancing Cloud
-    app.instanced_particles.begin();
-    if (app.world) {
-        auto& P = app.world->particles();
-        const std::size_t N = P.size();
-
-        for (std::size_t i = 0; i < N; ++i) {
-            float px = P.pos_x[i];
-            float py = P.pos_y[i];
-            float t  = P.temperature[i];
-            float f_gas = P.f_gas[i];
-
-            kalpana::Color p_col;
-            float p_radius = 5.0f;
-
-            if (f_gas > 0.4f) {
-                // STEAM VAPOR: White-cyan buoyant cloud
-                p_radius = 8.0f + f_gas * 4.0f;
-                p_col = {0.88f, 0.95f, 1.0f, 0.65f};
-            } else if (t >= 95.0f) {
-                // BOILING FROTH: Bubbly cyan-white
-                p_radius = 5.5f;
-                p_col = {0.90f, 0.98f, 1.0f, 0.95f};
-            } else if (t >= 60.0f) {
-                // HOT WATER: Warm aquamarine
-                float warm_prog = (t - 60.0f) / 35.0f;
-                p_col = {0.15f + 0.50f * warm_prog, 0.70f + 0.25f * warm_prog, 0.95f, 0.90f};
-            } else {
-                // COOL WATER: Deep ocean blue
-                float cool_prog = std::clamp((t - 15.0f) / 45.0f, 0.0f, 1.0f);
-                p_col = {0.10f, 0.45f + 0.25f * cool_prog, 0.90f + 0.10f * cool_prog, 0.85f};
-            }
-
-            app.instanced_particles.push(px, py, p_radius, p_col);
-        }
-    }
-    app.instanced_particles.end();
-
-    // 3. Build Vector Scene with Kalpana
+    // 2. Build Vector Scene with Kalpana & Populate Instanced Particles
     kalpana::Scene scene;
     build_scene(scene);
     app.canvas->render(scene);
@@ -738,14 +722,14 @@ static void event_cb(const sapp_event* ev) {
             app.fire_intensity = std::max(0.0f, app.fire_intensity - 0.5f);
             app.ice_blast = true;
         } else if (ev->key_code == SAPP_KEYCODE_F) {
-            // [F] Add Fresh Water Stream from top Faucet
-            if (app.world && app.world->particles().size() < 1200) {
-                for (int k = 0; k < 6; ++k) {
-                    float jx = app.pot_cx + (float(std::rand() % 40) - 20.0f);
-                    float jy = 70.0f + float(std::rand() % 20);
+            // [F] Add Fresh Fine Water Stream from top Faucet (Capacity up to 2,500 particles)
+            if (app.world && app.world->particles().size() < 2500) {
+                for (int k = 0; k < 10; ++k) {
+                    float jx = app.pot_cx + (float(std::rand() % 30) - 15.0f);
+                    float jy = 60.0f + float(std::rand() % 20);
                     app.world->particles().add({
                         .position = pebble::math::vec2(jx, jy),
-                        .velocity = {float(std::rand() % 30 - 15), 180.0f},
+                        .velocity = {float(std::rand() % 24 - 12), 190.0f},
                         .mass = 1.0f,
                         .temperature = 16.0f,
                         .material = app.mat_water,

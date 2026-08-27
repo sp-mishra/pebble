@@ -84,6 +84,7 @@ public:
     // Fast 3x3 neighbor traversal with zero hash table lookups
     template <class Fn>
     void for_each_neighbor(Scalar px, Scalar py, Scalar radius, Fn&& fn) const {
+        if (!std::isfinite(px) || !std::isfinite(py)) return;
         const auto [cx, cy] = cell_coord(px, py);
         const Scalar r2 = radius * radius;
 
@@ -95,7 +96,8 @@ public:
                 const std::uint32_t slot = hash_coords(nx, ny);
 
                 Index cur = head_[slot];
-                while (cur != kInvalid) {
+                std::uint32_t guard = 0;
+                while (cur != kInvalid && guard++ < 512) {
                     if (cell_of_[cur] == target_packed) {
                         fn(cur, r2);
                     }
@@ -108,6 +110,7 @@ public:
     struct CellCoord { std::int32_t x, y; };
 
     [[nodiscard]] CellCoord cell_coord(Scalar px, Scalar py) const noexcept {
+        if (!std::isfinite(px) || !std::isfinite(py)) return {0, 0};
         return {static_cast<std::int32_t>(std::floor(px * inv_cell_)),
                 static_cast<std::int32_t>(std::floor(py * inv_cell_))};
     }
