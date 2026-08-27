@@ -47,9 +47,9 @@ struct DensitySolver {
                 if (j != i) sum_grad2 += pebble::math::length_sq(g);
             });
             P.density[i] = rho;
-            const Scalar C = rho / cfg.rest_density - Scalar(1);
+            const Scalar C = std::max(Scalar(0), rho / cfg.rest_density - Scalar(1));
             sum_grad2 += pebble::math::length_sq(grad_i);
-            lambda_[i] = -C / (sum_grad2 + cfg.relaxation_eps);
+            lambda_[i] = C > Scalar(0) ? -C / (sum_grad2 + cfg.relaxation_eps) : Scalar(0);
 
             const MaterialParams& p = ctx.params_of(i);
             P.pressure[i] = tait_pressure(rho, cfg.rest_density, p, P.f_gas[i],

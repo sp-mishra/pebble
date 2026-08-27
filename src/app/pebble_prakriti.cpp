@@ -196,7 +196,8 @@ static void init_prakriti_world() {
 
     prakriti::DensitySolver density_solver;
     density_solver.cfg.smoothing_h = 16.0f;
-    density_solver.cfg.rest_density = 1.5f;
+    density_solver.cfg.rest_density = 0.015f; // SPH Poly6 kernel rest density at 10px grid spacing
+    density_solver.cfg.relaxation_eps = 1e-4f;
 
     ShowcaseMechanics mechanics_stack{
         std::make_tuple(

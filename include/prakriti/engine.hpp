@@ -132,7 +132,8 @@ private:
         const Scalar inv_dt = dt_sub > Scalar(0) ? Scalar(1) / dt_sub : Scalar(0);
         for (Index i = 0; i < n; ++i) {
             const Scalar mu = law_.effective_viscosity(ctx.params_of(i), ctx.phase_of(i));
-            damp_[i] = active_[i] * (Scalar(1) - std::min(mu + cfg_.global_damping, Scalar(1)));
+            const Scalar total_damp = (mu + cfg_.global_damping) * dt_sub;
+            damp_[i] = active_[i] * std::clamp(Scalar(1) - total_damp, Scalar(0), Scalar(1));
         }
         const CSpan dampc{damp_.data(), n};
         // vel = (pred - pos) * inv_dt, then vel *= damp (damp folds in the static mask => 0).
