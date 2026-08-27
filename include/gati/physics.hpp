@@ -9,6 +9,7 @@
 #include "ecs.hpp"
 #include "transform.hpp"
 #include "system.hpp"
+#include "material.hpp"
 
 #if defined(GATI_ENABLE_PRAKRITI) && __has_include("prakriti/prakriti.hpp")
 #define GATI_HAS_PRAKRITI 1
