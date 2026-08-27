@@ -64,12 +64,30 @@ struct PhysicsSyncSystem {
     void run(World& w, StepContext ctx) {
         if (!physics) return;
         physics->set_dt(ctx.dt);
-        w.view<BodyRef, Transform>([&](Entity, BodyRef&, Transform& tr) {
+        auto& pw = physics->prakriti();
+        auto& P = pw.particles();
+
+        // 1. Sync Gati ECS input velocities / forces to Prakriti before step
+        w.view<BodyRef, Transform>([&](Entity e, BodyRef& b, Transform& tr) {
             tr.checkpoint();
+            if (b.particle < P.size()) {
+                if (auto* mat = w.get<MaterialComponent>(e)) {
+                    P.temperature[b.particle] = mat->temperature;
+                }
+            }
         });
+
+        // 2. Step Prakriti Continuum & Multiphysics World
         physics->step();
-        w.view<BodyRef, Transform>([&](Entity, BodyRef& b, Transform& tr) {
-            tr.position = physics->position(b);
+
+        // 3. Write back simulated positions, velocities, and phase states to Gati ECS
+        w.view<BodyRef, Transform>([&](Entity e, BodyRef& b, Transform& tr) {
+            if (b.particle < P.size()) {
+                tr.position = physics->position(b);
+                if (auto* mat = w.get<MaterialComponent>(e)) {
+                    mat->temperature = P.temperature[b.particle];
+                }
+            }
         });
     }
 };

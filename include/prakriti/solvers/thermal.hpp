@@ -21,7 +21,8 @@ struct ThermalSolver {
         const Index n = P.size();
         const Scalar h = ctx.grid.cell_size();
 
-        delta_.assign(n, Scalar(0));
+        if (delta_.size() < n) delta_.resize(n);
+        std::fill(delta_.begin(), delta_.begin() + n, Scalar(0));
 
         // Accumulate conductive exchange with neighbors (symmetric, energy-conserving form).
         for (Index i = 0; i < n; ++i) {

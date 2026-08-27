@@ -62,35 +62,34 @@ private:
     //   • remove a Coulomb-bounded friction fraction of the tangential inbound velocity.
     template <class Store>
     void resolve_particle(Store& P, Index i) {
-        const pebble::math::vec2 p = P.pred_v(i);
+        pebble::math::vec2 pred = P.pred_v(i);
+        const pebble::math::vec2 v = P.vel_v(i);
+
         obstacles->for_each_shape([&](const auto& shape) {
-            const Scalar d = shape.sdf(p);
-            if (d >= cfg.contact_offset) return; // no contact
-            const pebble::math::vec2 normal = detail::sdf_normal(shape, p);
+            const Scalar d = shape.sdf(pred);
+            if (d >= cfg.contact_offset) return; // fast early out before gradient
+
+            const pebble::math::vec2 normal = detail::sdf_normal(shape, pred);
             const Scalar penetration = cfg.contact_offset - d;
 
-            pebble::math::vec2 pred = P.pred_v(i);
             // 1) non-penetration.
             pred = pred + normal * (penetration * cfg.contact_stiffness);
 
-            // 2) restitution + friction from the pre-solve velocity's inbound component.
-            const pebble::math::vec2 v = P.vel_v(i);
-            const Scalar vn = pebble::math::dot(v, normal);          // <0 => moving into the surface
+            // 2) restitution + friction from inbound component.
+            const Scalar vn = pebble::math::dot(v, normal);
             if (vn < Scalar(0)) {
-                // reverse the normal velocity with coefficient e: outward pred offset = e|vn|dt.
                 pred = pred + normal * (-cfg.restitution * vn * dt_sub_);
-                // friction: remove up to μ|vn| of tangential velocity, expressed as a pred shift.
-                const pebble::math::vec2 normal_vn = normal * vn;
-                const pebble::math::vec2 v_t = v - normal_vn;
-                const Scalar t_len = pebble::math::length(v_t);
-                if (t_len > Scalar(1e-9)) {
+                const pebble::math::vec2 v_t = v - normal * vn;
+                const Scalar t_len_sq = pebble::math::length_sq(v_t);
+                if (t_len_sq > Scalar(1e-12)) {
+                    const Scalar t_len = std::sqrt(t_len_sq);
                     const Scalar remove = std::min(cfg.friction * std::fabs(vn), t_len);
                     const pebble::math::vec2 shift = v_t * ((remove / t_len) * dt_sub_);
                     pred = pred - shift;
                 }
             }
-            P.set_pred(i, pred);
         });
+        P.set_pred(i, pred);
     }
 };
 

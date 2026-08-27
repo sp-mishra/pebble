@@ -9,71 +9,59 @@
 #include <span>
 #include <cmath>
 #include <cstdint>
-#include <unordered_map>
+#include <algorithm>
 
 namespace prakriti {
 
 class SpatialHash {
 public:
+    static constexpr std::uint32_t kTableSize = 4096; // Power-of-two flat table
+    static constexpr std::uint32_t kTableMask = kTableSize - 1;
+    static constexpr Index kInvalid = static_cast<Index>(-1);
+
     explicit SpatialHash(Scalar cell_size = Scalar(1))
-        : inv_cell_(Scalar(1) / cell_size), cell_size_(cell_size) {}
+        : inv_cell_(Scalar(1) / cell_size), cell_size_(cell_size) {
+        head_.assign(kTableSize, kInvalid);
+    }
 
     void set_cell_size(Scalar s) noexcept { cell_size_ = s; inv_cell_ = Scalar(1) / s; }
     [[nodiscard]] Scalar cell_size() const noexcept { return cell_size_; }
 
-    // (Re)build the cell list from split position columns (x[], y[]).
+    // (Re)build spatial linked-list cell structures with O(N) single-pass zero-allocation
     void build(std::span<const Scalar> px, std::span<const Scalar> py) {
         const Index n = static_cast<Index>(px.size());
         cell_of_.resize(n);
-        bucket_start_.clear();
-        entries_.resize(n);
+        next_.resize(n);
+        std::fill(head_.begin(), head_.end(), kInvalid);
 
-        // Map each point to a cell key; count per cell.
-        std::unordered_map<std::int64_t, Index> counts;
-        counts.reserve(n * 2);
         for (Index i = 0; i < n; ++i) {
-            const std::int64_t key = cell_key(cell_coord(px[i], py[i]));
-            cell_of_[i] = key;
-            ++counts[key];
-        }
-        // Prefix-sum bucket offsets.
-        Index acc = 0;
-        bucket_start_.reserve(counts.size());
-        for (auto& [key, c] : counts) {
-            bucket_start_[key] = acc;
-            const Index cnt = c;
-            c = acc;      // repurpose as running write cursor
-            acc += cnt;
-        }
-        // Scatter indices into contiguous entries via counting sort.
-        for (Index i = 0; i < n; ++i) {
-            Index& cur = counts[cell_of_[i]];
-            entries_[cur++] = i;
-        }
-        // Recompute bucket_start (counts now hold end cursors) and store lengths.
-        bucket_len_.clear();
-        for (auto& [key, end_cur] : counts) {
-            const Index start = bucket_start_[key];
-            bucket_len_[key] = end_cur - start;
+            const auto coord = cell_coord(px[i], py[i]);
+            const std::uint32_t slot = hash_coords(coord.x, coord.y);
+            cell_of_[i] = pack_coords(coord.x, coord.y);
+            next_[i] = head_[slot];
+            head_[slot] = i;
         }
     }
 
-    // Invoke fn(neighbor_index, radius²) for every candidate within `radius` of (px,py).
-    // Scans the 3x3 cell block around the point (radius must be <= cell_size).
+    // Fast 3x3 neighbor traversal with zero hash table lookups
     template <class Fn>
     void for_each_neighbor(Scalar px, Scalar py, Scalar radius, Fn&& fn) const {
         const auto [cx, cy] = cell_coord(px, py);
         const Scalar r2 = radius * radius;
+
         for (int dy = -1; dy <= 1; ++dy) {
             for (int dx = -1; dx <= 1; ++dx) {
-                const std::int64_t key = cell_key({cx + dx, cy + dy});
-                auto it = bucket_start_.find(key);
-                if (it == bucket_start_.end()) continue;
-                const Index start = it->second;
-                const Index len   = bucket_len_.at(key);
-                for (Index k = 0; k < len; ++k) {
-                    const Index j = entries_[start + k];
-                    fn(j, r2);
+                const int nx = cx + dx;
+                const int ny = cy + dy;
+                const std::uint32_t target_packed = pack_coords(nx, ny);
+                const std::uint32_t slot = hash_coords(nx, ny);
+
+                Index cur = head_[slot];
+                while (cur != kInvalid) {
+                    if (cell_of_[cur] == target_packed) {
+                        fn(cur, r2);
+                    }
+                    cur = next_[cur];
                 }
             }
         }
@@ -87,18 +75,34 @@ public:
     }
 
 private:
-    [[nodiscard]] static std::int64_t cell_key(CellCoord c) noexcept {
-        // Pack two 32-bit signed coords into one 64-bit key.
-        return (static_cast<std::int64_t>(static_cast<std::uint32_t>(c.x)) << 32)
-             | static_cast<std::uint32_t>(c.y);
+    [[nodiscard]] static constexpr std::uint32_t part1by1(std::uint32_t x) noexcept {
+        x &= 0x0000ffff;
+        x = (x | (x << 8)) & 0x00FF00FF;
+        x = (x | (x << 4)) & 0x0F0F0F0F;
+        x = (x | (x << 2)) & 0x33333333;
+        x = (x | (x << 1)) & 0x55555555;
+        return x;
+    }
+
+    [[nodiscard]] static constexpr std::uint32_t morton2d(std::uint32_t x, std::uint32_t y) noexcept {
+        return (part1by1(y) << 1) | part1by1(x);
+    }
+
+    [[nodiscard]] static constexpr std::uint32_t pack_coords(std::int32_t x, std::int32_t y) noexcept {
+        return (static_cast<std::uint32_t>(x & 0xFFFF) << 16) | static_cast<std::uint32_t>(y & 0xFFFF);
+    }
+
+    [[nodiscard]] static constexpr std::uint32_t hash_coords(std::int32_t x, std::int32_t y) noexcept {
+        // High-avalanche spatial prime multiplier hash combined with Morton interleaving
+        const std::uint32_t m = morton2d(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
+        return (m ^ (m >> 12)) & kTableMask;
     }
 
     Scalar inv_cell_;
     Scalar cell_size_;
-    std::vector<std::int64_t> cell_of_;
-    std::vector<Index>        entries_;      // particle ids grouped by cell
-    std::unordered_map<std::int64_t, Index> bucket_start_;
-    std::unordered_map<std::int64_t, Index> bucket_len_;
+    std::vector<std::uint32_t> head_;
+    std::vector<std::uint32_t> next_;
+    std::vector<std::uint32_t> cell_of_;
 };
 
 } // namespace prakriti

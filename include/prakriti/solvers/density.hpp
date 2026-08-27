@@ -23,8 +23,11 @@ struct DensitySolver {
         const Index n = P.size();
         const Scalar h = cfg.smoothing_h;
 
-        lambda_.assign(n, Scalar(0));
-        dp_.assign(n, pebble::math::vec2{0.0f, 0.0f});
+        if (lambda_.size() < n) {
+            lambda_.resize(n);
+            dp_.resize(n);
+        }
+        std::fill(lambda_.begin(), lambda_.begin() + n, Scalar(0));
 
         // 1. density + lambda (only where liquid fraction is significant).
         for (Index i = 0; i < n; ++i) {
@@ -68,7 +71,17 @@ struct DensitySolver {
                 Scalar scorr = Scalar(0);
                 if (wdq > Scalar(0)) {
                     const Scalar ratio = kernels::poly6(r2, h) / wdq;
-                    scorr = -cfg.scorr_k * std::pow(ratio, static_cast<Scalar>(cfg.scorr_n));
+                    // Fast integer power unroll: scorr_n is typically 4
+                    if (cfg.scorr_n == 4) {
+                        const Scalar r2_val = ratio * ratio;
+                        scorr = -cfg.scorr_k * (r2_val * r2_val);
+                    } else if (cfg.scorr_n == 2) {
+                        scorr = -cfg.scorr_k * (ratio * ratio);
+                    } else {
+                        Scalar p = ratio;
+                        for (int k = 1; k < cfg.scorr_n; ++k) p *= ratio;
+                        scorr = -cfg.scorr_k * p;
+                    }
                 }
                 const pebble::math::vec2 g = kernels::spiky_grad(pi_v - pj_v, h);
                 const Scalar scale = (lambda_[i] + lambda_[j] + scorr) / cfg.rest_density;

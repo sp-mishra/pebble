@@ -81,7 +81,7 @@ struct PrakritiStressApp {
     std::unique_ptr<kalpana::Canvas<kalpana::sokol_backend>> canvas;
 
     ShowcaseObstacles obstacles;
-    std::unique_ptr<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::ScalarBackend, ShowcaseMechanics>> world;
+    std::unique_ptr<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, ShowcaseMechanics>> world;
     prakriti::MaterialId mat_water = 0;
     prakriti::MaterialId mat_steel = 0;
     prakriti::MaterialId mat_dry_ice = 0;
@@ -155,7 +155,7 @@ static void init_prakriti_world() {
         )
     };
 
-    app.world = std::make_unique<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::ScalarBackend, ShowcaseMechanics>>(
+    app.world = std::make_unique<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, ShowcaseMechanics>>(
         cfg, std::move(mechanics_stack)
     );
 
@@ -352,23 +352,21 @@ static void build_scene(kalpana::Scene& scene) {
     const auto& P = pw.particles();
     const auto& E = pw.edges();
 
-    // 1. Background Grid
+    // 1. Background Grid (Batched into single compound path)
     {
         kalpana::Color gc{0.07f, 0.09f, 0.14f, 1.0f};
+        kalpana::Path grid_lines;
         for (int i = 0; i <= 24; ++i) {
             float x = float(i) / 24.0f * FW;
-            kalpana::Path line;
-            line.move_to(x, 0.0f);
-            line.line_to(x, FH);
-            scene.add(kalpana::Node::shape(line, kalpana::Paint::stroke(gc, 1.0f)));
+            grid_lines.move_to(x, 0.0f);
+            grid_lines.line_to(x, FH);
         }
         for (int j = 0; j <= 16; ++j) {
             float y = float(j) / 16.0f * FH;
-            kalpana::Path line;
-            line.move_to(0.0f, y);
-            line.line_to(FW, y);
-            scene.add(kalpana::Node::shape(line, kalpana::Paint::stroke(gc, 1.0f)));
+            grid_lines.move_to(0.0f, y);
+            grid_lines.line_to(FW, y);
         }
+        scene.add(kalpana::Node::shape(grid_lines, kalpana::Paint::stroke(gc, 1.0f)));
     }
 
     // 2. Render Static Obstacles (Circles & Capsules)

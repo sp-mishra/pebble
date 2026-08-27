@@ -13,6 +13,8 @@
 #include "material/phase.hpp"
 #include "compute/compute_backend.hpp"
 #include "compute/scalar_backend.hpp"
+#include "compute/highway_backend.hpp"
+#include "compute/pravaha_backend.hpp"
 #include "solvers/solver_base.hpp"
 #include "solvers/thermal.hpp"
 #include "solvers/xpbd.hpp"
@@ -39,11 +41,19 @@ struct SolverStack {
 // Default stack: mechanics (XPBD) + fluids (density) each iteration; damage runs once per substep.
 using DefaultMechanicsStack = SolverStack<XpbdSolver, DensitySolver>;
 
+#if defined(PRAKRITI_HAS_PRAVAHA_BACKEND)
+using DefaultComputeBackend = PravahaBackend;
+#elif defined(PRAKRITI_HAS_HIGHWAY_BACKEND)
+using DefaultComputeBackend = HighwayBackend;
+#else
+using DefaultComputeBackend = ScalarBackend;
+#endif
+
 // The mechanics stack is a template parameter so integrators can compose extra PhysicsSolvers
 // (e.g. akruti-backed ObstacleSolver / JointSolver) without touching the engine. It defaults to
 // DefaultMechanicsStack, so existing World<> uses are unchanged. A custom stack is passed in at
 // construction (solvers may hold references to external obstacle/joint data).
-template <MaterialLaw Law = DefaultMaterialLaw, ComputeBackend CB = ScalarBackend,
+template <MaterialLaw Law = DefaultMaterialLaw, ComputeBackend CB = DefaultComputeBackend,
           class MechanicsStack = DefaultMechanicsStack>
 class World {
 public:

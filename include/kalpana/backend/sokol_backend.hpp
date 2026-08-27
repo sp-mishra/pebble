@@ -74,7 +74,8 @@ public:
                     if (pt_idx + 1 < pts.size()) {
                         pebble::math::vec2 cp = xf.apply(pts[pt_idx++]);
                         pebble::math::vec2 end = xf.apply(pts[pt_idx++]);
-                        constexpr int kSteps = 6;
+                        float chord = pebble::math::length(end - curr);
+                        int kSteps = std::clamp(static_cast<int>(std::sqrt(chord) * 1.2f), 2, 8);
                         for (int i = 1; i <= kSteps; ++i) {
                             float t = float(i) / float(kSteps);
                             float inv = 1.0f - t;
@@ -94,7 +95,9 @@ public:
                         pebble::math::vec2 cp1 = xf.apply(pts[pt_idx++]);
                         pebble::math::vec2 cp2 = xf.apply(pts[pt_idx++]);
                         pebble::math::vec2 end = xf.apply(pts[pt_idx++]);
-                        constexpr int kSteps = 10;
+                        float chord = pebble::math::length(end - curr);
+                        // Adaptive level of detail: small particle circles (chord < 10px) use only 2-3 segments
+                        int kSteps = std::clamp(static_cast<int>(std::sqrt(chord) * 1.5f), 2, 12);
                         for (int i = 1; i <= kSteps; ++i) {
                             float t = float(i) / float(kSteps);
                             float inv = 1.0f - t;
