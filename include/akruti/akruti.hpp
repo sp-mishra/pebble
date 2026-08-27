@@ -33,6 +33,7 @@
 #include "spline.hpp"
 #include "morph.hpp"
 #include "deform.hpp"
+#include "body.hpp"
 
 // Scene layer
 #include "scene/parallel.hpp"

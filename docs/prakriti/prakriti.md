@@ -168,21 +168,21 @@ SPH kernels (2D poly6 / spiky gradient) in `solvers/kernels.hpp`. `JointSolver` 
 stiffness/stability). Each substep:
 
 1. **External accumulation** — `v += gravity·dt_sub`; inject ambient/emitter heat.
-2. **Thermal + phase** — diffusion pass; recompute phase fractions.
+2. **Thermal + phase** — diffusion pass; recompute phase fractions and thermodynamic quenching (e.g. Magma + Water $\implies$ Obsidian).
 3. **Predict motion** — `x_pred = x + v·dt_sub`.
-4. **Build neighborhoods** — spatial hash over `x_pred`.
-5. **Mechanics solve loop** (`solver_iters`) — XPBD → density → boundary-AABB clamp.
+4. **Build neighborhoods** — 2D Morton Z-order spatial hash over `x_pred`.
+5. **Mechanics solve loop** (`solver_iters`) — XPBD with `kosha::LRUCache` warm-starting → PBF density with interfacial tension → obstacle CCD continuous collision detection.
 6. **Damage + plasticity** — strain → damage; mutate `L0`; fracture/relink.
 7. **Velocity update + commit** — `v = (x_pred − x)/dt_sub`, viscous damping from `μ_eff`; `x = x_pred`.
 
-Anti-tunneling is achieved by substepping plus boundary containment on predicted positions.
+Anti-tunneling is achieved by substepping plus speculative Continuous Collision Detection (CCD) ray sweeps on obstacle SDFs.
 
 ## 10. Mathematical Formulations
 
 - **Phase blend:** `α_eff = Σ f_φ α_φ`, `μ_eff = Σ f_φ μ_φ`, `Σ f_φ = 1`.
-- **EOS:** `P_i = B((ρ_i/ρ₀)^γ − 1) + R·f_gas·T_i`.
-- **XPBD distance:** `Δλ = (−C − α̃λ)/(w_a + w_b + α̃)`, `Δx_a = +w_a ∇C Δλ`, `α̃ = compliance/dt²`.
-- **PBF density:** `C_i = ρ_i/ρ₀ − 1`, `λ_i = −C_i/(Σ|∇C|² + ε)`, `Δx_i = (1/ρ₀) Σ(λ_i+λ_j+scorr)∇W`.
+- **EOS:** `P_i = B((ρ_i/ρ₀)^γ − 1) + R·f_gas·T_i` (unrolled $\gamma=7$ integer powers).
+- **XPBD distance:** `Δλ = (−C − α̃λ)/(w_a + w_b + α̃)`, `Δx_a = +w_a ∇C Δλ`, `α̃ = compliance/dt²` with Kosha LRU warm-starting.
+- **PBF density:** `C_i = ρ_i/ρ₀ − 1`, `λ_i = −C_i/(Σ|∇C|² + ε)`, `Δx_i = (1/ρ₀) Σ(λ_i+λ_j+scorr)∇W - n_inter (0.04 h)`.
 - **Damage:** `ε = (‖x_a−x_b‖ − L0)/L0`, `ΔD = ((ε−ε_y)/ε_u)^β` for `ε > ε_y`, `α_struct = α_base/(1−D)`,
   `D ≥ 1 ⇒ fracture`.
 - **Thermal:** `ΔT_i = (k/c)·Σ_j w_ij (T_j − T_i)·dt`; latent heat buffers ΔE at transition plateaus.
@@ -191,7 +191,7 @@ Anti-tunneling is achieved by substepping plus boundary containment on predicted
 
 | Add | How |
 |-----|-----|
-| Material | register `MaterialParams` — zero code change |
+| Material | register `MaterialParams` (e.g. `steel`, `water`, `dry_ice`, `magma`, `obsidian`) — zero code change |
 | Material law | implement the `MaterialLaw` concept — template argument to `World` |
 | Solver | implement `PhysicsSolver` — add to a `SolverStack<...>` tuple |
 | Compute backend | implement the `ComputeBackend` concept — second template argument to `World` |
@@ -212,7 +212,7 @@ Three interchangeable tiers, all producing identical physics (parity-tested to 1
 | Tier | Backend | Header | Description |
 |------|---------|--------|-------------|
 | 1 | `ScalarBackend` (default) | `compute/scalar_backend.hpp` | Plain stride-1 loops over split columns; autovectorizes; zero dependencies. |
-| 2 | `HighwayBackend` | `compute/highway_backend.hpp` | Google Highway portable SIMD (NEON on Apple Silicon, AVX2/AVX-512 on x86). |
+| 2 | `HighwayBackend` | `compute/highway_backend.hpp` | Google Highway portable SIMD (NEON on Apple Silicon, AVX2/AVX-512 on x86) with `simd_sph_poly6`. |
 | 3 | `PravahaBackend` | `compute/pravaha_backend.hpp` | Pravaha parallel task graph execution across CPU cores for large particle batches. |
 
 ## 12. Pebble Subsystem Reuse
@@ -220,8 +220,11 @@ Three interchangeable tiers, all producing identical physics (parity-tested to 1
 | Concern | Reused Pebble Subsystem |
 |---|---|
 | **Linear Algebra** | `pebble::math` (`containers/numeric/math_vector.hpp`) — `vec2`, `mat2`, `aabb2`, `dot`, `cross`, `distance`, `normalize`, etc. |
+| **Cache (Kosha)** | `kosha::LRUCache` (`containers/cache/kosha.hpp`) — active contact manifold cache and XPBD multiplier warm-starting. |
+| **Lock-Free Containers** | `include/containers/lockfree/` (`RingBuffer`, `MPMCQueue`, `AtomicStack`) — thread synchronization and event streams. |
 | **Connected Components** | `containers::union_find` (`containers/union_find.hpp`) — used in `DamageSolver` island tracking. |
-| **Rigid Shapes & SDFs** | `akruti` (`akruti/akruti.hpp`) — used in `ObstacleSolver` for rigid boundary contact. |
+| **Rigid Shapes & SDFs** | `akruti` (`akruti/akruti.hpp`) — used in `ObstacleSolver` for rigid boundary contact and CCD ray sweeps. |
 | **Joint Kinematics** | `akruti::Joint` (`akruti/joint.hpp`) — used in `JointSolver` for positional XPBD constraint projection. |
-| **Multi-Core Tasking** | `pravaha` (`pravaha/pravaha.hpp`) — optional `PravahaBackend` execution of large particle batches. |
+| **Multi-Core Tasking** | `pravaha` (`pravaha/pravaha.hpp`) — 4-color checkerboard domain partitioning and parallel batching. |
+| **Vector Engine (Kalpana)** | `kalpana::InstancedParticlePipeline` (`kalpana/backend/instanced_pipeline.hpp`) — single draw-call GPU instancing. |
 | **Telemetry** | `observability/nadi.hpp` — easily consumes `w.kinetic_energy()` and state columns. |

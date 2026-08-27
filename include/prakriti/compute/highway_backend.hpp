@@ -152,6 +152,43 @@ struct HighwayBackend {
         }
         return total;
     }
+
+    // SIMD Vectorized SPH Poly6 Kernel evaluation across lanes
+    // Computes W(r2, h) = coeff * (h^2 - r2)^3 for valid r2 < h^2
+    static void simd_sph_poly6(const float* r2_lanes, float* out_w, float h, std::size_t count) noexcept {
+        namespace hn = hwy::HWY_NAMESPACE;
+        const hn::ScalableTag<float> d;
+        const std::size_t N = hn::Lanes(d);
+
+        const float h2 = h * h;
+        const float h4 = h2 * h2;
+        const float h8 = h4 * h4;
+        const float coeff_val = 4.0f / (3.141592653589793f * h8);
+
+        const auto vh2 = hn::Set(d, h2);
+        const auto vcoeff = hn::Set(d, coeff_val);
+        const auto vzero = hn::Zero(d);
+
+        std::size_t i = 0;
+        for (; i + N <= count; i += N) {
+            const auto vr2 = hn::LoadU(d, &r2_lanes[i]);
+            const auto mask = hn::Lt(vr2, vh2);
+            const auto diff = hn::Max(hn::Sub(vh2, vr2), vzero);
+            const auto diff2 = hn::Mul(diff, diff);
+            const auto diff3 = hn::Mul(diff2, diff);
+            const auto w = hn::Mul(vcoeff, diff3);
+            const auto res = hn::IfThenElseZero(mask, w);
+            hn::StoreU(res, d, &out_w[i]);
+        }
+        for (; i < count; ++i) {
+            if (r2_lanes[i] < h2) {
+                float diff = h2 - r2_lanes[i];
+                out_w[i] = coeff_val * (diff * diff * diff);
+            } else {
+                out_w[i] = 0.0f;
+            }
+        }
+    }
 };
 
 static_assert(ComputeBackend<HighwayBackend>);

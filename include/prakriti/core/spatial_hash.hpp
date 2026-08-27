@@ -43,6 +43,19 @@ public:
         }
     }
 
+    // 4-Color Checkerboard Partition for Lock-Free Parallel Sweeps
+    [[nodiscard]] static constexpr std::uint32_t cell_color(std::int32_t cx, std::int32_t cy) noexcept {
+        return (static_cast<std::uint32_t>(cx) & 1u) | ((static_cast<std::uint32_t>(cy) & 1u) << 1);
+    }
+
+    [[nodiscard]] std::uint32_t particle_color(Index i) const noexcept {
+        if (i >= cell_of_.size()) return 0;
+        const std::uint32_t packed = cell_of_[i];
+        const auto cx = static_cast<std::int16_t>(packed >> 16);
+        const auto cy = static_cast<std::int16_t>(packed & 0xFFFF);
+        return cell_color(cx, cy);
+    }
+
     // Fast 3x3 neighbor traversal with zero hash table lookups
     template <class Fn>
     void for_each_neighbor(Scalar px, Scalar py, Scalar radius, Fn&& fn) const {

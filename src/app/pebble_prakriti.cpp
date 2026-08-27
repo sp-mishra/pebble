@@ -27,6 +27,8 @@
 #include "akruti/akruti.hpp"
 #include "kalpana/kalpana.hpp"
 #include "kalpana/backend/sokol_backend.hpp"
+#include "containers/lockfree/RingBuffer.hpp"
+#include "containers/lockfree/AtomicStack.hpp"
 
 #include <vector>
 #include <memory>
@@ -53,16 +55,30 @@ static constexpr float FH = float(H);
 static constexpr float DT = 1.0f / 60.0f;
 
 // Custom Obstacle Collection satisfying ObstacleSolver requirements
+// Incorporates analytic shapes plus dynamic oscillating & deformable pinwheels
 struct ShowcaseObstacles {
     std::vector<akruti::Circle> circles;
     std::vector<akruti::Box>    boxes;
     std::vector<akruti::Capsule> capsules;
+
+    // Dynamic rotating 4-blade impeller pinwheel
+    pebble::math::vec2 pinwheel_center{FW * 0.5f, 480.0f};
+    float pinwheel_angle = 0.0f;
+    float pinwheel_speed = 1.2f;
 
     template <typename Fn>
     void for_each_shape(Fn&& fn) const {
         for (const auto& c : circles) fn(c);
         for (const auto& b : boxes) fn(b);
         for (const auto& cap : capsules) fn(cap);
+
+        // Dynamic 4-blade rotating Akruti capsule pinwheel
+        constexpr float kBladeLen = 55.0f;
+        for (int i = 0; i < 4; ++i) {
+            float a = pinwheel_angle + float(i) * 1.5707963f;
+            pebble::math::vec2 blade_tip = pinwheel_center + pebble::math::vec2(std::cos(a) * kBladeLen, std::sin(a) * kBladeLen);
+            fn(akruti::Capsule{pinwheel_center, blade_tip, 9.0f});
+        }
     }
 };
 
@@ -72,6 +88,16 @@ using ShowcaseMechanics = prakriti::SolverStack<
     prakriti::ObstacleSolver<ShowcaseObstacles>
 >;
 
+// Opt-in Nadi Live Telemetry Metric Snapshot
+struct NadiMetrics {
+    float substep_compute_ms = 0.0f;
+    float kinetic_energy = 0.0f;
+    std::size_t active_particles = 0;
+    std::size_t active_bonds = 0;
+    float fps = 60.0f;
+    bool telemetry_overlay = true; // [T] key toggle
+};
+
 struct PrakritiStressApp {
     sg_pipeline pip{};
     sg_bindings bind{};
@@ -79,12 +105,16 @@ struct PrakritiStressApp {
     sg_buffer vbuf{};
     sg_buffer ibuf{};
     std::unique_ptr<kalpana::Canvas<kalpana::sokol_backend>> canvas;
+    kalpana::InstancedParticlePipeline instanced_particles;
 
     ShowcaseObstacles obstacles;
+    NadiMetrics telemetry;
     std::unique_ptr<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, ShowcaseMechanics>> world;
     prakriti::MaterialId mat_water = 0;
     prakriti::MaterialId mat_steel = 0;
     prakriti::MaterialId mat_dry_ice = 0;
+    prakriti::MaterialId mat_lava = 0;
+    prakriti::MaterialId mat_obsidian = 0;
 
     float t = 0.0f;
     int frame = 0;
@@ -97,6 +127,7 @@ struct PrakritiStressApp {
     bool mouse_down = false;
     bool heat_emitter = false;
     bool cold_emitter = false;
+    bool fluid_emitter = false; // [F] Key live fluid nozzle
 };
 
 static PrakritiStressApp g_app;
@@ -159,22 +190,11 @@ static void init_prakriti_world() {
         cfg, std::move(mechanics_stack)
     );
 
-    app.mat_steel   = app.world->materials().add(prakriti::MaterialRegistry::steel());
-    app.mat_water   = app.world->materials().add(prakriti::MaterialRegistry::water());
-    app.mat_dry_ice = app.world->materials().add(prakriti::MaterialRegistry::dry_ice());
-
-    // Custom Magma / Molten Lava Material
-    prakriti::MaterialParams lava_params;
-    lava_params.rest_density = 2400.0f;
-    lava_params.heat_capacity = 1.8f;
-    lava_params.conductivity = 2.5f;
-    lava_params.melt_temp = 600.0f;
-    lava_params.boil_temp = 1800.0f;
-    lava_params.latent_heat_fusion = 400.0f;
-    lava_params.alpha = {1e-7f, 1e-4f, 5e-2f, 1.0f};
-    lava_params.visc = {0.0f, 0.4f, 0.85f, 0.02f};
-    lava_params.eos_B = 1.5e5f;
-    prakriti::MaterialId mat_lava = app.world->materials().add(lava_params);
+    app.mat_steel    = app.world->materials().add(prakriti::MaterialRegistry::steel());
+    app.mat_water    = app.world->materials().add(prakriti::MaterialRegistry::water());
+    app.mat_dry_ice  = app.world->materials().add(prakriti::MaterialRegistry::dry_ice());
+    app.mat_lava     = app.world->materials().add(prakriti::MaterialRegistry::magma());
+    app.mat_obsidian = app.world->materials().add(prakriti::MaterialRegistry::obsidian());
 
     // Custom Viscoelastic Jelly Material
     prakriti::MaterialParams jelly_params;
@@ -216,7 +236,7 @@ static void init_prakriti_world() {
                 .velocity = {-10.0f, 0.0f},
                 .mass = 2.2f,
                 .temperature = 950.0f, // Glowing hot magma!
-                .material = mat_lava,
+                .material = app.mat_lava,
                 .f_solid = 0.0f, .f_plastic = 0.1f, .f_liquid = 0.9f, .f_gas = 0.0f
             });
         }
@@ -338,6 +358,7 @@ static void init_cb() {
     app.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
     app.pass_action.colors[0].clear_value = {0.02f, 0.03f, 0.06f, 1.0f};
     app.canvas = std::make_unique<kalpana::Canvas<kalpana::sokol_backend>>(W, H);
+    app.instanced_particles.init(65536);
     app.last_time = std::chrono::high_resolution_clock::now();
 
     init_prakriti_world();
@@ -389,6 +410,29 @@ static void build_scene(kalpana::Scene& scene) {
         scene.add(kalpana::Node::shape(p, kalpana::Paint::stroke(kalpana::Color{0.4f, 0.6f, 0.95f, 0.8f}, 2.5f)));
     }
 
+    // 2b. Render Dynamic Akruti 4-Blade Impeller Pinwheel
+    {
+        const auto hub = app.obstacles.pinwheel_center;
+        kalpana::Path hub_p;
+        hub_p.circle(hub[0], hub[1], 16.0f);
+        scene.add(kalpana::Node::shape(hub_p, kalpana::Paint::fill(kalpana::Color{0.15f, 0.22f, 0.35f, 1.0f})));
+        scene.add(kalpana::Node::shape(hub_p, kalpana::Paint::stroke(kalpana::Color{0.0f, 0.85f, 1.0f, 0.9f}, 2.5f)));
+
+        constexpr float kBladeLen = 55.0f;
+        for (int i = 0; i < 4; ++i) {
+            float a = app.obstacles.pinwheel_angle + float(i) * 1.5707963f;
+            pebble::math::vec2 tip = hub + pebble::math::vec2(std::cos(a) * kBladeLen, std::sin(a) * kBladeLen);
+            kalpana::Path blade;
+            blade.move_to(hub[0], hub[1]);
+            blade.line_to(tip[0], tip[1]);
+            scene.add(kalpana::Node::shape(blade, kalpana::Paint::stroke(kalpana::Color{0.18f, 0.28f, 0.42f, 0.95f}, 18.0f)));
+            scene.add(kalpana::Node::shape(blade, kalpana::Paint::stroke(kalpana::Color{0.2f, 0.75f, 1.0f, 0.85f}, 2.0f)));
+            kalpana::Path tip_dot;
+            tip_dot.circle(tip[0], tip[1], 9.0f);
+            scene.add(kalpana::Node::shape(tip_dot, kalpana::Paint::fill(kalpana::Color{0.2f, 0.75f, 1.0f, 0.95f})));
+        }
+    }
+
     // 3. Render XPBD Elastic Bonds with Strain-Spectral Color Mapping
     for (std::size_t e = 0; e < E.size(); ++e) {
         if (!E.active[e]) continue;
@@ -412,7 +456,8 @@ static void build_scene(kalpana::Scene& scene) {
         scene.add(kalpana::Node::shape(bond, kalpana::Paint::stroke(bond_col, 3.5f)));
     }
 
-    // 4. Render Multiphysics Particles (Fluid, Solid, Gas & Thermal Glow)
+    // 4. Hardware Instanced Particle Stream (Zero CPU Scene Node Overhead)
+    app.instanced_particles.begin();
     const std::size_t N = P.size();
     for (prakriti::Index i = 0; i < N; ++i) {
         float x = P.pos_x[i];
@@ -452,9 +497,12 @@ static void build_scene(kalpana::Scene& scene) {
                 pr = 4.8f;
             }
         } else {
-            // Solid / Viscoelastic Soft-Body / Plastic
+            // Solid / Viscoelastic Soft-Body / Plastic / Obsidian
             if (P.material[i] == app.mat_dry_ice) {
                 pcol = kalpana::Color{0.92f, 0.96f, 1.0f, 0.98f}; // Cryo frost white
+                pr = 5.2f;
+            } else if (P.material[i] == app.mat_obsidian || (P.f_solid[i] > 0.6f && P.temperature[i] < 600.0f && P.material[i] == app.mat_lava)) {
+                pcol = kalpana::Color{0.10f, 0.08f, 0.12f, 0.98f}; // Deep volcanic obsidian black-purple
                 pr = 5.2f;
             } else if (P.f_solid[i] > 0.5f && P.f_plastic[i] > 0.05f) {
                 pcol = kalpana::Color{0.15f, 0.92f, 0.55f, 0.92f}; // Bouncy jelly emerald green
@@ -465,23 +513,22 @@ static void build_scene(kalpana::Scene& scene) {
             }
         }
 
-        kalpana::Path pdot;
-        pdot.circle(x, y, pr);
-        scene.add(kalpana::Node::shape(pdot, kalpana::Paint::fill(pcol)));
+        app.instanced_particles.add_instance(x, y, pr, pcol);
     }
 
     // 5. Interactive Mouse Emitter Feedback
-    if (app.mouse_down || app.heat_emitter || app.cold_emitter) {
+    if (app.mouse_down || app.heat_emitter || app.cold_emitter || app.fluid_emitter) {
         kalpana::Path reticle;
-        reticle.circle(app.mouse_x, app.mouse_y, 45.0f);
-        kalpana::Color emit_col = app.heat_emitter ? kalpana::Color{1.0f, 0.3f, 0.1f, 0.4f} :
-                                 (app.cold_emitter ? kalpana::Color{0.2f, 0.8f, 1.0f, 0.4f} :
-                                  kalpana::Color{0.5f, 1.0f, 0.5f, 0.35f});
-        scene.add(kalpana::Node::shape(reticle, kalpana::Paint::stroke(emit_col, 2.0f)));
+        reticle.circle(app.mouse_x, app.mouse_y, app.fluid_emitter ? 25.0f : 45.0f);
+        kalpana::Color emit_col = app.fluid_emitter ? kalpana::Color{0.1f, 0.75f, 1.0f, 0.8f} :
+                                 (app.heat_emitter  ? kalpana::Color{1.0f, 0.3f, 0.1f, 0.7f} :
+                                 (app.cold_emitter  ? kalpana::Color{0.2f, 0.8f, 1.0f, 0.7f} :
+                                  kalpana::Color{0.5f, 1.0f, 0.5f, 0.5f}));
+        scene.add(kalpana::Node::shape(reticle, kalpana::Paint::stroke(emit_col, 2.5f)));
     }
 
-    // 6. Glassmorphic Real-Time Performance & Telemetry HUD
-    {
+    // 6. Glassmorphic Real-Time Performance & Telemetry HUD (Toggle with [T])
+    if (app.telemetry.telemetry_overlay) {
         const float hud_x = 24.0f, hud_y = 24.0f;
         const float hud_w = 340.0f, hud_h = 135.0f;
 
@@ -510,6 +557,17 @@ static void build_scene(kalpana::Scene& scene) {
         kalpana::Path diag_p3;
         diag_p3.circle(hud_x + 22.0f, hud_y + 116.0f, 4.0f);
         scene.add(kalpana::Node::shape(diag_p3, kalpana::Paint::fill(kalpana::Color{0.92f, 0.96f, 1.0f, 0.95f})));
+
+        // Nadi Live Telemetry Gauges (Substep ms & Active Particle count)
+        float compute_bar = std::clamp(app.telemetry.substep_compute_ms * 12.0f, 0.0f, 120.0f);
+        kalpana::Path comp_p;
+        comp_p.round_rect(hud_x + 40.0f, hud_y + 70.0f, compute_bar, 4.0f, 2.0f, 2.0f);
+        scene.add(kalpana::Node::shape(comp_p, kalpana::Paint::fill(kalpana::Color{0.0f, 0.85f, 1.0f, 0.9f})));
+
+        float part_bar = std::clamp(float(app.telemetry.active_particles) / 40.0f, 0.0f, 120.0f);
+        kalpana::Path part_p;
+        part_p.round_rect(hud_x + 40.0f, hud_y + 92.0f, part_bar, 4.0f, 2.0f, 2.0f);
+        scene.add(kalpana::Node::shape(part_p, kalpana::Paint::fill(kalpana::Color{0.4f, 0.9f, 0.5f, 0.9f})));
     }
 }
 
@@ -518,17 +576,21 @@ static void frame_cb() {
     app.frame++;
     app.t += DT;
 
+    // Rotate dynamic Akruti pinwheel
+    app.obstacles.pinwheel_angle += app.obstacles.pinwheel_speed * DT;
+
     auto now = std::chrono::high_resolution_clock::now();
     float frame_ms = std::chrono::duration<float, std::milli>(now - app.last_time).count();
     app.last_time = now;
     if (frame_ms > 0.0f) {
         float current_fps = 1000.0f / frame_ms;
         app.fps = app.fps * 0.92f + current_fps * 0.08f;
+        app.telemetry.fps = app.fps;
     }
 
     if (app.world) {
-        // Interactive Mouse Temperature / Force Injection
-        if (app.mouse_down || app.heat_emitter || app.cold_emitter) {
+        // Interactive Mouse Temperature / Force Injection / Live Fluid Spray
+        if (app.mouse_down || app.heat_emitter || app.cold_emitter || app.fluid_emitter) {
             auto& P = app.world->particles();
             const std::size_t N = P.size();
             for (std::size_t i = 0; i < N; ++i) {
@@ -549,9 +611,32 @@ static void frame_cb() {
                     }
                 }
             }
+
+            // Live Fluid Nozzle: inject fresh liquid particles from cursor (capped at 4,000 particles)
+            if (app.fluid_emitter && P.size() < 4000) {
+                for (int k = 0; k < 2; ++k) {
+                    float jx = app.mouse_x + (float(std::rand() % 20) - 10.0f);
+                    float jy = app.mouse_y + (float(std::rand() % 20) - 10.0f);
+                    app.world->particles().add({
+                        .position = pebble::math::vec2(jx, jy),
+                        .velocity = {float(std::rand() % 60 - 30), 80.0f},
+                        .mass = 1.0f,
+                        .temperature = 18.0f,
+                        .material = app.mat_water,
+                        .f_solid = 0.0f, .f_plastic = 0.0f, .f_liquid = 1.0f, .f_gas = 0.0f
+                    });
+                }
+            }
         }
 
+        // Measure substep execution time for Nadi Telemetry
+        auto step_start = std::chrono::high_resolution_clock::now();
         app.world->step();
+        auto step_end = std::chrono::high_resolution_clock::now();
+        app.telemetry.substep_compute_ms = std::chrono::duration<float, std::milli>(step_end - step_start).count();
+        app.telemetry.active_particles = app.world->particles().size();
+        app.telemetry.active_bonds = app.world->edges().size();
+        app.telemetry.kinetic_energy = app.world->kinetic_energy();
     }
 
     kalpana::Scene scene;
@@ -573,6 +658,11 @@ static void frame_cb() {
     pass.action = app.pass_action;
     pass.swapchain = sglue_swapchain();
     sg_begin_pass(pass);
+
+    // 1. Draw Instanced Particle Cloud in a single GPU hardware invocation
+    app.instanced_particles.render(FW, FH);
+
+    // 2. Draw Vector Overlays (Obstacles, Bonds, HUD)
     if (!indices.empty()) {
         sg_apply_pipeline(app.pip);
         sg_apply_bindings(app.bind);
@@ -606,6 +696,12 @@ static void event_cb(const sapp_event* ev) {
             case SAPP_KEYCODE_C:
                 app.cold_emitter = !app.cold_emitter;
                 break;
+            case SAPP_KEYCODE_F:
+                app.fluid_emitter = !app.fluid_emitter;
+                break;
+            case SAPP_KEYCODE_T:
+                app.telemetry.telemetry_overlay = !app.telemetry.telemetry_overlay;
+                break;
             default:
                 break;
         }
@@ -624,7 +720,7 @@ sapp_desc sokol_main(int /*argc*/, char** /*argv*/) {
     d.cleanup_cb = cleanup_cb;
     d.width = W;
     d.height = H;
-    d.window_title = "Pebble Prakriti Stress Test — [L-Click] Vortex | [H] Heat Gun | [C] Cryo Gun | [R] Reset";
+    d.window_title = "Pebble Prakriti Multiphysics — [L-Click] Vortex | [F] Fluid Spray | [H] Heat | [C] Cryo | [T] Telemetry | [R] Reset";
     d.icon.sokol_default = true;
     d.logger.func = slog_func;
     return d;

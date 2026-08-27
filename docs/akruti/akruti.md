@@ -154,3 +154,12 @@ Each primitive satisfies `Shape` with exact `.sdf()`, `.aabb()`, and `.support()
 - `Scene`: Manages per-primitive batches, `LayerMask` collision filtering, and dynamic `containers::AABBTree` index.
 - `ParallelExecutor`: Leverages `pebble::pravaha` for task-graph chunked parallel execution when enabled (`AKRUTI_ENABLE_PRAVAHA`).
 - Bulk operations: `broadphase_pairs`, `bulk_narrowphase`, `bulk_point_inside`, `bulk_raycast`, `bulk_nearest_shape`, `bulk_sdf_field`.
+
+---
+
+## 9. Dynamic Rigid Bodies & 2-Way Continuum Coupling
+
+`akruti/body.hpp`:
+- `DynamicBody<Shape>`: Encapsulates dynamic 6-DOF (2D translation + rotation) motion with mass, moment of inertia, and linear/angular velocity.
+- Integrates with Prakriti continuum particle solvers: particles exert continuous contact reaction forces and hydrodynamic pressure impulses against `DynamicBody` surfaces, enabling floating, sinking, buoyancy, and mechanical deflection.
+- World-space evaluation of `sdf(p)`, `aabb()`, and `support(d)` for any underlying Akruti Shape (including compound CSG and deformed shapes).

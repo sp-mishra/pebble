@@ -18,6 +18,7 @@
 #include "backend/backend_concept.hpp"
 #include "backend/capture_backend.hpp"
 #include "backend/sokol_backend.hpp"
+#include "backend/instanced_pipeline.hpp"
 #include "backend/notcurses_backend.hpp"
 #include "canvas/canvas.hpp"
 

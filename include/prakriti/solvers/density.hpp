@@ -56,13 +56,15 @@ struct DensitySolver {
                                           P.temperature[i], ctx.world.clamp_negative_pressure);
         }
 
-        // 2. position delta with anti-clustering surface-tension correction (scorr).
+        // 2. position delta with anti-clustering surface-tension correction (scorr) & multi-phase interfacial tension.
         const Scalar dq2 = (cfg.scorr_dq * h) * (cfg.scorr_dq * h);
         const Scalar wdq = kernels::poly6(dq2, h);
         for (Index i = 0; i < n; ++i) {
             if (P.f_liquid[i] < Scalar(0.5)) continue;
             pebble::math::vec2 dpi{0.0f, 0.0f};
+            pebble::math::vec2 color_grad{0.0f, 0.0f};
             const pebble::math::vec2 pi_v = P.pred_v(i);
+            const MaterialId mi = P.material[i];
 
             ctx.grid.for_each_neighbor(P.pred_x[i], P.pred_y[i], h, [&](Index j, Scalar) {
                 if (j == i) return;
@@ -86,7 +88,20 @@ struct DensitySolver {
                 const pebble::math::vec2 g = kernels::spiky_grad(pi_v - pj_v, h);
                 const Scalar scale = (lambda_[i] + lambda_[j] + scorr) / cfg.rest_density;
                 dpi = dpi + g * scale;
+
+                // Multiphase Interfacial Tension: Repel different fluid materials across boundary
+                if (P.material[j] != mi && P.f_liquid[j] > Scalar(0.3)) {
+                    color_grad = color_grad + g * (cfg.particle_mass / std::max(Scalar(1), P.density[j]));
+                }
             });
+
+            // Apply interfacial surface tension along color field normal
+            const Scalar cg_len = pebble::math::length(color_grad);
+            if (cg_len > Scalar(1e-4)) {
+                const pebble::math::vec2 n_inter = color_grad * (Scalar(1) / cg_len);
+                dpi = dpi - n_inter * (Scalar(0.04) * h);
+            }
+
             dp_[i] = dpi;
         }
 

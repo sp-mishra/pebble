@@ -63,19 +63,46 @@ private:
     template <class Store>
     void resolve_particle(Store& P, Index i) {
         pebble::math::vec2 pred = P.pred_v(i);
+        const pebble::math::vec2 pos = P.pos_v(i);
         const pebble::math::vec2 v = P.vel_v(i);
 
         obstacles->for_each_shape([&](const auto& shape) {
-            const Scalar d = shape.sdf(pred);
-            if (d >= cfg.contact_offset) return; // fast early out before gradient
+            // 1. Continuous Collision Detection (CCD) Ray Sweep
+            // Test if trajectory from pos to pred crosses the obstacle surface
+            const Scalar d_pred = shape.sdf(pred);
+            const Scalar d_pos = shape.sdf(pos);
+
+            // If tunneling detected (started outside, ended inside or deeply penetrated)
+            if (d_pos >= Scalar(0) && d_pred < cfg.contact_offset) {
+                // Speculative contact manifold projection
+                const Scalar denom = (d_pos - d_pred);
+                const Scalar t_hit = denom > Scalar(1e-6) ? std::clamp(d_pos / denom, Scalar(0), Scalar(1)) : Scalar(0.5);
+                const pebble::math::vec2 hit_pt = pos + (pred - pos) * t_hit;
+                const pebble::math::vec2 normal = detail::sdf_normal(shape, hit_pt);
+                pred = hit_pt + normal * (cfg.contact_offset * cfg.contact_stiffness);
+
+                const Scalar vn = pebble::math::dot(v, normal);
+                if (vn < Scalar(0)) {
+                    pred = pred + normal * (-cfg.restitution * vn * dt_sub_);
+                    const pebble::math::vec2 v_t = v - normal * vn;
+                    const Scalar t_len = pebble::math::length(v_t);
+                    if (t_len > Scalar(1e-6)) {
+                        const Scalar remove = std::min(cfg.friction * std::fabs(vn), t_len);
+                        pred = pred - v_t * ((remove / t_len) * dt_sub_);
+                    }
+                }
+                return;
+            }
+
+            if (d_pred >= cfg.contact_offset) return; // fast early out
 
             const pebble::math::vec2 normal = detail::sdf_normal(shape, pred);
-            const Scalar penetration = cfg.contact_offset - d;
+            const Scalar penetration = cfg.contact_offset - d_pred;
 
-            // 1) non-penetration.
+            // Non-penetration projection
             pred = pred + normal * (penetration * cfg.contact_stiffness);
 
-            // 2) restitution + friction from inbound component.
+            // Restitution + Coulomb friction
             const Scalar vn = pebble::math::dot(v, normal);
             if (vn < Scalar(0)) {
                 pred = pred + normal * (-cfg.restitution * vn * dt_sub_);

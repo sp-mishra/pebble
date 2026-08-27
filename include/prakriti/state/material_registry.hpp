@@ -76,6 +76,26 @@ public:
         p.alpha = {Scalar(1e-7), Scalar(1e-4), Scalar(1e-2), Scalar(1)};
         return p;
     }
+    [[nodiscard]] static MaterialParams magma() noexcept {
+        MaterialParams p;
+        p.rest_density = Scalar(2600); p.heat_capacity = Scalar(1.4);
+        p.conductivity = Scalar(2.5);  p.melt_temp = Scalar(700); p.boil_temp = Scalar(2200);
+        p.latent_heat_fusion = Scalar(400); p.yield_strain = Scalar(0.05);
+        p.ultimate_strain = Scalar(0.15); p.youngs_modulus = Scalar(1e8);
+        p.alpha = {Scalar(1e-8), Scalar(1e-5), Scalar(5e-2), Scalar(1)};
+        p.visc = {Scalar(0), Scalar(0.2), Scalar(0.8), Scalar(0.01)}; // Highly viscous fluid
+        p.eos_B = Scalar(4e5);
+        return p;
+    }
+    [[nodiscard]] static MaterialParams obsidian() noexcept {
+        MaterialParams p;
+        p.rest_density = Scalar(2600); p.heat_capacity = Scalar(0.9);
+        p.conductivity = Scalar(1.3);  p.melt_temp = Scalar(850); p.boil_temp = Scalar(2400);
+        p.latent_heat_fusion = Scalar(350); p.yield_strain = Scalar(0.005);
+        p.ultimate_strain = Scalar(0.01); p.youngs_modulus = Scalar(7e10); // Hard brittle volcanic glass
+        p.alpha = {Scalar(1e-9), Scalar(1e-6), Scalar(1e-2), Scalar(1)};
+        return p;
+    }
 
 private:
     std::vector<MaterialParams> params_;

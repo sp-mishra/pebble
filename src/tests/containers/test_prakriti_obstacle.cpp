@@ -45,3 +45,30 @@ TEST_CASE("obstacle: restitution rebounds upward", "[prakriti][obstacle][restitu
     // XPBD substep damping bleeds energy, so we require a meaningful bounce, not ideal e^2 h.
     REQUIRE(apex > 0.15f);
 }
+
+// Dynamic Body obstacle set
+struct DynamicObstacleSet {
+    akruti::DynamicBody<akruti::Circle> body{akruti::Circle{{0.0f, 0.0f}, 2.0f}, 10.0f, 20.0f};
+    template <class Fn> void for_each_shape(Fn&& fn) const { fn(body); }
+};
+
+TEST_CASE("obstacle: particle deflects off dynamic Akruti body", "[prakriti][obstacle][dynamic_body]") {
+    DynamicObstacleSet dyn_obs;
+    dyn_obs.body.position = {0.0f, 0.0f};
+
+    auto stack = SolverStack<XpbdSolver, ObstacleSolver<DynamicObstacleSet>>{
+        std::make_tuple(XpbdSolver{}, ObstacleSolver<DynamicObstacleSet>{dyn_obs, ObstacleConfig{.friction=0.0f, .restitution=0.5f, .contact_offset=0.1f}})};
+    WorldConfig cfg; cfg.bounds = {{-100.0f, -100.0f}, {100.0f, 100.0f}};
+    World<DefaultMaterialLaw, ScalarBackend, decltype(stack)> w(cfg, stack);
+    auto steel = w.materials().add(MaterialRegistry::steel());
+
+    // Particle falling straight toward the dynamic body center
+    w.particles().add({.position = {0.0f, 5.0f}, .velocity = {0.0f, -10.0f}, .material = steel});
+
+    for (int f = 0; f < 30; ++f) w.step();
+
+    // Particle must be kept outside the dynamic body circle boundary (radius 2.0)
+    pebble::math::vec2 p_pos = w.particles().pos_v(0);
+    Scalar d = dyn_obs.body.sdf(p_pos);
+    REQUIRE(d >= -0.05f);
+}

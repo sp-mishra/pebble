@@ -6,11 +6,28 @@
 // ============================================================================
 #include "solver_base.hpp"
 #include <containers/numeric/math_vector.hpp>
+#include <containers/cache/kosha.hpp>
 #include <vector>
+#include <cstdint>
 
 namespace prakriti {
 
 struct XpbdSolver {
+    XpbdSolver() = default;
+
+    // Custom copy constructor: copies lambda_ scratch capacity and constructs a fresh warm_start_cache_
+    XpbdSolver(const XpbdSolver& o) : lambda_(o.lambda_), warm_start_cache_{4096} {}
+    XpbdSolver& operator=(const XpbdSolver& o) {
+        if (this != &o) {
+            lambda_ = o.lambda_;
+            warm_start_cache_.clear();
+        }
+        return *this;
+    }
+
+    XpbdSolver(XpbdSolver&&) noexcept = default;
+    XpbdSolver& operator=(XpbdSolver&&) noexcept = default;
+
     template <MaterialLaw Law>
     void solve(SolverContext<Law>& ctx) {
         auto& P = ctx.particles;
@@ -19,7 +36,7 @@ struct XpbdSolver {
         const Scalar inv_dt2 = ctx.dt_sub > Scalar(0)
                              ? Scalar(1) / (ctx.dt_sub * ctx.dt_sub) : Scalar(0);
 
-        lambda_.assign(m, Scalar(0)); // reset multipliers each substep
+        if (lambda_.size() < m) lambda_.resize(m);
 
         for (Index e = 0; e < m; ++e) {
             if (!E.is_active(e)) continue;
@@ -38,9 +55,18 @@ struct XpbdSolver {
             const Scalar base_alpha = ctx.law.effective_compliance(pa, ctx.phase_of(ia));
             const Scalar alpha = ctx.law.structural_alpha(base_alpha, E.damage[e]) * inv_dt2;
 
+            // Warm-start Lagrange multiplier from active manifold cache
+            const std::uint64_t edge_key = (static_cast<std::uint64_t>(ia) << 32) | static_cast<std::uint64_t>(ib);
+            Scalar prev_lambda = Scalar(0);
+            if (auto cached = warm_start_cache_.get(edge_key)) {
+                prev_lambda = *cached * Scalar(0.85); // Warm-start relaxation factor
+            }
+
             const Scalar denom = wa + wb + alpha;
-            const Scalar dlambda = (-C - alpha * lambda_[e]) / denom;
-            lambda_[e] += dlambda;
+            const Scalar dlambda = (-C - alpha * prev_lambda) / denom;
+            const Scalar final_lambda = prev_lambda + dlambda;
+            lambda_[e] = final_lambda;
+            (void)warm_start_cache_.put(edge_key, final_lambda);
 
             const pebble::math::vec2 corr = grad * dlambda;
             P.pred_x[ia] += corr[0] * wa; P.pred_y[ia] += corr[1] * wa;
@@ -51,6 +77,7 @@ struct XpbdSolver {
 
 private:
     std::vector<Scalar> lambda_;
+    kosha::LRUCache<std::uint64_t, Scalar> warm_start_cache_{4096};
 };
 
 } // namespace prakriti
