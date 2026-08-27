@@ -504,6 +504,9 @@ static void init_gati_simulation() {
     }
 }
 
+static constexpr std::size_t kMaxVerts = 1024 * 1024;
+static constexpr std::size_t kMaxIndices = 2048 * 1024;
+
 static void init_cb() {
     auto& app = g_app;
 
@@ -511,9 +514,6 @@ static void init_cb() {
     gfx.environment = sglue_environment();
     gfx.logger.func = slog_func;
     sg_setup(&gfx);
-
-    constexpr std::size_t kMaxVerts = 131072;
-    constexpr std::size_t kMaxIndices = 262144;
 
     {
         sg_buffer_desc d{};
@@ -902,10 +902,14 @@ static void frame_cb() {
     const auto& indices = app.canvas->backend().indices();
 
     if (!verts.empty() && !indices.empty()) {
-        sg_range vr = {verts.data(), verts.size() * sizeof(kalpana::sokol_backend::Vertex)};
+        const std::size_t max_vert_bytes = kMaxVerts * sizeof(kalpana::sokol_backend::Vertex);
+        const std::size_t vert_bytes = std::min(verts.size() * sizeof(kalpana::sokol_backend::Vertex), max_vert_bytes);
+        sg_range vr = {verts.data(), vert_bytes};
         sg_update_buffer(app.vbuf, vr);
 
-        sg_range ir = {indices.data(), indices.size() * sizeof(std::uint32_t)};
+        const std::size_t max_idx_bytes = kMaxIndices * sizeof(std::uint32_t);
+        const std::size_t idx_bytes = std::min(indices.size() * sizeof(std::uint32_t), max_idx_bytes);
+        sg_range ir = {indices.data(), idx_bytes};
         sg_update_buffer(app.ibuf, ir);
     }
 
@@ -916,7 +920,8 @@ static void frame_cb() {
     if (!indices.empty()) {
         sg_apply_pipeline(app.pip);
         sg_apply_bindings(app.bind);
-        sg_draw(0, static_cast<int>(indices.size()), 1);
+        const int draw_count = static_cast<int>(std::min(indices.size(), kMaxIndices));
+        sg_draw(0, draw_count, 1);
     }
     sg_end_pass();
     sg_commit();
