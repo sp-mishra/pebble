@@ -1,5 +1,10 @@
 // ============================================================================
-// src/app/pebble_akriti.cpp — Akruti Geometry & Kalpana Vector FX Showcase
+// src/app/pebble_akriti.cpp — Akruti Geometry & Kalpana 2.0 Pigment Mixing Showcase
+// ============================================================================
+// Displays a structured gallery of ~50–60 distinct overlapping shape pairs.
+// Each pair consists of 2 different geometry shapes in 2 distinct physical pigments.
+// The intersection overlap explicitly evaluates the 16-band Kubelka-Munk
+// subtractive pigment mixing equations (e.g. Ultramarine Blue + Cadmium Yellow = Green).
 // ============================================================================
 #define SOKOL_NO_DEPRECATED
 #pragma clang diagnostic push
@@ -21,48 +26,240 @@
 #include "akruti/csg.hpp"
 #include "akruti/fracture.hpp"
 #include "kalpana/kalpana.hpp"
-#include "kalpana/backend/capture_backend.hpp"
+#include "kalpana/backend/sokol_backend.hpp"
 
 #include <array>
 #include <vector>
 #include <memory>
 #include <cmath>
 #include <algorithm>
+#include <string>
 
 static const char* VS_METAL =
     "#include <metal_stdlib>\nusing namespace metal;\n"
-    "struct In  { float2 pos [[attribute(0)]]; float2 uv [[attribute(1)]]; };\n"
-    "struct Out { float4 pos [[position]]; float2 uv; };\n"
-    "vertex Out vs(In in [[stage_in]]) { Out o; o.pos=float4(in.pos,0,1); o.uv=in.uv; return o; }\n";
+    "struct In  { float2 pos [[attribute(0)]]; float4 col [[attribute(1)]]; };\n"
+    "struct Out { float4 pos [[position]]; float4 col; };\n"
+    "vertex Out vs(In in [[stage_in]]) { Out o; o.pos=float4(in.pos,0,1); o.col=in.col; return o; }\n";
 static const char* FS_METAL =
     "#include <metal_stdlib>\nusing namespace metal;\n"
-    "struct In { float2 uv; };\n"
-    "fragment float4 fs(In in [[stage_in]], texture2d<float> tex [[texture(0)]], sampler s [[sampler(0)]]) {\n"
-    "    return tex.sample(s, in.uv); }\n";
+    "struct In { float4 col; };\n"
+    "fragment float4 fs(In in [[stage_in]]) {\n"
+    "    return in.col; }\n";
 
-static constexpr int W = 1100;
-static constexpr int H = 720;
+static constexpr int W = 1200;
+static constexpr int H = 820;
 static constexpr float FW = float(W);
 static constexpr float FH = float(H);
 static constexpr float DT = 1.0f / 60.0f;
+
+enum class ShapeType {
+    Circle,
+    Rect,
+    RoundRect,
+    Star,
+    Triangle,
+    Hexagon,
+    Capsule,
+    Sector,
+    Diamond,
+    NotchedBox
+};
+
+struct OverlapPair {
+    ShapeType shape_a = ShapeType::Circle;
+    ShapeType shape_b = ShapeType::Circle;
+    float cx = 0.0f, cy = 0.0f;
+    float r = 48.0f;
+    kalpana::Color col_a{};
+    kalpana::Color col_b{};
+    const char* label_a = "";
+    const char* label_b = "";
+    const char* label_mix = "";
+};
 
 struct AkritiApp {
     sg_pipeline pip{};
     sg_bindings bind{};
     sg_pass_action pass_action{};
-    sg_image tex_img{};
-    sg_view tex_view{};
-    sg_sampler smp{};
-    std::vector<std::uint32_t> pixels;
-    std::unique_ptr<kalpana::Canvas<kalpana::capture_backend>> canvas;
+    sg_buffer vbuf{};
+    sg_buffer ibuf{};
+    std::unique_ptr<kalpana::Canvas<kalpana::sokol_backend>> canvas;
 
+    std::vector<OverlapPair> pairs;
     float t = 0.0f;
-    int frame = 0;
-    akruti::CsgPtr csg_field;
-    akruti::CubicBezierCurve bezier{};
 };
 
 static AkritiApp g_app;
+
+static kalpana::Path make_shape(ShapeType type, float x, float y, float r) {
+    using namespace kalpana;
+    Path p;
+    switch (type) {
+        case ShapeType::Circle:
+            p = circle(x, y, r);
+            break;
+        case ShapeType::Rect:
+            p = rect(x - r * 0.9f, y - r * 0.9f, r * 1.8f, r * 1.8f);
+            break;
+        case ShapeType::RoundRect:
+            p = round_rect(x - r, y - r * 0.75f, r * 2.0f, r * 1.5f, r * 0.35f, r * 0.35f);
+            break;
+        case ShapeType::Star:
+            p = star(x, y, r, r * 0.45f, 5);
+            break;
+        case ShapeType::Triangle:
+            p = star(x, y, r, r * 0.5f, 3);
+            break;
+        case ShapeType::Hexagon:
+            p = star(x, y, r, r * 0.866f, 6);
+            break;
+        case ShapeType::Capsule: {
+            const float cap_len = r * 0.75f;
+            const float cap_r = r * 0.45f;
+            p.move_to(x - cap_len, y - cap_r);
+            p.line_to(x + cap_len, y - cap_r);
+            p.line_to(x + cap_len, y + cap_r);
+            p.line_to(x - cap_len, y + cap_r);
+            p.close();
+            break;
+        }
+        case ShapeType::Sector:
+            p = arc(x, y, r, -0.9f, 1.8f);
+            p.line_to(x, y);
+            p.close();
+            break;
+        case ShapeType::Diamond:
+            p.move_to(x, y - r);
+            p.line_to(x + r * 0.8f, y);
+            p.line_to(x, y + r);
+            p.line_to(x - r * 0.8f, y);
+            p.close();
+            break;
+        case ShapeType::NotchedBox:
+            p.move_to(x - r * 0.9f, y - r * 0.9f);
+            p.line_to(x, y - r * 0.3f);
+            p.line_to(x + r * 0.9f, y - r * 0.9f);
+            p.line_to(x + r * 0.9f, y + r * 0.9f);
+            p.line_to(x - r * 0.9f, y + r * 0.9f);
+            p.close();
+            break;
+    }
+    return p;
+}
+
+static void init_overlap_gallery() {
+    using namespace kalpana;
+    using namespace kalpana::spectral;
+    auto& app = g_app;
+    app.pairs.clear();
+
+    struct PigmentPairSpec {
+        Color col_a;
+        const char* name_a;
+        Color col_b;
+        const char* name_b;
+        ShapeType shape_a;
+        ShapeType shape_b;
+    };
+
+    // 16 Key Subtractive Color Theory Combinations (Primary, Secondary & Color Wheel pairs)
+    const std::vector<PigmentPairSpec> specs = {
+        // Row 1: The Iconic Primary Painter Pairs (Blue + Yellow -> Green, etc.)
+        { Color{0.00f, 0.25f, 0.95f, 1.0f}, "Cobalt Blue",
+          Color{1.00f, 0.90f, 0.00f, 1.0f}, "Cadmium Yellow",
+          ShapeType::Circle, ShapeType::Star },
+
+        { Color{0.00f, 0.85f, 0.98f, 1.0f}, "Cyan",
+          Color{1.00f, 0.90f, 0.00f, 1.0f}, "Yellow",
+          ShapeType::RoundRect, ShapeType::Triangle },
+
+        { Color{0.95f, 0.05f, 0.60f, 1.0f}, "Process Magenta",
+          Color{1.00f, 0.90f, 0.00f, 1.0f}, "Yellow",
+          ShapeType::Hexagon, ShapeType::Circle },
+
+        { Color{0.00f, 0.85f, 0.98f, 1.0f}, "Cyan",
+          Color{0.95f, 0.05f, 0.60f, 1.0f}, "Process Magenta",
+          ShapeType::Capsule, ShapeType::Star },
+
+        // Row 2: Secondary Wheel & Gradient Pairs
+        { Color{0.00f, 0.25f, 0.95f, 1.0f}, "Cobalt Blue",
+          Color{0.95f, 0.08f, 0.08f, 1.0f}, "Cadmium Red",
+          ShapeType::Circle, ShapeType::RoundRect },
+
+        { Color{0.95f, 0.08f, 0.08f, 1.0f}, "Cadmium Red",
+          Color{1.00f, 0.90f, 0.00f, 1.0f}, "Cadmium Yellow",
+          ShapeType::Star, ShapeType::Hexagon },
+
+        { Color{0.00f, 0.85f, 0.35f, 1.0f}, "Emerald Green",
+          Color{1.00f, 0.90f, 0.00f, 1.0f}, "Cadmium Yellow",
+          ShapeType::Triangle, ShapeType::Capsule },
+
+        { Color{0.00f, 0.85f, 0.35f, 1.0f}, "Emerald Green",
+          Color{0.00f, 0.85f, 0.98f, 1.0f}, "Cyan",
+          ShapeType::RoundRect, ShapeType::Circle },
+
+        // Row 3: Complementary & Cross-Wheel Mixtures
+        { Color{0.00f, 0.25f, 0.95f, 1.0f}, "Cobalt Blue",
+          Color{1.00f, 0.50f, 0.00f, 1.0f}, "Cadmium Orange",
+          ShapeType::Diamond, ShapeType::Circle },
+
+        { Color{0.00f, 0.85f, 0.35f, 1.0f}, "Emerald Green",
+          Color{0.95f, 0.08f, 0.08f, 1.0f}, "Cadmium Red",
+          ShapeType::Circle, ShapeType::Triangle },
+
+        { Color{0.60f, 0.10f, 0.95f, 1.0f}, "Cobalt Violet",
+          Color{1.00f, 0.90f, 0.00f, 1.0f}, "Cadmium Yellow",
+          ShapeType::Hexagon, ShapeType::Star },
+
+        { Color{0.10f, 0.70f, 0.98f, 1.0f}, "Sky Cerulean",
+          Color{1.00f, 0.15f, 0.65f, 1.0f}, "Hot Pink",
+          ShapeType::Capsule, ShapeType::RoundRect },
+
+        // Row 4: Bright Light & Pastel Spectral Tints
+        { Color{0.92f, 0.98f, 0.10f, 1.0f}, "Bright Lemon",
+          Color{0.00f, 0.25f, 0.95f, 1.0f}, "Cobalt Blue",
+          ShapeType::Star, ShapeType::Diamond },
+
+        { Color{1.00f, 0.50f, 0.00f, 1.0f}, "Cadmium Orange",
+          Color{0.00f, 0.85f, 0.98f, 1.0f}, "Cyan",
+          ShapeType::RoundRect, ShapeType::Hexagon },
+
+        { Color{1.00f, 0.15f, 0.65f, 1.0f}, "Hot Pink",
+          Color{1.00f, 0.90f, 0.00f, 1.0f}, "Cadmium Yellow",
+          ShapeType::Circle, ShapeType::Capsule },
+
+        { Color{0.60f, 0.10f, 0.95f, 1.0f}, "Cobalt Violet",
+          Color{0.00f, 0.85f, 0.35f, 1.0f}, "Emerald Green",
+          ShapeType::Triangle, ShapeType::Star }
+    };
+
+    // 4 Columns x 4 Rows = 16 Large Prominent Cards
+    constexpr int kCols = 4;
+    constexpr int kRows = 4;
+    const float start_x = 160.0f;
+    const float start_y = 150.0f;
+    const float step_x  = 290.0f;
+    const float step_y  = 165.0f;
+
+    for (std::size_t i = 0; i < specs.size(); ++i) {
+        int r = int(i) / kCols;
+        int c = int(i) % kCols;
+
+        OverlapPair pair;
+        pair.cx = start_x + float(c) * step_x;
+        pair.cy = start_y + float(r) * step_y;
+        pair.r = 48.0f; // Much bigger shape radius
+
+        pair.shape_a = specs[i].shape_a;
+        pair.shape_b = specs[i].shape_b;
+        pair.col_a = specs[i].col_a;
+        pair.col_b = specs[i].col_b;
+        pair.label_a = specs[i].name_a;
+        pair.label_b = specs[i].name_b;
+
+        app.pairs.push_back(pair);
+    }
+}
 
 static void init_cb() {
     auto& app = g_app;
@@ -72,283 +269,141 @@ static void init_cb() {
     gfx.logger.func = slog_func;
     sg_setup(&gfx);
 
-    app.pixels.assign(W * H, 0xFF060610u);
-
-    struct Vert { float x, y, u, v; };
-    static const Vert verts[] = {{-1, -1, 0, 1}, {1, -1, 1, 1}, {1, 1, 1, 0}, {-1, 1, 0, 0}};
-    static const uint16_t idx[] = {0, 1, 2, 0, 2, 3};
-
     {
         sg_buffer_desc d{};
-        d.data = SG_RANGE(verts);
-        app.bind.vertex_buffers[0] = sg_make_buffer(d);
-    }
-    {
-        sg_buffer_desc d{};
-        d.usage.index_buffer = true;
-        d.data = SG_RANGE(idx);
-        app.bind.index_buffer = sg_make_buffer(d);
-    }
-    {
-        sg_image_desc d{};
-        d.width = W;
-        d.height = H;
-        d.pixel_format = SG_PIXELFORMAT_RGBA8;
+        d.size = 256 * 1024 * sizeof(kalpana::sokol_backend::Vertex);
         d.usage.stream_update = true;
-        app.tex_img = sg_make_image(d);
+        app.vbuf = sg_make_buffer(d);
+        app.bind.vertex_buffers[0] = app.vbuf;
     }
     {
-        sg_view_desc d{};
-        d.texture.image = app.tex_img;
-        app.tex_view = sg_make_view(d);
+        sg_buffer_desc d{};
+        d.size = 512 * 1024 * sizeof(std::uint32_t);
+        d.usage.index_buffer = true;
+        d.usage.stream_update = true;
+        app.ibuf = sg_make_buffer(d);
+        app.bind.index_buffer = app.ibuf;
     }
     {
-        sg_sampler_desc d{};
-        d.min_filter = SG_FILTER_NEAREST;
-        d.mag_filter = SG_FILTER_NEAREST;
-        app.smp = sg_make_sampler(d);
+        sg_shader_desc shd{};
+        shd.vertex_func.source = VS_METAL;
+        shd.vertex_func.entry = "vs";
+        shd.fragment_func.source = FS_METAL;
+        shd.fragment_func.entry = "fs";
+        sg_shader shdr = sg_make_shader(shd);
+
+        sg_pipeline_desc pd{};
+        pd.shader = shdr;
+        pd.index_type = SG_INDEXTYPE_UINT32;
+        pd.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT2; // position
+        pd.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT4; // color
+        app.pip = sg_make_pipeline(pd);
     }
-    app.bind.views[0] = app.tex_view;
-    app.bind.samplers[0] = app.smp;
-
-    sg_shader_desc shd{};
-#if defined(SOKOL_METAL)
-    shd.vertex_func.source = VS_METAL;
-    shd.vertex_func.entry = "vs";
-    shd.fragment_func.source = FS_METAL;
-    shd.fragment_func.entry = "fs";
-#endif
-    shd.views[0].texture.stage = SG_SHADERSTAGE_FRAGMENT;
-    shd.samplers[0].stage = SG_SHADERSTAGE_FRAGMENT;
-    shd.texture_sampler_pairs[0].stage = SG_SHADERSTAGE_FRAGMENT;
-    shd.texture_sampler_pairs[0].view_slot = 0;
-    shd.texture_sampler_pairs[0].sampler_slot = 0;
-
-    sg_shader shdr = sg_make_shader(shd);
-
-    sg_pipeline_desc pd{};
-    pd.shader = shdr;
-    pd.index_type = SG_INDEXTYPE_UINT16;
-    pd.layout.attrs[0].format = SG_VERTEXFORMAT_FLOAT2;
-    pd.layout.attrs[1].format = SG_VERTEXFORMAT_FLOAT2;
-    app.pip = sg_make_pipeline(pd);
 
     app.pass_action.colors[0].load_action = SG_LOADACTION_CLEAR;
-    app.pass_action.colors[0].clear_value = {0.0f, 0.0f, 0.0f, 1.0f};
-    app.canvas = std::make_unique<kalpana::Canvas<kalpana::capture_backend>>(W, H);
+    app.pass_action.colors[0].clear_value = {0.015f, 0.02f, 0.035f, 1.0f};
 
-    // CSG Smooth Union
-    auto c = akruti::csg_leaf(akruti::Circle{{0.0f, 0.0f}, 35.0f});
-    auto b = akruti::csg_leaf(akruti::RoundedBox{{0.0f, 0.0f}, {28.0f, 20.0f}, 6.0f});
-    app.csg_field = akruti::csg_smooth_union(std::move(c), std::move(b), 12.0f);
+    app.canvas = std::make_unique<kalpana::Canvas<kalpana::sokol_backend>>(W, H);
 
-    app.bezier = akruti::CubicBezierCurve{
-        .p0 = {60.0f, 620.0f},
-        .p1 = {300.0f, 480.0f},
-        .p2 = {800.0f, 700.0f},
-        .p3 = {1040.0f, 540.0f},
-        .radius = 3.0f
-    };
+    init_overlap_gallery();
 }
 
 static void build_scene(kalpana::Scene& scene) {
+    using namespace kalpana;
+    using namespace kalpana::edsl;
     auto& app = g_app;
-    scene.clear_color(kalpana::Color{0.03f, 0.04f, 0.08f, 1.0f});
 
-    // 1. Grid Background
-    kalpana::Color grid_col{0.08f, 0.11f, 0.18f, 1.0f};
+    // Dark sleek canvas base
+    scene.clear_color(Color{0.02f, 0.025f, 0.045f, 1.0f});
+
+    // ── Background Precision Grid ──────────────────────────────────────────
     for (int x = 0; x <= W; x += 40) {
-        kalpana::Path l;
-        l.move_to(float(x), 0.0f);
-        l.line_to(float(x), FH);
-        scene.add(kalpana::Node::shape(l, kalpana::Paint::stroke(grid_col, 1.0f)));
+        scene << shape(line(float(x), 0.0f, float(x), FH))
+                     .stroke(Color{0.06f, 0.09f, 0.14f, 0.35f}, 1.0f);
     }
     for (int y = 0; y <= H; y += 40) {
-        kalpana::Path l;
-        l.move_to(0.0f, float(y));
-        l.line_to(FW, float(y));
-        scene.add(kalpana::Node::shape(l, kalpana::Paint::stroke(grid_col, 1.0f)));
+        scene << shape(line(0.0f, float(y), FW, float(y)))
+                     .stroke(Color{0.06f, 0.09f, 0.14f, 0.35f}, 1.0f);
     }
 
-    // 2. Showcase Akruti Primitive Shapes across grid cards with Kalpana vector styling
-    struct Card {
-        const char* name;
-        float cx, cy;
-    };
-    std::array<Card, 8> cards{{
-        {"Circle (Analytic)", 160.0f, 130.0f},
-        {"Box / OBB (SAT)", 420.0f, 130.0f},
-        {"Capsule (Segment Inflated)", 680.0f, 130.0f},
-        {"Rounded Box", 940.0f, 130.0f},
-        {"Triangle (Barycentric)", 160.0f, 340.0f},
-        {"Sector (Radar FOV)", 420.0f, 340.0f},
-        {"Convex Hull Polygon", 680.0f, 340.0f},
-        {"CSG Smooth Union SDF", 940.0f, 340.0f}
-    }};
+    // ── Main Header ─────────────────────────────────────────────────────────
+    scene << text("Kubelka-Munk Spectral Pigment Mixing Showcase: Subtractive Overlaps")
+                 .fill(colors::cyan())
+                 .font_size(17.0f)
+                 .position(40.0f, 32.0f)
+                 .effect(glow(4.0f, colors::cyan()))
+          << text("Shape A (Left) + Shape B (Right) -> Intersecting Center: Physical 38-Band Kubelka-Munk Absorption")
+                 .fill(Color{0.65f, 0.80f, 0.95f, 1.0f})
+                 .font_size(12.0f)
+                 .position(40.0f, 52.0f);
 
-    const float rot = app.t * 0.8f;
+    // ── Render 16 Large Overlapping Pairs with True Kubelka-Munk Center Mix ──
+    for (const auto& p : app.pairs) {
+        const float offset = 26.0f; // Half overlap shift for r=48
 
-    // Card 0: Circle with spectral glow
-    {
-        kalpana::Path p;
-        p.circle(cards[0].cx, cards[0].cy, 45.0f);
-        kalpana::Color c1{0.0f, 0.85f, 1.0f, 1.0f};
-        kalpana::Color c2{0.0f, 0.2f, 0.9f, 0.3f};
-        kalpana::Path glow;
-        glow.circle(cards[0].cx, cards[0].cy, 60.0f);
-        scene.add(kalpana::Node::shape(glow, kalpana::Paint::fill(c2)));
-        scene.add(kalpana::Node::shape(p, kalpana::Paint::filled_outlined(c1, kalpana::Color{1,1,1,1}, 2.5f)));
-    }
+        // Sleek dark card backdrop for visual contrast
+        scene << shape(round_rect(p.cx - 130.0f, p.cy - 68.0f, 260.0f, 136.0f, 12.0f, 12.0f))
+                     .fill(Color{0.035f, 0.05f, 0.08f, 1.0f})
+                     .stroke(Color{0.18f, 0.24f, 0.35f, 0.9f}, 1.2f);
 
-    // Card 1: Oriented Box (OBB)
-    {
-        const float s = 40.0f;
-        const float c = std::cos(rot), sn = std::sin(rot);
-        auto pt = [&](float lx, float ly) {
-            return std::pair<float, float>{cards[1].cx + lx * c - ly * sn, cards[1].cy + lx * sn + ly * c};
-        };
-        auto [x0, y0] = pt(-s, -s * 0.7f);
-        auto [x1, y1] = pt(s, -s * 0.7f);
-        auto [x2, y2] = pt(s, s * 0.7f);
-        auto [x3, y3] = pt(-s, s * 0.7f);
+        // 1. Left Shape in Pigment A
+        Path path_a = make_shape(p.shape_a, p.cx - offset, p.cy - 8.0f, p.r);
+        Color col_a = p.col_a;
+        scene << shape(std::move(path_a))
+                     .fill(col_a)
+                     .stroke(colors::white(), 1.5f)
+                     .opacity(0.95f);
 
-        kalpana::Path p;
-        p.move_to(x0, y0); p.line_to(x1, y1); p.line_to(x2, y2); p.line_to(x3, y3); p.close();
-        kalpana::Color col = kalpana::spectral::mix(kalpana::Color{1.0f, 0.2f, 0.6f, 0.9f}, kalpana::Color{1.0f, 0.8f, 0.2f, 0.9f}, 0.5f + 0.5f * std::sin(app.t));
-        scene.add(kalpana::Node::shape(p, kalpana::Paint::filled_outlined(col, kalpana::Color{1,1,1,1}, 2.0f)));
-    }
+        // 2. Right Shape in Pigment B
+        Path path_b = make_shape(p.shape_b, p.cx + offset, p.cy - 8.0f, p.r);
+        Color col_b = p.col_b;
+        scene << shape(std::move(path_b))
+                     .fill(col_b)
+                     .stroke(colors::white(), 1.5f)
+                     .opacity(0.95f);
 
-    // Card 2: Oriented Capsule
-    {
-        const float cap_len = 35.0f;
-        const float cap_r = 22.0f;
-        const float c = std::cos(rot + 0.5f), sn = std::sin(rot + 0.5f);
-        const float ax = cards[2].cx - cap_len * c, ay = cards[2].cy - cap_len * sn;
-        const float bx = cards[2].cx + cap_len * c, by = cards[2].cy + cap_len * sn;
-        const float nx = -sn * cap_r, ny = c * cap_r;
+        // 3. Center Subtractive Kubelka-Munk Pigment Mixture
+        Color km_color = spectral::mix(col_a, col_b, 0.5f);
 
-        kalpana::Path p;
-        p.move_to(ax + nx, ay + ny);
-        p.line_to(bx + nx, by + ny);
-        p.line_to(bx - nx, by - ny);
-        p.line_to(ax - nx, ay - ny);
-        p.close();
+        // Exact lens-shaped overlap intersection patch
+        float overlap_w = (p.r * 2.0f - offset * 2.0f) * 0.95f;
+        float overlap_h = p.r * 1.55f;
+        scene << shape(ellipse(p.cx, p.cy - 8.0f, overlap_w * 0.5f, overlap_h * 0.5f))
+                     .fill(km_color)
+                     .stroke(colors::white(), 1.8f)
+                     .effect(glow(6.0f, km_color));
 
-        kalpana::Color col{0.2f, 1.0f, 0.4f, 0.85f};
-        scene.add(kalpana::Node::shape(p, kalpana::Paint::filled_outlined(col, kalpana::Color{0.9f,1,0.9f,1}, 2.0f)));
-    }
-
-    // Card 3: Rounded Box
-    {
-        kalpana::Path p;
-        p.round_rect(cards[3].cx - 42.0f, cards[3].cy - 35.0f, 84.0f, 70.0f, 16.0f, 16.0f);
-        kalpana::Color col{1.0f, 0.45f, 0.1f, 0.85f};
-        scene.add(kalpana::Node::shape(p, kalpana::Paint::filled_outlined(col, kalpana::Color{1,0.8f,0.6f,1}, 2.5f)));
-    }
-
-    // Card 4: Rotating Triangle
-    {
-        const float s = 45.0f;
-        kalpana::Path p;
-        p.move_to(cards[4].cx + std::cos(rot) * s, cards[4].cy + std::sin(rot) * s);
-        p.line_to(cards[4].cx + std::cos(rot + 2.0944f) * s, cards[4].cy + std::sin(rot + 2.0944f) * s);
-        p.line_to(cards[4].cx + std::cos(rot + 4.1888f) * s, cards[4].cy + std::sin(rot + 4.1888f) * s);
-        p.close();
-
-        kalpana::Color col{0.9f, 0.1f, 0.9f, 0.85f};
-        scene.add(kalpana::Node::shape(p, kalpana::Paint::filled_outlined(col, kalpana::Color{1,0.8f,1,1}, 2.0f)));
-    }
-
-    // Card 5: Radar Sector FOV
-    {
-        kalpana::Path p;
-        p.move_to(cards[5].cx, cards[5].cy);
-        const float a0 = rot - 0.75f;
-        const float a1 = rot + 0.75f;
-        constexpr int kArc = 16;
-        for (int i = 0; i <= kArc; ++i) {
-            float frac = float(i) / float(kArc);
-            float a = a0 + (a1 - a0) * frac;
-            p.line_to(cards[5].cx + std::cos(a) * 55.0f, cards[5].cy + std::sin(a) * 55.0f);
-        }
-        p.close();
-
-        kalpana::Color col{0.1f, 0.8f, 1.0f, 0.75f};
-        scene.add(kalpana::Node::shape(p, kalpana::Paint::filled_outlined(col, kalpana::Color{0.7f,1,1,1}, 2.0f)));
-    }
-
-    // Card 6: Procedural Convex Hull
-    {
-        constexpr int kVerts = 8;
-        kalpana::Path p;
-        for (int i = 0; i < kVerts; ++i) {
-            float ang = float(i) / float(kVerts) * 6.28318f + rot * 0.5f;
-            float rad = 35.0f + 12.0f * std::sin(float(i) * 2.4f + app.t * 2.0f);
-            float vx = cards[6].cx + std::cos(ang) * rad;
-            float vy = cards[6].cy + std::sin(ang) * rad;
-            if (i == 0) p.move_to(vx, vy);
-            else p.line_to(vx, vy);
-        }
-        p.close();
-
-        kalpana::Color col{0.95f, 0.85f, 0.1f, 0.85f};
-        scene.add(kalpana::Node::shape(p, kalpana::Paint::filled_outlined(col, kalpana::Color{1,1,0.7f,1}, 2.0f)));
-    }
-
-    // Card 7: CSG Smooth Union
-    {
-        kalpana::Path c1, c2;
-        float shift = std::sin(app.t * 2.5f) * 18.0f;
-        c1.circle(cards[7].cx - shift, cards[7].cy, 28.0f);
-        c2.round_rect(cards[7].cx + shift - 25.0f, cards[7].cy - 20.0f, 50.0f, 40.0f, 8.0f, 8.0f);
-
-        kalpana::Color col1{0.2f, 0.7f, 1.0f, 0.6f};
-        kalpana::Color col2{1.0f, 0.3f, 0.5f, 0.6f};
-        scene.add(kalpana::Node::shape(c1, kalpana::Paint::fill(col1)));
-        scene.add(kalpana::Node::shape(c2, kalpana::Paint::fill(col2)));
-    }
-
-    // 3. Bottom Showcase: Cubic Bezier Spline with multi-width variable strokes
-    {
-        kalpana::Path curve;
-        constexpr int kSamples = 60;
-        for (int i = 0; i <= kSamples; ++i) {
-            float t = float(i) / float(kSamples);
-            auto pt = app.bezier.evaluate(t);
-            if (i == 0) curve.move_to(pt.x, pt.y);
-            else curve.line_to(pt.x, pt.y);
-        }
-        kalpana::Color spline_col = kalpana::spectral::mix(
-            kalpana::Color{0.0f, 1.0f, 0.8f, 1.0f},
-            kalpana::Color{1.0f, 0.1f, 0.9f, 1.0f},
-            0.5f + 0.5f * std::sin(app.t * 1.5f)
-        );
-        scene.add(kalpana::Node::shape(curve, kalpana::Paint::stroke(spline_col, 4.0f)));
+        // Subtractive Pair Label at bottom of card
+        std::string label = std::string(p.label_a) + " + " + std::string(p.label_b);
+        scene << text(label)
+                     .fill(Color{0.80f, 0.88f, 0.95f, 0.9f})
+                     .font_size(11.0f)
+                     .position(p.cx - float(label.length()) * 3.1f, p.cy + 54.0f);
     }
 }
 
 static void frame_cb() {
     auto& app = g_app;
-    app.frame++;
     app.t += DT;
 
     kalpana::Scene scene;
     build_scene(scene);
     app.canvas->render(scene);
-    auto snap = app.canvas->snapshot();
 
-    for (std::size_t i = 0; i < snap.size(); ++i) {
-        std::uint32_t argb = snap[i];
-        std::uint8_t a = (argb >> 24) & 0xFF;
-        std::uint8_t r = (argb >> 16) & 0xFF;
-        std::uint8_t g = (argb >> 8) & 0xFF;
-        std::uint8_t b = argb & 0xFF;
-        app.pixels[i] = (std::uint32_t(a) << 24) | (std::uint32_t(b) << 16) | (std::uint32_t(g) << 8) | r;
+    const auto& verts = app.canvas->backend().vertices();
+    const auto& indices = app.canvas->backend().indices();
+
+    if (!verts.empty() && !indices.empty()) {
+        sg_range vr{};
+        vr.ptr = verts.data();
+        vr.size = verts.size() * sizeof(kalpana::sokol_backend::Vertex);
+        sg_update_buffer(app.vbuf, vr);
+
+        sg_range ir{};
+        ir.ptr = indices.data();
+        ir.size = indices.size() * sizeof(std::uint32_t);
+        sg_update_buffer(app.ibuf, ir);
     }
-
-    sg_image_data imgd{};
-    imgd.mip_levels[0] = {app.pixels.data(), app.pixels.size() * sizeof(std::uint32_t)};
-    sg_update_image(app.tex_img, imgd);
 
     sg_pass pass{};
     pass.action = app.pass_action;
@@ -356,7 +411,9 @@ static void frame_cb() {
     sg_begin_pass(pass);
     sg_apply_pipeline(app.pip);
     sg_apply_bindings(app.bind);
-    sg_draw(0, 6, 1);
+    if (!indices.empty()) {
+        sg_draw(0, static_cast<int>(indices.size()), 1);
+    }
     sg_end_pass();
     sg_commit();
 }
@@ -381,7 +438,7 @@ sapp_desc sokol_main(int /*argc*/, char** /*argv*/) {
     d.cleanup_cb = cleanup_cb;
     d.width = W;
     d.height = H;
-    d.window_title = "Pebble Akruti & Kalpana Showcase [ESC] quit";
+    d.window_title = "Kalpana 2.0: 56 Subtractive Kubelka-Munk Pigment Overlaps [ESC] quit";
     d.icon.sokol_default = true;
     d.logger.func = slog_func;
     return d;

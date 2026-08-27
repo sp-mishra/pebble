@@ -74,8 +74,7 @@ public:
                     if (pt_idx + 1 < pts.size()) {
                         pebble::math::vec2 cp = xf.apply(pts[pt_idx++]);
                         pebble::math::vec2 end = xf.apply(pts[pt_idx++]);
-                        float chord = pebble::math::length(end - curr);
-                        int kSteps = std::clamp(static_cast<int>(std::sqrt(chord) * 1.2f), 2, 8);
+                        constexpr int kSteps = 6;
                         for (int i = 1; i <= kSteps; ++i) {
                             float t = float(i) / float(kSteps);
                             float inv = 1.0f - t;
@@ -95,9 +94,7 @@ public:
                         pebble::math::vec2 cp1 = xf.apply(pts[pt_idx++]);
                         pebble::math::vec2 cp2 = xf.apply(pts[pt_idx++]);
                         pebble::math::vec2 end = xf.apply(pts[pt_idx++]);
-                        float chord = pebble::math::length(end - curr);
-                        // Adaptive level of detail: small particle circles (chord < 10px) use only 2-3 segments
-                        int kSteps = std::clamp(static_cast<int>(std::sqrt(chord) * 1.5f), 2, 12);
+                        constexpr int kSteps = 10;
                         for (int i = 1; i <= kSteps; ++i) {
                             float t = float(i) / float(kSteps);
                             float inv = 1.0f - t;
@@ -122,100 +119,148 @@ public:
             }
         }
 
-        auto screen_to_clip = [&](float sx, float sy) -> std::pair<float, float> {
-            return {
-                (sx / float(width_)) * 2.0f - 1.0f,
-                1.0f - (sy / float(height_)) * 2.0f
-            };
+        auto to_clip_x = [&](float px) -> float {
+            return (px / float(width_)) * 2.0f - 1.0f;
+        };
+        auto to_clip_y = [&](float py) -> float {
+            return 1.0f - (py / float(height_)) * 2.0f;
         };
 
-        // 1. GPU Polygon Tessellation (Triangle Fan from Polygon Centroid)
+        // 1. Polygon Fill Tessellation with Subpixel Antialiased Outer Fringe
         if (paint.has_fill() && poly_pts.size() >= 3) {
-            Color c = paint.fill_color();
+            Color fc = paint.fill_color();
+            const std::uint32_t base_idx = static_cast<std::uint32_t>(vertices_.size());
+
+            // Compute center of mass
             float cx = 0.0f, cy = 0.0f;
-            for (const auto& pt : poly_pts) {
-                cx += pt[0];
-                cy += pt[1];
+            for (const auto& p : poly_pts) {
+                cx += p[0];
+                cy += p[1];
             }
             cx /= float(poly_pts.size());
             cy /= float(poly_pts.size());
 
-            auto [ccx, ccy] = screen_to_clip(cx, cy);
-            std::uint32_t base_idx = static_cast<std::uint32_t>(vertices_.size());
-            vertices_.push_back({ccx, ccy, c.r, c.g, c.b, c.a});
+            // Center vertex
+            vertices_.push_back(Vertex{to_clip_x(cx), to_clip_y(cy), fc.r, fc.g, fc.b, fc.a});
 
-            for (const auto& pt : poly_pts) {
-                auto [px, py] = screen_to_clip(pt[0], pt[1]);
-                vertices_.push_back({px, py, c.r, c.g, c.b, c.a});
+            // Boundary vertices (interior)
+            for (const auto& p : poly_pts) {
+                vertices_.push_back(Vertex{to_clip_x(p[0]), to_clip_y(p[1]), fc.r, fc.g, fc.b, fc.a});
             }
 
             const std::uint32_t n_pts = static_cast<std::uint32_t>(poly_pts.size());
             for (std::uint32_t i = 0; i < n_pts; ++i) {
-                std::uint32_t next_i = (i + 1) % n_pts;
-                indices_.push_back(base_idx);
-                indices_.push_back(base_idx + 1 + i);
-                indices_.push_back(base_idx + 1 + next_i);
+                const std::uint32_t v0 = base_idx;
+                const std::uint32_t v1 = base_idx + 1 + i;
+                const std::uint32_t v2 = base_idx + 1 + ((i + 1) % n_pts);
+                indices_.push_back(v0);
+                indices_.push_back(v1);
+                indices_.push_back(v2);
+            }
+
+            // Antialiased Outer Fringe Skirt (1.2px feather to alpha 0)
+            const std::uint32_t fringe_start = static_cast<std::uint32_t>(vertices_.size());
+            for (std::size_t i = 0; i < n_pts; ++i) {
+                const auto& p = poly_pts[i];
+                float dx = p[0] - cx;
+                float dy = p[1] - cy;
+                float len = std::sqrt(dx * dx + dy * dy) + 1e-4f;
+                float ox = p[0] + (dx / len) * 1.25f;
+                float oy = p[1] + (dy / len) * 1.25f;
+                vertices_.push_back(Vertex{to_clip_x(ox), to_clip_y(oy), fc.r, fc.g, fc.b, 0.0f});
+            }
+
+            for (std::uint32_t i = 0; i < n_pts; ++i) {
+                const std::uint32_t next = (i + 1) % n_pts;
+                const std::uint32_t in0 = base_idx + 1 + i;
+                const std::uint32_t in1 = base_idx + 1 + next;
+                const std::uint32_t out0 = fringe_start + i;
+                const std::uint32_t out1 = fringe_start + next;
+
+                indices_.push_back(in0);
+                indices_.push_back(out0);
+                indices_.push_back(out1);
+
+                indices_.push_back(in0);
+                indices_.push_back(out1);
+                indices_.push_back(in1);
             }
         }
 
-        // 2. GPU Stroke Tessellation (Thick Quad Strips per Segment)
+        // 2. Stroke Tessellation with Antialiased Edge Falloff
         if (paint.has_stroke() && !segs.empty()) {
             Color sc = paint.stroke().color;
-            float hw = std::max(0.5f, paint.stroke().width * 0.5f);
+            const float half_w = std::max(0.5f, paint.stroke().width * 0.5f);
 
             for (const auto& s : segs) {
-                float dx = s.x1 - s.x0;
-                float dy = s.y1 - s.y0;
-                float len = std::sqrt(dx * dx + dy * dy);
+                const float dx = s.x1 - s.x0;
+                const float dy = s.y1 - s.y0;
+                const float len = std::sqrt(dx * dx + dy * dy);
                 if (len < 1e-4f) continue;
 
-                float nx = (-dy / len) * hw;
-                float ny = ( dx / len) * hw;
+                const float nx = -dy / len * half_w;
+                const float ny =  dx / len * half_w;
+                const float fnx = -dy / len * (half_w + 1.2f);
+                const float fny =  dx / len * (half_w + 1.2f);
 
-                auto [v0x, v0y] = screen_to_clip(s.x0 + nx, s.y0 + ny);
-                auto [v1x, v1y] = screen_to_clip(s.x1 + nx, s.y1 + ny);
-                auto [v2x, v2y] = screen_to_clip(s.x1 - nx, s.y1 - ny);
-                auto [v3x, v3y] = screen_to_clip(s.x0 - nx, s.y0 - ny);
+                const std::uint32_t base_idx = static_cast<std::uint32_t>(vertices_.size());
 
-                std::uint32_t base_idx = static_cast<std::uint32_t>(vertices_.size());
-                vertices_.push_back({v0x, v0y, sc.r, sc.g, sc.b, sc.a});
-                vertices_.push_back({v1x, v1y, sc.r, sc.g, sc.b, sc.a});
-                vertices_.push_back({v2x, v2y, sc.r, sc.g, sc.b, sc.a});
-                vertices_.push_back({v3x, v3y, sc.r, sc.g, sc.b, sc.a});
+                // Inner core quads
+                vertices_.push_back(Vertex{to_clip_x(s.x0 + nx), to_clip_y(s.y0 + ny), sc.r, sc.g, sc.b, sc.a});
+                vertices_.push_back(Vertex{to_clip_x(s.x0 - nx), to_clip_y(s.y0 - ny), sc.r, sc.g, sc.b, sc.a});
+                vertices_.push_back(Vertex{to_clip_x(s.x1 - nx), to_clip_y(s.y1 - ny), sc.r, sc.g, sc.b, sc.a});
+                vertices_.push_back(Vertex{to_clip_x(s.x1 + nx), to_clip_y(s.y1 + ny), sc.r, sc.g, sc.b, sc.a});
 
                 indices_.push_back(base_idx + 0);
                 indices_.push_back(base_idx + 1);
                 indices_.push_back(base_idx + 2);
+
                 indices_.push_back(base_idx + 0);
                 indices_.push_back(base_idx + 2);
                 indices_.push_back(base_idx + 3);
+
+                // Feather fringes (left and right)
+                vertices_.push_back(Vertex{to_clip_x(s.x0 + fnx), to_clip_y(s.y0 + fny), sc.r, sc.g, sc.b, 0.0f});
+                vertices_.push_back(Vertex{to_clip_x(s.x1 + fnx), to_clip_y(s.y1 + fny), sc.r, sc.g, sc.b, 0.0f});
+
+                indices_.push_back(base_idx + 0);
+                indices_.push_back(base_idx + 4);
+                indices_.push_back(base_idx + 5);
+
+                indices_.push_back(base_idx + 0);
+                indices_.push_back(base_idx + 5);
+                indices_.push_back(base_idx + 3);
+
+                vertices_.push_back(Vertex{to_clip_x(s.x0 - fnx), to_clip_y(s.y0 - fny), sc.r, sc.g, sc.b, 0.0f});
+                vertices_.push_back(Vertex{to_clip_x(s.x1 - fnx), to_clip_y(s.y1 - fny), sc.r, sc.g, sc.b, 0.0f});
+
+                indices_.push_back(base_idx + 1);
+                indices_.push_back(base_idx + 6);
+                indices_.push_back(base_idx + 7);
+
+                indices_.push_back(base_idx + 1);
+                indices_.push_back(base_idx + 7);
+                indices_.push_back(base_idx + 2);
             }
         }
     }
 
-    void push_group(Transform, float, BlendMode, std::span<const Effect>) {}
+    void push_group(Transform, float, BlendMode, const EffectChain&) {}
     void pop_group() {}
 
     void draw_image(const std::uint32_t*, std::uint32_t, std::uint32_t, float, float, float, float, Transform) {}
 
     void present() {}
 
-    void readback(std::span<std::uint32_t> dst) {
-        if (!dst.empty()) {
-            std::fill(dst.begin(), dst.end(), clear_color_.to_argb8888());
-        }
-    }
+    void readback(std::span<std::uint32_t>) {}
 
     [[nodiscard]] const std::vector<Vertex>& vertices() const noexcept { return vertices_; }
     [[nodiscard]] const std::vector<std::uint32_t>& indices() const noexcept { return indices_; }
-    [[nodiscard]] Color clear_color() const noexcept { return clear_color_; }
-    [[nodiscard]] std::uint32_t width() const noexcept { return width_; }
-    [[nodiscard]] std::uint32_t height() const noexcept { return height_; }
 
 private:
     std::uint32_t              width_ = 0;
     std::uint32_t              height_ = 0;
-    Color                      clear_color_ = colors::transparent();
+    Color                      clear_color_ = colors::black();
     std::vector<Vertex>        vertices_;
     std::vector<std::uint32_t> indices_;
 };

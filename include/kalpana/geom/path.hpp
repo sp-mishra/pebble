@@ -4,10 +4,12 @@
 // ============================================================================
 // Supports move_to, line_to, cubic_to, quad_to, close commands, primitive
 // builders (rect, round_rect, circle, ellipse, polygon), and Akruti spline import.
+// Configurable sequence storage with SmallVector defaults.
 // ============================================================================
 
 #include "transform.hpp"
 #include "containers/numeric/math_vector.hpp"
+#include "containers/dynamic/SmallVector.hpp"
 #include "akruti/spline.hpp"
 #include "akruti/fracture.hpp"
 #include <vector>
@@ -24,30 +26,37 @@ enum class PathVerb : std::uint8_t {
     Close
 };
 
-class Path {
+template <
+    typename VerbContainer = containers::dynamic::SmallVector<PathVerb, 64>,
+    typename PointContainer = containers::dynamic::SmallVector<pebble::math::vec2, 128>
+>
+class BasicPath {
 public:
-    Path() = default;
+    using verb_container_type = VerbContainer;
+    using point_container_type = PointContainer;
 
-    Path& move_to(float x, float y) {
+    BasicPath() = default;
+
+    BasicPath& move_to(float x, float y) {
         verbs_.push_back(PathVerb::Move);
         pts_.push_back(pebble::math::vec2(x, y));
         return *this;
     }
 
-    Path& line_to(float x, float y) {
+    BasicPath& line_to(float x, float y) {
         verbs_.push_back(PathVerb::Line);
         pts_.push_back(pebble::math::vec2(x, y));
         return *this;
     }
 
-    Path& quad_to(float cx, float cy, float x, float y) {
+    BasicPath& quad_to(float cx, float cy, float x, float y) {
         verbs_.push_back(PathVerb::Quad);
         pts_.push_back(pebble::math::vec2(cx, cy));
         pts_.push_back(pebble::math::vec2(x, y));
         return *this;
     }
 
-    Path& cubic_to(float c1x, float c1y, float c2x, float c2y, float x, float y) {
+    BasicPath& cubic_to(float c1x, float c1y, float c2x, float c2y, float x, float y) {
         verbs_.push_back(PathVerb::Cubic);
         pts_.push_back(pebble::math::vec2(c1x, c1y));
         pts_.push_back(pebble::math::vec2(c2x, c2y));
@@ -55,13 +64,13 @@ public:
         return *this;
     }
 
-    Path& close() {
+    BasicPath& close() {
         verbs_.push_back(PathVerb::Close);
         return *this;
     }
 
     // ── Primitive Shapes ────────────────────────────────────────────────────────
-    Path& rect(float x, float y, float w, float h) {
+    BasicPath& rect(float x, float y, float w, float h) {
         move_to(x, y);
         line_to(x + w, y);
         line_to(x + w, y + h);
@@ -69,7 +78,7 @@ public:
         return close();
     }
 
-    Path& round_rect(float x, float y, float w, float h, float rx, float ry) {
+    BasicPath& round_rect(float x, float y, float w, float h, float rx, float ry) {
         rx = std::min(rx, w * 0.5f);
         ry = std::min(ry, h * 0.5f);
         constexpr float k = 0.5522847498f; // Cubic constant for circle arc
@@ -87,11 +96,11 @@ public:
         return close();
     }
 
-    Path& circle(float cx, float cy, float r) {
+    BasicPath& circle(float cx, float cy, float r) {
         return ellipse(cx, cy, r, r);
     }
 
-    Path& ellipse(float cx, float cy, float rx, float ry) {
+    BasicPath& ellipse(float cx, float cy, float rx, float ry) {
         constexpr float k = 0.5522847498f;
         const float kx = rx * k, ky = ry * k;
 
@@ -104,15 +113,15 @@ public:
     }
 
     // ── Akruti Spline & Polygon Import ──────────────────────────────────────────
-    static Path from_bezier(const akruti::CubicBezierCurve& curve) {
-        Path p;
+    static BasicPath from_bezier(const akruti::CubicBezierCurve& curve) {
+        BasicPath p;
         p.move_to(curve.p0.x, curve.p0.y);
         p.cubic_to(curve.p1.x, curve.p1.y, curve.p2.x, curve.p2.y, curve.p3.x, curve.p3.y);
         return p;
     }
 
-    static Path from_catmull_rom(const akruti::CatmullRomSpline& spline) {
-        Path p;
+    static BasicPath from_catmull_rom(const akruti::CatmullRomSpline& spline) {
+        BasicPath p;
         if (spline.points.empty()) return p;
         p.move_to(spline.points[0].x, spline.points[0].y);
         for (std::size_t i = 1; i < spline.points.size(); ++i) {
@@ -123,8 +132,8 @@ public:
     }
 
     template <std::size_t N>
-    static Path from_chain(const akruti::ChainShape<N>& chain) {
-        Path p;
+    static BasicPath from_chain(const akruti::ChainShape<N>& chain) {
+        BasicPath p;
         if (chain.verts.empty()) return p;
         p.move_to(chain.verts[0].x, chain.verts[0].y);
         for (std::size_t i = 1; i < chain.verts.size(); ++i) {
@@ -134,8 +143,8 @@ public:
         return p;
     }
 
-    static Path from_poly(const akruti::Poly& poly) {
-        Path p;
+    static BasicPath from_poly(const akruti::Poly& poly) {
+        BasicPath p;
         if (poly.empty()) return p;
         p.move_to(poly[0].x, poly[0].y);
         for (std::size_t i = 1; i < poly.size(); ++i) {
@@ -145,8 +154,16 @@ public:
         return p;
     }
 
-    [[nodiscard]] const std::vector<PathVerb>& verbs() const noexcept { return verbs_; }
-    [[nodiscard]] const std::vector<pebble::math::vec2>& points() const noexcept { return pts_; }
+    [[nodiscard]] akruti::Poly to_poly() const {
+        akruti::Poly poly;
+        for (const auto& pt : pts_) {
+            poly.push_back(akruti::Vec2<akruti::Scalar>{pt[0], pt[1]});
+        }
+        return poly;
+    }
+
+    [[nodiscard]] const VerbContainer& verbs() const noexcept { return verbs_; }
+    [[nodiscard]] const PointContainer& points() const noexcept { return pts_; }
     [[nodiscard]] bool empty() const noexcept { return verbs_.empty(); }
 
     void clear() noexcept {
@@ -154,9 +171,14 @@ public:
         pts_.clear();
     }
 
+    friend bool operator==(const BasicPath&, const BasicPath&) = default;
+
 private:
-    std::vector<PathVerb>           verbs_;
-    std::vector<pebble::math::vec2> pts_;
+    VerbContainer  verbs_;
+    PointContainer pts_;
 };
+
+// Default Path using SmallVector storage policy
+using Path = BasicPath<>;
 
 } // namespace kalpana

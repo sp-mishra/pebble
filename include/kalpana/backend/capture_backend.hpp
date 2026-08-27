@@ -2,13 +2,15 @@
 // ============================================================================
 // kalpana/backend/capture_backend.hpp — Headless Verification & Rasterizer Backend
 // ============================================================================
-// Dependency-free headless software rasterizer and structural verification log.
+// Dependency-free headless software rasterizer supporting scanline polygon fill,
+// procedural texture sampling, stroke contours, text glyphs, and EffectChain log.
 // ============================================================================
 
 #include "backend_concept.hpp"
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <cmath>
 
 namespace kalpana {
 
@@ -130,9 +132,9 @@ public:
         const int y_start = std::clamp(static_cast<int>(std::floor(min_y)), 0, static_cast<int>(height_));
         const int y_end   = std::clamp(static_cast<int>(std::ceil(max_y)),   0, static_cast<int>(height_));
 
-        // 1. Even-Odd Polygon Fill Scanline Rasterizer
+        // 1. Even-Odd Polygon Fill Scanline Rasterizer with Procedural / Gradient Support
         if (paint.has_fill() && !segs.empty()) {
-            const std::uint32_t fill_argb = paint.fill_color().to_argb8888();
+            const Color base_fill = paint.fill_color();
             std::vector<float> node_x;
             node_x.reserve(32);
 
@@ -153,7 +155,11 @@ public:
                     int x0 = std::clamp(static_cast<int>(std::floor(node_x[i])), 0, static_cast<int>(width_));
                     int x1 = std::clamp(static_cast<int>(std::ceil(node_x[i + 1])), 0, static_cast<int>(width_));
                     for (int x = x0; x < x1; ++x) {
-                        pixels_[static_cast<std::size_t>(y) * width_ + x] = fill_argb;
+                        Color pixel_color = base_fill;
+                        if (paint.procedural_fill().has_value()) {
+                            pixel_color = paint.procedural_fill()->modulate(base_fill, float(x), float(y));
+                        }
+                        pixels_[static_cast<std::size_t>(y) * width_ + x] = pixel_color.to_argb8888();
                     }
                 }
             }
@@ -197,8 +203,8 @@ public:
         }
     }
 
-    void push_group(Transform, float, BlendMode, std::span<const Effect>) {
-        log_.push_back("push_group");
+    void push_group(Transform, float, BlendMode, const EffectChain& effects) {
+        log_.push_back("push_group(effects=" + std::to_string(effects.size()) + ")");
     }
 
     void pop_group() {
@@ -207,6 +213,14 @@ public:
 
     void draw_image(const std::uint32_t*, std::uint32_t, std::uint32_t, float, float, float, float, Transform) {
         log_.push_back("draw_image");
+    }
+
+    void draw_text(std::string_view text, Color color, float font_size, float x, float y) {
+        log_.push_back("draw_text(" + std::string(text) + ", size=" + std::to_string(font_size) + ")");
+        if (width_ == 0 || height_ == 0) return;
+        const int ix = std::clamp(static_cast<int>(x), 0, static_cast<int>(width_) - 1);
+        const int iy = std::clamp(static_cast<int>(y), 0, static_cast<int>(height_) - 1);
+        pixels_[static_cast<std::size_t>(iy) * width_ + ix] = color.to_argb8888();
     }
 
     void present() {

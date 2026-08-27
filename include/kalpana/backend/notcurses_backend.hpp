@@ -30,7 +30,7 @@ public:
         }
     }
 
-    void push_group(Transform, float, BlendMode, std::span<const Effect>) {}
+    void push_group(Transform, float, BlendMode, const EffectChain&) {}
     void pop_group() {}
 
     void draw_image(const std::uint32_t*, std::uint32_t, std::uint32_t, float, float, float, float, Transform) {}

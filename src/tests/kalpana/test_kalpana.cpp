@@ -56,8 +56,8 @@ TEST_CASE("Kalpana: Scene Graph Composition & Headless Scanline Canvas", "[kalpa
     REQUIRE(sample_px == red_argb);
 }
 
-TEST_CASE("Kalpana: Realtime Brush Pressure Dynamics & Stamp Emission", "[kalpana][brush]") {
-    kalpana::Brush brush;
+TEST_CASE("Kalpana: Realtime Brush Pressure Dynamics & Stamp Emission (Unified API)", "[kalpana][brush]") {
+    kalpana::SpectralBrush brush;
     brush.size(20.0f).spacing(0.2f).color(kalpana::colors::coral());
 
     kalpana::BrushPoint p0{.pos = {0.0f, 0.0f}, .pressure = 0.5f};
@@ -70,8 +70,6 @@ TEST_CASE("Kalpana: Realtime Brush Pressure Dynamics & Stamp Emission", "[kalpan
     // Radius should smoothly expand as pressure increases from 0.5 to 1.0
     REQUIRE(stamps.front().radius < stamps.back().radius);
 }
-
-#include "kalpana/backend/sokol_backend.hpp"
 
 TEST_CASE("Kalpana: Sokol Metal GPU Tessellation Backend (Polygon Fan & Outline Quads)", "[kalpana][sokol][gpu]") {
     kalpana::Scene scene;
@@ -107,4 +105,3 @@ TEST_CASE("Kalpana: Sokol Metal GPU Tessellation Backend (Polygon Fan & Outline 
         REQUIRE(v.a <= 1.0f);
     }
 }
-

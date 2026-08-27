@@ -24,7 +24,20 @@ public:
     void render(const Scene& scene) {
         backend_.begin(w_, h_);
         backend_.clear(scene.clear_color());
-        walk(scene.root(), /*is_root=*/true);
+
+        if (scene.has_layers()) {
+            for (const auto& layer : scene.layers().layers()) {
+                if (!layer.visible()) continue;
+                backend_.push_group(Transform::identity(), layer.opacity(), layer.blend(), layer.effect_chain());
+                for (const auto& node : layer.nodes()) {
+                    walk(node, false);
+                }
+                backend_.pop_group();
+            }
+        } else {
+            walk(scene.root(), /*is_root=*/true);
+        }
+
         backend_.present();
     }
 
@@ -43,8 +56,7 @@ private:
     void walk(const Node& n, bool is_root) {
         if (const auto* g = std::get_if<GroupNode>(&n.content)) {
             if (!is_root) {
-                backend_.push_group(n.xf, n.opacity, n.blend,
-                                    std::span<const Effect>(n.effects.data(), n.effects.size()));
+                backend_.push_group(n.xf, n.opacity, n.blend, n.effects);
             }
             for (const Node& child : g->children) {
                 walk(child, false);
@@ -56,6 +68,11 @@ private:
             backend_.draw_shape(s->path, s->paint, n.xf);
         } else if (const auto* im = std::get_if<ImageNode>(&n.content)) {
             backend_.draw_image(im->pixels, im->w, im->h, im->dx, im->dy, im->dw, im->dh, n.xf);
+        } else if (const auto* t = std::get_if<TextNode>(&n.content)) {
+            // Software text draw fallback if backend provides draw_text
+            if constexpr (requires(B b) { b.draw_text(t->text, t->color, t->font_size, t->x, t->y); }) {
+                backend_.draw_text(t->text, t->color, t->font_size, t->x, t->y);
+            }
         }
     }
 

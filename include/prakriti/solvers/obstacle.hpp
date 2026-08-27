@@ -126,7 +126,7 @@ private:
                 pred = hit_pt + normal * (cfg.contact_offset * cfg.contact_stiffness);
 
                 const Scalar vn = pebble::math::dot(v, normal);
-                if (vn < Scalar(-25.0)) { // Restitution threshold to avoid resting chatter
+                if (vn < Scalar(-0.1)) { // Restitution threshold to avoid resting chatter
                     pred = pred + normal * (-cfg.restitution * vn * dt_sub_);
                 }
                 if (vn < Scalar(0)) {
@@ -150,7 +150,7 @@ private:
 
             // Restitution + Coulomb friction
             const Scalar vn = pebble::math::dot(v, normal);
-            if (vn < Scalar(-25.0)) { // Restitution threshold to avoid resting chatter
+            if (vn < Scalar(-0.1)) { // Restitution threshold to avoid resting chatter
                 pred = pred + normal * (-cfg.restitution * vn * dt_sub_);
             }
             if (vn < Scalar(0)) {
