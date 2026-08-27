@@ -110,32 +110,42 @@ static void init_prakriti_world() {
     cfg.solver_iters = 3;   // 3 solver iterations for snappy performance
     cfg.cell_size = 14.0f;
 
-    // 1. Setup Static Obstacles
+    // 1. Setup Static Obstacles — Plinko field & angled sluice ramps
     app.obstacles.circles.clear();
     app.obstacles.boxes.clear();
     app.obstacles.capsules.clear();
 
-    // Deflector Pegs & Funnels
-    app.obstacles.circles.push_back(akruti::Circle{pebble::math::vec2(FW * 0.35f, 340.0f), 28.0f});
-    app.obstacles.circles.push_back(akruti::Circle{pebble::math::vec2(FW * 0.65f, 340.0f), 28.0f});
-    app.obstacles.circles.push_back(akruti::Circle{pebble::math::vec2(FW * 0.50f, 480.0f), 35.0f});
+    // Multi-tier Galton board / Plinko deflector grid
+    constexpr int kPegRows = 3;
+    for (int pr = 0; pr < kPegRows; ++pr) {
+        int count = 5 + (pr % 2);
+        float spacing = FW / float(count + 1);
+        float y = 240.0f + float(pr) * 75.0f;
+        for (int pc = 1; pc <= count; ++pc) {
+            float x = float(pc) * spacing + ((pr % 2) ? (spacing * 0.5f) : 0.0f);
+            if (x > 80.0f && x < FW - 80.0f) {
+                app.obstacles.circles.push_back(akruti::Circle{pebble::math::vec2(x, y), 14.0f});
+            }
+        }
+    }
 
-    // Angled Ramp Obstacles
+    // Angled Funnel Guides & Center Bouncer
+    app.obstacles.circles.push_back(akruti::Circle{pebble::math::vec2(FW * 0.50f, 500.0f), 32.0f});
     app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(120.0f, 220.0f),
-        pebble::math::vec2(320.0f, 280.0f),
+        pebble::math::vec2(80.0f, 160.0f),
+        pebble::math::vec2(280.0f, 220.0f),
         10.0f
     });
     app.obstacles.capsules.push_back(akruti::Capsule{
-        pebble::math::vec2(FW - 120.0f, 220.0f),
-        pebble::math::vec2(FW - 320.0f, 280.0f),
+        pebble::math::vec2(FW - 80.0f, 160.0f),
+        pebble::math::vec2(FW - 280.0f, 220.0f),
         10.0f
     });
 
     prakriti::ObstacleConfig obs_cfg{};
     obs_cfg.contact_stiffness = 1.0f;
-    obs_cfg.restitution = 0.4f;
-    obs_cfg.friction = 0.15f;
+    obs_cfg.restitution = 0.45f;
+    obs_cfg.friction = 0.12f;
 
     ShowcaseMechanics mechanics_stack{
         std::make_tuple(
@@ -153,20 +163,61 @@ static void init_prakriti_world() {
     app.mat_water   = app.world->materials().add(prakriti::MaterialRegistry::water());
     app.mat_dry_ice = app.world->materials().add(prakriti::MaterialRegistry::dry_ice());
 
-    // 2. Optimized High-Speed Fluid Column (600 fluid particles)
-    constexpr int kCols = 25;
-    constexpr int kRows = 24;
-    for (int r = 0; r < kRows; ++r) {
-        for (int c = 0; c < kCols; ++c) {
-            float px = 55.0f + float(c) * 10.5f;
-            float py = 50.0f + float(r) * 10.5f;
+    // Custom Magma / Molten Lava Material
+    prakriti::MaterialParams lava_params;
+    lava_params.rest_density = 2400.0f;
+    lava_params.heat_capacity = 1.8f;
+    lava_params.conductivity = 2.5f;
+    lava_params.melt_temp = 600.0f;
+    lava_params.boil_temp = 1800.0f;
+    lava_params.latent_heat_fusion = 400.0f;
+    lava_params.alpha = {1e-7f, 1e-4f, 5e-2f, 1.0f};
+    lava_params.visc = {0.0f, 0.4f, 0.85f, 0.02f};
+    lava_params.eos_B = 1.5e5f;
+    prakriti::MaterialId mat_lava = app.world->materials().add(lava_params);
+
+    // Custom Viscoelastic Jelly Material
+    prakriti::MaterialParams jelly_params;
+    jelly_params.rest_density = 1100.0f;
+    jelly_params.heat_capacity = 2.2f;
+    jelly_params.conductivity = 0.8f;
+    jelly_params.melt_temp = 85.0f;
+    jelly_params.boil_temp = 140.0f;
+    jelly_params.yield_strain = 0.35f;
+    jelly_params.ultimate_strain = 0.85f;
+    jelly_params.alpha = {5e-4f, 1e-3f, 1e-1f, 1.0f};
+    jelly_params.visc = {0.1f, 0.25f, 0.5f, 0.01f};
+    prakriti::MaterialId mat_jelly = app.world->materials().add(jelly_params);
+
+    // 2. High-Density Dual Fluid Dam Breaks (Water on left, Superheated Magma on right)
+    // Left: Cool Water Reservoir (450 particles)
+    for (int r = 0; r < 18; ++r) {
+        for (int c = 0; c < 25; ++c) {
+            float px = 45.0f + float(c) * 9.0f;
+            float py = 45.0f + float(r) * 9.0f;
             app.world->particles().add({
                 .position = pebble::math::vec2(px, py),
-                .velocity = {0.0f, 0.0f},
+                .velocity = {10.0f, 0.0f},
                 .mass = 1.0f,
-                .temperature = 18.0f,
+                .temperature = 16.0f,
                 .material = app.mat_water,
                 .f_solid = 0.0f, .f_plastic = 0.0f, .f_liquid = 1.0f, .f_gas = 0.0f
+            });
+        }
+    }
+
+    // Right: Superheated Molten Lava Column (450 particles)
+    for (int r = 0; r < 18; ++r) {
+        for (int c = 0; c < 25; ++c) {
+            float px = FW - 270.0f + float(c) * 9.0f;
+            float py = 45.0f + float(r) * 9.0f;
+            app.world->particles().add({
+                .position = pebble::math::vec2(px, py),
+                .velocity = {-10.0f, 0.0f},
+                .mass = 2.2f,
+                .temperature = 950.0f, // Glowing hot magma!
+                .material = mat_lava,
+                .f_solid = 0.0f, .f_plastic = 0.1f, .f_liquid = 0.9f, .f_gas = 0.0f
             });
         }
     }
@@ -174,35 +225,66 @@ static void init_prakriti_world() {
     // 3. Multi-Tier XPBD Elastic Lattice & Suspension Bridges
     constexpr int kChains = 2;
     for (int ch = 0; ch < kChains; ++ch) {
-        float y_base = 330.0f + float(ch) * 120.0f;
-        constexpr int kNodes = 18;
+        float y_base = 350.0f + float(ch) * 130.0f;
+        constexpr int kNodes = 20;
         std::vector<prakriti::Index> node_indices;
         for (int i = 0; i < kNodes; ++i) {
-            float px = 280.0f + float(i) * 35.0f;
-            float py = y_base + std::sin(float(i) * 0.35f) * 10.0f;
+            float px = 270.0f + float(i) * 32.0f;
+            float py = y_base + std::sin(float(i) * 0.32f) * 12.0f;
             auto idx = app.world->particles().add({
                 .position = pebble::math::vec2(px, py),
                 .velocity = {0.0f, 0.0f},
                 .mass = (i == 0 || i == kNodes - 1) ? 0.0f : 1.8f,
-                .temperature = 25.0f,
+                .temperature = 22.0f,
                 .material = app.mat_steel,
                 .f_solid = 1.0f, .f_plastic = 0.0f, .f_liquid = 0.0f, .f_gas = 0.0f
             });
             node_indices.push_back(idx);
         }
         for (std::size_t i = 1; i < node_indices.size(); ++i) {
-            app.world->edges().add(node_indices[i - 1], node_indices[i], 35.0f);
+            app.world->edges().add(node_indices[i - 1], node_indices[i], 32.0f);
         }
     }
 
-    // 4. Sublimating & Floating Dry Ice Clusters (80 particles)
-    for (int r = 0; r < 8; ++r) {
+    // 4. Deformable XPBD Jelly Soft-Body Mesh (5x5 Cross-Braced Lattice)
+    {
+        constexpr int j_rows = 5, j_cols = 5;
+        prakriti::Index j_grid[j_rows][j_cols];
+        for (int r = 0; r < j_rows; ++r) {
+            for (int c = 0; c < j_cols; ++c) {
+                float jx = FW * 0.5f - 40.0f + float(c) * 20.0f;
+                float jy = 70.0f + float(r) * 20.0f;
+                j_grid[r][c] = app.world->particles().add({
+                    .position = pebble::math::vec2(jx, jy),
+                    .velocity = {0.0f, 50.0f},
+                    .mass = 1.2f,
+                    .temperature = 24.0f,
+                    .material = mat_jelly,
+                    .f_solid = 0.85f, .f_plastic = 0.15f, .f_liquid = 0.0f, .f_gas = 0.0f
+                });
+            }
+        }
+        // Add horizontal, vertical, and cross-braced shear springs
+        for (int r = 0; r < j_rows; ++r) {
+            for (int c = 0; c < j_cols; ++c) {
+                if (c + 1 < j_cols) app.world->edges().add(j_grid[r][c], j_grid[r][c + 1], 20.0f);
+                if (r + 1 < j_rows) app.world->edges().add(j_grid[r][c], j_grid[r + 1][c], 20.0f);
+                if (r + 1 < j_rows && c + 1 < j_cols) {
+                    app.world->edges().add(j_grid[r][c], j_grid[r + 1][c + 1], 28.28f);
+                    app.world->edges().add(j_grid[r + 1][c], j_grid[r][c + 1], 28.28f);
+                }
+            }
+        }
+    }
+
+    // 5. Cryogenic Sublimating Dry Ice Cluster (100 particles)
+    for (int r = 0; r < 10; ++r) {
         for (int c = 0; c < 10; ++c) {
             app.world->particles().add({
-                .position = pebble::math::vec2(FW - 260.0f + float(c) * 14.0f, 60.0f + float(r) * 14.0f),
-                .velocity = {-15.0f, 0.0f},
-                .mass = 1.2f,
-                .temperature = -85.0f + float(r + c) * 2.0f,
+                .position = pebble::math::vec2(FW * 0.5f - 60.0f + float(c) * 12.0f, 180.0f + float(r) * 12.0f),
+                .velocity = {0.0f, 20.0f},
+                .mass = 1.4f,
+                .temperature = -85.0f + float(r + c) * 1.5f,
                 .material = app.mat_dry_ice,
                 .f_solid = 1.0f, .f_plastic = 0.0f, .f_liquid = 0.0f, .f_gas = 0.0f
             });
@@ -349,24 +431,39 @@ static void build_scene(kalpana::Scene& scene) {
                 kalpana::Color{1.0f, 0.45f, 0.1f, 0.55f * P.f_gas[i]},
                 heat
             );
-            pr = 7.0f;
-        } else if (P.f_liquid[i] > 0.45f) {
-            // Hydrodynamic fluid particle
-            float heat = std::clamp((P.temperature[i] - 15.0f) / 90.0f, 0.0f, 1.0f);
-            pcol = kalpana::spectral::mix(
-                kalpana::Color{0.05f, 0.65f, 1.0f, 0.88f},
-                kalpana::Color{1.0f, 0.35f, 0.05f, 0.92f},
-                heat
-            );
-            pr = 5.0f;
-        } else {
-            // Solid / Plastic material
-            if (P.material[i] == app.mat_dry_ice) {
-                pcol = kalpana::Color{0.92f, 0.96f, 1.0f, 0.95f};
-                pr = 5.2f;
+            pr = 6.5f;
+        } else if (P.f_liquid[i] > 0.35f) {
+            // Hydrodynamic fluid particle: Cool water vs Molten magma
+            if (P.temperature[i] > 200.0f) {
+                // Glowing molten lava
+                float lava_glow = std::clamp((P.temperature[i] - 200.0f) / 800.0f, 0.0f, 1.0f);
+                pcol = kalpana::spectral::mix(
+                    kalpana::Color{0.95f, 0.25f, 0.05f, 0.95f},
+                    kalpana::Color{1.0f, 0.92f, 0.30f, 1.0f},
+                    lava_glow
+                );
+                pr = 5.5f;
             } else {
-                pcol = kalpana::Color{0.75f, 0.82f, 0.95f, 1.0f};
-                pr = 4.2f;
+                // Clear blue water
+                float heat = std::clamp((P.temperature[i] - 10.0f) / 80.0f, 0.0f, 1.0f);
+                pcol = kalpana::spectral::mix(
+                    kalpana::Color{0.08f, 0.68f, 1.0f, 0.90f},
+                    kalpana::Color{0.45f, 0.95f, 0.85f, 0.92f},
+                    heat
+                );
+                pr = 4.8f;
+            }
+        } else {
+            // Solid / Viscoelastic Soft-Body / Plastic
+            if (P.material[i] == app.mat_dry_ice) {
+                pcol = kalpana::Color{0.92f, 0.96f, 1.0f, 0.98f}; // Cryo frost white
+                pr = 5.2f;
+            } else if (P.f_solid[i] > 0.5f && P.f_plastic[i] > 0.05f) {
+                pcol = kalpana::Color{0.15f, 0.92f, 0.55f, 0.92f}; // Bouncy jelly emerald green
+                pr = 5.0f;
+            } else {
+                pcol = kalpana::Color{0.75f, 0.82f, 0.95f, 1.0f}; // Structural steel
+                pr = 4.0f;
             }
         }
 
