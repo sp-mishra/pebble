@@ -70,3 +70,41 @@ TEST_CASE("Kalpana: Realtime Brush Pressure Dynamics & Stamp Emission", "[kalpan
     // Radius should smoothly expand as pressure increases from 0.5 to 1.0
     REQUIRE(stamps.front().radius < stamps.back().radius);
 }
+
+#include "kalpana/backend/sokol_backend.hpp"
+
+TEST_CASE("Kalpana: Sokol Metal GPU Tessellation Backend (Polygon Fan & Outline Quads)", "[kalpana][sokol][gpu]") {
+    kalpana::Scene scene;
+    scene.clear_color(kalpana::Color{0.0f, 0.0f, 0.0f, 1.0f});
+
+    kalpana::Path poly;
+    poly.move_to(100.0f, 100.0f);
+    poly.line_to(200.0f, 100.0f);
+    poly.line_to(150.0f, 200.0f);
+    poly.close();
+
+    scene.add(kalpana::Node::shape(poly, kalpana::Paint::filled_outlined(
+        kalpana::colors::cyan(), kalpana::colors::white(), 2.0f)));
+
+    kalpana::Canvas<kalpana::sokol_backend> gpu_canvas(1000, 1000);
+    gpu_canvas.render(scene);
+
+    const auto& verts = gpu_canvas.backend().vertices();
+    const auto& indices = gpu_canvas.backend().indices();
+
+    // Verify GPU tessellation output
+    REQUIRE_FALSE(verts.empty());
+    REQUIRE_FALSE(indices.empty());
+    REQUIRE(indices.size() % 3 == 0); // Must be valid triangle list
+
+    // Verify clip-space coordinates [-1, 1]
+    for (const auto& v : verts) {
+        REQUIRE(v.x >= -1.05f);
+        REQUIRE(v.x <= 1.05f);
+        REQUIRE(v.y >= -1.05f);
+        REQUIRE(v.y <= 1.05f);
+        REQUIRE(v.a >= 0.0f);
+        REQUIRE(v.a <= 1.0f);
+    }
+}
+

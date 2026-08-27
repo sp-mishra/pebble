@@ -38,3 +38,33 @@ TEST_CASE("Gati: Collision with Akruti ChainShape and GridSDF", "[gati][collisio
 
     REQUIRE(contacts >= 1);
 }
+
+TEST_CASE("Gati: Policy-Based TensorBroadphase with 250 Entities", "[gati][collision][tensor]") {
+    pebble::ecs::World world;
+    gati::CollisionSystem col_sys;
+    gati::EventBus bus;
+    smriti::pools::LinearArena scratch{1024 * 1024};
+    gati::ParallelExecutor executor;
+    gati::StepContext ctx{1.0f / 60.0f, 0, bus, scratch, executor};
+
+    // Spawn 250 overlapping entity pairs (triggers TensorBroadphase threshold > 200)
+    for (int i = 0; i < 250; ++i) {
+        auto e = world.spawn();
+        float x = float(i % 10) * 10.0f;
+        float y = float(i / 10) * 10.0f;
+        world.add<gati::Transform>(e, {.position = pebble::math::vec2(x, y)});
+        world.add<gati::ShapeRef>(e, {.shape = akruti::Circle{{0.0f, 0.0f}, 6.0f}});
+    }
+
+    int contacts = 0;
+    col_sys.run(world, ctx);
+
+    bus.drain<gati::ContactEvent>([&](const gati::ContactEvent& ce) {
+        ++contacts;
+        REQUIRE(ce.depth > 0.0f);
+    });
+
+    // 250 densely packed circles with radius 6 in a 10x10 spacing must produce contacts
+    REQUIRE(contacts > 0);
+}
+

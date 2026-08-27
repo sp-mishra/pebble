@@ -134,12 +134,12 @@ struct BasicTensorBroadphase {
         std::size_t idx = 0;
 
         w.view<ShapeRef, Transform>([&](Entity e, ShapeRef& s, Transform& tr) {
-            s_ptr[idx * 4 + 0] = tr.position.x;
-            s_ptr[idx * 4 + 1] = tr.position.y;
+            s_ptr[idx * 4 + 0] = tr.position[0];
+            s_ptr[idx * 4 + 1] = tr.position[1];
             s_ptr[idx * 4 + 2] = 0.0f;
             s_ptr[idx * 4 + 3] = 0.0f;
             auto box = shape_aabb(s.shape, tr.position);
-            r_ptr[idx] = std::max(box.hi.x - box.lo.x, box.hi.y - box.lo.y) * 0.5f;
+            r_ptr[idx] = std::max(box.hi[0] - box.lo[0], box.hi[1] - box.lo[1]) * 0.5f;
             entity_indices[idx] = e.index;
             ++idx;
         });

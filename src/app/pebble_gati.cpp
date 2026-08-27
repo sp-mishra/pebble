@@ -97,6 +97,13 @@ struct GatiApp {
     int reactions = 0;
     float t = 0.0f;
     int frame = 0;
+
+    // FPS / Performance instrumentation
+    float fps = 60.0f;
+    float frame_ms = 16.6f;
+    std::chrono::high_resolution_clock::time_point last_time = std::chrono::high_resolution_clock::now();
+    int fps_accum_frames = 0;
+    float fps_accum_time = 0.0f;
 };
 
 static GatiApp g_app;
@@ -812,13 +819,27 @@ static void build_scene(kalpana::Scene& scene) {
         scene.add(kalpana::Node::shape(path, kalpana::Paint::filled_outlined(fill, rim, 1.5f)));
     }
 
-    // UI Overlay Header
+    // UI Overlay Header & Performance HUD
     {
         kalpana::Path ui_box;
-        ui_box.round_rect(10.0f, 25.0f, 360.0f, 32.0f, 4.0f, 4.0f);
+        ui_box.round_rect(10.0f, 25.0f, 420.0f, 36.0f, 6.0f, 6.0f);
         scene.add(kalpana::Node::shape(ui_box, kalpana::Paint::filled_outlined(
-            kalpana::Color{0.04f, 0.06f, 0.12f, 0.85f},
-            kalpana::Color{0.2f, 0.3f, 0.5f, 1.0f}, 1.0f)));
+            kalpana::Color{0.04f, 0.06f, 0.12f, 0.90f},
+            kalpana::Color{0.2f, 0.35f, 0.65f, 1.0f}, 1.5f)));
+
+        // Real-time FPS status bar indicator
+        float fps_ratio = std::clamp(app.fps / 60.0f, 0.0f, 1.0f);
+        kalpana::Color fps_color = (app.fps >= 55.0f)
+            ? kalpana::Color{0.15f, 0.95f, 0.35f, 1.0f}
+            : (app.fps >= 30.0f ? kalpana::Color{1.0f, 0.8f, 0.1f, 1.0f} : kalpana::Color{1.0f, 0.2f, 0.2f, 1.0f});
+
+        kalpana::Path fps_bar;
+        fps_bar.round_rect(20.0f, 48.0f, 140.0f * fps_ratio, 6.0f, 2.0f, 2.0f);
+        scene.add(kalpana::Node::shape(fps_bar, kalpana::Paint::fill(fps_color)));
+
+        kalpana::Path bar_bg;
+        bar_bg.round_rect(20.0f, 48.0f, 140.0f, 6.0f, 2.0f, 2.0f);
+        scene.add(kalpana::Node::shape(bar_bg, kalpana::Paint::stroke(kalpana::Color{0.2f, 0.25f, 0.35f, 0.8f}, 1.0f)));
     }
 }
 
@@ -826,6 +847,21 @@ static void frame_cb() {
     auto& app = g_app;
     app.frame++;
     app.t += DT;
+
+    // Real-time FPS & frame duration measurement
+    auto now = std::chrono::high_resolution_clock::now();
+    float delta_s = std::chrono::duration<float>(now - app.last_time).count();
+    app.last_time = now;
+    if (delta_s > 0.0f && delta_s < 1.0f) {
+        app.fps_accum_time += delta_s;
+        app.fps_accum_frames++;
+        if (app.fps_accum_time >= 0.25f) {
+            app.fps = float(app.fps_accum_frames) / app.fps_accum_time;
+            app.frame_ms = (app.fps_accum_time / float(app.fps_accum_frames)) * 1000.0f;
+            app.fps_accum_time = 0.0f;
+            app.fps_accum_frames = 0;
+        }
+    }
 
     step_gati(DT);
 
