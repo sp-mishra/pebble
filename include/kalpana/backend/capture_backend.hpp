@@ -132,11 +132,23 @@ public:
         const int y_start = std::clamp(static_cast<int>(std::floor(min_y)), 0, static_cast<int>(height_));
         const int y_end   = std::clamp(static_cast<int>(std::ceil(max_y)),   0, static_cast<int>(height_));
 
-        // 1. Even-Odd Polygon Fill Scanline Rasterizer with Procedural / Gradient Support
+        // 1. Even-Odd Polygon Fill Scanline Rasterizer with Subpixel Edge Anti-Aliasing (AA) & Procedural / Gradient Support
         if (paint.has_fill() && !segs.empty()) {
             const Color base_fill = paint.fill_color();
             std::vector<float> node_x;
             node_x.reserve(32);
+
+            auto blend_pixel = [&](int x, int y, Color src, float coverage) {
+                if (coverage <= 0.0f || x < 0 || x >= static_cast<int>(width_) || y < 0 || y >= static_cast<int>(height_)) return;
+                const std::size_t idx = static_cast<std::size_t>(y) * width_ + static_cast<std::size_t>(x);
+                if (coverage >= 0.999f && src.a >= 0.999f) {
+                    pixels_[idx] = src.to_argb8888();
+                } else {
+                    const Color dst = Color::from_hex(pixels_[idx]);
+                    const Color blended = src.with_alpha(src.a * coverage).over(dst);
+                    pixels_[idx] = blended.to_argb8888();
+                }
+            };
 
             for (int y = y_start; y < y_end; ++y) {
                 const float py = float(y) + 0.5f;
@@ -152,30 +164,45 @@ public:
                 std::sort(node_x.begin(), node_x.end());
 
                 for (std::size_t i = 0; i + 1 < node_x.size(); i += 2) {
-                    int x0 = std::clamp(static_cast<int>(std::floor(node_x[i])), 0, static_cast<int>(width_));
-                    int x1 = std::clamp(static_cast<int>(std::ceil(node_x[i + 1])), 0, static_cast<int>(width_));
+                    const float left_x = node_x[i];
+                    const float right_x = node_x[i + 1];
+                    if (right_x <= left_x) continue;
+
+                    int x0 = static_cast<int>(std::floor(left_x));
+                    int x1 = static_cast<int>(std::ceil(right_x));
+
                     for (int x = x0; x < x1; ++x) {
+                        const float px_left = float(x);
+                        const float px_right = float(x + 1);
+
+                        // Exact 1D subpixel overlap calculation:
+                        const float overlap_left = std::max(left_x, px_left);
+                        const float overlap_right = std::min(right_x, px_right);
+                        const float coverage = std::clamp(overlap_right - overlap_left, 0.0f, 1.0f);
+
                         Color pixel_color = base_fill;
                         if (paint.procedural_fill().has_value()) {
                             pixel_color = paint.procedural_fill()->modulate(base_fill, float(x), float(y));
                         }
-                        pixels_[static_cast<std::size_t>(y) * width_ + x] = pixel_color.to_argb8888();
+
+                        blend_pixel(x, y, pixel_color, coverage);
                     }
                 }
             }
         }
 
-        // 2. Stroke Contour Rasterizer
+        // 2. Stroke Contour Rasterizer with Subpixel Gaussian/Hermite Smooth Falloff
         if (paint.has_stroke() && !segs.empty()) {
-            const std::uint32_t stroke_argb = paint.stroke().color.to_argb8888();
-            const float half_w = std::max(0.75f, paint.stroke().width * 0.5f);
-            const float half_w_sq = half_w * half_w;
+            const Color stroke_color = paint.stroke().color;
+            const float half_w = std::max(0.5f, paint.stroke().width * 0.5f);
+            const float r_outer = half_w + 0.5f;
+            const float r_outer_sq = r_outer * r_outer;
 
             for (const auto& s : segs) {
-                float seg_min_x = std::clamp(std::min(s.x0, s.x1) - half_w - 1.0f, 0.0f, float(width_));
-                float seg_max_x = std::clamp(std::max(s.x0, s.x1) + half_w + 1.0f, 0.0f, float(width_));
-                float seg_min_y = std::clamp(std::min(s.y0, s.y1) - half_w - 1.0f, 0.0f, float(height_));
-                float seg_max_y = std::clamp(std::max(s.y0, s.y1) + half_w + 1.0f, 0.0f, float(height_));
+                float seg_min_x = std::clamp(std::min(s.x0, s.x1) - r_outer - 1.0f, 0.0f, float(width_));
+                float seg_max_x = std::clamp(std::max(s.x0, s.x1) + r_outer + 1.0f, 0.0f, float(width_));
+                float seg_min_y = std::clamp(std::min(s.y0, s.y1) - r_outer - 1.0f, 0.0f, float(height_));
+                float seg_max_y = std::clamp(std::max(s.y0, s.y1) + r_outer + 1.0f, 0.0f, float(height_));
 
                 const float dx = s.x1 - s.x0;
                 const float dy = s.y1 - s.y0;
@@ -194,8 +221,18 @@ public:
                         float qx = s.x0 + t * dx;
                         float qy = s.y0 + t * dy;
                         float dist_sq = (px - qx) * (px - qx) + (py - qy) * (py - qy);
-                        if (dist_sq <= half_w_sq) {
-                            pixels_[static_cast<std::size_t>(y) * width_ + x] = stroke_argb;
+
+                        if (dist_sq <= r_outer_sq) {
+                            float dist = std::sqrt(dist_sq);
+                            float coverage = std::clamp(0.5f + (half_w - dist), 0.0f, 1.0f);
+                            const std::size_t idx = static_cast<std::size_t>(y) * width_ + static_cast<std::size_t>(x);
+                            if (coverage >= 0.999f && stroke_color.a >= 0.999f) {
+                                pixels_[idx] = stroke_color.to_argb8888();
+                            } else {
+                                const Color dst = Color::from_hex(pixels_[idx]);
+                                const Color blended = stroke_color.with_alpha(stroke_color.a * coverage).over(dst);
+                                pixels_[idx] = blended.to_argb8888();
+                            }
                         }
                     }
                 }
