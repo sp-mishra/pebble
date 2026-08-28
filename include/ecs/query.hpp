@@ -1,6 +1,9 @@
 #pragma once
 // ============================================================================
-// ecs/query.hpp — Rich Query Filter Tags (With, Without, Optional)
+// ecs/query.hpp — Rich Query Filter Tags (With, Without, Optional, Changed)
+// ============================================================================
+// Compile-time filter expressions for multi-store join queries.
+// Zero virtual functions, zero macros, modern C++23.
 // ============================================================================
 
 #include "entity.hpp"
