@@ -131,4 +131,45 @@ TEST_CASE("external inflow entity generation", "[prakriti][celestial][inflow]") 
     REQUIRE(star.ingress_vel[0] > 0.0f);
 }
 
+TEST_CASE("roche lobe overflow mass transfer", "[prakriti][celestial][rlof]") {
+    // Large donor star (R = 25 px, M = 200) close to massive accretor (M = 800) at distance 40 px
+    auto res = prakriti::celestial::evaluate_roche_lobe_overflow(200.0f, 25.0f, 800.0f, 40.0f, 0.016f);
+    REQUIRE(res.is_overflowing);
+    REQUIRE(res.roche_lobe_radius < 25.0f);
+    REQUIRE(res.mass_transfer_rate > 0.0f);
+
+    // Far away star -> No overflow
+    auto res_far = prakriti::celestial::evaluate_roche_lobe_overflow(200.0f, 25.0f, 800.0f, 300.0f, 0.016f);
+    REQUIRE_FALSE(res_far.is_overflowing);
+}
+
+TEST_CASE("tidal locking dissipation torque", "[prakriti][celestial][tidal]") {
+    // Rapidly rotating moon (omega = 25 rad/s) in close orbit (d = 30 px, v_rel = 15 px/s -> Omega_orb = 0.5 rad/s)
+    auto res = prakriti::celestial::evaluate_tidal_locking_torque(
+        50.0f, 6.0f, 25.0f, 500.0f, 30.0f, 15.0f, 0.016f
+    );
+    // Torque should oppose spin discrepancy (negative torque)
+    REQUIRE(res.spin_torque < 0.0f);
+    REQUIRE(res.orbital_damping_force > 0.0f);
+}
+
+TEST_CASE("sedov-taylor blast wave expansion", "[prakriti][celestial][sedov]") {
+    const float e_blast = 2000.0f;
+    const float rho = 1.0f;
+    
+    float r1 = prakriti::celestial::compute_sedov_taylor_radius(e_blast, rho, 0.1f);
+    float r2 = prakriti::celestial::compute_sedov_taylor_radius(e_blast, rho, 0.5f);
+    REQUIRE(r1 > 0.0f);
+    REQUIRE(r2 > r1); // Self-similar expansion over time
+}
+
+TEST_CASE("mhd magnetic flux tube between rotating stars", "[prakriti][celestial][mhd]") {
+    pebble::math::vec2 p1{100.0f, 100.0f};
+    pebble::math::vec2 p2{200.0f, 100.0f};
+    auto tube = prakriti::celestial::compute_mhd_flux_tube(p1, 300.0f, 15.0f, p2, 400.0f, -15.0f);
+    REQUIRE(tube.field_strength > 0.0f);
+    REQUIRE(tube.current_intensity > 0.0f);
+}
+
+
 

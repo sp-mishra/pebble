@@ -464,4 +464,31 @@ Located in `#include <prakriti/material/celestial.hpp>`:
   - **Hypervelocity Rogue Stars & Pulsars**: Fast stellar wanderers with relativistic magnetic dipole beam wakes.
   - **Interstellar Oumuamua Comets**: High-eccentricity cryogenic icy swarms.
 
+---
+
+## 31. Roche Lobe Overflow (RLOF) & Accretion Stripping
+- **Eggleton Roche Lobe Equation**:
+  $$\frac{R_{\text{lobe}}}{d} = \frac{0.49 q^{2/3}}{0.6 q^{2/3} + \ln(1 + q^{1/3})}, \quad q = \frac{M_{\text{donor}}}{M_{\text{accretor}}}$$
+- Simulates hydrodynamic matter transfer when stars exceed their Roche potential surface in close binary orbits, siphoning plasma directly onto the primary accretor.
+
+---
+
+## 32. Tidal Dissipation & Spin-Orbit Locking
+- **Tidal Torque & Circularization**:
+  $$\tau_{\text{tidal}} = -\frac{3 k_2 G M_2^2 R_1^5}{Q d^6} (\omega_1 - \Omega_{\text{orb}})$$
+- Drives orbital circularization and locks planetary spin periods $\omega$ into 1:1 or 3:2 resonances with orbital frequency.
+
+---
+
+## 33. Supernova Remnant (SNR) Sedov-Taylor Blast Waves
+- **Self-Similar Shock Expansion**:
+  $$R_{\text{shock}}(t) = \left(\frac{E_{\text{blast}}}{\rho_0}\right)^{1/5} t^{2/5}$$
+- Models Rankine-Hugoniot shock jumps compressing interstellar dust into new protostellar condensation knots.
+
+---
+
+## 34. Magnetohydrodynamic (MHD) Magnetic Flux Tubes
+- Traces dipolar magnetic vector potentials $\vec{B}(\vec{r})$ and Birkeland current paths between rotating magnetized stars and millisecond pulsars.
+
+
 

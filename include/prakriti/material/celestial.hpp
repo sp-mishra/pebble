@@ -955,5 +955,119 @@ generate_random_inflow(float viewport_w, float viewport_h, float spawn_margin,
     return cfg;
 }
 
+// ── 31. Roche Lobe Overflow (RLOF) & Accretion Stream Stripping ───────────────
+
+struct RLOFTransferResult {
+    bool  is_overflowing = false;
+    float mass_transfer_rate = 0.0f; // Siphoned mass delta
+    float roche_lobe_radius = 0.0f;  // Eggleton approximation
+};
+
+// Eggleton's analytical formula for Roche Lobe effective radius:
+// R_lobe / a = \frac{0.49 q^{2/3}}{0.6 q^{2/3} + \ln(1 + q^{1/3})}
+[[nodiscard]] inline RLOFTransferResult
+evaluate_roche_lobe_overflow(float m_donor, float r_donor, float m_accretor, float distance, float dt) noexcept {
+    RLOFTransferResult res;
+    if (distance <= 1.0f || m_donor <= 0.0f || m_accretor <= 0.0f) return res;
+
+    const float q = std::max(0.01f, m_donor / m_accretor); // Mass ratio
+    const float q_13 = std::cbrt(q);
+    const float q_23 = q_13 * q_13;
+    const float r_lobe_ratio = (0.49f * q_23) / (0.6f * q_23 + std::log(1.0f + q_13));
+    res.roche_lobe_radius = distance * r_lobe_ratio;
+
+    if (r_donor > res.roche_lobe_radius) {
+        res.is_overflowing = true;
+        const float overflow_depth = (r_donor - res.roche_lobe_radius) / std::max(r_donor, 1.0f);
+        // Hydrodynamic polytropic mass loss rate
+        res.mass_transfer_rate = std::clamp(overflow_depth * m_donor * 0.04f * dt, 0.001f, m_donor * 0.15f);
+    }
+    return res;
+}
+
+// ── 32. Tidal Dissipation, Circularization & Spin-Orbit Locking ───────────────
+
+struct TidalFrictionResult {
+    float spin_torque = 0.0f;           // \tau_spin applied to body 1
+    float orbital_damping_force = 0.0f; // Dissipative drag reducing orbital eccentricity
+};
+
+// Tidal torque: \tau = -\frac{3 k_2 G M_2^2 R_1^5}{Q d^6} (\omega_1 - \Omega_{orb})
+[[nodiscard]] inline TidalFrictionResult
+evaluate_tidal_locking_torque(float m1, float r1, float omega1,
+                              float m2, float distance, float v_rel, float dt) noexcept {
+    TidalFrictionResult res;
+    if (distance <= 1.0f || m1 <= 0.0f || m2 <= 0.0f) return res;
+
+    // Orbital angular frequency: \Omega_{orb} = v_tangent / d
+    const float omega_orb = v_rel / std::max(distance, 1.0f);
+    const float delta_omega = omega1 - omega_orb;
+
+    // Love number k2 / Q tidal dissipation factor
+    const float r1_5 = r1 * r1 * r1 * r1 * r1;
+    const float d_6 = std::pow(distance, 6.0f);
+    const float tidal_coeff = (18000.0f * (m2 * m2) * r1_5) / (d_6 + 1000.0f);
+
+    // Apply torque towards tidal locking (delta_omega -> 0)
+    res.spin_torque = -std::clamp(tidal_coeff * delta_omega * 0.015f * dt, -std::abs(delta_omega) * 0.5f, std::abs(delta_omega) * 0.5f);
+    res.orbital_damping_force = std::clamp(tidal_coeff * 0.001f, 0.0f, 0.05f);
+    return res;
+}
+
+// ── 33. Supernova Remnant (SNR) Sedov-Taylor Blast Wave ───────────────────────
+
+struct SedovTaylorBlast {
+    pebble::math::vec2 center{0.0f, 0.0f};
+    float              radius = 2.0f;
+    float              max_radius = 420.0f;
+    float              energy = 1000.0f;
+    float              age = 0.0f;
+    float              max_age = 2.8f;
+    float              density_compression = 4.0f; // Strong Rankine-Hugoniot shock jump condition
+};
+
+// Evaluates Sedov-Taylor self-similar blast wave expansion: R(t) = (E / \rho_0)^{1/5} t^{2/5}
+[[nodiscard]] inline float
+compute_sedov_taylor_radius(float energy, float ambient_density, float time_sec) noexcept {
+    if (time_sec <= 0.0f) return 1.0f;
+    const float scale = std::pow(std::max(10.0f, energy) / std::max(1.0f, ambient_density), 0.2f);
+    return scale * std::pow(time_sec * 60.0f, 0.4f) * 18.0f;
+}
+
+// ── 34. Magnetohydrodynamic (MHD) Magnetic Flux Tubes ────────────────────────
+
+struct MHDFluxTube {
+    pebble::math::vec2 p1{0.0f, 0.0f};
+    pebble::math::vec2 p2{0.0f, 0.0f};
+    pebble::math::vec2 midpoint{0.0f, 0.0f};
+    float              field_strength = 0.0f; // Tesla / Normalized magnetic potential
+    float              current_intensity = 0.0f; // Birkeland current
+};
+
+// Evaluates dipolar magnetic connection and Birkeland currents between binary magnetic stars
+[[nodiscard]] inline MHDFluxTube
+compute_mhd_flux_tube(const pebble::math::vec2& p1, float m1, float omega1,
+                      const pebble::math::vec2& p2, float m2, float omega2) noexcept {
+    MHDFluxTube tube;
+    tube.p1 = p1;
+    tube.p2 = p2;
+    const pebble::math::vec2 d = p2 - p1;
+    const float dist = std::sqrt(d[0] * d[0] + d[1] * d[1]);
+    if (dist < 1.0f || dist > 350.0f) return tube;
+
+    // Midpoint bowed flux tube arc offset by mutual rotation
+    const pebble::math::vec2 mid = (p1 + p2) * 0.5f;
+    const pebble::math::vec2 normal{-d[1] / dist, d[0] / dist};
+    const float bow = (omega1 + omega2) * 0.5f * (dist * 0.15f);
+    tube.midpoint = mid + normal * bow;
+
+    // Dipolar potential scaling B \propto (M_1 M_2 \omega_1 \omega_2) / d^3
+    const float b_dipole = (m1 * m2 * std::abs(omega1 * omega2)) / (dist * dist * dist + 50.0f);
+    tube.field_strength = std::clamp(b_dipole * 0.5f, 0.02f, 0.95f);
+    tube.current_intensity = std::clamp(b_dipole * 0.25f, 0.01f, 0.65f);
+    return tube;
+}
+
 } // namespace prakriti::celestial
+
 

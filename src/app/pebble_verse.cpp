@@ -217,14 +217,16 @@ struct PebbleVerseApp {
         .max_force = MAX_GRAV_FORCE
     };
 
-    std::vector<PlanetBody>              planets;
-    std::vector<SparkParticle>           sparks;
-    std::vector<NebulaGasParticle>       nebulae;
-    std::vector<RelativisticJetParticle> jets;
-    std::vector<GravitationalWaveRipple> gw_ripples;
-    std::vector<AccretionFlare>          flares;
-    pebble::spandana::ScreenShake2D      camera_shake;
-    SlingshotLauncher                    slingshot;
+    std::vector<PlanetBody>                     planets;
+    std::vector<SparkParticle>                  sparks;
+    std::vector<NebulaGasParticle>              nebulae;
+    std::vector<RelativisticJetParticle>        jets;
+    std::vector<GravitationalWaveRipple>        gw_ripples;
+    std::vector<AccretionFlare>                 flares;
+    std::vector<prakriti::celestial::SedovTaylorBlast> snr_blasts;
+    std::vector<prakriti::celestial::MHDFluxTube>      mhd_tubes;
+    pebble::spandana::ScreenShake2D             camera_shake;
+    SlingshotLauncher                           slingshot;
 
     // Initial Simulation Startup Config Modal State
     bool in_startup_modal = true; // Displays startup config screen until ENTER is pressed
@@ -703,6 +705,47 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
             }
         }
 
+        // ── Roche Lobe Overflow (RLOF) & Tidal Spin-Orbit Locking ──
+        if (p.mass > 40.0f) {
+            for (std::size_t j = 0; j < app.planets.size(); ++j) {
+                if (i == j) continue;
+                auto& host = app.planets[j];
+                if (!host.alive || host.mass <= p.mass * 1.5f) continue;
+
+                const pebble::math::vec2 d = host.pos - p.pos;
+                const float dist = std::sqrt(d[0] * d[0] + d[1] * d[1]);
+                if (dist > 180.0f || dist <= p.radius + host.radius) continue;
+
+                // 1. Roche Lobe Overflow Mass Siphoning
+                const auto rlof = prakriti::celestial::evaluate_roche_lobe_overflow(p.mass, p.radius, host.mass, dist, sim_dt);
+                if (rlof.is_overflowing && p.mass > 5.0f) {
+                    p.mass -= rlof.mass_transfer_rate;
+                    host.mass += rlof.mass_transfer_rate * 0.85f; // Mass accretion efficiency
+
+                    // Emit subtle siphoned accretion stream particles
+                    if (app.sparks.size() < 400 && dist01(app.rng) < 0.35f) {
+                        const pebble::math::vec2 stream_dir = pebble::math::normalize(d);
+                        app.sparks.push_back(SparkParticle{
+                            .pos = p.pos + stream_dir * (p.radius + 1.0f),
+                            .vel = host.vel + stream_dir * 30.0f,
+                            .radius = 1.0f,
+                            .life = 0.25f,
+                            .max_life = 0.25f,
+                            .color = kalpana::Color{1.0f, 0.75f, 0.25f, 0.75f}
+                        });
+                    }
+                }
+
+                // 2. Tidal Dissipation & Spin-Orbit Locking
+                const pebble::math::vec2 dv = p.vel - host.vel;
+                const float v_rel = std::sqrt(dv[0] * dv[0] + dv[1] * dv[1]);
+                const auto tidal = prakriti::celestial::evaluate_tidal_locking_torque(
+                    p.mass, p.radius, p.omega, host.mass, dist, v_rel, sim_dt
+                );
+                p.omega += tidal.spin_torque;
+            }
+        }
+
         // Apply gentle Cosmological Hubble Metric Drift (v_H = H0 * (r - r_center))
         const pebble::math::vec2 hubble_drift = prakriti::celestial::apply_hubble_metric_drift(
             p.pos, cosmic_center, kHubbleConstant, sim_dt
@@ -790,6 +833,17 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                 p.density = p.mat_params.rest_density;
                 p.radius = evol.event_horizon_radius;
                 p.temperature = 12000.0f; // Relativistic accretion temperature
+
+                // ── Supernova Remnant (SNR) Sedov-Taylor Blast Wave ──
+                app.snr_blasts.push_back(prakriti::celestial::SedovTaylorBlast{
+                    .center = p.pos,
+                    .radius = 2.0f,
+                    .max_radius = 480.0f,
+                    .energy = p.mass * 25.0f,
+                    .age = 0.0f,
+                    .max_age = 3.2f,
+                    .density_compression = 4.0f
+                });
 
                 // ── Spectacular Core-Collapse Supernova Blast (Triple-Shell Relativistic Ejecta) ──
                 // Shell 1: Hyper-velocity relativistic plasma blast
@@ -1368,6 +1422,42 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
     }
     std::erase_if(app.flares, [](const AccretionFlare& f) { return f.life <= 0.0f; });
 
+    // 11. Update Supernova Remnant (SNR) Sedov-Taylor Blast Waves & Secondary Protostar Compression
+    for (auto& snr : app.snr_blasts) {
+        snr.age += dt;
+        snr.radius = prakriti::celestial::compute_sedov_taylor_radius(snr.energy, 1.0f, snr.age);
+
+        // Compress passing interstellar dust at the shock front -> triggers secondary protostellar nucleation
+        for (auto& dust : app.planets) {
+            if (!dust.alive || dust.mass > 40.0f) continue;
+            const pebble::math::vec2 d = dust.pos - snr.center;
+            const float dist = std::sqrt(d[0] * d[0] + d[1] * d[1]);
+            if (std::abs(dist - snr.radius) < 14.0f && dist > 1.0f) {
+                // Radial shock compression force
+                const pebble::math::vec2 s_norm = d * (1.0f / dist);
+                dust.vel = dust.vel + s_norm * (25.0f * (1.0f - snr.age / snr.max_age));
+                dust.temperature += 180.0f * dt;
+                dust.density = std::min(dust.density * 1.002f, 12000.0f);
+            }
+        }
+    }
+    std::erase_if(app.snr_blasts, [](const prakriti::celestial::SedovTaylorBlast& snr) { return snr.age >= snr.max_age; });
+
+    // 12. Evaluate Active Magnetohydrodynamic (MHD) Magnetic Flux Tubes between Binary Stars/Pulsars
+    app.mhd_tubes.clear();
+    for (std::size_t i = 0; i < app.planets.size(); ++i) {
+        const auto& p1 = app.planets[i];
+        if (!p1.alive || p1.mass < 140.0f) continue;
+        for (std::size_t j = i + 1; j < app.planets.size(); ++j) {
+            const auto& p2 = app.planets[j];
+            if (!p2.alive || p2.mass < 140.0f) continue;
+            const auto tube = prakriti::celestial::compute_mhd_flux_tube(p1.pos, p1.mass, p1.omega, p2.pos, p2.mass, p2.omega);
+            if (tube.field_strength > 0.05f) {
+                app.mhd_tubes.push_back(tube);
+            }
+        }
+    }
+
     app.camera_shake.update(dt);
 
     // 8. Cleanup Dead Planets
@@ -1550,8 +1640,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
             return w2s(pt, true);
         };
 
-        // Horizontal geodesic lines
-        for (int r = 0; r <= grid_rows; ++r) {
+        // Horizontal geodesic lines (Ultra-faint, sparse spacing)
+        for (int r = 0; r <= grid_rows; r += 2) {
             const float gy = static_cast<float>(r) * dy;
             kalpana::Path h_line;
             const pebble::math::vec2 start_pt = warp_vertex(0.0f, gy);
@@ -1561,11 +1651,11 @@ static void render_gpu_frame(PebbleVerseApp& app) {
                 const pebble::math::vec2 p_w = warp_vertex(gx, gy);
                 h_line.line_to(p_w[0], p_w[1]);
             }
-            scene.add(kalpana::Node::shape(h_line, kalpana::Paint::stroke(kalpana::Color{0.14f, 0.28f, 0.55f, 0.12f}, 0.70f)));
+            scene.add(kalpana::Node::shape(h_line, kalpana::Paint::stroke(kalpana::Color{0.10f, 0.22f, 0.45f, 0.035f}, 0.5f)));
         }
 
-        // Vertical geodesic lines
-        for (int c = 0; c <= grid_cols; ++c) {
+        // Vertical geodesic lines (Ultra-faint, sparse spacing)
+        for (int c = 0; c <= grid_cols; c += 2) {
             const float gx = static_cast<float>(c) * dx;
             kalpana::Path v_line;
             const pebble::math::vec2 start_pt = warp_vertex(gx, 0.0f);
@@ -1575,7 +1665,7 @@ static void render_gpu_frame(PebbleVerseApp& app) {
                 const pebble::math::vec2 p_w = warp_vertex(gx, gy);
                 v_line.line_to(p_w[0], p_w[1]);
             }
-            scene.add(kalpana::Node::shape(v_line, kalpana::Paint::stroke(kalpana::Color{0.14f, 0.28f, 0.55f, 0.12f}, 0.70f)));
+            scene.add(kalpana::Node::shape(v_line, kalpana::Paint::stroke(kalpana::Color{0.10f, 0.22f, 0.45f, 0.035f}, 0.5f)));
         }
     }
 
@@ -1598,7 +1688,7 @@ static void render_gpu_frame(PebbleVerseApp& app) {
                             const pebble::math::vec2 s_pt = w2s(orbit_pts[pt_i]);
                             orbit_path.line_to(s_pt[0], s_pt[1]);
                         }
-                        scene.add(kalpana::Node::shape(orbit_path, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.85f, 1.0f, 0.35f}, 1.0f)));
+                        scene.add(kalpana::Node::shape(orbit_path, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.85f, 1.0f, 0.20f}, 0.8f)));
                     }
                 }
             }
@@ -1661,11 +1751,56 @@ static void render_gpu_frame(PebbleVerseApp& app) {
 
     // 6. Relativistic Gravitational Wave Space-time Ripples (Ultra-Subtle & Faint)
     for (const auto& gw : app.gw_ripples) {
-        const float alpha = std::clamp(gw.life / gw.max_life, 0.0f, 1.0f) * 0.18f;
+        const float alpha = std::clamp(gw.life / gw.max_life, 0.0f, 1.0f) * 0.08f;
         const pebble::math::vec2 s_center = w2s(gw.center);
         kalpana::Path gw_ring;
         gw_ring.circle(s_center[0], s_center[1], gw.radius * app.camera_zoom);
-        scene.add(kalpana::Node::shape(gw_ring, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.7f, 1.0f, alpha}, 0.75f)));
+        scene.add(kalpana::Node::shape(gw_ring, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.7f, 1.0f, alpha}, 0.6f)));
+    }
+
+    // 6b. Supernova Remnant (SNR) Sedov-Taylor Blast Shockwaves (Ultra-faint expanding compression fronts)
+    for (const auto& snr : app.snr_blasts) {
+        const float alpha = std::clamp(1.0f - (snr.age / snr.max_age), 0.0f, 1.0f) * 0.08f;
+        const pebble::math::vec2 s_center = w2s(snr.center);
+        kalpana::Path snr_ring;
+        snr_ring.circle(s_center[0], s_center[1], snr.radius * app.camera_zoom);
+        scene.add(kalpana::Node::shape(snr_ring, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.45f, 0.15f, alpha}, 0.8f)));
+    }
+
+    // 6c. Magnetohydrodynamic (MHD) Magnetic Flux Tubes (Ultra-faint synchrotron flux arcs between binary stars/pulsars)
+    for (const auto& tube : app.mhd_tubes) {
+        const pebble::math::vec2 s1 = w2s(tube.p1);
+        const pebble::math::vec2 s2 = w2s(tube.p2);
+        const pebble::math::vec2 smid = w2s(tube.midpoint);
+        kalpana::Path flux_path;
+        flux_path.move_to(s1[0], s1[1]);
+        flux_path.quad_to(smid[0], smid[1], s2[0], s2[1]);
+        const float alpha = tube.field_strength * 0.04f;
+        scene.add(kalpana::Node::shape(flux_path, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.95f, 1.0f, alpha}, 0.6f)));
+    }
+
+    // 6d. Jacobi Orbital Hierarchy (Ultra-faint, ONLY between major massive stars and their primary moon)
+    if (app.tracked_planet_index >= 0 && app.tracked_planet_index < static_cast<int>(app.planets.size())) {
+        const auto& tracked = app.planets[app.tracked_planet_index];
+        if (tracked.alive) {
+            for (std::size_t j = 0; j < app.planets.size(); ++j) {
+                if (static_cast<int>(j) == app.tracked_planet_index) continue;
+                const auto& other = app.planets[j];
+                if (!other.alive || other.mass < 150.0f) continue;
+                const auto pair = prakriti::celestial::detect_binary_barycenter(
+                    app.tracked_planet_index, j, tracked.pos, tracked.vel, tracked.mass, other.pos, other.vel, other.mass
+                );
+                if (pair.is_bound) {
+                    const pebble::math::vec2 s1 = w2s(tracked.pos);
+                    const pebble::math::vec2 s2 = w2s(other.pos);
+                    kalpana::Path bond_line;
+                    bond_line.move_to(s1[0], s1[1]);
+                    bond_line.line_to(s2[0], s2[1]);
+                    scene.add(kalpana::Node::shape(bond_line, kalpana::Paint::stroke(kalpana::Color{0.2f, 0.85f, 0.45f, 0.04f}, 0.5f)));
+                    break; // Only link to closest parent
+                }
+            }
+        }
     }
 
 
@@ -1814,6 +1949,43 @@ static void render_gpu_frame(PebbleVerseApp& app) {
                 p_dot.circle(rx, ry, dot_r);
                 scene.add(kalpana::Node::shape(p_dot, kalpana::Paint::fill(get_celestial_color(p))));
             }
+        }
+    }
+
+    // 6e. Real-Time Hertzsprung-Russell (H-R) Diagram Inset (Bottom-Left, Ultra-Faint)
+    {
+        constexpr float hr_w = 110.0f;
+        constexpr float hr_h = 75.0f;
+        constexpr float hr_x = 12.0f;
+        const float hr_y = FH - hr_h - 12.0f;
+
+        // Frame
+        kalpana::Path hr_box;
+        hr_box.rect(hr_x, hr_y, hr_w, hr_h);
+        scene.add(kalpana::Node::shape(hr_box, kalpana::Paint::fill(kalpana::Color{0.015f, 0.03f, 0.06f, 0.65f})));
+        scene.add(kalpana::Node::shape(hr_box, kalpana::Paint::stroke(kalpana::Color{0.25f, 0.45f, 0.75f, 0.35f}, 0.8f)));
+
+        // Axis line
+        kalpana::Path hr_axes;
+        hr_axes.move_to(hr_x + 6.0f, hr_y + 6.0f); hr_axes.line_to(hr_x + 6.0f, hr_y + hr_h - 6.0f);
+        hr_axes.line_to(hr_x + hr_w - 6.0f, hr_y + hr_h - 6.0f);
+        scene.add(kalpana::Node::shape(hr_axes, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.5f, 0.8f, 0.25f}, 0.6f)));
+
+        // Plot stars on H-R diagram: X = Temperature (reversed: Hot -> Cold), Y = Mass/Luminosity
+        for (const auto& p : app.planets) {
+            if (!p.alive || p.mass < 60.0f) continue;
+            // Temp range [2000 K to 35000 K] mapped to X
+            const float t_norm = std::clamp((p.temperature + 273.15f - 2000.0f) / 33000.0f, 0.0f, 1.0f);
+            const float px = hr_x + hr_w - 10.0f - t_norm * (hr_w - 20.0f); // Hot on left, cold on right
+            // Mass range [60 to 1200] mapped to Y (high mass on top)
+            const float m_norm = std::clamp((p.mass - 60.0f) / 1000.0f, 0.0f, 1.0f);
+            const float py = hr_y + hr_h - 10.0f - m_norm * (hr_h - 20.0f);
+
+            kalpana::Path star_dot;
+            star_dot.circle(px, py, 1.1f);
+            kalpana::Color dot_c = get_celestial_color(p);
+            dot_c.a = 0.55f; // Keep ultra-faint
+            scene.add(kalpana::Node::shape(star_dot, kalpana::Paint::fill(dot_c)));
         }
     }
 
