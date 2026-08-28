@@ -365,3 +365,48 @@ Located in `#include <prakriti/material/celestial.hpp>`:
   $$\vec{v}_H = H_0 (\vec{r} - \vec{r}_{\text{center}})$$
 - Simulates background metric cosmic expansion smoothly across cosmological timescales.
 
+---
+
+## 16. Supermassive Black Hole (SMBH) Inspiral & Gravitational Ringdown
+- **Post-Newtonian Inspiral Drag**:
+  - Calculates 2.5PN gravitational radiation reaction drag between orbiting black hole binaries.
+  - Escalates chirp frequency ($\omega_{\text{chirp}} \propto (t_{\text{merge}} - t)^{-3/8}$) until horizon coalescence.
+
+---
+
+## 17. Tidal Disruption Events (TDE) & Stellar Spaghettification
+- **Hills Tidal Radius**:
+  $$r_t = R_* \left(\frac{M_{\text{BH}}}{M_*}\right)^{1/3}$$
+- Stars passing within the tidal radius are torn into luminous parabolic spaghettified accretion streams feeding directly into the ISCO disk.
+
+---
+
+## 18. Morgan-Keenan (MK) Stellar Spectral Classification
+- Classifies stars by surface temperature and mass into standard astrophysical spectral types:
+  - **Class O**: Deep Blue Hypergiants ($T > 28,000\,\text{K}$)
+  - **Class B**: Blue-White Giants ($10,000\text{--}28,000\,\text{K}$)
+  - **Class A**: White Sirius Stars ($7,500\text{--}10,000\,\text{K}$)
+  - **Class F**: Yellow-White Procyon Stars ($6,000\text{--}7,500\,\text{K}$)
+  - **Class G**: Yellow Solar Suns ($5,200\text{--}6,000\,\text{K}$)
+  - **Class K**: Orange Arcturus Giants ($3,700\text{--}5,200\,\text{K}$)
+  - **Class M**: Red Dwarf Proxima Stars ($T < 3,700\,\text{K}$)
+
+---
+
+## 20. Stellar Wind & Coronal Mass Ejection (CME) Radiation Pressure
+- **Stefan-Boltzmann Radiation Force**:
+  $$\vec{F}_{\text{rad}} = \frac{L}{4\pi r^2 c} \hat{r}$$
+- Pushes lighter cosmic dust outward from incandescent stars ($T > 1500^\circ\text{C}$) while erupting magnetic coronal mass ejection plasma loops.
+
+---
+
+## 21. Barycentric Multi-Star System Hierarchies (Jacobi Coordinates)
+- **Specific Orbital Energy**:
+  $$\epsilon = \frac{1}{2} v_{\text{rel}}^2 - \frac{G M_{\text{total}}}{r}$$
+- Dynamically detects and tracks gravitationally bound binary, triple, and multiple star subsystems, rendering their mutual center-of-mass barycenters.
+
+---
+
+## 22. Cosmic Filament Web (Zel'dovich Approximation)
+- Evaluates large-scale structure filamentary bridges linking galactic clusters and dark matter gravitational potential wells across cosmological scales.
+

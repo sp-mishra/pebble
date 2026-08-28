@@ -323,35 +323,30 @@ static kalpana::Color get_celestial_color(const PlanetBody& p, SpectralViewMode 
     // ── Mode 0: Optical RGB True-Color Spectrum ──────────────────────────────
     kalpana::Color base;
 
-    // High-luminance, high-contrast primary celestial spectral colors
-    if (p.density < 1500.0f) {
-        base = kalpana::Color{0.25f, 0.95f, 1.00f, 1.0f}; // Ultra-Bright Cyan / Ice Blue
-    } else if (p.density < 4500.0f) {
-        base = kalpana::Color{1.00f, 0.90f, 0.25f, 1.0f}; // Radiant Solar Gold / Yellow (Silicate Rock)
-    } else if (p.density < 10000.0f) {
-        base = kalpana::Color{1.00f, 0.60f, 0.15f, 1.0f}; // Intense Metallic Orange (Iron-Nickel)
+    // Check for Morgan-Keenan (MK) Stellar Spectral Classification for hot stellar cores
+    if (p.temperature > 1200.0f || p.mass >= 140.0f) {
+        const auto mk = prakriti::celestial::evaluate_stellar_spectral_class(p.mass, p.temperature);
+        base = kalpana::Color{mk.r, mk.g, mk.b, 1.0f};
     } else {
-        base = kalpana::Color{0.95f, 0.30f, 1.00f, 1.0f}; // Vivid Hyperdense Singularity Magenta
+        // High-luminance, high-contrast primary celestial spectral colors for terrestrial planetoids
+        if (p.density < 1500.0f) {
+            base = kalpana::Color{0.25f, 0.95f, 1.00f, 1.0f}; // Ultra-Bright Cyan / Ice Blue
+        } else if (p.density < 4500.0f) {
+            base = kalpana::Color{1.00f, 0.90f, 0.25f, 1.0f}; // Radiant Solar Gold / Yellow (Silicate Rock)
+        } else if (p.density < 10000.0f) {
+            base = kalpana::Color{1.00f, 0.60f, 0.15f, 1.0f}; // Intense Metallic Orange (Iron-Nickel)
+        } else {
+            base = kalpana::Color{0.95f, 0.30f, 1.00f, 1.0f}; // Vivid Hyperdense Singularity Magenta
+        }
     }
 
-    // Thermal incandescence shift
+    // Thermal incandescence shift for cooler bodies
     if (p.temperature < -20.0f) {
         const float t = std::clamp((-p.temperature) / 100.0f, 0.0f, 1.0f);
         base = kalpana::Color{
             base.r * (1.0f - t * 0.4f),
             base.g * (1.0f - t * 0.1f) + 0.3f * t,
             std::min(1.0f, base.b + 0.4f * t),
-            1.0f
-        };
-    } else if (p.temperature > 800.0f) {
-        const float t = std::clamp((p.temperature - 800.0f) / 2500.0f, 0.0f, 1.0f);
-        const kalpana::Color hot_col = (t > 0.5f)
-            ? kalpana::Color{1.0f, 1.0f, 1.0f, 1.0f}    // Pure white-hot star plasma
-            : kalpana::Color{1.0f, 0.25f, 0.12f, 1.0f}; // Brilliant crimson magma
-        base = kalpana::Color{
-            base.r * (1.0f - t) + hot_col.r * t,
-            base.g * (1.0f - t) + hot_col.g * t,
-            base.b * (1.0f - t) + hot_col.b * t,
             1.0f
         };
     }
@@ -510,6 +505,42 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                     app.planets[i].acc = app.planets[i].acc + drag.azimuthal_force * (1.0f / app.planets[i].mass);
                 }
             }
+        }
+
+        // Stellar Wind & Radiation Pressure (Pushes light dust outward from hot fusion stars)
+        for (const auto& star : app.planets) {
+            if (!star.alive || (&star == &app.planets[i]) || star.temperature < 1500.0f) continue;
+            const auto wind = prakriti::celestial::evaluate_stellar_wind_radiation_pressure(
+                star.pos, star.mass, star.temperature, star.radius, app.planets[i].pos, dist01(app.rng)
+            );
+            app.planets[i].acc = app.planets[i].acc + wind.force * (1.0f / app.planets[i].mass);
+
+            // Coronal Mass Ejection (CME) Solar Flare Loop Eruption
+            if (wind.triggers_cme && app.sparks.size() < 400) {
+                const float flare_a = dist01(app.rng) * 6.2831853f;
+                for (int s = 0; s < 12; ++s) {
+                    const float arc = flare_a + (static_cast<float>(s) - 6.0f) * 0.12f;
+                    const float flare_spd = 55.0f + dist01(app.rng) * 45.0f;
+                    app.sparks.push_back(SparkParticle{
+                        .pos = star.pos + pebble::math::vec2{std::cos(arc), std::sin(arc)} * (star.radius + 1.0f),
+                        .vel = star.vel + pebble::math::vec2{std::cos(arc), std::sin(arc)} * flare_spd,
+                        .radius = 1.4f + dist01(app.rng) * 1.0f,
+                        .life = 0.45f + dist01(app.rng) * 0.25f,
+                        .max_life = 0.70f,
+                        .color = kalpana::Color{1.0f, 0.55f, 0.1f, 1.0f} // Brilliant solar flare orange
+                    });
+                }
+            }
+        }
+
+        // Lin-Shu Galactic Spiral Arm Density Wave Perturbation:
+        // Organizes scattered disk stars and gas into dynamic rotating logarithmic spiral arms
+        if (app.config_dist_mode == 1 || app.planets.size() > 200) {
+            const pebble::math::vec2 galactic_center{FW * 0.5f, FH * 0.5f};
+            const pebble::math::vec2 f_spiral = prakriti::celestial::compute_lin_shu_spiral_density_wave(
+                app.planets[i].pos, galactic_center, app.total_mass, 0.35f, 2
+            );
+            app.planets[i].acc = app.planets[i].acc + f_spiral;
         }
 
         // Interactive gravity vortex
@@ -1434,6 +1465,71 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         kalpana::Path gw_ring;
         gw_ring.circle(s_center[0], s_center[1], gw.radius * app.camera_zoom);
         scene.add(kalpana::Node::shape(gw_ring, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.7f, 1.0f, alpha}, 0.75f)));
+    }
+
+    // ── Cosmic Filament Web Bridges (Zel'dovich Approximation) ──
+    std::vector<const PlanetBody*> cosmic_nodes;
+    for (const auto& p : app.planets) {
+        if (p.alive && p.mass > 120.0f) cosmic_nodes.push_back(&p);
+    }
+    const std::size_t max_nodes = std::min(cosmic_nodes.size(), std::size_t(8));
+    for (std::size_t i = 0; i < max_nodes; ++i) {
+        for (std::size_t j = i + 1; j < max_nodes; ++j) {
+            const auto f_bridge = prakriti::celestial::compute_cosmic_filament(
+                cosmic_nodes[i]->pos, cosmic_nodes[i]->mass,
+                cosmic_nodes[j]->pos, cosmic_nodes[j]->mass, 480.0f
+            );
+            if (f_bridge.filament_density > 0.05f) {
+                const pebble::math::vec2 s_a = w2s(f_bridge.node_a);
+                const pebble::math::vec2 s_b = w2s(f_bridge.node_b);
+                kalpana::Path fil_line;
+                fil_line.move_to(s_a[0], s_a[1]);
+                fil_line.line_to(s_b[0], s_b[1]);
+                const float fil_alpha = f_bridge.filament_density * 0.22f;
+                scene.add(kalpana::Node::shape(fil_line, kalpana::Paint::stroke(kalpana::Color{0.4f, 0.25f, 0.75f, fil_alpha}, 1.2f)));
+            }
+        }
+    }
+
+    // ── Barycentric Multi-Star System Hierarchies (Jacobi Coordinates) ──
+    for (std::size_t i = 0; i < max_nodes; ++i) {
+        for (std::size_t j = i + 1; j < max_nodes; ++j) {
+            const auto pair = prakriti::celestial::detect_binary_barycenter(
+                i, j,
+                cosmic_nodes[i]->pos, cosmic_nodes[i]->vel, cosmic_nodes[i]->mass,
+                cosmic_nodes[j]->pos, cosmic_nodes[j]->vel, cosmic_nodes[j]->mass
+            );
+            if (pair.is_bound) {
+                const pebble::math::vec2 s_cm = w2s(pair.center_of_mass);
+                // Subtle barycentric crosshair
+                kalpana::Path cm_cross;
+                cm_cross.move_to(s_cm[0] - 4.0f, s_cm[1]); cm_cross.line_to(s_cm[0] + 4.0f, s_cm[1]);
+                cm_cross.move_to(s_cm[0], s_cm[1] - 4.0f); cm_cross.line_to(s_cm[0], s_cm[1] + 4.0f);
+                scene.add(kalpana::Node::shape(cm_cross, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.95f, 0.65f, 0.45f}, 0.8f)));
+            }
+        }
+    }
+
+    // ── Luminous Tidal Disruption Events (TDE) Stellar Spaghettification Streams ──
+    for (const auto& bh : app.planets) {
+        if (!bh.alive || (!bh.is_singularity && bh.type != CelestialType::BlackHoleSingularity)) continue;
+        for (const auto& star : app.planets) {
+            if (!star.alive || (&star == &bh) || star.is_singularity || star.mass < 15.0f) continue;
+            const pebble::math::vec2 d = star.pos - bh.pos;
+            const float dist = std::sqrt(d[0] * d[0] + d[1] * d[1]);
+            const auto tde = prakriti::celestial::compute_tde_spaghettification(star.mass, star.radius, bh.mass, dist);
+            if (tde.is_disrupting) {
+                // Parabolic spaghettified stream curve connecting star core to black hole ISCO disk
+                kalpana::Path tde_stream;
+                const pebble::math::vec2 s_star = w2s(star.pos);
+                const pebble::math::vec2 s_bh = w2s(bh.pos);
+                const pebble::math::vec2 mid = (s_star + s_bh) * 0.5f + pebble::math::vec2{-d[1], d[0]} * 0.18f * app.camera_zoom;
+                
+                tde_stream.move_to(s_star[0], s_star[1]);
+                tde_stream.quad_to(mid[0], mid[1], s_bh[0], s_bh[1]);
+                scene.add(kalpana::Node::shape(tde_stream, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.75f, 0.25f, 0.65f}, 2.0f * app.camera_zoom)));
+            }
+        }
     }
 
     // 7. Relativistic Event Horizons, Photon Rings & ISCO (For Actual Compact Singularities & Stars)

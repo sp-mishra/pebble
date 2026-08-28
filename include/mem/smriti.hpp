@@ -18,12 +18,14 @@
 #include <flat_set>
 #include <format>
 #include <functional>
+#include <iostream>
 #include <latch>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <new>
 #include <optional>
+#include <ostream>
 #include <print>
 #include <shared_mutex>
 #include <source_location>

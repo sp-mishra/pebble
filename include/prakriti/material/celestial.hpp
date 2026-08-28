@@ -566,4 +566,213 @@ apply_hubble_metric_drift(const pebble::math::vec2& pos, const pebble::math::vec
     return r * (hubble_constant * dt);
 }
 
+// ── 16. Supermassive Black Hole (SMBH) Post-Newtonian Inspiral & Ringdown ─────────────────
+
+struct SMBHInspiralState {
+    bool  is_in_inspiral = false;
+    float gw_chirp_frequency = 0.0f;
+    float post_newtonian_drag = 0.0f;
+    bool  triggers_ringdown_merger = false;
+};
+
+[[nodiscard]] inline SMBHInspiralState
+evaluate_smbh_inspiral(float m1, float m2, float distance, float r_isco) noexcept {
+    SMBHInspiralState state;
+    if (distance < r_isco * 2.5f && distance > 0.5f) {
+        state.is_in_inspiral = true;
+        // Gravitational Wave Chirp Frequency: \omega \propto (M_chirp)^{5/8} * (r)^{-3/2}
+        const float m_chirp = std::pow(m1 * m2, 0.6f) / std::pow(m1 + m2, 0.2f);
+        state.gw_chirp_frequency = (std::sqrt(18000.0f * (m1 + m2)) / std::pow(distance, 1.5f)) * 4.0f;
+        
+        // Post-Newtonian (2.5PN) Radiation Reaction Drag Acceleration
+        state.post_newtonian_drag = (m_chirp * 120.0f) / (distance * distance + 16.0f);
+        state.triggers_ringdown_merger = (distance <= r_isco * 1.15f);
+    }
+    return state;
+}
+
+// ── 17. Stellar Spaghettification & Tidal Disruption Events (TDE) ───────────────────────────
+
+struct TDESpaghettificationStream {
+    bool  is_disrupting = false;
+    float tidal_radius = 0.0f;
+    float accretion_feed_rate = 0.0f;
+};
+
+[[nodiscard]] inline TDESpaghettificationStream
+compute_tde_spaghettification(float star_mass, float star_radius, float bh_mass, float distance) noexcept {
+    TDESpaghettificationStream stream;
+    // Tidal Radius (Hills Radius): r_t = R_* * (M_BH / M_*)^(1/3)
+    stream.tidal_radius = star_radius * std::cbrt(std::max(1.0f, bh_mass / std::max(star_mass, 1.0f)));
+    if (distance < stream.tidal_radius && distance > 1.0f) {
+        stream.is_disrupting = true;
+        // Mass transfer rate feeding the ISCO accretion disk
+        stream.accretion_feed_rate = std::clamp((stream.tidal_radius - distance) / stream.tidal_radius, 0.1f, 1.0f) * (star_mass * 0.45f);
+    }
+    return stream;
+}
+
+// ── 18. Morgan-Keenan (MK) Stellar Spectral Classification ──────────────────────────────────
+
+enum class SpectralClassMK : std::uint8_t {
+    ClassO, // Hyper-luminous Deep Blue Giant (> 30,000 K)
+    ClassB, // Blue-White Giant (10,000 - 30,000 K)
+    ClassA, // White Sirius (7,500 - 10,000 K)
+    ClassF, // Yellow-White Procyon (6,000 - 7,500 K)
+    ClassG, // Yellow Sol Sun-like (5,200 - 6,000 K)
+    ClassK, // Orange Arcturus (3,700 - 5,200 K)
+    ClassM  // Red Dwarf Proxima (< 3,700 K)
+};
+
+struct StellarSpectralInfo {
+    SpectralClassMK cls = SpectralClassMK::ClassM;
+    float r = 1.0f;
+    float g = 1.0f;
+    float b = 1.0f;
+};
+
+[[nodiscard]] inline StellarSpectralInfo
+evaluate_stellar_spectral_class(float mass, float temp_celsius) noexcept {
+    StellarSpectralInfo info;
+    const float t_kelvin = temp_celsius + 273.15f;
+
+    if (t_kelvin >= 28000.0f || mass > 900.0f) {
+        info.cls = SpectralClassMK::ClassO;
+        info.r = 0.45f; info.g = 0.65f; info.b = 1.0f; // Deep Blue
+    } else if (t_kelvin >= 10000.0f || mass > 500.0f) {
+        info.cls = SpectralClassMK::ClassB;
+        info.r = 0.65f; info.g = 0.82f; info.b = 1.0f; // Blue-White
+    } else if (t_kelvin >= 7500.0f || mass > 350.0f) {
+        info.cls = SpectralClassMK::ClassA;
+        info.r = 0.90f; info.g = 0.95f; info.b = 1.0f; // White
+    } else if (t_kelvin >= 6000.0f || mass > 220.0f) {
+        info.cls = SpectralClassMK::ClassF;
+        info.r = 1.0f;  info.g = 0.98f; info.b = 0.85f; // Yellow-White
+    } else if (t_kelvin >= 5200.0f || mass > 140.0f) {
+        info.cls = SpectralClassMK::ClassG;
+        info.r = 1.0f;  info.g = 0.88f; info.b = 0.35f; // Yellow Sun
+    } else if (t_kelvin >= 3700.0f || mass > 80.0f) {
+        info.cls = SpectralClassMK::ClassK;
+        info.r = 1.0f;  info.g = 0.58f; info.b = 0.20f; // Orange Giant
+    } else {
+        info.cls = SpectralClassMK::ClassM;
+        info.r = 1.0f;  info.g = 0.32f; info.b = 0.15f; // Red Dwarf
+    }
+    return info;
+}
+
+// ── 19. Lin-Shu Galactic Spiral Arm Density Wave Theory ──────────────────────────────────────
+
+[[nodiscard]] inline pebble::math::vec2
+compute_lin_shu_spiral_density_wave(const pebble::math::vec2& pos, const pebble::math::vec2& galactic_center,
+                                    float galaxy_mass, float pattern_speed = 0.45f, int n_arms = 2) noexcept {
+    const pebble::math::vec2 r_vec = pos - galactic_center;
+    const float r = std::sqrt(r_vec[0] * r_vec[0] + r_vec[1] * r_vec[1]);
+    if (r < 12.0f || r > 500.0f) return pebble::math::vec2{0.0f, 0.0f};
+
+    const float theta = std::atan2(r_vec[1], r_vec[0]);
+    // Logarithmic Spiral Arm Phase: \Phi(r, \theta) = n * (\theta - \Omega_p * t) - k * \ln(r / r_0)
+    constexpr float pitch_angle_factor = 2.8f;
+    const float spiral_phase = static_cast<float>(n_arms) * theta - pitch_angle_factor * std::log(r / 20.0f);
+
+    // Lin-Shu Gravitational Potential Perturbation Force: F_wave = -\nabla \Phi_wave
+    const float wave_amp = (galaxy_mass * 0.035f) / (r + 30.0f);
+    const float force_azimuthal = -std::sin(spiral_phase) * wave_amp;
+    const float force_radial = -std::cos(spiral_phase) * wave_amp * 0.4f;
+
+    const pebble::math::vec2 r_hat = r_vec * (1.0f / r);
+    const pebble::math::vec2 theta_hat{-r_hat[1], r_hat[0]};
+
+    return r_hat * force_radial + theta_hat * force_azimuthal;
+}
+
+// ── 20. Stellar Wind & Coronal Mass Ejection (CME) Radiation Pressure ───────────────────────
+
+struct StellarWindForce {
+    pebble::math::vec2 force{0.0f, 0.0f};
+    bool               triggers_cme = false;
+};
+
+[[nodiscard]] inline StellarWindForce
+evaluate_stellar_wind_radiation_pressure(const pebble::math::vec2& star_pos, float star_mass,
+                                         float star_temp, float star_radius,
+                                         const pebble::math::vec2& target_pos, float rand_sample) noexcept {
+    StellarWindForce res;
+    if (star_temp < 1400.0f && star_mass < 120.0f) return res;
+
+    const pebble::math::vec2 d = target_pos - star_pos;
+    const float dist_sq = d[0] * d[0] + d[1] * d[1];
+    const float dist = std::sqrt(dist_sq);
+    if (dist < star_radius || dist > 260.0f) return res;
+
+    // Stefan-Boltzmann Luminosity: L \propto R^2 * T^4
+    const float t_norm = star_temp / 5500.0f;
+    const float luminosity = (star_radius * star_radius) * (t_norm * t_norm * t_norm * t_norm);
+    
+    // Radiation Pressure: F_rad = \frac{L}{4\pi r^2 c}
+    const float rad_press = (luminosity * 140.0f) / (dist_sq + 100.0f);
+    res.force = pebble::math::vec2{d[0] / dist, d[1] / dist} * rad_press;
+
+    // Periodic Coronal Mass Ejection (CME) Magnetic Flare Eruptions
+    if (star_temp > 2200.0f && rand_sample < 0.004f) {
+        res.triggers_cme = true;
+    }
+    return res;
+}
+
+// ── 21. Barycentric Hierarchy Detection (Jacobi Coordinates) ───────────────────────────────
+
+struct BarycentricPair {
+    std::size_t        idx1 = 0;
+    std::size_t        idx2 = 0;
+    pebble::math::vec2 center_of_mass{0.0f, 0.0f};
+    float              total_mass = 0.0f;
+    float              separation = 0.0f;
+    bool               is_bound = false;
+};
+
+[[nodiscard]] inline BarycentricPair
+detect_binary_barycenter(std::size_t i, std::size_t j,
+                         const pebble::math::vec2& p1, const pebble::math::vec2& v1, float m1,
+                         const pebble::math::vec2& p2, const pebble::math::vec2& v2, float m2) noexcept {
+    BarycentricPair pair;
+    pair.idx1 = i;
+    pair.idx2 = j;
+    const pebble::math::vec2 d = p2 - p1;
+    pair.separation = std::sqrt(d[0] * d[0] + d[1] * d[1]);
+    pair.total_mass = m1 + m2;
+    pair.center_of_mass = (p1 * m1 + p2 * m2) * (1.0f / pair.total_mass);
+
+    // Mutual Orbital Specific Energy: \epsilon = \frac{1}{2} v_{rel}^2 - \frac{G M_{tot}}{r}
+    const pebble::math::vec2 dv = v2 - v1;
+    const float v_rel_sq = dv[0] * dv[0] + dv[1] * dv[1];
+    const float spec_energy = 0.5f * v_rel_sq - (18000.0f * pair.total_mass) / (pair.separation + 10.0f);
+
+    pair.is_bound = (spec_energy < 0.0f && pair.separation < 220.0f);
+    return pair;
+}
+
+// ── 22. Cosmic Filament Web (Zel'dovich Approximation) ──────────────────────────────────────
+
+struct CosmicFilamentBridge {
+    pebble::math::vec2 node_a{0.0f, 0.0f};
+    pebble::math::vec2 node_b{0.0f, 0.0f};
+    float              filament_density = 0.0f;
+};
+
+[[nodiscard]] inline CosmicFilamentBridge
+compute_cosmic_filament(const pebble::math::vec2& p1, float m1,
+                        const pebble::math::vec2& p2, float m2, float max_span = 450.0f) noexcept {
+    CosmicFilamentBridge f;
+    f.node_a = p1;
+    f.node_b = p2;
+    const pebble::math::vec2 d = p2 - p1;
+    const float len = std::sqrt(d[0] * d[0] + d[1] * d[1]);
+    if (len > 30.0f && len < max_span) {
+        // Gravitational bridge density between supermassive nodes
+        f.filament_density = std::clamp((m1 * m2) / (len * len * 8.0f), 0.05f, 0.65f);
+    }
+    return f;
+}
+
 } // namespace prakriti::celestial
