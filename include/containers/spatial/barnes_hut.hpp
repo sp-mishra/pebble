@@ -161,18 +161,21 @@ public:
 
             if (s2 <= r2 * theta2) {
                 // Node is sufficiently far away; approximate entire subtree as single center of mass
-                const float denom = std::pow(r2 + eps2, 1.5f);
-                if (denom > 1e-6f) {
-                    const float f_mag = (policy.G * target_mass * node.total_mass) / denom;
-                    force = force + dr * f_mag;
-                }
+                const float inv_r = 1.0f / std::sqrt(r2 + eps2);
+                const float inv_r3 = inv_r * inv_r * inv_r;
+                const float f_mag = (policy.G * target_mass * node.total_mass) * inv_r3;
+                force = force + dr * f_mag;
             } else {
-                // Node is too close; recurse into children
-                for (int i = 0; i < 4; ++i) {
-                    if (node.children[i] != kNull && sp < 64) {
-                        stack[sp++] = node.children[i];
-                    }
-                }
+                // Node is too close; unroll 4 children into traversal stack
+                const auto c0 = node.children[0];
+                const auto c1 = node.children[1];
+                const auto c2 = node.children[2];
+                const auto c3 = node.children[3];
+
+                if (c0 != kNull && sp < 60) stack[sp++] = c0;
+                if (c1 != kNull && sp < 61) stack[sp++] = c1;
+                if (c2 != kNull && sp < 62) stack[sp++] = c2;
+                if (c3 != kNull && sp < 63) stack[sp++] = c3;
             }
         }
 

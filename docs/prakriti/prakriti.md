@@ -583,6 +583,18 @@ Located in `#include <prakriti/material/celestial.hpp>`:
 - **Eggleton Roche Lobe Equation**: Computes donor Roche radius $r_L(q, a)$ where $q = M_{\text{donor}} / M_{\text{host}}$.
 - **L1 Lagrange Nozzle Injection**: When a gas giant or star's envelope overflows $r_L$, matter is siphoned through the inner Lagrange point $L_1$ into an SPH continuum fluid particle stream feeding the host's accretion disk.
 
+---
+
+## 50. Morton Z-Order Space-Filling Curve Acceleration
+- **Cache-Locality Interleaving**: Interleaves 16-bit coordinates into a 32-bit Morton Z-order key to map 2D spatial points onto a contiguous 1D memory curve.
+- **L1/L2 Hardware Prefetch Optimization**: Guarantees that spatially adjacent particles reside in the same CPU cache line, boosting broadphase collision and quadtree traversal throughput.
+
+---
+
+## 51. Fast Unrolled Quadtree Traversal & Multi-Scale Logarithmic Cosmic Zoom
+- **Fast 4-Way Unrolled Traversal**: Unrolls quadtree child expansion directly into the local execution stack and uses fast reciprocal square roots ($\frac{1}{\sqrt{r^2 + \epsilon^2}}$), eliminating dynamic recursion overhead.
+- **Multi-Scale Logarithmic Cosmic Zoom**: Provides smooth camera scaling from $0.25\times$ (Deep Universe cluster field) to $3.5\times$ (individual planetary surface and accretion ring close-ups).
+
 
 
 

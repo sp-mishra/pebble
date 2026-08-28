@@ -2843,9 +2843,12 @@ static void event_cb(const sapp_event* e) {
             app.slingshot.current_y = e->mouse_y;
         }
     } else if (e->type == SAPP_EVENTTYPE_MOUSE_SCROLL) {
-        // Zoom is locked at 1.0x to preserve full simulation scale and prevent cluster cluttering
-        app.target_zoom = 1.0f;
-        app.camera_zoom = 1.0f;
+        // Smooth Multi-Scale Logarithmic Cosmic Zoom: Range 0.25x (Deep Space) to 3.5x (Close Surface)
+        if (e->scroll_y > 0.0f) {
+            app.target_zoom = std::min(3.5f, app.target_zoom * 1.15f);
+        } else if (e->scroll_y < 0.0f) {
+            app.target_zoom = std::max(0.25f, app.target_zoom * 0.87f);
+        }
     } else if (e->type == SAPP_EVENTTYPE_MOUSE_DOWN) {
         if (e->mouse_button == SAPP_MOUSEBUTTON_MIDDLE) {
             app.middle_mouse_down = true;

@@ -106,4 +106,26 @@ private:
     std::vector<Entry> entries_;
 };
 
+// ── Morton Z-Order 2D Curve Encoding for Cache-Locality Sorting ──────────────
+
+// Interleaves 16-bit integers to form a 32-bit Morton code (Z-order curve)
+[[nodiscard]] constexpr std::uint32_t morton_encode_2d(std::uint16_t x, std::uint16_t y) noexcept {
+    auto expand_bits = [](std::uint16_t v) constexpr -> std::uint32_t {
+        std::uint32_t x32 = v;
+        x32 = (x32 | (x32 << 8)) & 0x00FF00FF;
+        x32 = (x32 | (x32 << 4)) & 0x0F0F0F0F;
+        x32 = (x32 | (x32 << 2)) & 0x33333333;
+        x32 = (x32 | (x32 << 1)) & 0x55555555;
+        return x32;
+    };
+    return expand_bits(x) | (expand_bits(y) << 1);
+}
+
+// Computes 2D Morton Z-code for spatial floating-point coordinates
+[[nodiscard]] inline std::uint32_t morton_key_from_pos(float x, float y, float min_x = -50000.0f, float min_y = -50000.0f, float cell_res = 16.0f) noexcept {
+    const auto qx = static_cast<std::uint16_t>(std::clamp((x - min_x) / cell_res, 0.0f, 65535.0f));
+    const auto qy = static_cast<std::uint16_t>(std::clamp((y - min_y) / cell_res, 0.0f, 65535.0f));
+    return morton_encode_2d(qx, qy);
+}
+
 } // namespace containers::spatial

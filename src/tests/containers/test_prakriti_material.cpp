@@ -402,7 +402,7 @@ TEST_CASE("gati celestial system unified simulation step", "[gati][systems][cele
 
     system.step(bodies, cache_mgr, 0.016f);
 
-    REQUIRE(bodies[1].pos[0] != 80.0f || bodies[1].pos[1] != 0.0f);
+    REQUIRE((bodies[1].pos[0] != 80.0f || bodies[1].pos[1] != 0.0f));
     REQUIRE(bodies[1].acc[0] < 0.0f); // Accelerating toward central mass
 }
 
@@ -453,6 +453,49 @@ TEST_CASE("sph roche lobe gaseous planet tidal stripping", "[prakriti][celestial
     REQUIRE(strip_state.l1_lagrange_point[0] < host_pos[0]);
     REQUIRE(strip_state.mass_loss_rate > 0.0f);
     REQUIRE(strip_state.stream_velocity > 0.0f);
+}
+
+TEST_CASE("morton z-order 2D curve spatial locality encoding", "[containers][spatial][morton]") {
+    const std::uint32_t code_0_0 = containers::spatial::morton_encode_2d(0, 0);
+    const std::uint32_t code_1_0 = containers::spatial::morton_encode_2d(1, 0);
+    const std::uint32_t code_0_1 = containers::spatial::morton_encode_2d(0, 1);
+    const std::uint32_t code_1_1 = containers::spatial::morton_encode_2d(1, 1);
+
+    REQUIRE(code_0_0 == 0);
+    REQUIRE(code_1_0 == 1);
+    REQUIRE(code_0_1 == 2);
+    REQUIRE(code_1_1 == 3);
+
+    const std::uint32_t key1 = containers::spatial::morton_key_from_pos(100.0f, 200.0f);
+    const std::uint32_t key2 = containers::spatial::morton_key_from_pos(105.0f, 205.0f);
+    const std::uint32_t key_far = containers::spatial::morton_key_from_pos(5000.0f, 8000.0f);
+
+    // Spatially close points produce closely clustered Morton keys
+    REQUIRE(std::abs(static_cast<std::int64_t>(key1) - static_cast<std::int64_t>(key2)) < 
+            std::abs(static_cast<std::int64_t>(key1) - static_cast<std::int64_t>(key_far)));
+}
+
+TEST_CASE("fast unrolled barnes-hut gravity computation", "[containers][spatial][barnes_hut]") {
+    containers::spatial::BarnesHutTree tree;
+    std::vector<containers::spatial::BarnesHutBody> bodies = {
+        {.pos = {0.0f, 0.0f}, .mass = 10000.0f, .id = 0},
+        {.pos = {50.0f, 0.0f}, .mass = 1.0f, .id = 1},
+        {.pos = {0.0f, 50.0f}, .mass = 1.0f, .id = 2}
+    };
+
+    tree.build(bodies);
+    containers::spatial::DefaultGravityPolicy policy{.G = 1000.0f, .softening = 5.0f, .theta = 0.5f};
+
+    const pebble::math::vec2 f1 = tree.compute_force(bodies[1].pos, bodies[1].mass, 1, bodies, policy);
+    const pebble::math::vec2 f2 = tree.compute_force(bodies[2].pos, bodies[2].mass, 2, bodies, policy);
+
+    // Dominant force on body 1 at (50, 0) is gravitational pull towards central mass (0, 0)
+    REQUIRE(f1[0] < -50.0f); // Strong negative X pull towards central mass
+    REQUIRE(std::abs(f1[0]) > std::abs(f1[1]) * 10.0f); // X pull vastly dominates small Y pull from body 2
+
+    // Dominant force on body 2 at (0, 50) is gravitational pull towards central mass (0, 0)
+    REQUIRE(f2[1] < -50.0f); // Strong negative Y pull towards central mass
+    REQUIRE(std::abs(f2[1]) > std::abs(f2[0]) * 10.0f); // Y pull vastly dominates small X pull from body 1
 }
 
 
