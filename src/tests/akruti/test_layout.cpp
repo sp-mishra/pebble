@@ -215,3 +215,60 @@ TEST_CASE("akruti::layout: Layout snapshot capture and restore", "[akruti][layou
     REQUIRE(restored);
     CHECK(engine.measured[0].w == 100.0f);
 }
+
+TEST_CASE("akruti::layout: True incremental subtree solving", "[akruti][layout]") {
+    LayoutTree tree;
+
+    // Root container (Column, 400x600)
+    LayoutNode root_node;
+    root_node.style.axis = Axis::Column;
+    root_node.style.width = SizeSpec::Px(400.0f);
+    root_node.style.height = SizeSpec::Px(600.0f);
+    auto root_id = tree.insert(nullptr, root_node);
+
+    // Child 1 (Fixed 100px)
+    LayoutNode child1;
+    child1.style.width = SizeSpec::Px(200.0f);
+    child1.style.height = SizeSpec::Px(100.0f);
+    tree.insert(root_id, child1);
+
+    // Child 2 (Flex 1.0)
+    LayoutNode child2;
+    child2.style.width = SizeSpec::Px(200.0f);
+    child2.style.flex_grow = 1.0f;
+    tree.insert(root_id, child2);
+
+    Engine engine;
+    engine.enable_perf_tracking = true;
+    engine.bake(tree);
+
+    Bounds2D viewport{{0.0f, 0.0f}, {400.0f, 600.0f}};
+    engine.solve(viewport);
+
+    CHECK(engine.rect[1].h == 100.0f);
+    CHECK(engine.rect[2].h == 500.0f);
+
+    // Incremental solve when not dirty does zero node measurements
+    engine.solve_incremental(viewport);
+    CHECK(engine.perf_stats.nodes_measured == 3); // Unchanged from initial solve
+
+    // Modify child 1 height and run incremental solve
+    LayoutStyle mod_child1;
+    mod_child1.width = SizeSpec::Px(200.0f);
+    mod_child1.height = SizeSpec::Px(150.0f);
+    engine.set_style(1, mod_child1);
+
+    engine.solve_incremental(viewport);
+    CHECK(engine.rect[1].h == 150.0f);
+    CHECK(engine.rect[2].h == 450.0f);
+}
+
+TEST_CASE("akruti::layout: Smriti ScopedArena zero-heap scratch integration", "[akruti][layout]") {
+    smriti::pools::ScopedArena<4096> arena;
+    void* ptr = arena.allocate(sizeof(Rect2D) * 10, alignof(Rect2D));
+    REQUIRE(ptr != nullptr);
+    REQUIRE(arena.used_bytes() >= sizeof(Rect2D) * 10);
+    arena.reset();
+    CHECK(arena.used_bytes() == 0);
+}
+

@@ -28,22 +28,12 @@
 #include <cstdio>
 
 #include "akruti/math.hpp"
+#include "akruti/simd.hpp"
 #include "containers/tree/NAryTree.hpp"
 #include "containers/graph/LiteGraph.hpp"
-
-// Highway SIMD support (conditional)
-#if defined(__has_include)
-#  if __has_include("hwy/highway.h")
-#    define AKRUTI_HAS_HIGHWAY 1
-#    include "hwy/highway.h"
-#    include "hwy/aligned_allocator.h"
-namespace hwy { namespace HWY_NAMESPACE { } }
-#  else
-#    define AKRUTI_HAS_HIGHWAY 0
-#  endif
-#else
-#  define AKRUTI_HAS_HIGHWAY 0
-#endif
+#include "mem/smriti.hpp"
+#include "mem/arena.hpp"
+#include "pravaha/pravaha.hpp"
 
 namespace akruti::layout {
     using Vec2 = akruti::Vec;
@@ -864,7 +854,64 @@ namespace akruti::layout {
         }
 
         void solve_incremental(const Bounds2D &viewport) {
-            solve(viewport);
+            if (size() == 0) return;
+
+            // Check if any node is dirty
+            bool has_any_dirty = false;
+            for (std::size_t i = 0; i < size(); ++i) {
+                if (dirty[i] != DIRTY_NONE) {
+                    has_any_dirty = true;
+                    break;
+                }
+            }
+
+            if (!has_any_dirty) {
+                // If nothing is dirty, layout is stable — no work needed!
+                return;
+            }
+
+            auto start_time = std::chrono::high_resolution_clock::now();
+            if (enable_perf_tracking) perf_stats.reset();
+
+            Rect2D root_r = bounds_to_rect(viewport);
+
+            // Phase 1: Incremental Measure Pass (only measure dirty nodes bottom-up)
+            auto m_start = std::chrono::high_resolution_clock::now();
+            measure_pass_incremental();
+            if (enable_perf_tracking) perf_stats.measure_time = std::chrono::high_resolution_clock::now() - m_start;
+
+            // Phase 2: Place pass (top-down, only updating paths through dirty nodes)
+            auto p_start = std::chrono::high_resolution_clock::now();
+            place_pass(root_r);
+            if (enable_perf_tracking) perf_stats.place_time = std::chrono::high_resolution_clock::now() - p_start;
+
+            // Phase 3: Constraints pass
+            auto c_start = std::chrono::high_resolution_clock::now();
+            constraints_pass();
+            if (enable_perf_tracking) perf_stats.constraints_time = std::chrono::high_resolution_clock::now() - c_start;
+
+            // Phase 4: Clip pass
+            auto cl_start = std::chrono::high_resolution_clock::now();
+            clip_pass(viewport);
+            if (enable_perf_tracking) perf_stats.clip_time = std::chrono::high_resolution_clock::now() - cl_start;
+
+            if (enable_spatial_hash) {
+                update_spatial_hash();
+            }
+
+            if (enable_snapshots) {
+                take_snapshot("solve_incremental");
+            }
+
+            for (std::size_t i = 0; i < size(); ++i) {
+                dirty[i] = DIRTY_NONE;
+            }
+            scheduled_updates_.clear();
+
+            if (enable_perf_tracking) {
+                perf_stats.total_time = std::chrono::high_resolution_clock::now() - start_time;
+                perf_stats.node_count = size();
+            }
         }
         
         void take_snapshot(const std::string& label = "") {
@@ -1021,69 +1068,82 @@ namespace akruti::layout {
             state.dirty = &dirty;
         }
 
+        void measure_node(std::uint32_t u) {
+            if (enable_perf_tracking) perf_stats.nodes_measured++;
+
+            Size2D content{0.0f, 0.0f};
+
+            if (text[u] != nullptr && text_measure_callback.measure != nullptr) {
+                const float max_w = (width[u].kind == SizeSpec::Kind::Px) ? width[u].value : 0.0f;
+                content = text_measure_callback.measure(text[u], max_w, text_measure_callback.user_data);
+                if (enable_perf_tracking) perf_stats.text_measure_calls++;
+            }
+
+            if (child_count[u] > 0) {
+                const Axis ax = axis[u];
+                float main_sum = 0.0f;
+                float cross_max = 0.0f;
+
+                const std::uint32_t fc = first_child[u];
+                const std::uint32_t cc = child_count[u];
+                for (std::uint32_t c = 0; c < cc; ++c) {
+                    const std::uint32_t ch = fc + c;
+                    const Size2D ch_m = measured[ch];
+                    const Edges &ch_mg = margin[ch];
+
+                    const float ch_main = main_size(ch_m, ax) + main_margin_before(ch_mg, ax) + main_margin_after(ch_mg, ax);
+                    const float ch_cross = cross_size(ch_m, ax) + cross_margin_before(ch_mg, ax) + cross_margin_after(ch_mg, ax);
+
+                    main_sum += ch_main;
+                    cross_max = std::max(cross_max, ch_cross);
+                }
+
+                Size2D children_size{};
+                set_main_size(children_size, ax, main_sum);
+                set_cross_size(children_size, ax, cross_max);
+
+                content.w = std::max(content.w, children_size.w);
+                content.h = std::max(content.h, children_size.h);
+            }
+
+            LayoutStyle st;
+            st.width = width[u];
+            st.height = height[u];
+            st.min_width = min_width[u];
+            st.min_height = min_height[u];
+            st.max_width = max_width[u];
+            st.max_height = max_height[u];
+            st.aspect_ratio = aspect_ratio[u];
+            st.aspect_lock = (aspect_lock[u] != 0);
+
+            Size2D final_size = content;
+            const Edges &pad = padding[u];
+            final_size.w += pad.l + pad.r;
+            final_size.h += pad.t + pad.b;
+
+            if (st.width.kind == SizeSpec::Kind::Px) final_size.w = st.width.value;
+            if (st.height.kind == SizeSpec::Kind::Px) final_size.h = st.height.value;
+
+            final_size = apply_min_max_content(final_size, st);
+            final_size = apply_aspect_content(final_size, st);
+
+            measured[u] = final_size;
+        }
+
         void measure_pass() {
             const std::size_t count = size();
             for (std::int64_t i = static_cast<std::int64_t>(count) - 1; i >= 0; --i) {
+                measure_node(static_cast<std::uint32_t>(i));
+            }
+        }
+
+        void measure_pass_incremental() {
+            const std::size_t count = size();
+            for (std::int64_t i = static_cast<std::int64_t>(count) - 1; i >= 0; --i) {
                 const std::uint32_t u = static_cast<std::uint32_t>(i);
-                if (enable_perf_tracking) perf_stats.nodes_measured++;
-
-                Size2D content{0.0f, 0.0f};
-
-                if (text[u] != nullptr && text_measure_callback.measure != nullptr) {
-                    const float max_w = (width[u].kind == SizeSpec::Kind::Px) ? width[u].value : 0.0f;
-                    content = text_measure_callback.measure(text[u], max_w, text_measure_callback.user_data);
-                    if (enable_perf_tracking) perf_stats.text_measure_calls++;
+                if (dirty[u] & (DIRTY_MEASURE | DIRTY_GEOMETRY)) {
+                    measure_node(u);
                 }
-
-                if (child_count[u] > 0) {
-                    const Axis ax = axis[u];
-                    float main_sum = 0.0f;
-                    float cross_max = 0.0f;
-
-                    const std::uint32_t fc = first_child[u];
-                    const std::uint32_t cc = child_count[u];
-                    for (std::uint32_t c = 0; c < cc; ++c) {
-                        const std::uint32_t ch = fc + c;
-                        const Size2D ch_m = measured[ch];
-                        const Edges &ch_mg = margin[ch];
-
-                        const float ch_main = main_size(ch_m, ax) + main_margin_before(ch_mg, ax) + main_margin_after(ch_mg, ax);
-                        const float ch_cross = cross_size(ch_m, ax) + cross_margin_before(ch_mg, ax) + cross_margin_after(ch_mg, ax);
-
-                        main_sum += ch_main;
-                        cross_max = std::max(cross_max, ch_cross);
-                    }
-
-                    Size2D children_size{};
-                    set_main_size(children_size, ax, main_sum);
-                    set_cross_size(children_size, ax, cross_max);
-
-                    content.w = std::max(content.w, children_size.w);
-                    content.h = std::max(content.h, children_size.h);
-                }
-
-                LayoutStyle st;
-                st.width = width[u];
-                st.height = height[u];
-                st.min_width = min_width[u];
-                st.min_height = min_height[u];
-                st.max_width = max_width[u];
-                st.max_height = max_height[u];
-                st.aspect_ratio = aspect_ratio[u];
-                st.aspect_lock = (aspect_lock[u] != 0);
-
-                Size2D final_size = content;
-                const Edges &pad = padding[u];
-                final_size.w += pad.l + pad.r;
-                final_size.h += pad.t + pad.b;
-
-                if (st.width.kind == SizeSpec::Kind::Px) final_size.w = st.width.value;
-                if (st.height.kind == SizeSpec::Kind::Px) final_size.h = st.height.value;
-
-                final_size = apply_min_max_content(final_size, st);
-                final_size = apply_aspect_content(final_size, st);
-
-                measured[u] = final_size;
             }
         }
 

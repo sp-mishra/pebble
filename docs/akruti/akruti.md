@@ -290,7 +290,9 @@ for (const auto& shard : shards) {
   3. **Constraints Pass**: Evaluates parent matching (`match_parent_width`, `match_parent_height`), centering, and relative anchor offsets via `LiteGraph`.
   4. **Clip Pass** (Top-Down): Computes hierarchy clipping bounds (`Bounds2D` intersection) for overflow modes (`Overflow::Clip`, `Overflow::Scroll`).
 - **Spatial Hash**: Grid-based spatial hash index (`SpatialHash`) enabling $O(1)$ hit testing (`hit_test(x, y)`).
-- **Phase-Aware Invalidation**: `mark_dirty(node, mask)` propagates dirty flags up ancestor paths without re-evaluating unchanged subtrees.
+- **Phase-Aware Invalidation & Incremental Solving**: `mark_dirty(node, mask)` propagates dirty flags up ancestor paths. `solve_incremental(viewport)` skips unchanged subtrees, running bottom-up measurements only on dirty nodes.
+- **Highway SIMD Acceleration**: Vectorized batch bounding box calculations and spatial hash point-overlap queries via Google Highway when available.
+- **Smriti Zero-Heap Scratch Memory**: Seamlessly leverages `smriti::pools::ScopedArena` and `smriti::pools::LinearArena` for stack-bounded scratch allocations.
 - **Snapshots & Debugging**: Built-in snapshot ring buffer (`take_snapshot`, `restore_snapshot`) and customizable debug overlay renderer (`DebugOverlay`).
 
 ### Usage Example
@@ -323,5 +325,12 @@ engine.solve(viewport);
 // 3. Query Results & Hit Test
 Rect2D child_rect = engine.rect[1]; // x, y, w, h
 auto hit_node = engine.hit_test(100.0f, 100.0f);
+
+// 4. True Incremental Updates
+LayoutStyle mod_style = flex_child.style;
+mod_style.flex_grow = 2.0f;
+engine.set_style(1, mod_style);
+engine.solve_incremental(viewport); // Fast path: only recomputes affected subtrees!
 ```
+
 
