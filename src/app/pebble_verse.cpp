@@ -230,11 +230,12 @@ struct PebbleVerseApp {
 
     // Initial Simulation Startup Config Modal State
     bool in_startup_modal = true; // Displays startup config screen until ENTER is pressed
-    int  config_selected_row = 0; // 0=Dust Count, 1=Gravitational G, 2=Initial Distribution, 3=Barnes-Hut Theta
+    int  config_selected_row = 0; // 0=Dust Count, 1=Gravitational G, 2=Initial Distribution, 3=Barnes-Hut Theta, 4=Show Overlays
     int  config_initial_dust_count = 650; // Range: 150 to 1500
     float config_grav_g = 18000.0f;       // Range: 5000 to 45000
     int  config_dist_mode = 0;            // 0=Uniform Cosmic Field, 1=Barycentric Cluster, 2=Dual Infall Cloud
     float config_bh_theta = 0.5f;         // 0.3 to 0.8
+    bool show_analytics_overlays = false; // Background auxiliary overlays toggle (Grid, H-R, Jacobi, MHD)
 
     // Multi-Spectral View & Cosmic Nucleosynthesis
     SpectralViewMode view_mode = SpectralViewMode::OpticalRGB;
@@ -1623,7 +1624,7 @@ static void render_gpu_frame(PebbleVerseApp& app) {
     };
 
     // ── 0. Sub-Layer: Spacetime Curvature & Geodesic Grid (Faint, High-Res Background Layer) ──
-    {
+    if (app.show_analytics_overlays) {
         constexpr int grid_cols = 64;
         constexpr int grid_rows = 40;
         const float dx = FW / static_cast<float>(grid_cols);
@@ -1768,42 +1769,42 @@ static void render_gpu_frame(PebbleVerseApp& app) {
     }
 
     // 6c. Magnetohydrodynamic (MHD) Magnetic Flux Tubes (Ultra-faint synchrotron flux arcs between binary stars/pulsars)
-    for (const auto& tube : app.mhd_tubes) {
-        const pebble::math::vec2 s1 = w2s(tube.p1);
-        const pebble::math::vec2 s2 = w2s(tube.p2);
-        const pebble::math::vec2 smid = w2s(tube.midpoint);
-        kalpana::Path flux_path;
-        flux_path.move_to(s1[0], s1[1]);
-        flux_path.quad_to(smid[0], smid[1], s2[0], s2[1]);
-        const float alpha = tube.field_strength * 0.04f;
-        scene.add(kalpana::Node::shape(flux_path, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.95f, 1.0f, alpha}, 0.6f)));
-    }
+    if (app.show_analytics_overlays) {
+        for (const auto& tube : app.mhd_tubes) {
+            const pebble::math::vec2 s1 = w2s(tube.p1);
+            const pebble::math::vec2 s2 = w2s(tube.p2);
+            const pebble::math::vec2 smid = w2s(tube.midpoint);
+            kalpana::Path flux_path;
+            flux_path.move_to(s1[0], s1[1]);
+            flux_path.quad_to(smid[0], smid[1], s2[0], s2[1]);
+            const float alpha = tube.field_strength * 0.04f;
+            scene.add(kalpana::Node::shape(flux_path, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.95f, 1.0f, alpha}, 0.6f)));
+        }
 
-    // 6d. Jacobi Orbital Hierarchy (Ultra-faint, ONLY between major massive stars and their primary moon)
-    if (app.tracked_planet_index >= 0 && app.tracked_planet_index < static_cast<int>(app.planets.size())) {
-        const auto& tracked = app.planets[app.tracked_planet_index];
-        if (tracked.alive) {
-            for (std::size_t j = 0; j < app.planets.size(); ++j) {
-                if (static_cast<int>(j) == app.tracked_planet_index) continue;
-                const auto& other = app.planets[j];
-                if (!other.alive || other.mass < 150.0f) continue;
-                const auto pair = prakriti::celestial::detect_binary_barycenter(
-                    app.tracked_planet_index, j, tracked.pos, tracked.vel, tracked.mass, other.pos, other.vel, other.mass
-                );
-                if (pair.is_bound) {
-                    const pebble::math::vec2 s1 = w2s(tracked.pos);
-                    const pebble::math::vec2 s2 = w2s(other.pos);
-                    kalpana::Path bond_line;
-                    bond_line.move_to(s1[0], s1[1]);
-                    bond_line.line_to(s2[0], s2[1]);
-                    scene.add(kalpana::Node::shape(bond_line, kalpana::Paint::stroke(kalpana::Color{0.2f, 0.85f, 0.45f, 0.04f}, 0.5f)));
-                    break; // Only link to closest parent
+        // 6d. Jacobi Orbital Hierarchy (Ultra-faint, ONLY between major massive stars and their primary moon)
+        if (app.tracked_planet_index >= 0 && app.tracked_planet_index < static_cast<int>(app.planets.size())) {
+            const auto& tracked = app.planets[app.tracked_planet_index];
+            if (tracked.alive) {
+                for (std::size_t j = 0; j < app.planets.size(); ++j) {
+                    if (static_cast<int>(j) == app.tracked_planet_index) continue;
+                    const auto& other = app.planets[j];
+                    if (!other.alive || other.mass < 150.0f) continue;
+                    const auto pair = prakriti::celestial::detect_binary_barycenter(
+                        app.tracked_planet_index, j, tracked.pos, tracked.vel, tracked.mass, other.pos, other.vel, other.mass
+                    );
+                    if (pair.is_bound) {
+                        const pebble::math::vec2 s1 = w2s(tracked.pos);
+                        const pebble::math::vec2 s2 = w2s(other.pos);
+                        kalpana::Path bond_line;
+                        bond_line.move_to(s1[0], s1[1]);
+                        bond_line.line_to(s2[0], s2[1]);
+                        scene.add(kalpana::Node::shape(bond_line, kalpana::Paint::stroke(kalpana::Color{0.2f, 0.85f, 0.45f, 0.04f}, 0.5f)));
+                        break; // Only link to closest parent
+                    }
                 }
             }
         }
     }
-
-
 
     // 7. Relativistic Event Horizons, Photon Rings & ISCO (For Actual Compact Singularities & Stars)
     for (std::size_t idx = 0; idx < app.planets.size(); ++idx) {
@@ -1953,7 +1954,7 @@ static void render_gpu_frame(PebbleVerseApp& app) {
     }
 
     // 6e. Real-Time Hertzsprung-Russell (H-R) Diagram Inset (Bottom-Left, Ultra-Faint)
-    {
+    if (app.show_analytics_overlays) {
         constexpr float hr_w = 110.0f;
         constexpr float hr_h = 75.0f;
         constexpr float hr_x = 12.0f;
@@ -2239,15 +2240,20 @@ static void render_gpu_frame(PebbleVerseApp& app) {
 
         // Camera Tracking Indicator
         if (app.tracked_planet_index >= 0) {
-            draw_text(1085.0f, 10.0f, "CAM:LOCKED", kalpana::Color{1.0f, 0.85f, 0.2f, 0.95f}, 6.5f, 11.0f);
+            draw_text(1075.0f, 10.0f, "CAM:LOCKED", kalpana::Color{1.0f, 0.85f, 0.2f, 0.95f}, 6.5f, 11.0f);
         } else {
-            draw_text(1085.0f, 10.0f, "CAM:WIDE", kalpana::Color{0.6f, 0.8f, 1.0f, 0.8f}, 6.5f, 11.0f);
+            draw_text(1075.0f, 10.0f, "CAM:WIDE", kalpana::Color{0.6f, 0.8f, 1.0f, 0.8f}, 6.5f, 11.0f);
         }
 
         // Time Dilation Speed
         const int speed_pct = static_cast<int>(app.time_dilation * 100.0f);
         std::string time_str = "TIME:" + std::to_string(speed_pct / 100) + "." + std::to_string((speed_pct % 100) / 10) + "X";
-        draw_text(1185.0f, 10.0f, time_str, kalpana::Color{0.6f, 0.95f, 0.7f, 0.95f}, 6.5f, 11.0f);
+        draw_text(1170.0f, 10.0f, time_str, kalpana::Color{0.6f, 0.95f, 0.7f, 0.95f}, 6.5f, 11.0f);
+
+        // Overlays Layer Toggle Status
+        std::string over_hud = app.show_analytics_overlays ? "OVERLAYS:ON" : "OVERLAYS:OFF";
+        kalpana::Color over_col = app.show_analytics_overlays ? kalpana::Color{0.4f, 0.95f, 0.5f, 0.95f} : kalpana::Color{0.6f, 0.6f, 0.6f, 0.75f};
+        draw_text(1250.0f, 10.0f, over_hud, over_col, 5.5f, 10.0f);
     }
 
     // 7. Interactive Mouse Reticle
@@ -2273,8 +2279,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         scene.add(kalpana::Node::shape(backdrop, kalpana::Paint::fill(kalpana::Color{0.01f, 0.02f, 0.05f, 0.88f})));
 
         // Modal Frame Card (Centered)
-        constexpr float mw = 580.0f;
-        constexpr float mh = 380.0f;
+        constexpr float mw = 590.0f;
+        constexpr float mh = 445.0f;
         const float mx = (FW - mw) * 0.5f;
         const float my = (FH - mh) * 0.5f;
 
@@ -2291,8 +2297,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         draw_modal_text(mx + 25.0f, my + 15.0f, "PEBBLE VERSE : COSMOLOGICAL CONFIG", kalpana::Color{0.4f, 0.9f, 1.0f, 1.0f}, 8.5f, 14.0f);
 
         // Parameters Rows
-        const float start_y = my + 65.0f;
-        constexpr float row_step = 55.0f;
+        const float start_y = my + 60.0f;
+        constexpr float row_step = 52.0f;
 
         // Row 0: Dust Count
         {
@@ -2354,6 +2360,23 @@ static void render_gpu_frame(PebbleVerseApp& app) {
             draw_modal_text(mx + 30.0f, ry + 4.0f, "[4] QUADTREE THETA", row_col, 7.0f, 11.0f);
             draw_modal_text(mx + 340.0f, ry + 4.0f, "< 0." + std::to_string(theta_pct) + " MACRO >", sel ? kalpana::Color{0.3f, 0.95f, 1.0f, 1.0f} : row_col, 7.5f, 12.0f);
             draw_modal_text(mx + 30.0f, ry + 22.0f, "MULTIPOLE OPENING ANGLE RESOLUTION", kalpana::Color{0.45f, 0.6f, 0.75f, 0.75f}, 5.0f, 9.0f);
+        }
+
+        // Row 4: Analytics Overlays Layer Toggle (Grid, Jacobi Links, MHD Arcs, H-R Inset)
+        {
+            const float ry = start_y + row_step * 4.0f;
+            const bool sel = (app.config_selected_row == 4);
+            const kalpana::Color row_col = sel ? kalpana::Color{1.0f, 0.85f, 0.2f, 1.0f} : kalpana::Color{0.7f, 0.8f, 0.9f, 0.85f};
+            if (sel) {
+                kalpana::Path sel_box;
+                sel_box.rect(mx + 15.0f, ry - 4.0f, mw - 30.0f, 44.0f);
+                scene.add(kalpana::Node::shape(sel_box, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.85f, 0.2f, 0.7f}, 1.2f)));
+            }
+            const std::string over_str = app.show_analytics_overlays ? "ENABLED" : "DISABLED";
+            const kalpana::Color val_col = app.show_analytics_overlays ? kalpana::Color{0.25f, 0.95f, 0.45f, 1.0f} : kalpana::Color{0.75f, 0.4f, 0.4f, 1.0f};
+            draw_modal_text(mx + 30.0f, ry + 4.0f, "[5] OVERLAYS LAYER", row_col, 7.0f, 11.0f);
+            draw_modal_text(mx + 340.0f, ry + 4.0f, "< " + over_str + " >", sel ? val_col : row_col, 7.0f, 11.0f);
+            draw_modal_text(mx + 30.0f, ry + 22.0f, "SEPARATE SUB-LAYER: GRID, JACOBI, MHD & H-R INSET", kalpana::Color{0.45f, 0.6f, 0.75f, 0.75f}, 5.0f, 9.0f);
         }
 
         // Bottom Action Bar: Launch Prompt
@@ -2577,10 +2600,10 @@ static void event_cb(const sapp_event* e) {
         if (app.in_startup_modal) {
             switch (e->key_code) {
                 case SAPP_KEYCODE_UP:
-                    app.config_selected_row = (app.config_selected_row == 0) ? 3 : app.config_selected_row - 1;
+                    app.config_selected_row = (app.config_selected_row == 0) ? 4 : app.config_selected_row - 1;
                     break;
                 case SAPP_KEYCODE_DOWN:
-                    app.config_selected_row = (app.config_selected_row + 1) % 4;
+                    app.config_selected_row = (app.config_selected_row + 1) % 5;
                     break;
                 case SAPP_KEYCODE_LEFT:
                     if (app.config_selected_row == 0) {
@@ -2591,6 +2614,8 @@ static void event_cb(const sapp_event* e) {
                         app.config_dist_mode = (app.config_dist_mode == 0) ? 2 : app.config_dist_mode - 1;
                     } else if (app.config_selected_row == 3) {
                         app.config_bh_theta = std::max(0.3f, app.config_bh_theta - 0.05f);
+                    } else if (app.config_selected_row == 4) {
+                        app.show_analytics_overlays = !app.show_analytics_overlays;
                     }
                     break;
                 case SAPP_KEYCODE_RIGHT:
@@ -2602,6 +2627,8 @@ static void event_cb(const sapp_event* e) {
                         app.config_dist_mode = (app.config_dist_mode + 1) % 3;
                     } else if (app.config_selected_row == 3) {
                         app.config_bh_theta = std::min(0.85f, app.config_bh_theta + 0.05f);
+                    } else if (app.config_selected_row == 4) {
+                        app.show_analytics_overlays = !app.show_analytics_overlays;
                     }
                     break;
                 case SAPP_KEYCODE_ENTER:
@@ -2734,6 +2761,9 @@ static void event_cb(const sapp_event* e) {
                 app.tracked_planet_index = -1;
                 app.target_cam_pos = pebble::math::vec2{FW * 0.5f, FH * 0.5f};
                 app.target_zoom = 1.0f;
+                break;
+            case SAPP_KEYCODE_O:
+                app.show_analytics_overlays = !app.show_analytics_overlays;
                 break;
             case SAPP_KEYCODE_V:
                 if (app.view_mode == SpectralViewMode::OpticalRGB) {
