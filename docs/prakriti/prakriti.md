@@ -514,6 +514,28 @@ Located in `#include <prakriti/material/celestial.hpp>`:
   $$\frac{\delta \nu}{\nu} = -\frac{1}{2} h_{ij}(t)$$
 - Simulates nanosecond timing residuals on millisecond pulsar spin beacons in response to passing quadrupole gravitational wave strains.
 
+---
+
+## 39. SplitMix64 / WyHash Deterministic Spatial Procedural Nucleation
+- **Stateless 64-Bit Hash**:
+  $$\text{Seed} = \text{SplitMix64}(S_x, S_y, \text{CosmicSeed})$$
+- Generates infinite boundless space divided into discrete sectors ($2560 \times 1600\,\text{px}$) with continuous Jeans density perturbations seeding cosmic voids, diffuse nebulae, and protogalaxies on discovery.
+
+---
+
+## 40. Fast Multipole Method (FMM) Far-Field Gravitational Tensors
+- **Multipole Potential**:
+  $$\Phi_{\text{far}}(\vec{r}) = -\frac{G M_k}{d} - \frac{G}{2 d^5} \vec{d}^T Q_k \vec{d}$$
+- Reduces gravitational pull of billions of out-of-view stars in distant dormant sectors to an exact $O(1)$ analytic vector evaluation using aggregated monopole masses and quadrupole moment tensors.
+
+---
+
+## 41. Two-Tier Hierarchical Out-of-Core Sector Caching
+- **Hot Simulation Ring**: Contiguous memory N-body integration for active $3 \times 3$ sectors.
+- **Kosha RAM Cache (`kosha::LRUCache`)**: Microsecond LRU in-memory storage for recently visited sectors.
+- **Petika & Glaze Disk Storage**: Zero-copy compile-time reflection (`glz::write_json`) to persist dormant sectors to disk, allowing returning to distant evolved galaxies seamlessly.
+
+
 
 
 

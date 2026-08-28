@@ -212,6 +212,76 @@ TEST_CASE("pulsar timing array nano-hertz gw modulation", "[prakriti][celestial]
     REQUIRE(std::abs(pta.timing_shift_ns) > 0.0f);
 }
 
+#include "prakriti/celestial/sector_types.hpp"
+#include "prakriti/celestial/sector_generator.hpp"
+#include "prakriti/celestial/sector_multipole.hpp"
+#include "prakriti/celestial/sector_cache_manager.hpp"
+
+TEST_CASE("splitmix64 spatial hash determinism and sector generation", "[prakriti][celestial][openworld]") {
+    prakriti::celestial::SectorKey k1{4, -8};
+    prakriti::celestial::SectorKey k2{4, -8};
+    prakriti::celestial::SectorKey k3{5, -8};
+
+    // Identical coordinates produce identical 64-bit seeds
+    REQUIRE(prakriti::celestial::compute_sector_seed(k1.x, k1.y) == prakriti::celestial::compute_sector_seed(k2.x, k2.y));
+    REQUIRE(prakriti::celestial::compute_sector_seed(k1.x, k1.y) != prakriti::celestial::compute_sector_seed(k3.x, k3.y));
+
+    // Procedural matter generation consistency
+    auto sec1 = prakriti::celestial::generate_procedural_sector(k1);
+    auto sec2 = prakriti::celestial::generate_procedural_sector(k2);
+    REQUIRE(sec1.bodies.size() == sec2.bodies.size());
+    REQUIRE(sec1.total_mass == Catch::Approx(sec2.total_mass));
+    REQUIRE(sec1.barycenter_x == Catch::Approx(sec2.barycenter_x));
+}
+
+TEST_CASE("fast multipole method far field gravity tensor", "[prakriti][celestial][fmm]") {
+    prakriti::celestial::SectorData sec;
+    sec.total_mass = 12000.0f;
+    sec.barycenter_x = 10000.0f;
+    sec.barycenter_y = 10000.0f;
+    sec.quadrupole.qxx = 50000.0f;
+    sec.quadrupole.qyy = 50000.0f;
+
+    pebble::math::vec2 probe_pos{0.0f, 0.0f};
+    auto a_grav = prakriti::celestial::compute_sector_far_field_gravity(probe_pos, sec, 18000.0f);
+
+    // Gravity vector should pull towards the distant sector barycenter
+    REQUIRE(a_grav[0] > 0.0f);
+    REQUIRE(a_grav[1] > 0.0f);
+}
+
+TEST_CASE("glaze sector data serialization and kosha cache", "[prakriti][celestial][glaze_cache]") {
+    prakriti::celestial::SectorCacheManager mgr(16);
+
+    prakriti::celestial::SectorKey key{12, -3};
+    auto sec = mgr.get_or_generate_sector(key, 9999ULL);
+    REQUIRE(!sec.bodies.empty());
+
+    // Modify sector state (simulate celestial evolution)
+    sec.bodies[0].mass = 999.0f;
+    mgr.freeze_sector(sec);
+
+    // Re-fetch from cache
+    auto sec_restored = mgr.get_or_generate_sector(key, 9999ULL);
+    REQUIRE(sec_restored.bodies[0].mass == Catch::Approx(999.0f));
+}
+
+TEST_CASE("dormant sector macro node collective gravity calculation", "[prakriti][celestial][collective_gravity]") {
+    prakriti::celestial::SectorMacroNode macro;
+    macro.total_mass = 5000.0f;
+    macro.bx = 1200.0f;
+    macro.by = 800.0f;
+    macro.q.qxx = 200.0f;
+    macro.q.qyy = 200.0f;
+
+    pebble::math::vec2 probe{0.0f, 0.0f};
+    auto a_coll = prakriti::celestial::compute_collective_macro_gravity(probe, macro, 18000.0f);
+
+    REQUIRE(a_coll[0] > 0.0f);
+    REQUIRE(a_coll[1] > 0.0f);
+}
+
+
 
 
 

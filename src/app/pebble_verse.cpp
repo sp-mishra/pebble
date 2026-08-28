@@ -30,6 +30,10 @@
 #include "containers/spatial/barnes_hut.hpp"
 #include "containers/numeric/math_vector.hpp"
 #include "prakriti/material/celestial.hpp"
+#include "prakriti/celestial/sector_types.hpp"
+#include "prakriti/celestial/sector_generator.hpp"
+#include "prakriti/celestial/sector_multipole.hpp"
+#include "prakriti/celestial/sector_cache_manager.hpp"
 #include "prakriti/state/material_registry.hpp"
 #include "kalpana/kalpana.hpp"
 #include "kalpana/backend/sokol_backend.hpp"
@@ -242,6 +246,12 @@ struct PebbleVerseApp {
     float config_bh_theta = 0.5f;         // 0.3 to 0.8
     bool show_analytics_overlays = false; // Background auxiliary overlays toggle (Grid, H-R, Jacobi, MHD)
 
+    // Multi-Tier Sector Streaming & Out-of-Core Caching
+    prakriti::celestial::SectorCacheManager sector_manager{128};
+    prakriti::celestial::SectorKey          current_sector{0, 0};
+    std::unordered_set<std::uint64_t>       visited_sectors;
+    std::uint64_t                           cosmic_seed = 13371337ULL;
+
     // Multi-Spectral View & Cosmic Nucleosynthesis
     SpectralViewMode view_mode = SpectralViewMode::OpticalRGB;
     float cosmic_metallicity_z = 0.02f; // Current universe heavy element fraction (0.02 to 0.45)
@@ -272,6 +282,7 @@ struct PebbleVerseApp {
     float              camera_zoom = 1.0f;
     float              target_zoom = 1.0f;
     bool               middle_mouse_down = false;
+    bool               right_mouse_down = false;
     pebble::math::vec2 last_mouse_pos{0.0f, 0.0f};
 
     // Open Universe Radar Scale Mode (1x = Viewport, 2x = Neighborhood, 4x = Deep Cosmos)
@@ -593,36 +604,142 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
 
     const auto t_start = std::chrono::high_resolution_clock::now();
 
-    // 1. External Inflow (Rogue Galaxies, Clusters, Stars, Comets) & Spontaneous Quantum Condensation
-    app.spawn_timer += sim_dt;
-    app.inflow_timer += sim_dt;
+    // 1. Dynamic Open-World Spatial Sector Discovery & Freezing (Strict Viewport Window Only)
+    // Active simulation window is strictly the visible screen view:
+    const float active_min_x = app.camera_pos[0] - FW * 0.5f;
+    const float active_max_x = app.camera_pos[0] + FW * 0.5f;
+    const float active_min_y = app.camera_pos[1] - FH * 0.5f;
+    const float active_max_y = app.camera_pos[1] + FH * 0.5f;
 
-    // Periodic Inflow of External Cosmic Systems formed by astrophysics laws outside
-    if (app.inflow_timer >= app.inflow_interval && app.planets.size() < 1600) {
-        app.inflow_timer = 0.0f;
-        app.inflow_interval = 4.0f + dist01(app.rng) * 5.0f;
-        spawn_external_inflow(app);
+    // Identify all spatial tiles (320x200 px) covering the active viewport
+    const std::int32_t min_tile_x = static_cast<std::int32_t>(std::floor(active_min_x / prakriti::celestial::kSectorWidth));
+    const std::int32_t max_tile_x = static_cast<std::int32_t>(std::floor(active_max_x / prakriti::celestial::kSectorWidth));
+    const std::int32_t min_tile_y = static_cast<std::int32_t>(std::floor(active_min_y / prakriti::celestial::kSectorHeight));
+    const std::int32_t max_tile_y = static_cast<std::int32_t>(std::floor(active_max_y / prakriti::celestial::kSectorHeight));
+
+    // A. Freezing: Freeze any bodies that have slid outside the active simulation window into their sector tiles
+    std::unordered_map<std::uint64_t, prakriti::celestial::SectorData> freezing_sectors;
+    std::vector<PlanetBody> remaining_active_planets;
+    remaining_active_planets.reserve(app.planets.size());
+
+    for (const auto& p : app.planets) {
+        if (!p.alive) continue;
+        const bool inside_active = (p.pos[0] >= active_min_x && p.pos[0] <= active_max_x &&
+                                    p.pos[1] >= active_min_y && p.pos[1] <= active_max_y);
+        if (inside_active) {
+            remaining_active_planets.push_back(p);
+        } else {
+            // Compress into dormant sector record
+            const std::int32_t tx = static_cast<std::int32_t>(std::floor(p.pos[0] / prakriti::celestial::kSectorWidth));
+            const std::int32_t ty = static_cast<std::int32_t>(std::floor(p.pos[1] / prakriti::celestial::kSectorHeight));
+            const prakriti::celestial::SectorKey sk{tx, ty};
+            const std::uint64_t hid = prakriti::celestial::hash_sector_key(sk);
+
+            if (!freezing_sectors.contains(hid)) {
+                freezing_sectors[hid] = app.sector_manager.get_or_generate_sector(sk, app.cosmic_seed);
+            }
+            auto& sec = freezing_sectors[hid];
+            sec.key = sk;
+            prakriti::celestial::CompactBodyRecord b;
+            b.x = p.pos[0]; b.y = p.pos[1];
+            b.vx = p.vel[0]; b.vy = p.vel[1];
+            b.mass = p.mass; b.radius = p.radius;
+            b.temperature = p.temperature; b.omega = p.omega;
+            b.type = static_cast<std::uint8_t>(p.type);
+            sec.bodies.push_back(b);
+        }
+    }
+    app.planets = std::move(remaining_active_planets);
+
+    // Save frozen sectors into dormant macro nodes
+    for (auto& [hid, sec] : freezing_sectors) {
+        sec.total_mass = 0.0f;
+        sec.barycenter_x = 0.0f;
+        sec.barycenter_y = 0.0f;
+        sec.quadrupole = prakriti::celestial::SectorQuadrupole{};
+
+        for (const auto& b : sec.bodies) {
+            sec.total_mass += b.mass;
+            sec.barycenter_x += b.mass * b.x;
+            sec.barycenter_y += b.mass * b.y;
+        }
+
+        if (sec.total_mass > 0.0f) {
+            sec.barycenter_x /= sec.total_mass;
+            sec.barycenter_y /= sec.total_mass;
+            for (const auto& b : sec.bodies) {
+                const float rx = b.x - sec.barycenter_x;
+                const float ry = b.y - sec.barycenter_y;
+                const float r2 = rx * rx + ry * ry;
+                sec.quadrupole.qxx += b.mass * (3.0f * rx * rx - r2);
+                sec.quadrupole.qxy += b.mass * (3.0f * rx * ry);
+                sec.quadrupole.qyy += b.mass * (3.0f * ry * ry - r2);
+            }
+        }
+        app.sector_manager.freeze_sector(sec);
     }
 
-    if (app.spawn_timer >= 0.08f) {
-        app.spawn_timer = 0.0f;
-        
-        // When population decreases due to mergers, quantum vacuum matter spontaneously condenses across the cosmic grid!
-        const std::size_t target_pop = app.config_initial_dust_count;
-        if (app.planets.size() < target_pop) {
-            const int n_quantum_condensations = std::min(4, static_cast<int>((target_pop - app.planets.size()) / 15) + 1);
-            for (int k = 0; k < n_quantum_condensations; ++k) {
-                const auto q_event = prakriti::celestial::evaluate_quantum_vacuum_condensation(
-                    static_cast<float>(app.planets.size()), dist01(app.rng)
-                );
-                if (q_event.spawns_particle) {
-                    spawn_dust_particle(app);
+    // B. Discovery & Awakening: Populate newly uncovered tiles or wake up returning tiles
+    for (std::int32_t tx = min_tile_x; tx <= max_tile_x; ++tx) {
+        for (std::int32_t ty = min_tile_y; ty <= max_tile_y; ++ty) {
+            const prakriti::celestial::SectorKey sk{tx, ty};
+            const std::uint64_t hid = prakriti::celestial::hash_sector_key(sk);
+
+            if (!app.visited_sectors.contains(hid)) {
+                // Brand new undiscovered space: seed primordial dust field across this 320x200 tile
+                app.visited_sectors.insert(hid);
+                const float base_x = static_cast<float>(tx) * prakriti::celestial::kSectorWidth;
+                const float base_y = static_cast<float>(ty) * prakriti::celestial::kSectorHeight;
+
+                // Density scaled per 320x200 tile (matches ~650 specs per 1280x800 screen)
+                const int tile_count = std::max(20, app.config_initial_dust_count / 16);
+                for (int s = 0; s < tile_count; ++s) {
+                    const float px = base_x + 8.0f + dist01(app.rng) * (prakriti::celestial::kSectorWidth - 16.0f);
+                    const float py = base_y + 8.0f + dist01(app.rng) * (prakriti::celestial::kSectorHeight - 16.0f);
+                    spawn_dust_particle(app, true, px, py);
                 }
+
+                auto sec_data = app.sector_manager.get_or_generate_sector(sk, app.cosmic_seed);
+                sec_data.discovery_tick = static_cast<std::uint64_t>(app.frame + 1);
+                app.sector_manager.mark_sector_active(sk);
+            } else if (app.sector_manager.dormant_macro_nodes().contains(hid)) {
+                // Re-entering previously visited tile: wake up dormant frozen bodies!
+                auto sec_data = app.sector_manager.get_or_generate_sector(sk, app.cosmic_seed);
+                app.sector_manager.mark_sector_active(sk);
+
+                for (const auto& b : sec_data.bodies) {
+                    PlanetBody p;
+                    p.ent = app.world.spawn();
+                    p.pos = pebble::math::vec2{b.x, b.y};
+                    p.prev_pos = p.pos;
+                    p.vel = pebble::math::vec2{b.vx, b.vy};
+                    p.mass = b.mass;
+                    p.temperature = b.temperature;
+                    p.omega = b.omega;
+                    p.type = static_cast<CelestialType>(b.type);
+                    if (p.type == CelestialType::IceCrust) {
+                        p.mat_params = prakriti::celestial::ice_crust();
+                    } else if (p.type == CelestialType::SilicateRock) {
+                        p.mat_params = prakriti::celestial::silicate_rock();
+                    } else if (p.type == CelestialType::IronCore) {
+                        p.mat_params = prakriti::celestial::iron_nickel_core();
+                    } else {
+                        p.mat_params = prakriti::celestial::molten_magma();
+                    }
+                    p.density = p.mat_params.rest_density;
+                    p.radius = std::clamp(std::pow(p.mass, 0.333f) * 0.45f, 0.85f, 2.8f);
+                    p.angular_momentum = 0.5f * p.mass * (p.radius * p.radius) * p.omega;
+                    app.planets.push_back(p);
+                }
+                // Cleared from dormant storage now that bodies are live in app.planets
+                sec_data.bodies.clear();
+                sec_data.total_mass = 0.0f;
+                app.sector_manager.freeze_sector(sec_data);
             }
         }
     }
 
-    // 2. Prepare Barnes-Hut input bodies array
+    // 2. Prepare Barnes-Hut input bodies array (Strictly only live active bodies in viewport)
     std::vector<containers::spatial::BarnesHutBody> bh_bodies;
     bh_bodies.reserve(app.planets.size());
 
@@ -636,35 +753,51 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
         });
     }
 
-    // 3. Build QuadTree & Compute N-Body Gravitational Forces
+    // 3. Build QuadTree & Compute N-Body Gravitational Forces for Active Window
     app.bh_tree.build(bh_bodies);
     std::vector<pebble::math::vec2> forces(bh_bodies.size());
     containers::spatial::compute_all_forces(app.bh_tree, bh_bodies, forces, app.gravity_policy);
 
-    // Map forces back to planet bodies
+    // Cache hot fusion stars once for fast O(K) stellar wind evaluations
+    std::vector<const PlanetBody*> active_fusion_stars;
+    for (const auto& p : app.planets) {
+        if (p.alive && p.temperature >= 1500.0f) {
+            active_fusion_stars.push_back(&p);
+        }
+    }
+
+    // Map forces back and apply collective gravity from all dormant macro nodes
     std::size_t bh_idx = 0;
     for (std::size_t i = 0; i < app.planets.size(); ++i) {
         if (!app.planets[i].alive) continue;
         const pebble::math::vec2 f_grav = forces[bh_idx++];
         app.planets[i].acc = f_grav * (1.0f / app.planets[i].mass);
 
-        // Stellar Wind & Radiation Pressure (Pushes light dust outward from hot fusion stars)
-        for (const auto& star : app.planets) {
-            if (!star.alive || (&star == &app.planets[i]) || star.temperature < 1500.0f) continue;
+        // Ultra-Fast Collective Gravitational Pull from all Dormant Out-of-View Sectors
+        for (const auto& [node_hid, macro_node] : app.sector_manager.dormant_macro_nodes()) {
+            const pebble::math::vec2 a_coll = prakriti::celestial::compute_collective_macro_gravity(
+                app.planets[i].pos, macro_node, app.config_grav_g
+            );
+            app.planets[i].acc = app.planets[i].acc + a_coll;
+        }
+
+        // Stellar Wind & Radiation Pressure (Evaluated only against genuine fusion stars)
+        for (const auto* star : active_fusion_stars) {
+            if (star == &app.planets[i]) continue;
             const auto wind = prakriti::celestial::evaluate_stellar_wind_radiation_pressure(
-                star.pos, star.mass, star.temperature, star.radius, app.planets[i].pos, dist01(app.rng)
+                star->pos, star->mass, star->temperature, star->radius, app.planets[i].pos, dist01(app.rng)
             );
             app.planets[i].acc = app.planets[i].acc + wind.force * (1.0f / app.planets[i].mass);
 
             // Coronal Mass Ejection (CME) Solar Flare Loop Eruption
             if (wind.triggers_cme && app.sparks.size() < 400) {
                 const float flare_a = dist01(app.rng) * 6.2831853f;
-                for (int s = 0; s < 12; ++s) {
-                    const float arc = flare_a + (static_cast<float>(s) - 6.0f) * 0.12f;
+                for (int s = 0; s < 8; ++s) {
+                    const float arc = flare_a + (static_cast<float>(s) - 4.0f) * 0.12f;
                     const float flare_spd = 55.0f + dist01(app.rng) * 45.0f;
                     app.sparks.push_back(SparkParticle{
-                        .pos = star.pos + pebble::math::vec2{std::cos(arc), std::sin(arc)} * (star.radius + 1.0f),
-                        .vel = star.vel + pebble::math::vec2{std::cos(arc), std::sin(arc)} * flare_spd,
+                        .pos = star->pos + pebble::math::vec2{std::cos(arc), std::sin(arc)} * (star->radius + 1.0f),
+                        .vel = star->vel + pebble::math::vec2{std::cos(arc), std::sin(arc)} * flare_spd,
                         .radius = 1.4f + dist01(app.rng) * 1.0f,
                         .life = 0.45f + dist01(app.rng) * 0.25f,
                         .max_life = 0.70f,
@@ -1091,8 +1224,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
             }
         }
 
-        // ── Open World Boundless Universe: Recycle bodies that escape into infinite deep cosmos ──
-        const auto cull = prakriti::celestial::evaluate_open_world_bounds(p.pos, cosmic_center, 3800.0f, 2200.0f);
+        // ── Open World Boundless Universe: Recycle bodies that escape far beyond active camera horizon ──
+        const auto cull = prakriti::celestial::evaluate_open_world_bounds(p.pos, app.camera_pos, 10000.0f, 8000.0f);
         if (cull.should_recycle) {
             p.alive = false; // Graceful cosmological recycling beyond active horizon
         }
@@ -1102,14 +1235,24 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
     const std::size_t num_planets = app.planets.size();
     for (std::size_t i = 0; i < num_planets; ++i) {
         if (!app.planets[i].alive) continue;
+        const float ri = app.planets[i].radius;
+        const float xi = app.planets[i].pos[0];
+        const float yi = app.planets[i].pos[1];
+
         for (std::size_t j = i + 1; j < num_planets; ++j) {
             if (!app.planets[j].alive) continue;
 
-            const pebble::math::vec2 dr = app.planets[j].pos - app.planets[i].pos;
-            const float dist2 = dr[0] * dr[0] + dr[1] * dr[1];
+            const float min_dist = ri + app.planets[j].radius;
+            const float dx = app.planets[j].pos[0] - xi;
+            if (std::abs(dx) > min_dist) continue;
+            const float dy = app.planets[j].pos[1] - yi;
+            if (std::abs(dy) > min_dist) continue;
 
-            if (const float min_dist = app.planets[i].radius + app.planets[j].radius; dist2 < min_dist * min_dist && dist2 > 1e-4f) {
+            const float dist2 = dx * dx + dy * dy;
+
+            if (dist2 < min_dist * min_dist && dist2 > 1e-4f) {
                 app.collisions_count++;
+                const pebble::math::vec2 dr{dx, dy};
 
                 const float dist = std::sqrt(dist2);
                 const pebble::math::vec2 normal = dr * (1.0f / dist);
@@ -2319,17 +2462,14 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         std::string z_str = "Z:0." + std::to_string(z_pct);
         draw_text(995.0f, 10.0f, z_str, kalpana::Color{1.0f, 0.75f, 0.3f, 0.95f}, 6.5f, 11.0f);
 
-        // Camera Tracking Indicator
-        if (app.tracked_planet_index >= 0) {
-            draw_text(1075.0f, 10.0f, "CAM:LOCKED", kalpana::Color{1.0f, 0.85f, 0.2f, 0.95f}, 6.5f, 11.0f);
-        } else {
-            draw_text(1075.0f, 10.0f, "CAM:WIDE", kalpana::Color{0.6f, 0.8f, 1.0f, 0.8f}, 6.5f, 11.0f);
-        }
+        // Sector Coordinates Display (e.g. SEC:[0, 0])
+        const std::string sec_str = "SEC:[" + std::to_string(app.current_sector.x) + "," + std::to_string(app.current_sector.y) + "]";
+        draw_text(1075.0f, 10.0f, sec_str, kalpana::Color{0.3f, 0.95f, 0.85f, 0.95f}, 6.0f, 11.0f);
 
         // Time Dilation Speed
         const int speed_pct = static_cast<int>(app.time_dilation * 100.0f);
         std::string time_str = "TIME:" + std::to_string(speed_pct / 100) + "." + std::to_string((speed_pct % 100) / 10) + "X";
-        draw_text(1170.0f, 10.0f, time_str, kalpana::Color{0.6f, 0.95f, 0.7f, 0.95f}, 6.5f, 11.0f);
+        draw_text(1175.0f, 10.0f, time_str, kalpana::Color{0.6f, 0.95f, 0.7f, 0.95f}, 6.0f, 11.0f);
 
         // Overlays Layer Toggle Status
         std::string over_hud = app.show_analytics_overlays ? "OVERLAYS:ON" : "OVERLAYS:OFF";
@@ -2596,10 +2736,13 @@ static void frame_cb() {
 static void event_cb(const sapp_event* e) {
     auto& app = g_app;
     if (e->type == SAPP_EVENTTYPE_MOUSE_MOVE) {
-        if (app.middle_mouse_down) {
-            const float dx = (e->mouse_x - app.last_mouse_pos[0]) / app.camera_zoom;
-            const float dy = (e->mouse_y - app.last_mouse_pos[1]) / app.camera_zoom;
-            app.target_cam_pos = app.target_cam_pos - pebble::math::vec2{dx, dy};
+        if (app.middle_mouse_down || app.right_mouse_down) {
+            // Smooth small-step spatial panning across the open world
+            constexpr float kPanSpeed = 1.0f;
+            const float dx = (e->mouse_x - app.last_mouse_pos[0]) * kPanSpeed;
+            const float dy = (e->mouse_y - app.last_mouse_pos[1]) * kPanSpeed;
+            app.target_cam_pos[0] -= dx;
+            app.target_cam_pos[1] -= dy;
             app.tracked_planet_index = -1; // Unlink tracking on manual pan
         }
         app.last_mouse_pos = pebble::math::vec2{e->mouse_x, e->mouse_y};
@@ -2610,16 +2753,15 @@ static void event_cb(const sapp_event* e) {
             app.slingshot.current_y = e->mouse_y;
         }
     } else if (e->type == SAPP_EVENTTYPE_MOUSE_SCROLL) {
-        if (!app.in_startup_modal) {
-            if (e->scroll_y > 0.1f) {
-                app.target_zoom = std::min(4.0f, app.target_zoom * 1.15f);
-            } else if (e->scroll_y < -0.1f) {
-                app.target_zoom = std::max(0.25f, app.target_zoom * 0.85f);
-            }
-        }
+        // Zoom is locked at 1.0x to preserve full simulation scale and prevent cluster cluttering
+        app.target_zoom = 1.0f;
+        app.camera_zoom = 1.0f;
     } else if (e->type == SAPP_EVENTTYPE_MOUSE_DOWN) {
         if (e->mouse_button == SAPP_MOUSEBUTTON_MIDDLE) {
             app.middle_mouse_down = true;
+            app.last_mouse_pos = pebble::math::vec2{e->mouse_x, e->mouse_y};
+        } else if (e->mouse_button == SAPP_MOUSEBUTTON_RIGHT) {
+            app.right_mouse_down = true;
             app.last_mouse_pos = pebble::math::vec2{e->mouse_x, e->mouse_y};
         } else if (e->mouse_button == SAPP_MOUSEBUTTON_LEFT && !app.gravity_vortex && !app.heat_ray && !app.freeze_ray) {
             app.slingshot.active = true;
@@ -2627,14 +2769,14 @@ static void event_cb(const sapp_event* e) {
             app.slingshot.start_y = e->mouse_y;
             app.slingshot.current_x = e->mouse_x;
             app.slingshot.current_y = e->mouse_y;
-        } else if (e->mouse_button == SAPP_MOUSEBUTTON_RIGHT) {
-            spawn_dust_particle(app, true, e->mouse_x, e->mouse_y);
         } else {
             app.mouse_down = true;
         }
     } else if (e->type == SAPP_EVENTTYPE_MOUSE_UP) {
         if (e->mouse_button == SAPP_MOUSEBUTTON_MIDDLE) {
             app.middle_mouse_down = false;
+        } else if (e->mouse_button == SAPP_MOUSEBUTTON_RIGHT) {
+            app.right_mouse_down = false;
         } else if (e->mouse_button == SAPP_MOUSEBUTTON_LEFT && app.slingshot.active) {
             app.slingshot.active = false;
             const float dx = app.slingshot.start_x - e->mouse_x;
@@ -2726,10 +2868,19 @@ static void event_cb(const sapp_event* e) {
                     app.nebulae.clear();
                     app.jets.clear();
 
+                    // Seed initial viewport spatial tiles (4x4 tiles of 320x200 covering [0, FW] x [0, FH])
+                    app.visited_sectors.clear();
+                    for (int tx = 0; tx < 4; ++tx) {
+                        for (int ty = 0; ty < 4; ++ty) {
+                            const prakriti::celestial::SectorKey sk{tx, ty};
+                            app.visited_sectors.insert(prakriti::celestial::hash_sector_key(sk));
+                        }
+                    }
+
                     for (int i = 0; i < app.config_initial_dust_count; ++i) {
                         if (app.config_dist_mode == 0) {
-                            // Mode 0: True Isotropic Uniform Field with Thermal Dispersion
-                            spawn_dust_particle(app);
+                            // Mode 0: True Isotropic Uniform Field with Thermal Dispersion across [0, FW] x [0, FH]
+                            spawn_dust_particle(app, true, 12.0f + dist01(app.rng) * (FW - 24.0f), 12.0f + dist01(app.rng) * (FH - 24.0f));
                         } else if (app.config_dist_mode == 1) {
                             // Mode 1: Rotating Barycentric Protogalactic Disk
                             const float cx = FW * 0.5f;
@@ -2797,19 +2948,19 @@ static void event_cb(const sapp_event* e) {
                 app.radar_zoom_level = (app.radar_zoom_level + 1) % 3;
                 break;
             case SAPP_KEYCODE_UP:
-                app.target_cam_pos[1] -= 80.0f / app.camera_zoom;
+                app.target_cam_pos[1] -= 240.0f;
                 app.tracked_planet_index = -1;
                 break;
             case SAPP_KEYCODE_DOWN:
-                app.target_cam_pos[1] += 80.0f / app.camera_zoom;
+                app.target_cam_pos[1] += 240.0f;
                 app.tracked_planet_index = -1;
                 break;
             case SAPP_KEYCODE_LEFT:
-                app.target_cam_pos[0] -= 80.0f / app.camera_zoom;
+                app.target_cam_pos[0] -= 240.0f;
                 app.tracked_planet_index = -1;
                 break;
             case SAPP_KEYCODE_RIGHT:
-                app.target_cam_pos[0] += 80.0f / app.camera_zoom;
+                app.target_cam_pos[0] += 240.0f;
                 app.tracked_planet_index = -1;
                 break;
             case SAPP_KEYCODE_TAB: {
