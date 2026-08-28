@@ -71,3 +71,64 @@ TEST_CASE("dry ice sublimates directly from solid to gas", "[prakriti][material]
     REQUIRE(warm.liquid() == Catch::Approx(0.0f));
 }
 
+#include "prakriti/material/celestial.hpp"
+
+TEST_CASE("comet tail sublimation activates near hot stars", "[prakriti][celestial][comet]") {
+    pebble::math::vec2 star_pos{0.0f, 0.0f};
+    const float star_temp = 5500.0f;
+    const float star_radius = 12.0f;
+
+    // 1. Cold comet far away (-80 C) -> No sublimation
+    pebble::math::vec2 cold_pos{1000.0f, 0.0f};
+    auto res_cold = prakriti::celestial::evaluate_comet_tail_sublimation(cold_pos, -80.0f, star_pos, star_temp, star_radius, 0.016f);
+    REQUIRE_FALSE(res_cold.is_sublimating);
+
+    // 2. Active comet at perihelion (T = 50 C, distance = 100 px) -> Outgassing tail pointing radially away
+    pebble::math::vec2 active_pos{100.0f, 0.0f};
+    auto res_active = prakriti::celestial::evaluate_comet_tail_sublimation(active_pos, 50.0f, star_pos, star_temp, star_radius, 0.016f);
+    REQUIRE(res_active.is_sublimating);
+    REQUIRE(res_active.mass_loss_rate > 0.0f);
+    REQUIRE(res_active.tail_direction[0] == Catch::Approx(1.0f).margin(1e-3));
+    REQUIRE(res_active.tail_direction[1] == Catch::Approx(0.0f).margin(1e-3));
+    REQUIRE(res_active.is_ion_plasma);
+}
+
+TEST_CASE("open world boundless culling and rim detection", "[prakriti][celestial][open_world]") {
+    pebble::math::vec2 center{640.0f, 400.0f};
+
+    // Body inside active viewport
+    pebble::math::vec2 in_bounds{600.0f, 400.0f};
+    auto cull_in = prakriti::celestial::evaluate_open_world_bounds(in_bounds, center, 3000.0f, 1500.0f);
+    REQUIRE_FALSE(cull_in.should_recycle);
+    REQUIRE_FALSE(cull_in.is_in_outer_rim);
+
+    // Body in outer rim
+    pebble::math::vec2 rim_pos{2400.0f, 400.0f};
+    auto cull_rim = prakriti::celestial::evaluate_open_world_bounds(rim_pos, center, 3000.0f, 1500.0f);
+    REQUIRE_FALSE(cull_rim.should_recycle);
+    REQUIRE(cull_rim.is_in_outer_rim);
+
+    // Body far in deep space
+    pebble::math::vec2 deep_pos{5000.0f, 400.0f};
+    auto cull_deep = prakriti::celestial::evaluate_open_world_bounds(deep_pos, center, 3000.0f, 1500.0f);
+    REQUIRE(cull_deep.should_recycle);
+}
+
+TEST_CASE("external inflow entity generation", "[prakriti][celestial][inflow]") {
+    const float vw = 1280.0f;
+    const float vh = 800.0f;
+    
+    auto galaxy = prakriti::celestial::generate_random_inflow(vw, vh, 200.0f, 0.0f, 0.5f, prakriti::celestial::InflowEntityType::RogueProtogalaxy);
+    REQUIRE(galaxy.core_mass >= 400.0f);
+    REQUIRE(galaxy.satellite_count >= 8);
+    // Spawns outside viewport perimeter
+    REQUIRE(galaxy.spawn_pos[0] > vw);
+
+    auto star = prakriti::celestial::generate_random_inflow(vw, vh, 200.0f, 3.14159f, 0.8f, prakriti::celestial::InflowEntityType::HypervelocityStar);
+    REQUIRE(star.core_mass >= 300.0f);
+    REQUIRE(star.satellite_count == 0);
+    // Ingress velocity directed inwards
+    REQUIRE(star.ingress_vel[0] > 0.0f);
+}
+
+

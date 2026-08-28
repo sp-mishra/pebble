@@ -833,27 +833,127 @@ compute_osculating_orbit_points(const pebble::math::vec2& body_pos, const pebble
     return points;
 }
 
-// ── 27. Cosmic Ray Synchrotron Magnetic Shockwave Arcs ───────────────────────────────────────
+// ── 28. Cometary Outgassing & Sublimation Physics ────────────────────────────
 
-struct SynchrotronArc {
-    pebble::math::vec2 center{0.0f, 0.0f};
-    float              radius = 0.0f;
-    float              start_angle = 0.0f;
-    float              end_angle = 0.0f;
-    float              intensity = 1.0f;
+struct CometSublimationResult {
+    bool               is_sublimating = false;
+    float              mass_loss_rate = 0.0f;
+    pebble::math::vec2 tail_direction{0.0f, 0.0f}; // Anti-solar radiation direction
+    float              tail_velocity_mag = 0.0f;
+    bool               is_ion_plasma = false;       // Type I ion tail vs Type II dust tail
 };
 
-[[nodiscard]] inline SynchrotronArc
-compute_synchrotron_shock_arc(const pebble::math::vec2& origin, const pebble::math::vec2& dir,
-                              float shock_radius, float energy_density) noexcept {
-    SynchrotronArc arc;
-    arc.center = origin;
-    arc.radius = shock_radius;
-    const float base_angle = std::atan2(dir[1], dir[0]);
-    arc.start_angle = base_angle - 0.75f;
-    arc.end_angle = base_angle + 0.75f;
-    arc.intensity = std::clamp(energy_density * 0.02f, 0.2f, 0.95f);
-    return arc;
+// Evaluates cometary ice sublimation and solar radiation pressure ion/dust tail ejection
+[[nodiscard]] inline CometSublimationResult
+evaluate_comet_tail_sublimation(const pebble::math::vec2& comet_pos, float comet_temp,
+                                const pebble::math::vec2& star_pos, float star_temp,
+                                float star_radius, float dt) noexcept {
+    CometSublimationResult res;
+    if (comet_temp < -40.0f) return res;
+
+    const pebble::math::vec2 d = comet_pos - star_pos;
+    const float dist_sq = d[0] * d[0] + d[1] * d[1];
+    const float dist = std::sqrt(dist_sq);
+    if (dist < 1.0f || dist > 600.0f) return res;
+
+    res.is_sublimating = true;
+    res.tail_direction = pebble::math::vec2{d[0] / dist, d[1] / dist};
+
+    // Sublimation rate \propto (T_comet - T_sublim) * (1 / r^2)
+    const float solar_flux = (star_radius * star_radius * (star_temp + 273.15f)) / (dist_sq + 100.0f);
+    res.mass_loss_rate = std::clamp(solar_flux * 0.005f * (comet_temp + 40.0f) * dt, 0.0001f, 0.5f);
+    res.tail_velocity_mag = 40.0f + std::clamp(solar_flux * 12.0f, 10.0f, 180.0f);
+    res.is_ion_plasma = (star_temp > 2500.0f || comet_temp > 150.0f);
+    return res;
+}
+
+// ── 29. Open World Cosmic Boundary & Vacuum Recycling ─────────────────────────
+
+struct OpenWorldCullResult {
+    bool should_recycle = false;
+    bool is_in_outer_rim = false;
+};
+
+// Evaluates if a body has escaped far beyond the active universe and can be recycled
+[[nodiscard]] inline OpenWorldCullResult
+evaluate_open_world_bounds(const pebble::math::vec2& pos, const pebble::math::vec2& center,
+                           float active_radius = 2800.0f, float rim_radius = 1800.0f) noexcept {
+    OpenWorldCullResult res;
+    const pebble::math::vec2 d = pos - center;
+    const float dist_sq = d[0] * d[0] + d[1] * d[1];
+    if (dist_sq > active_radius * active_radius) {
+        res.should_recycle = true;
+    } else if (dist_sq > rim_radius * rim_radius) {
+        res.is_in_outer_rim = true;
+    }
+    return res;
+}
+
+// ── 30. External Infall Celestial Entity Presets ──────────────────────────────
+
+enum class InflowEntityType : std::uint8_t {
+    RogueProtogalaxy,    // Rotating cluster of 8-24 stellar/planetary bodies
+    HypervelocityStar,   // Fast-moving hot star traversing the cosmos
+    RoguePulsarMagnetar, // Millisecond pulsar with energetic relativistic beams
+    InterstellarComet    // High-eccentricity icy body with volatile inventory
+};
+
+struct InflowSpawnConfig {
+    pebble::math::vec2 spawn_pos{0.0f, 0.0f};
+    pebble::math::vec2 ingress_vel{0.0f, 0.0f};
+    InflowEntityType   type = InflowEntityType::RogueProtogalaxy;
+    float              core_mass = 250.0f;
+    int                satellite_count = 6;
+};
+
+[[nodiscard]] inline InflowSpawnConfig
+generate_random_inflow(float viewport_w, float viewport_h, float spawn_margin,
+                       float rand_angle, float rand_speed_factor, InflowEntityType type) noexcept {
+    InflowSpawnConfig cfg;
+    cfg.type = type;
+    const pebble::math::vec2 center{viewport_w * 0.5f, viewport_h * 0.5f};
+    
+    // Spawn around an ellipse beyond viewport perimeter
+    const float rx = (viewport_w * 0.5f) + spawn_margin;
+    const float ry = (viewport_h * 0.5f) + spawn_margin;
+    cfg.spawn_pos = center + pebble::math::vec2{std::cos(rand_angle) * rx, std::sin(rand_angle) * ry};
+
+    // Vector pointing generally towards center with natural orbital impact parameter deflection
+    const pebble::math::vec2 to_center = center - cfg.spawn_pos;
+    const float dist = std::sqrt(to_center[0] * to_center[0] + to_center[1] * to_center[1]);
+    const pebble::math::vec2 dir = (dist > 1e-3f) ? (to_center * (1.0f / dist)) : pebble::math::vec2{1.0f, 0.0f};
+    const pebble::math::vec2 tangent{-dir[1], dir[0]};
+
+    // Deflect velocity to create parabolic / hyperbolic flybys rather than direct bullseye colliders
+    const float deflection = (rand_speed_factor - 0.5f) * 0.65f;
+    const pebble::math::vec2 v_dir = pebble::math::normalize(dir + tangent * deflection);
+
+    switch (type) {
+        case InflowEntityType::HypervelocityStar:
+            cfg.ingress_vel = v_dir * (35.0f + rand_speed_factor * 30.0f);
+            cfg.core_mass = 320.0f + rand_speed_factor * 280.0f;
+            cfg.satellite_count = 0;
+            break;
+        case InflowEntityType::RoguePulsarMagnetar:
+            cfg.ingress_vel = v_dir * (45.0f + rand_speed_factor * 40.0f);
+            cfg.core_mass = 750.0f;
+            cfg.satellite_count = 0;
+            break;
+        case InflowEntityType::InterstellarComet:
+            cfg.ingress_vel = v_dir * (28.0f + rand_speed_factor * 25.0f);
+            cfg.core_mass = 45.0f + rand_speed_factor * 35.0f;
+            cfg.satellite_count = 3 + static_cast<int>(rand_speed_factor * 4.0f);
+            break;
+        case InflowEntityType::RogueProtogalaxy:
+        default:
+            cfg.ingress_vel = v_dir * (12.0f + rand_speed_factor * 18.0f);
+            cfg.core_mass = 450.0f + rand_speed_factor * 400.0f;
+            cfg.satellite_count = 8 + static_cast<int>(rand_speed_factor * 12.0f);
+            break;
+    }
+
+    return cfg;
 }
 
 } // namespace prakriti::celestial
+

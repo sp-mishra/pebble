@@ -441,3 +441,27 @@ Located in `#include <prakriti/material/celestial.hpp>`:
 ## 27. Cosmic Ray Synchrotron Magnetic Shockwaves
 - Simulates relativistic electron acceleration along expanding supernova shock fronts, casting curved synchrotron magnetic shock arcs.
 
+---
+
+## 28. Cometary Outgassing & Sublimation Physics
+- **Radiation-Induced Volatile Loss**:
+  $$\dot{M}_{\text{sub}} \propto \frac{R_*^2 T_*}{r^2} (T_{\text{ice}} - T_{\text{sublim}})$$
+- Cryogenic ice bodies nearing stellar radiation fields ($T > -40^\circ\text{C}$) develop expanding volatile tails:
+  - **Type I Radiant Cyan Ion Tails**: Superheated plasma stripped by stellar winds.
+  - **Type II Diffuse Gold Dust Tails**: Micron-sized silicates lagging along Keplerian orbital tracks.
+
+---
+
+## 29. Boundless Open Universe & Deep Cosmos Horizons
+- Eliminates reflective bounding boxes. Particles, stellar remnants, and ejecta escape freely into open space.
+- Smoothly preserves active cosmic equilibrium via horizon evaluation ($R_{\text{active}} \approx 3800\,\text{px}$).
+
+---
+
+## 30. External Infall Cosmic Systems (Galaxies, Stars, Comets)
+- Ingests structured multi-body entities formed via astrophysical laws beyond the observable horizon:
+  - **Rogue Protogalaxies & Star Clusters**: Self-gravitating rotating clusters with Virial orbital profiles.
+  - **Hypervelocity Rogue Stars & Pulsars**: Fast stellar wanderers with relativistic magnetic dipole beam wakes.
+  - **Interstellar Oumuamua Comets**: High-eccentricity cryogenic icy swarms.
+
+

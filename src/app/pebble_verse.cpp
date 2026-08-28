@@ -239,9 +239,12 @@ struct PebbleVerseApp {
     float cosmic_metallicity_z = 0.02f; // Current universe heavy element fraction (0.02 to 0.45)
     std::size_t supernova_count = 0;
 
-    // Spawner parameters
+    // Spawner & External Inflow Parameters
     float spawn_timer = 0.0f;
-    float spawn_interval = 0.22f; // Smooth periodic entry
+    float spawn_interval = 0.22f;      // Smooth periodic entry
+    float inflow_timer = 0.0f;         // External galaxy/star/comet inflow timer
+    float inflow_interval = 4.5f;      // Next cosmic entity ingress (seconds)
+    std::size_t inflow_count = 0;      // Total external entities arrived
     std::mt19937 rng{1337};
 
     // Telemetry & Metrics
@@ -254,12 +257,17 @@ struct PebbleVerseApp {
     std::size_t fractures_count = 0;
     std::size_t gas_particles_count = 0;
 
-    // Dynamic Lagrangian Tracking Camera
-    int                tracked_planet_index = -1; // -1 = Global Wide Angle, >=0 = Target Body Index
+    // Dynamic Lagrangian Tracking & Open-World Camera
+    int                tracked_planet_index = -1; // -1 = Free / Manual, >=0 = Target Body Index
     pebble::math::vec2 camera_pos{FW * 0.5f, FH * 0.5f};
     pebble::math::vec2 target_cam_pos{FW * 0.5f, FH * 0.5f};
     float              camera_zoom = 1.0f;
     float              target_zoom = 1.0f;
+    bool               middle_mouse_down = false;
+    pebble::math::vec2 last_mouse_pos{0.0f, 0.0f};
+
+    // Open Universe Radar Scale Mode (1x = Viewport, 2x = Neighborhood, 4x = Deep Cosmos)
+    int radar_zoom_level = 1; // 0=1x, 1=2.5x, 2=5.0x cosmic radar reach
 
     // Interactive mouse & keyboard controls
     float mouse_x = 0.0f, mouse_y = 0.0f;
@@ -440,6 +448,125 @@ static void spawn_dust_particle(PebbleVerseApp& app, bool user_spawn = false, fl
 }
 
 // ----------------------------------------------------------------------------
+// External Inflow Spawner: Form galaxies, stars, comets outside and inject into space
+// ----------------------------------------------------------------------------
+static void spawn_external_inflow(PebbleVerseApp& app) {
+    std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
+    
+    // Choose entity type
+    const float roll = dist01(app.rng);
+    prakriti::celestial::InflowEntityType type;
+    if (roll < 0.35f) {
+        type = prakriti::celestial::InflowEntityType::RogueProtogalaxy;
+    } else if (roll < 0.65f) {
+        type = prakriti::celestial::InflowEntityType::InterstellarComet;
+    } else if (roll < 0.88f) {
+        type = prakriti::celestial::InflowEntityType::HypervelocityStar;
+    } else {
+        type = prakriti::celestial::InflowEntityType::RoguePulsarMagnetar;
+    }
+
+    const float rand_angle = dist01(app.rng) * 6.2831853f;
+    const float speed_factor = 0.5f + dist01(app.rng) * 0.8f;
+    const auto cfg = prakriti::celestial::generate_random_inflow(FW, FH, 280.0f, rand_angle, speed_factor, type);
+
+    app.inflow_count++;
+
+    // 1. Core / Primary Body
+    PlanetBody core;
+    core.ent = app.world.spawn();
+    core.pos = cfg.spawn_pos;
+    core.prev_pos = core.pos;
+    core.vel = cfg.ingress_vel;
+    core.mass = cfg.core_mass;
+
+    if (type == prakriti::celestial::InflowEntityType::RoguePulsarMagnetar) {
+        core.is_neutron_star = true;
+        core.type = CelestialType::NeutronStar;
+        core.mat_params = prakriti::celestial::neutron_star();
+        core.density = core.mat_params.rest_density;
+        core.radius = 2.6f;
+        core.temperature = 6000.0f;
+        core.omega = 45.0f;
+    } else if (type == prakriti::celestial::InflowEntityType::HypervelocityStar) {
+        core.type = CelestialType::SuperheatedPlasma;
+        core.mat_params = prakriti::celestial::superheated_plasma();
+        core.density = core.mat_params.rest_density;
+        core.radius = std::clamp(std::cbrt(core.mass) * 0.75f, 3.5f, 9.0f);
+        core.temperature = 2800.0f + dist01(app.rng) * 2200.0f;
+        core.omega = (dist01(app.rng) - 0.5f) * 6.0f;
+    } else if (type == prakriti::celestial::InflowEntityType::InterstellarComet) {
+        core.type = CelestialType::IceCrust;
+        core.mat_params = prakriti::celestial::ice_crust();
+        core.density = core.mat_params.rest_density;
+        core.radius = std::clamp(std::cbrt(core.mass) * 0.6f, 1.4f, 2.8f);
+        core.temperature = -120.0f + dist01(app.rng) * 40.0f; // Cryogenic deep space ice
+        core.omega = (dist01(app.rng) - 0.5f) * 8.0f;
+    } else { // RogueProtogalaxy
+        core.type = CelestialType::MoltenMagma;
+        core.mat_params = prakriti::celestial::molten_magma();
+        core.density = core.mat_params.rest_density;
+        core.radius = std::clamp(std::cbrt(core.mass) * 0.7f, 4.0f, 11.0f);
+        core.temperature = 1400.0f + dist01(app.rng) * 800.0f;
+        core.omega = 2.5f;
+    }
+
+    core.angular_momentum = 0.5f * core.mass * (core.radius * core.radius) * core.omega;
+    app.planets.push_back(core);
+
+    // 2. Swarm of Bound Satellite Moons / Orbiting Stars / Comet Shards
+    for (int k = 0; k < cfg.satellite_count; ++k) {
+        PlanetBody sat;
+        sat.ent = app.world.spawn();
+        
+        const float sat_angle = dist01(app.rng) * 6.2831853f;
+        const float sat_r = (type == prakriti::celestial::InflowEntityType::InterstellarComet)
+            ? (6.0f + dist01(app.rng) * 16.0f)
+            : (18.0f + dist01(app.rng) * 75.0f);
+
+        sat.pos = core.pos + pebble::math::vec2{std::cos(sat_angle), std::sin(sat_angle)} * sat_r;
+        sat.prev_pos = sat.pos;
+
+        // Circular orbital velocity around core: v = \sqrt{G * M_core / r}
+        const float v_circ = std::sqrt(std::max(1.0f, (app.gravity_policy.G * core.mass) / std::max(sat_r, 10.0f))) * 0.75f;
+        const pebble::math::vec2 sat_tangent{-std::sin(sat_angle), std::cos(sat_angle)};
+        sat.vel = core.vel + sat_tangent * v_circ + pebble::math::vec2{dist01(app.rng) - 0.5f, dist01(app.rng) - 0.5f} * 2.0f;
+
+        if (type == prakriti::celestial::InflowEntityType::InterstellarComet) {
+            sat.type = CelestialType::IceCrust;
+            sat.mat_params = prakriti::celestial::ice_crust();
+            sat.mass = 4.0f + dist01(app.rng) * 8.0f;
+            sat.temperature = -130.0f + dist01(app.rng) * 30.0f;
+        } else {
+            const float m_roll = dist01(app.rng);
+            if (m_roll < 0.4f) {
+                sat.type = CelestialType::SilicateRock;
+                sat.mat_params = prakriti::celestial::silicate_rock();
+                sat.mass = 12.0f + dist01(app.rng) * 18.0f;
+                sat.temperature = 20.0f + dist01(app.rng) * 60.0f;
+            } else if (m_roll < 0.75f) {
+                sat.type = CelestialType::IronCore;
+                sat.mat_params = prakriti::celestial::iron_nickel_core();
+                sat.mass = 18.0f + dist01(app.rng) * 25.0f;
+                sat.temperature = 100.0f + dist01(app.rng) * 120.0f;
+            } else {
+                sat.type = CelestialType::IceCrust;
+                sat.mat_params = prakriti::celestial::ice_crust();
+                sat.mass = 8.0f + dist01(app.rng) * 10.0f;
+                sat.temperature = -60.0f + dist01(app.rng) * 40.0f;
+            }
+        }
+
+        sat.density = sat.mat_params.rest_density;
+        sat.radius = std::clamp(std::cbrt(sat.mass) * 0.55f, 0.85f, 2.2f);
+        sat.omega = (dist01(app.rng) - 0.5f) * 5.0f;
+        sat.angular_momentum = 0.5f * sat.mass * (sat.radius * sat.radius) * sat.omega;
+
+        app.planets.push_back(sat);
+    }
+}
+
+// ----------------------------------------------------------------------------
 // Pure N-Body Physical Simulation Loop
 // ----------------------------------------------------------------------------
 static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
@@ -452,8 +579,17 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
 
     const auto t_start = std::chrono::high_resolution_clock::now();
 
-    // 1. Spontaneous Quantum Vacuum Matter Condensation (Continuous primordial replenishment)
+    // 1. External Inflow (Rogue Galaxies, Clusters, Stars, Comets) & Spontaneous Quantum Condensation
     app.spawn_timer += sim_dt;
+    app.inflow_timer += sim_dt;
+
+    // Periodic Inflow of External Cosmic Systems formed by astrophysics laws outside
+    if (app.inflow_timer >= app.inflow_interval && app.planets.size() < 1600) {
+        app.inflow_timer = 0.0f;
+        app.inflow_interval = 4.0f + dist01(app.rng) * 5.0f;
+        spawn_external_inflow(app);
+    }
+
     if (app.spawn_timer >= 0.08f) {
         app.spawn_timer = 0.0f;
         
@@ -800,10 +936,41 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
             p.radius = std::clamp(std::cbrt(p.mass) * 0.65f, 0.75f, 18.0f);
         }
 
-        if (p.pos[0] < p.radius) { p.pos[0] = p.radius; p.vel[0] = -p.vel[0] * 0.7f; }
-        if (p.pos[0] > FW - p.radius) { p.pos[0] = FW - p.radius; p.vel[0] = -p.vel[0] * 0.7f; }
-        if (p.pos[1] < p.radius) { p.pos[1] = p.radius; p.vel[1] = -p.vel[1] * 0.7f; }
-        if (p.pos[1] > FH - p.radius) { p.pos[1] = FH - p.radius; p.vel[1] = -p.vel[1] * 0.7f; }
+        // ── Cometary Sublimation Tail Outgassing (When icy bodies approach hot stars) ──
+        if (p.type == CelestialType::IceCrust && app.nebulae.size() < 500) {
+            for (const auto& star : app.planets) {
+                if (!star.alive || (&star == &p) || star.temperature < 1200.0f) continue;
+                const auto comet_sub = prakriti::celestial::evaluate_comet_tail_sublimation(
+                    p.pos, p.temperature, star.pos, star.temperature, star.radius, sim_dt
+                );
+                if (comet_sub.is_sublimating && dist01(app.rng) < 0.35f) {
+                    p.mass = std::max(0.2f, p.mass - comet_sub.mass_loss_rate);
+                    const float tail_spd = comet_sub.tail_velocity_mag + (dist01(app.rng) - 0.5f) * 15.0f;
+                    const float spread = (dist01(app.rng) - 0.5f) * 0.25f;
+                    const pebble::math::vec2 t_dir = pebble::math::normalize(
+                        comet_sub.tail_direction + pebble::math::vec2{-comet_sub.tail_direction[1], comet_sub.tail_direction[0]} * spread
+                    );
+
+                    app.nebulae.push_back(NebulaGasParticle{
+                        .pos = p.pos + t_dir * (p.radius + 1.0f),
+                        .vel = p.vel * 0.35f + t_dir * tail_spd,
+                        .radius = 1.2f + dist01(app.rng) * 0.8f,
+                        .life = 0.65f + dist01(app.rng) * 0.45f,
+                        .max_life = 1.1f,
+                        .color = comet_sub.is_ion_plasma
+                            ? kalpana::Color{0.3f, 0.9f, 1.0f, 0.65f}   // Radiant Cyan Ion Plasma Tail (Type I)
+                            : kalpana::Color{0.9f, 0.85f, 0.7f, 0.45f}  // Diffuse Golden Dust Tail (Type II)
+                    });
+                    break;
+                }
+            }
+        }
+
+        // ── Open World Boundless Universe: Recycle bodies that escape into infinite deep cosmos ──
+        const auto cull = prakriti::celestial::evaluate_open_world_bounds(p.pos, cosmic_center, 3800.0f, 2200.0f);
+        if (cull.should_recycle) {
+            p.alive = false; // Graceful cosmological recycling beyond active horizon
+        }
     }
 
     // 5. Collision Narrowphase: 3-Way Regime (Elastic Rebound & Recoil, Ductile Merger, or Brittle Fragmentation)
@@ -1332,24 +1499,19 @@ static void render_gpu_frame(PebbleVerseApp& app) {
     kalpana::Scene scene;
     app.instanced_planets.begin();
 
-    // ── 0. Dynamic Lagrangian Tracking Camera Update ──
+    // ── 0. Dynamic Lagrangian Tracking & Open-World Camera Update ──
     if (app.tracked_planet_index >= 0 && app.tracked_planet_index < static_cast<int>(app.planets.size())) {
         const auto& tp = app.planets[app.tracked_planet_index];
         if (tp.alive) {
             app.target_cam_pos = tp.pos;
-            app.target_zoom = std::clamp(2.4f - (tp.radius / 10.0f), 1.4f, 3.2f);
+            app.target_zoom = std::clamp(2.4f - (tp.radius / 10.0f), 0.6f, 3.5f);
         } else {
             app.tracked_planet_index = -1; // Reset if target merged or evaporated
-            app.target_cam_pos = pebble::math::vec2{FW * 0.5f, FH * 0.5f};
-            app.target_zoom = 1.0f;
         }
-    } else {
-        app.target_cam_pos = pebble::math::vec2{FW * 0.5f, FH * 0.5f};
-        app.target_zoom = 1.0f;
     }
 
     // Smooth exponential damping interpolation
-    constexpr float cam_lerp = 0.08f;
+    constexpr float cam_lerp = 0.10f;
     app.camera_pos = app.camera_pos + (app.target_cam_pos - app.camera_pos) * cam_lerp;
     app.camera_zoom = app.camera_zoom + (app.target_zoom - app.camera_zoom) * cam_lerp;
 
@@ -1609,36 +1771,46 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         scene.add(kalpana::Node::shape(traj_path, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.9f, 0.6f, 0.45f}, 1.5f)));
     }
 
-    // 6. Real-Time Orbital Minimap / Radar Inset (Bottom-Right)
+    // 6. Real-Time Open-World Cosmic Radar Inset (Bottom-Right with Adaptive Scale)
     {
-        constexpr float radar_w = 120.0f;
-        constexpr float radar_h = 75.0f;
+        constexpr float radar_w = 140.0f;
+        constexpr float radar_h = 90.0f;
         const float radar_x = FW - radar_w - 12.0f;
         const float radar_y = FH - radar_h - 12.0f;
 
         // Radar background & frame border
         kalpana::Path r_box;
         r_box.rect(radar_x, radar_y, radar_w, radar_h);
-        scene.add(kalpana::Node::shape(r_box, kalpana::Paint::fill(kalpana::Color{0.02f, 0.04f, 0.08f, 0.85f})));
-        scene.add(kalpana::Node::shape(r_box, kalpana::Paint::stroke(kalpana::Color{0.2f, 0.5f, 0.85f, 0.7f}, 1.0f)));
+        scene.add(kalpana::Node::shape(r_box, kalpana::Paint::fill(kalpana::Color{0.015f, 0.03f, 0.07f, 0.88f})));
+        scene.add(kalpana::Node::shape(r_box, kalpana::Paint::stroke(kalpana::Color{0.2f, 0.55f, 0.9f, 0.75f}, 1.2f)));
 
         // Center crosshair
         kalpana::Path r_cross;
-        r_cross.move_to(radar_x + radar_w * 0.5f - 6.0f, radar_y + radar_h * 0.5f);
-        r_cross.line_to(radar_x + radar_w * 0.5f + 6.0f, radar_y + radar_h * 0.5f);
-        r_cross.move_to(radar_x + radar_w * 0.5f, radar_y + radar_h * 0.5f - 6.0f);
-        r_cross.line_to(radar_x + radar_w * 0.5f, radar_y + radar_h * 0.5f + 6.0f);
+        const float cx = radar_x + radar_w * 0.5f;
+        const float cy = radar_y + radar_h * 0.5f;
+        r_cross.move_to(cx - 6.0f, cy); r_cross.line_to(cx + 6.0f, cy);
+        r_cross.move_to(cx, cy - 6.0f); r_cross.line_to(cx, cy + 6.0f);
         scene.add(kalpana::Node::shape(r_cross, kalpana::Paint::stroke(kalpana::Color{0.25f, 0.6f, 0.9f, 0.4f}, 0.8f)));
 
-        // Map bodies onto radar coordinates
+        // Viewport bounds rectangle on radar
+        const float radar_world_span = (app.radar_zoom_level == 0) ? (FW * 1.5f) : ((app.radar_zoom_level == 1) ? (FW * 3.5f) : (FW * 7.0f));
+        const float vp_rw = (FW / radar_world_span) * radar_w;
+        const float vp_rh = (FH / radar_world_span) * radar_h;
+        const float vp_rx = cx + ((app.camera_pos[0] - FW * 0.5f) / radar_world_span) * radar_w - vp_rw * 0.5f;
+        const float vp_ry = cy + ((app.camera_pos[1] - FH * 0.5f) / radar_world_span) * radar_h - vp_rh * 0.5f;
+
+        kalpana::Path vp_rect;
+        vp_rect.rect(vp_rx, vp_ry, vp_rw, vp_rh);
+        scene.add(kalpana::Node::shape(vp_rect, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.85f, 1.0f, 0.45f}, 0.8f)));
+
+        // Map all bodies across open universe onto radar coordinates
         for (const auto& p : app.planets) {
             if (!p.alive) continue;
-            // Map viewport [0, FW] x [0, FH] to radar box
-            const float rx = radar_x + (p.pos[0] / FW) * radar_w;
-            const float ry = radar_y + (p.pos[1] / FH) * radar_h;
-            if (rx >= radar_x && rx <= radar_x + radar_w && ry >= radar_y && ry <= radar_y + radar_h) {
+            const float rx = cx + ((p.pos[0] - FW * 0.5f) / radar_world_span) * radar_w;
+            const float ry = cy + ((p.pos[1] - FH * 0.5f) / radar_world_span) * radar_h;
+            if (rx >= radar_x + 1.0f && rx <= radar_x + radar_w - 1.0f && ry >= radar_y + 1.0f && ry <= radar_y + radar_h - 1.0f) {
                 kalpana::Path p_dot;
-                const float dot_r = (p.mass > 500.0f) ? 2.0f : ((p.mass > 100.0f) ? 1.4f : 0.9f);
+                const float dot_r = (p.mass > 500.0f) ? 2.2f : ((p.mass > 100.0f) ? 1.5f : 0.85f);
                 p_dot.circle(rx, ry, dot_r);
                 scene.add(kalpana::Node::shape(p_dot, kalpana::Paint::fill(get_celestial_color(p))));
             }
@@ -2148,19 +2320,32 @@ static void frame_cb() {
 static void event_cb(const sapp_event* e) {
     auto& app = g_app;
     if (e->type == SAPP_EVENTTYPE_MOUSE_MOVE) {
+        if (app.middle_mouse_down) {
+            const float dx = (e->mouse_x - app.last_mouse_pos[0]) / app.camera_zoom;
+            const float dy = (e->mouse_y - app.last_mouse_pos[1]) / app.camera_zoom;
+            app.target_cam_pos = app.target_cam_pos - pebble::math::vec2{dx, dy};
+            app.tracked_planet_index = -1; // Unlink tracking on manual pan
+        }
+        app.last_mouse_pos = pebble::math::vec2{e->mouse_x, e->mouse_y};
         app.mouse_x = e->mouse_x;
         app.mouse_y = e->mouse_y;
         if (app.slingshot.active) {
             app.slingshot.current_x = e->mouse_x;
             app.slingshot.current_y = e->mouse_y;
         }
-        if (e->scroll_y > 0.1f) {
-            app.selected_mat_index = (app.selected_mat_index % 4) + 1;
-        } else if (e->scroll_y < -0.1f) {
-            app.selected_mat_index = (app.selected_mat_index == 1) ? 4 : app.selected_mat_index - 1;
+    } else if (e->type == SAPP_EVENTTYPE_MOUSE_SCROLL) {
+        if (!app.in_startup_modal) {
+            if (e->scroll_y > 0.1f) {
+                app.target_zoom = std::min(4.0f, app.target_zoom * 1.15f);
+            } else if (e->scroll_y < -0.1f) {
+                app.target_zoom = std::max(0.25f, app.target_zoom * 0.85f);
+            }
         }
     } else if (e->type == SAPP_EVENTTYPE_MOUSE_DOWN) {
-        if (e->mouse_button == SAPP_MOUSEBUTTON_LEFT && !app.gravity_vortex && !app.heat_ray && !app.freeze_ray) {
+        if (e->mouse_button == SAPP_MOUSEBUTTON_MIDDLE) {
+            app.middle_mouse_down = true;
+            app.last_mouse_pos = pebble::math::vec2{e->mouse_x, e->mouse_y};
+        } else if (e->mouse_button == SAPP_MOUSEBUTTON_LEFT && !app.gravity_vortex && !app.heat_ray && !app.freeze_ray) {
             app.slingshot.active = true;
             app.slingshot.start_x = e->mouse_x;
             app.slingshot.start_y = e->mouse_y;
@@ -2172,7 +2357,9 @@ static void event_cb(const sapp_event* e) {
             app.mouse_down = true;
         }
     } else if (e->type == SAPP_EVENTTYPE_MOUSE_UP) {
-        if (e->mouse_button == SAPP_MOUSEBUTTON_LEFT && app.slingshot.active) {
+        if (e->mouse_button == SAPP_MOUSEBUTTON_MIDDLE) {
+            app.middle_mouse_down = false;
+        } else if (e->mouse_button == SAPP_MOUSEBUTTON_LEFT && app.slingshot.active) {
             app.slingshot.active = false;
             const float dx = app.slingshot.start_x - e->mouse_x;
             const float dy = app.slingshot.start_y - e->mouse_y;
@@ -2321,6 +2508,30 @@ static void event_cb(const sapp_event* e) {
             case SAPP_KEYCODE_EQUAL:
                 app.time_dilation = std::min(4.0f, app.time_dilation * 1.35f);
                 break;
+            case SAPP_KEYCODE_I:
+                // Instantly spawn an external system inflow
+                spawn_external_inflow(app);
+                break;
+            case SAPP_KEYCODE_M:
+                // Cycle Radar Reach (1.5x -> 3.5x -> 7.0x)
+                app.radar_zoom_level = (app.radar_zoom_level + 1) % 3;
+                break;
+            case SAPP_KEYCODE_UP:
+                app.target_cam_pos[1] -= 80.0f / app.camera_zoom;
+                app.tracked_planet_index = -1;
+                break;
+            case SAPP_KEYCODE_DOWN:
+                app.target_cam_pos[1] += 80.0f / app.camera_zoom;
+                app.tracked_planet_index = -1;
+                break;
+            case SAPP_KEYCODE_LEFT:
+                app.target_cam_pos[0] -= 80.0f / app.camera_zoom;
+                app.tracked_planet_index = -1;
+                break;
+            case SAPP_KEYCODE_RIGHT:
+                app.target_cam_pos[0] += 80.0f / app.camera_zoom;
+                app.tracked_planet_index = -1;
+                break;
             case SAPP_KEYCODE_TAB: {
                 // Cycle tracking to next massive body (or reset if at end)
                 std::vector<int> heavy_indices;
@@ -2349,6 +2560,8 @@ static void event_cb(const sapp_event* e) {
             }
             case SAPP_KEYCODE_ESCAPE:
                 app.tracked_planet_index = -1;
+                app.target_cam_pos = pebble::math::vec2{FW * 0.5f, FH * 0.5f};
+                app.target_zoom = 1.0f;
                 break;
             case SAPP_KEYCODE_V:
                 if (app.view_mode == SpectralViewMode::OpticalRGB) {
