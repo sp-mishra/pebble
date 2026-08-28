@@ -791,4 +791,92 @@ compute_spacetime_geodesic_deflection(const pebble::math::vec2& grid_pt,
     return pebble::math::vec2{d[0] / dist, d[1] / dist} * std::min(pinch_mag, 16.0f);
 }
 
+// ── 24. Hawking Radiation Quantum Black Hole Evaporation ───────────────────────────────────
+
+struct HawkingRadiationState {
+    float mass_loss_rate = 0.0f;
+    float hawking_temp = 0.0f;
+    bool  triggers_gamma_flash = false;
+};
+
+[[nodiscard]] inline HawkingRadiationState
+evaluate_hawking_radiation(float mass, float dt) noexcept {
+    HawkingRadiationState res;
+    if (mass < 1.0f) return res;
+
+    // Hawking Temperature: T_H \propto 1 / M
+    res.hawking_temp = 12000.0f / (mass * 0.05f + 1.0f);
+
+    // Mass Loss Rate: dM/dt \propto -1 / M^2
+    res.mass_loss_rate = (14.0f / (mass * mass * 0.001f + 1.0f)) * dt;
+
+    // High-Energy Gamma-Ray Flash when below critical degenerate mass
+    res.triggers_gamma_flash = (mass <= 45.0f);
+    return res;
+}
+
+// ── 25. General Relativistic Gravitational Redshift ─────────────────────────────────────────
+
+[[nodiscard]] inline float
+compute_gravitational_redshift_factor(float mass, float radius, float distance) noexcept {
+    // Gravitational Redshift Factor: z = \frac{1}{\sqrt{1 - \frac{2 G M}{c^2 r}}} - 1
+    const float r_eff = std::max(radius, distance);
+    const float rs = (mass * 0.0035f + 2.5f); // Effective Schwarzschild radius
+    const float schw_ratio = std::clamp(rs / (r_eff + 1.0f), 0.0f, 0.88f);
+    return (1.0f / std::sqrt(1.0f - schw_ratio)) - 1.0f;
+}
+
+// ── 26. Forward Keplerian / Osculating Orbit Prediction ──────────────────────────────────────
+
+struct OrbitPredictionPoint {
+    pebble::math::vec2 pos{0.0f, 0.0f};
+    bool               is_bound = false;
+};
+
+[[nodiscard]] inline std::vector<pebble::math::vec2>
+compute_osculating_orbit_points(const pebble::math::vec2& body_pos, const pebble::math::vec2& body_vel,
+                                const pebble::math::vec2& host_pos, float host_mass,
+                                int num_steps = 28, float dt_step = 0.08f) noexcept {
+    std::vector<pebble::math::vec2> points;
+    points.reserve(num_steps);
+
+    pebble::math::vec2 sim_p = body_pos;
+    pebble::math::vec2 sim_v = body_vel;
+
+    for (int step = 0; step < num_steps; ++step) {
+        const pebble::math::vec2 d = host_pos - sim_p;
+        const float dist2 = d[0] * d[0] + d[1] * d[1] + 16.0f;
+        const float dist = std::sqrt(dist2);
+        const pebble::math::vec2 a = pebble::math::vec2{d[0] / dist, d[1] / dist} * ((18000.0f * host_mass) / dist2);
+
+        sim_v = sim_v + a * dt_step;
+        sim_p = sim_p + sim_v * dt_step;
+        points.push_back(sim_p);
+    }
+    return points;
+}
+
+// ── 27. Cosmic Ray Synchrotron Magnetic Shockwave Arcs ───────────────────────────────────────
+
+struct SynchrotronArc {
+    pebble::math::vec2 center{0.0f, 0.0f};
+    float              radius = 0.0f;
+    float              start_angle = 0.0f;
+    float              end_angle = 0.0f;
+    float              intensity = 1.0f;
+};
+
+[[nodiscard]] inline SynchrotronArc
+compute_synchrotron_shock_arc(const pebble::math::vec2& origin, const pebble::math::vec2& dir,
+                              float shock_radius, float energy_density) noexcept {
+    SynchrotronArc arc;
+    arc.center = origin;
+    arc.radius = shock_radius;
+    const float base_angle = std::atan2(dir[1], dir[0]);
+    arc.start_angle = base_angle - 0.75f;
+    arc.end_angle = base_angle + 0.75f;
+    arc.intensity = std::clamp(energy_density * 0.02f, 0.2f, 0.95f);
+    return arc;
+}
+
 } // namespace prakriti::celestial

@@ -384,10 +384,10 @@ static void spawn_dust_particle(PebbleVerseApp& app, bool user_spawn = false, fl
     if (user_spawn) {
         p.pos = pebble::math::vec2{at_x, at_y};
     } else {
-        // Spontaneous Quantum Matter Condensation across the entire active cosmic grid
+        // True Full-Grid Isotropic Matter Nucleation across all coordinates [12, FW - 12] x [12, FH - 12]
         p.pos = pebble::math::vec2{
-            20.0f + dist01(app.rng) * (FW - 40.0f),
-            20.0f + dist01(app.rng) * (FH - 40.0f)
+            12.0f + dist01(app.rng) * (FW - 24.0f),
+            12.0f + dist01(app.rng) * (FH - 24.0f)
         };
     }
 
@@ -636,7 +636,30 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
         }
 
         // ── Pure In-Situ Organic Stellar Evolution via Prakriti Physics Engine ────────
-        if (!p.is_singularity) {
+        if (p.is_singularity || p.type == CelestialType::BlackHoleSingularity) {
+            // Hawking Radiation Quantum Mass Loss: dM/dt \propto -1 / M^2
+            const auto hawk = prakriti::celestial::evaluate_hawking_radiation(p.mass, sim_dt);
+            p.mass = std::max(0.0f, p.mass - hawk.mass_loss_rate);
+            p.temperature = hawk.hawking_temp;
+
+            if (hawk.triggers_gamma_flash || p.mass <= 10.0f) {
+                // Final High-Energy Quantum Gamma-Ray Flash & Complete Evaporation
+                p.alive = false;
+                for (int s = 0; s < 32; ++s) {
+                    const float a = static_cast<float>(s) * (6.2831853f / 32.0f);
+                    const float spd = 120.0f + dist01(app.rng) * 90.0f;
+                    app.sparks.push_back(SparkParticle{
+                        .pos = p.pos,
+                        .vel = p.vel + pebble::math::vec2{std::cos(a), std::sin(a)} * spd,
+                        .radius = 1.6f + dist01(app.rng) * 1.2f,
+                        .life = 0.5f + dist01(app.rng) * 0.3f,
+                        .max_life = 0.8f,
+                        .color = kalpana::Color{0.4f, 0.95f, 1.0f, 1.0f} // Brilliant Hawking gamma flash
+                    });
+                }
+                app.camera_shake.add_trauma(0.35f);
+            }
+        } else {
             const auto evol = prakriti::celestial::evaluate_stellar_evolution(p.mass, p.density, p.temperature, p.radius, sim_dt);
             
             p.temperature += evol.fusion_heat_rate;
@@ -1420,10 +1443,10 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         };
     };
 
-    // ── 0. Sub-Layer: Spacetime Curvature & Geodesic Grid (Faint Background Layer) ──
+    // ── 0. Sub-Layer: Spacetime Curvature & Geodesic Grid (Faint, High-Res Background Layer) ──
     {
-        constexpr int grid_cols = 36;
-        constexpr int grid_rows = 22;
+        constexpr int grid_cols = 64;
+        constexpr int grid_rows = 40;
         const float dx = FW / static_cast<float>(grid_cols);
         const float dy = FH / static_cast<float>(grid_rows);
 
@@ -1449,7 +1472,7 @@ static void render_gpu_frame(PebbleVerseApp& app) {
                 const pebble::math::vec2 p_w = warp_vertex(gx, gy);
                 h_line.line_to(p_w[0], p_w[1]);
             }
-            scene.add(kalpana::Node::shape(h_line, kalpana::Paint::stroke(kalpana::Color{0.14f, 0.28f, 0.55f, 0.16f}, 0.85f)));
+            scene.add(kalpana::Node::shape(h_line, kalpana::Paint::stroke(kalpana::Color{0.14f, 0.28f, 0.55f, 0.12f}, 0.70f)));
         }
 
         // Vertical geodesic lines
@@ -1463,12 +1486,35 @@ static void render_gpu_frame(PebbleVerseApp& app) {
                 const pebble::math::vec2 p_w = warp_vertex(gx, gy);
                 v_line.line_to(p_w[0], p_w[1]);
             }
-            scene.add(kalpana::Node::shape(v_line, kalpana::Paint::stroke(kalpana::Color{0.14f, 0.28f, 0.55f, 0.16f}, 0.85f)));
+            scene.add(kalpana::Node::shape(v_line, kalpana::Paint::stroke(kalpana::Color{0.14f, 0.28f, 0.55f, 0.12f}, 0.70f)));
         }
     }
 
-    // 1. Batch Orbital Motion Trails & Accretion Halos
+    // 1. Batch Orbital Motion Trails
     for (const auto& p : app.planets) {
+        if (!p.alive) continue;
+
+        // Render subtle forward orbit trajectory ONLY for the actively tracked Lagrangian target
+        if (app.tracked_planet_index >= 0 && &p == &app.planets[app.tracked_planet_index] && p.mass < 250.0f) {
+            for (const auto* host : massive_lenses) {
+                if (host != &p && host->mass > p.mass * 3.0f) {
+                    const auto orbit_pts = prakriti::celestial::compute_osculating_orbit_points(
+                        p.pos, p.vel, host->pos, host->mass, 24, 0.06f
+                    );
+                    if (!orbit_pts.empty()) {
+                        kalpana::Path orbit_path;
+                        const pebble::math::vec2 s_start = w2s(orbit_pts[0]);
+                        orbit_path.move_to(s_start[0], s_start[1]);
+                        for (std::size_t pt_i = 1; pt_i < orbit_pts.size(); ++pt_i) {
+                            const pebble::math::vec2 s_pt = w2s(orbit_pts[pt_i]);
+                            orbit_path.line_to(s_pt[0], s_pt[1]);
+                        }
+                        scene.add(kalpana::Node::shape(orbit_path, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.85f, 1.0f, 0.35f}, 1.0f)));
+                    }
+                }
+            }
+        }
+
         if (p.trail_count > 1) {
             const kalpana::Color col = get_celestial_color(p, app.view_mode);
             for (int t = 0; t < p.trail_count; ++t) {
@@ -2349,7 +2395,27 @@ static void event_cb(const sapp_event* e) {
                     app.jets.clear();
 
                     for (int i = 0; i < app.config_initial_dust_count; ++i) {
-                        spawn_dust_particle(app);
+                        if (app.config_dist_mode == 0) {
+                            // Mode 0: True Isotropic Full-Grid Uniform Distribution
+                            spawn_dust_particle(app);
+                        } else if (app.config_dist_mode == 1) {
+                            // Mode 1: Central Barycentric Cluster with wide dispersion
+                            std::normal_distribution<float> norm_x(FW * 0.5f, FW * 0.22f);
+                            std::normal_distribution<float> norm_y(FH * 0.5f, FH * 0.22f);
+                            const float rx = std::clamp(norm_x(app.rng), 20.0f, FW - 20.0f);
+                            const float ry = std::clamp(norm_y(app.rng), 20.0f, FH - 20.0f);
+                            spawn_dust_particle(app, true, rx, ry);
+                        } else {
+                            // Mode 2: Dual Infall Colliding Protogalactic Clouds
+                            const bool cloud2 = (i % 2 == 0);
+                            const float cx = cloud2 ? (FW * 0.72f) : (FW * 0.28f);
+                            const float cy = cloud2 ? (FH * 0.65f) : (FH * 0.35f);
+                            std::normal_distribution<float> norm_x(cx, 80.0f);
+                            std::normal_distribution<float> norm_y(cy, 80.0f);
+                            const float rx = std::clamp(norm_x(app.rng), 20.0f, FW - 20.0f);
+                            const float ry = std::clamp(norm_y(app.rng), 20.0f, FH - 20.0f);
+                            spawn_dust_particle(app, true, rx, ry);
+                        }
                     }
                     break;
                 }

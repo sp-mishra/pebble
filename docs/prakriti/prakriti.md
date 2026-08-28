@@ -415,5 +415,29 @@ Located in `#include <prakriti/material/celestial.hpp>`:
 ## 23. Sub-Layer Spacetime Curvature & Geodesic Grid Embedding
 - **General Relativity Coordinate Warping**:
   $$\Delta \vec{x} = \frac{GM_i}{r_i^2 + \epsilon^2} \hat{r}_i$$
-- Renders an authentic Einstein rubber-sheet curvature mesh as a sub-layer beneath all particles, pinching grid intersections radially towards gravitating stars, pulsars, and black holes with faint, clean opacity ($\alpha \approx 0.16$).
+- Renders an authentic Einstein rubber-sheet curvature mesh as a sub-layer beneath all particles, pinching grid intersections radially towards gravitating stars, pulsars, and black holes with faint, clean opacity ($\alpha \approx 0.12$).
+
+---
+
+## 24. Hawking Radiation Quantum Black Hole Evaporation
+- **Hawking Temperature & Mass Loss**:
+  $$T_H = \frac{\hbar c^3}{8\pi G M k_B} \propto \frac{1}{M}, \quad \frac{dM}{dt} \propto -\frac{1}{M^2}$$
+- Isolated small or aging black holes lose mass continuously, culminating in a high-energy quantum gamma-ray flash.
+
+---
+
+## 25. General Relativistic Gravitational Redshift
+- **Gravitational Redshift Factor**:
+  $$z = \frac{1}{\sqrt{1 - \frac{2GM}{c^2 r}}} - 1$$
+- Redshifts apparent thermal and synchrotron emissions towards deep infrared/radio frequencies near intense event horizons.
+
+---
+
+## 26. Forward Keplerian / Osculating Orbit Prediction
+- Evaluates real-time two-body osculating Keplerian orbital state vectors, generating projected forward orbit ellipses and hyperbolic trajectories for bound moons.
+
+---
+
+## 27. Cosmic Ray Synchrotron Magnetic Shockwaves
+- Simulates relativistic electron acceleration along expanding supernova shock fronts, casting curved synchrotron magnetic shock arcs.
 
