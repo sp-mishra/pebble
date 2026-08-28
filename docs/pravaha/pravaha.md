@@ -1618,8 +1618,111 @@ analysis layer (`lithe::exec`, opt-in via `include/edsl/lithe_exec/lithe_exec.hp
 
 ---
 
+---
+
+## Persistent Thread Pool & Real-Time Simulation Patterns
+
+### The Zero-Overhead Physics Loop Pattern
+Instantiating thread pools per frame in real-time 60 FPS simulations causes severe OS context-switching overhead and kernel thread creation latency. In `barnes_hut.hpp` and `pebble_verse.cpp`, Pravaha uses a **static persistent thread pool holder** to amortize thread initialization to a single $O(1)$ startup cost:
+
+```cpp
+#include "pravaha/pravaha.hpp"
+
+template <typename Range, typename Func>
+inline void parallel_physics_sweep(Range&& range, Func&& fn, std::size_t chunk_size = 32) {
+    // Persistent thread pool reused across all 60 FPS frames
+    struct ThreadPoolHolder {
+        pravaha::JThreadBackend backend{std::min<unsigned>(std::thread::hardware_concurrency(), 8u)};
+        pravaha::Runner<pravaha::JThreadBackend> runner{backend};
+    };
+    static ThreadPoolHolder pool;
+
+    auto task = pravaha::lazy_parallel_for(std::forward<Range>(range), std::forward<Func>(fn), chunk_size);
+    (void)pool.runner.submit(std::move(task));
+}
+```
+
+---
+
+## End-to-End Master Execution Examples
+
+### 1. Multi-Stage Deterministic Physics Pipeline DAG
+```cpp
+#include "pravaha/pravaha.hpp"
+#include <iostream>
+#include <vector>
+
+struct RigidBody {
+    float x, y;
+    float vx, vy;
+    float fx, fy;
+    float mass;
+};
+
+int main() {
+    std::vector<RigidBody> bodies(5000);
+    pravaha::JThreadBackend backend(8);
+    pravaha::Runner<pravaha::JThreadBackend> runner(backend);
+
+    // 1. Build Task Graph DSL
+    auto clear_forces = pravaha::task("clear_forces", [&bodies]() {
+        for (auto& b : bodies) { b.fx = 0.0f; b.fy = -9.81f * b.mass; }
+    });
+
+    auto compute_gravity = pravaha::lazy_parallel_for(bodies, [](RigidBody& b) {
+        // Evaluate gravitational potential
+        b.fx += 0.5f;
+    }, 64);
+
+    auto integrate_kinematics = pravaha::lazy_parallel_for(bodies, [](RigidBody& b) {
+        constexpr float dt = 0.016f;
+        b.vx += (b.fx / b.mass) * dt;
+        b.vy += (b.fy / b.mass) * dt;
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+    }, 64);
+
+    // 2. Compose Pipeline Sequence (clear_forces -> compute_gravity -> integrate_kinematics)
+    auto pipeline = clear_forces >> compute_gravity >> integrate_kinematics;
+
+    // 3. Submit and Execute DAG
+    auto result = runner.submit(std::move(pipeline));
+    if (result.has_value()) {
+        std::cout << "Physics DAG Step Completed Successfully!\n";
+    }
+}
+```
+
+### 2. High-Throughput Parallel Map-Reduce
+```cpp
+#include "pravaha/pravaha.hpp"
+#include <iostream>
+#include <vector>
+#include <numeric>
+
+int main() {
+    std::vector<float> energy_values(100000, 1.25f);
+    pravaha::JThreadBackend backend(4);
+    pravaha::Runner<pravaha::JThreadBackend> runner(backend);
+
+    // Parallel Reduction over contiguous memory buffer
+    auto reduce_task = pravaha::lazy_parallel_reduce(
+        energy_values,
+        [](float a, float b) { return a + b; }, // Reduction combiner
+        0.0f,                                   // Initial accumulator
+        1024                                    // Chunk size
+    );
+
+    auto handle = runner.submit(std::move(reduce_task));
+    std::cout << "Total Universe Energy: " << *handle << "\n";
+}
+```
+
+---
+
 ## References
 
 - **C++23 Features:** Concepts, Ranges, Coroutines (C++20), `std::expected` (C++23)
 - **Design Inspiration:** P2300 (Executors), P2049 (std::coroutine)
 - **Architecture:** DAG task scheduling, type-erased payloads, sender/receiver async
+

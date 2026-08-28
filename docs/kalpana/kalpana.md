@@ -287,3 +287,32 @@ auto frame_buffer = canvas.snapshot();
 - **Custom Color Spaces**: Specialize `color_space_converter<MyColorSpace>` to plug in proprietary formats.
 - **Custom Procedural Noise**: Implement `float operator()(vec2 p) const` to inject custom shaders into `ProceduralFill::custom_noise(gen)`.
 - **Configurable Storage Policy**: `BasicPath<Allocator>`, `BasicLayerStack<Alloc>`, and `BasicEffectChain<N>` support custom Smriti allocators and `SmallVector` inline capacities.
+
+---
+
+## 10. Thermal Blackbody Radiation & Perceptual OkLab Gradients
+
+### 10.1 Planckian Incandescence & Stellar Radiance
+Kalpana computes physically grounded blackbody thermal emission across temperatures from $800\,\text{K}$ (deep red incandescence) to $40,000\,\text{K}$ (supergiant blue-white):
+
+```cpp
+#include "kalpana/kalpana.hpp"
+#include "kalpana/color/blackbody.hpp"
+#include <iostream>
+
+int main() {
+    // 1. Evaluate stellar temperature color (Planckian locus)
+    kalpana::Color sun_surface = kalpana::blackbody::temperature_to_rgb(5778.0f);   // 5,778K G2V Sun
+    kalpana::Color blue_giant = kalpana::blackbody::temperature_to_rgb(25000.0f);  // 25,000K O-Type Star
+
+    // 2. Perceptually Linear OkLab Blackbody Gradient Interpolation
+    // Prevents muddy desaturation when interpolating between incandescent core and cool corona
+    kalpana::OkLab oklab_core = kalpana::to_oklab(blue_giant);
+    kalpana::OkLab oklab_rim  = kalpana::to_oklab(sun_surface);
+    
+    kalpana::OkLab blended = kalpana::lerp(oklab_core, oklab_rim, 0.5f);
+    kalpana::Color srgb_blended = kalpana::to_srgb(blended);
+
+    std::cout << "Blended RGB: (" << srgb_blended.r << ", " << srgb_blended.g << ", " << srgb_blended.b << ")\n";
+}
+```

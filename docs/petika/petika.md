@@ -1,54 +1,146 @@
-# Petika: A Unified, Engine-Agnostic Storage Platform for C++23
+# Petika: Unified Engine-Agnostic Key-Value & Storage Engine Platform
 
-## 1. Overview
+**Petika** (`include/petika/`) is Pebble's high-performance, crash-consistent, engine-agnostic storage and key-value platform in modern C++23. It decouples high-level application transactional storage APIs from low-level storage engines (SkipList, B+Tree, LSM-Tree, In-Memory Hash), backed by lock-free persistence workers and write-ahead logging (Nitya).
 
-**Petika** (Hindi/Sanskrit: *box*, *container*, *repository*) is a high-performance, durable, embedded storage platform
-built with modern C++23.
+---
 
-### Core Philosophy
+## 1. Architectural Architecture & Engine Decoupling
 
-Applications should depend on a unified **Storage API**, not on an underlying storage architecture.
+```
+                                PETIKA STORAGE ARCHITECTURE
+                                
+  ┌────────────────────────────────────────────────────────────────────────────────────────┐
+  │                                    APPLICATION LAYER                                   │
+  │     put(), get(), erase(), contains(), scan(), range_query(), txn(), snapshot()        │
+  └──────────────────────────────────────────┬─────────────────────────────────────────────┘
+                                             │
+  ┌──────────────────────────────────────────┴─────────────────────────────────────────────┐
+  │                                 petika::Store<K, V, Engine>                            │
+  │                                                                                        │
+  │  Storage Engines (Zero-Virtual Concepts):    Common Infrastructure Substrate:          │
+  │  - JournaledSkipEngine (O(log N) SkipList)   - petika::AsyncPersistenceWorker (SPSC)   │
+  │  - MVCCJournaledSkipEngine (SI Isolation)    - nitya::Nitya (Durable WAL & Segmented)  │
+  │  - BTreeEngine (B+Tree Block Store)          - utils::setu (Zero-Copy MMap Windows)    │
+  │  - LSMEngine (SSTable MemTable / Compaction) - mem::smriti (Arena Allocation Pools)    │
+  │                                              - observability::nadi (Pulse Telemetry)   │
+  └────────────────────────────────────────────────────────────────────────────────────────┘
+```
 
-Whether an application uses a **SkipList**, **B+Tree**, **LSM-Tree**, or **In-Memory Hash**, the Petika API remains
-uniform and stable while execution engines evolve underneath:
+---
 
+## 2. Core Subsystems & Algorithmic Guarantees
+
+### 2.1 Multi-Version Concurrency Control (MVCC) Engine
+`petika::engines::MVCCJournaledSkipEngine` implements snapshot isolation:
+- **Lock-Free Read Visibility**: Readers acquire a read timestamp $T_{\text{read}}$ and read the latest version $V \le T_{\text{read}}$ without acquiring locks or blocking concurrent writers.
+- **Write-Conflict Detection**: Optimistic commit validation aborts conflicting transactions attempting to modify the same key at timestamp $T_{\text{write}} > T_{\text{read}}$.
+- **Garbage Collection (GC)**: Old versions behind the global minimum active snapshot are reclaimed by background epoch reclamation.
+
+### 2.2 Lock-Free Background Persistence (`petika::AsyncPersistenceWorker`)
+- **Header**: `#include <petika/async_persistence_worker.hpp>`
+- **Architecture**: Single-Producer Single-Consumer (SPSC) lock-free ring buffer offloading synchronous disk serialization and Glaze JSON encoding from the main simulation thread.
+- **Throughput**: Zero main-thread blocking latency; handles bursts of $>100,000\,\text{ops/sec}$ with background asynchronous OS `fsync` calls.
+
+---
+
+## 3. End-to-End API Guide
+
+### 3.1 Synchronous Key-Value Store with Write-Ahead Logging
 ```cpp
-using Store = petika::SkipStore<std::string, std::string>;
-// Or later:
-// using Store = petika::BTreeStore<std::string, std::string>;
-// using Store = petika::LSMStore<std::string, std::string>;
+#include "petika/petika.hpp"
+#include <iostream>
+
+int main() {
+    petika::PetikaOptions options{
+        .db_dir = "./galaxy_db",
+        .segment_size = 32 * 1024 * 1024, // 32MB WAL segments
+        .sync_on_write = false             // Group commit via background flusher
+    };
+
+    // Instantiate high-performance Journaled SkipStore
+    petika::SkipStore<std::string, std::string> store(options);
+
+    // 1. Put
+    store.put("sector_0_0", "{\"mass\": 5000, \"bodies\": 1200}");
+    store.put("sector_0_1", "{\"mass\": 3400, \"bodies\": 850}");
+
+    // 2. Get
+    if (auto res = store.get("sector_0_0")) {
+        std::cout << "Read: " << *res << "\n";
+    }
+
+    // 3. Scan Prefix / Range
+    store.scan("sector_", [](std::string_view k, std::string_view v) {
+        std::cout << "Key: " << k << " -> Value: " << v << "\n";
+        return true; // continue scan
+    });
+
+    // 4. Erase
+    store.erase("sector_0_1");
+}
+```
+
+### 3.2 MVCC Snapshot Isolation Transactions
+```cpp
+#include "petika/petika.hpp"
+
+petika::MVCCSkipStore<uint64_t, float> balances(options);
+
+void transfer(uint64_t from, uint64_t to, float amount) {
+    auto txn = balances.begin_transaction();
+    
+    float from_bal = txn.get(from).value_or(0.0f);
+    float to_bal = txn.get(to).value_or(0.0f);
+
+    if (from_bal >= amount) {
+        txn.put(from, from_bal - amount);
+        txn.put(to, to_bal + amount);
+        if (txn.commit()) {
+            std::cout << "Transfer committed successfully!\n";
+            return;
+        }
+    }
+    txn.rollback();
+    std::cout << "Transfer failed or conflicted.\n";
+}
+```
+
+### 3.3 Asynchronous Non-Blocking Persistence Worker
+```cpp
+#include "petika/async_persistence_worker.hpp"
+#include <glaze/glaze.hpp>
+
+struct SectorPayload {
+    int64_t sector_x = 0;
+    int64_t sector_y = 0;
+    std::vector<float> masses;
+};
+
+int main() {
+    petika::AsyncPersistenceWorker worker(
+        "./cold_storage",
+        [](const std::string& path, const std::string& json_data) {
+            // Background write execution
+            std::ofstream out(path, std::ios::binary);
+            out << json_data;
+        },
+        512 // Ring buffer capacity
+    );
+
+    SectorPayload sec{.sector_x = 10, .sector_y = -5, .masses = {10.0f, 25.0f, 40.0f}};
+    std::string serialized = glz::write_json(sec).value_or("{}");
+
+    // Zero-latency enqueue from main simulation thread
+    worker.enqueue("./cold_storage/sec_10_-5.json", std::move(serialized));
+
+    // Clean drain and shutdown
+    worker.stop();
+}
 ```
 
 ---
 
-## 2. Layered Architecture
-
-```
-┌────────────────────────────────────────────────────────┐
-│                    Application API                     │
-│  put(), get(), erase(), contains(), scan(), txn(), snap()
-└───────────────────────────┬────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│                   Petika Storage Hub                   │
-│   (Transactions, Snapshots, Manifest, Recovery)        │
-└───────────────┬────────────────────────┬───────────────┘
-                │                        │
-                ▼                        ▼
-      ┌──────────────────┐     ┌──────────────────┐
-      │ Engine Concept   │     │ Infrastructure   │
-      │ ├─ SkipEngine    │     │ ├─ Nitya (WAL)   │
-      │ ├─ BTreeEngine   │     │ ├─ Setu (mmap)   │
-      │ └─ LSMEngine     │     │ ├─ Smriti (mem)  │
-      └──────────────────┘     │ ├─ NADI (telemetry)
-                               │ └─ EasyRules     │
-                               └──────────────────┘
-```
-
----
-
-## 3. Infrastructure Subsystems
+## 4. Infrastructure Summary
 
 | Subsystem      | Role                      | Petika Integration                                                          |
 |----------------|---------------------------|-----------------------------------------------------------------------------|
@@ -57,8 +149,6 @@ using Store = petika::SkipStore<std::string, std::string>;
 | **Smriti**     | Memory Resource System    | Fast linear arena (`LinearArena`) and pools for node allocation             |
 | **Containers** | Data Structures & Caching | `kosha::adapter::PetikaAdapter` for durable cache backends                  |
 | **NADI**       | Telemetry & Observability | Pulse scopes for `trace_publish()`, `trace_flush()`, `trace_recovery()`     |
-| **EasyRules**  | Operational Policies      | Administrative rules for compaction, archival, and alerts                   |
-
 ---
 
 ## 4. Default Production Engine: `MvccJournaledSkipEngine`

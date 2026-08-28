@@ -103,6 +103,12 @@ Concrete named algorithms per container, with the header they live in.
 - **slot_map** — generational slot map with stable addresses.
 - **generational_handle** — stale-safe phantom-typed handle (foundation for slot_map / registries).
 
+### Spatial & Dynamic Storage
+
+- **SpatialHashGrid** — $O(N)$ zero-allocation broadphase grid with SplitMix64 coordinate hashing and Morton Z-order cache locality.
+- **SoAVector** — policy-driven Structure-of-Arrays vector (`StaticStoragePolicy`, `SmallVectorStoragePolicy`, `DynamicStoragePolicy`) with SIMD unrolled vectorization.
+- **BarnesHutTree** — $O(N \log N)$ hierarchical multipole gravity tree with unrolled fast reciprocal square root evaluation.
+
 ### Dynamic / Inline Storage
 
 - **SmallVector** — SBO dynamic array. See [SmallVector.md](SmallVector.md).
@@ -110,8 +116,7 @@ Concrete named algorithms per container, with the header they live in.
 
 ### Lock-Free
 
-- **RingBuffer** (SPSC), **MPMCQueue** (Vyukov), **MPSCQueue** (Michael-Scott), **AtomicStack** (Treiber), *
-  *HazardRegistry** (hazard pointers). See [lockfree_containers.md](lockfree_containers.md).
+- **RingBuffer** (SPSC), **MPMCQueue** (Vyukov), **MPSCQueue** (Michael-Scott), **AtomicStack** (Treiber), **HazardRegistry** (hazard pointers). See [lockfree_containers.md](lockfree_containers.md).
 
 ### Symbol / Interning
 
@@ -123,7 +128,7 @@ Concrete named algorithms per container, with the header they live in.
 
 - **descriptor_registry** — generational-handle registry keyed by FNV-1a name hash.
 - **content_store** — SHA-256 content-addressed blob store (filesystem + Setu backends).
-- **Kosha** — Robin-Hood cache with compile-time thread-safety grade.
+- **Kosha** — Robin-Hood open-addressing cache with ARC, LFU, LRU, FIFO, TTL, and cluster skeleton. See [kosha.md](kosha.md).
 - **canonical_codec** — deterministic serialization with sorted string table.
 - **conversion_graph** — Dijkstra least-cost conversion-path finder.
 
@@ -135,16 +140,22 @@ Concrete named algorithms per container, with the header they live in.
 
 ## Detailed Docs
 
-| Container            | Doc                                                                  |
-|----------------------|----------------------------------------------------------------------|
-| LiteGraph            | [LiteGraph.md](LiteGraph.md) · [tutorial](../tutorials/LiteGraph.md) |
-| egraph               | [egraph.md](egraph.md)                                               |
-| NAryTree             | [NAryTree.md](NAryTree.md)                                           |
-| SmallVector          | [SmallVector.md](SmallVector.md)                                     |
-| SparseSet            | [SparseSet.md](SparseSet.md)                                         |
-| Lock-free containers | [lockfree_containers.md](lockfree_containers.md)                     |
-| InternPool           | [symbol/InternPool.md](symbol/InternPool.md)                         |
-| SymbolTable          | [symbol/SymbolTable.md](symbol/SymbolTable.md)                       |
+| Container / Subsystem | Dedicated Documentation Guide |
+|:---|:---|
+| **Spatial Acceleration Structures** | [spatial.md](spatial.md) (`BarnesHutTree`, `SpatialHashGrid`, `AABBTree`) |
+| **Structure-of-Arrays & Static Vector** | [soa_vector.md](soa_vector.md) (`SoAVector` SIMD Kinematics, `static_vector`) |
+| **Handles, SlotMaps & Registries** | [handle_and_registry.md](handle_and_registry.md) (`generational_handle`, `slot_map`, `descriptor_registry`, `content_store`) |
+| **High-Performance Cache** | [kosha.md](kosha.md) (`kosha::core`, LRU/LFU/FIFO/ARC, `FlatHashStorage`, Sharding, TTL) |
+| **Multidimensional Tensor Engine** | [tensor.md](tensor.md) (`ts::tensor`, `ts::edsl`, MLX GPU backend, SmallTensor) |
+| **Versioned State & MVCC Substrate** | [anukrama.md](anukrama.md) (Immutable version chains, Snapshot isolation, `atomic_clock`) |
+| **B+ Tree Block Storage** | [bplus_tree.md](bplus_tree.md) (SoA node layouts, Highway SIMD search, Intrusive freelist recycling) |
+| **Lock-Free Concurrency Primitives** | [lockfree_containers.md](lockfree_containers.md) (Vyukov `MPMCQueue`, `RingBuffer`, `HazardRegistry`) |
+| **Math Vectors & Graphics Primitives**| [math_vector.md](math_vector.md) (`vec2/3/4`, `mat2/3/4`, `quat`, Look-At view & Perspective projections) |
+| **Small-Buffer Dynamic Array** | [SmallVector.md](SmallVector.md) (Inline SBO byte budgeting, allocator traits) |
+| **Sparse Set Indexing** | [SparseSet.md](SparseSet.md) (Briggs-Torczon dual-buffer sparse set) |
+| **LiteGraph Network Analysis** | [LiteGraph.md](LiteGraph.md) · [tutorial](../tutorials/LiteGraph.md) (30+ Graph algorithms, SIMD sweeps) |
+| **E-Graph Equality Saturation** | [egraph.md](egraph.md) (Congruence closure, AST rewriting) |
+| **N-Ary Tree Hierarchy** | [NAryTree.md](NAryTree.md) (First-child next-sibling pointer trees) |
+| **String Interning Pool** | [symbol/InternPool.md](symbol/InternPool.md) (Concurrent atomic string interning) |
+| **Symbol Table & Namespace Trie** | [symbol/SymbolTable.md](symbol/SymbolTable.md) (Scoped symbol resolution) |
 
-Containers without a dedicated doc are indexed above with their algorithm and header; the header comment
-block is the authoritative reference for each.

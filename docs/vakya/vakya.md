@@ -1358,3 +1358,90 @@ This means frontends that compose with `type_arena` get structural hash-consing 
 
 Pebble owns Vākya independently. A downstream project includes the Vākya headers it needs and may define ADL
 `structural_unwrap` overloads for its own transparent wrapper types. Vākya neither includes nor names consumer types.
+
+---
+
+## Master End-to-End Vākya Pipeline Examples
+
+### 1. Structural AST Construction, Hash Deduplication & Folds
+```cpp
+#include "vakya/vakya.hpp"
+#include <iostream>
+
+using namespace vakya;
+
+int main() {
+    // 1. Build immutable structural AST nodes
+    auto x = var("x");
+    auto two = lit(2);
+    auto expr1 = add(mul(two, x), lit(5)); // 2 * x + 5
+    auto expr2 = add(mul(lit(2), var("x")), lit(5)); // Identical AST
+
+    // 2. Exact Structural Hash Equivalence (O(1) comparison without pointer chasing)
+    std::cout << "Expr 1 Hash: " << structural_hash(expr1) << "\n";
+    std::cout << "Expr 2 Hash: " << structural_hash(expr2) << "\n";
+    assert(structural_hash(expr1) == structural_hash(expr2));
+
+    // 3. Tree Depth Fold
+    size_t depth = tree::fold(expr1, [](auto tag, auto&&... child_depths) -> size_t {
+        size_t max_c = 0;
+        ((max_c = std::max(max_c, child_depths)), ...);
+        return 1 + max_c;
+    });
+    std::cout << "Expression Depth: " << depth << "\n";
+}
+```
+
+### 2. Declarative Pattern Matching & Algebraic Simplification
+```cpp
+#include "vakya/vakya.hpp"
+#include "vakya/pattern.hpp"
+#include "vakya/rewrite.hpp"
+#include <iostream>
+
+using namespace vakya;
+using namespace vakya::pattern;
+
+int main() {
+    // Rule: x * 0 -> 0
+    auto x_pat = capture("x");
+    auto zero_mul_rule = make_rewrite_rule(
+        mul(x_pat, lit(0)),
+        [](const MatchContext& ctx) { return lit(0); }
+    );
+
+    // Expression: (y + 10) * 0
+    auto target = mul(add(var("y"), lit(10)), lit(0));
+
+    // Apply rewrite rule
+    auto simplified = apply_rewrite(target, zero_mul_rule);
+    std::cout << "Simplified AST: " << to_string(simplified) << "\n"; // Output: "0"
+}
+```
+
+### 3. Hindley-Milner Type Inference with Tarka SMT Verification
+```cpp
+#include "vakya/vakya_types.hpp"
+#include "vakya/smt.hpp"
+#include <iostream>
+
+int main() {
+    vakya::types::type_arena arena;
+    vakya::types::type_environment env;
+
+    // Register primitive types
+    auto t_int  = arena.make_primitive(vakya::types::primitive_kind::i32);
+    auto t_bool = arena.make_primitive(vakya::types::primitive_kind::boolean);
+
+    // Create type variables for polymorphic function: fn(x: ?T) -> ?T
+    auto var_t = arena.make_variable("T");
+    auto fn_type = arena.make_function({var_t}, var_t);
+
+    // Unification of ?T with i32
+    vakya::types::unification_solver unifier(arena);
+    auto result = unifier.unify(var_t, t_int);
+    if (result.has_value()) {
+        std::cout << "Unified type variable T to: " << arena.to_string(unifier.resolve(var_t)) << "\n";
+    }
+}
+```

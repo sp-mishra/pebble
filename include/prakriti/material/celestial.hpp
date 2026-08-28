@@ -1241,6 +1241,42 @@ evaluate_sph_roche_lobe_stripping(const pebble::math::vec2& donor_pos, float don
     return state;
 }
 
+// ── 40. Multi-Phase Supernova Remnant (SNR) Blast Wave Evolution ──────────────
+
+struct SNRBlastState {
+    float radius = 0.0f;
+    float shock_velocity = 0.0f;
+    float post_shock_compression = 1.0f;
+    bool  is_snowplow_phase = false;
+};
+
+// Evaluates transition from adiabatic Sedov-Taylor ($R \propto t^{2/5}$) to radiative snowplow ($R \propto t^{1/4}$)
+[[nodiscard]] inline SNRBlastState
+evaluate_snr_multiphase_expansion(float explosion_energy, float age_sec, float ism_density = 1.0f) noexcept {
+    SNRBlastState state;
+    const float t = std::max(age_sec, 0.01f);
+    // Transition time from Sedov-Taylor adiabatic expansion to radiative snowplow cooling (~0.85s in sim scale)
+    constexpr float t_transition = 0.85f;
+
+    if (t < t_transition) {
+        // Sedov-Taylor adiabatic phase: R(t) = 1.15 * (E / \rho)^{1/5} * t^{2/5}
+        const float r0 = 1.15f * std::pow(explosion_energy / std::max(ism_density, 0.1f), 0.2f);
+        state.radius = r0 * std::pow(t, 0.40f) * 65.0f;
+        state.shock_velocity = (0.40f * state.radius) / t;
+        state.post_shock_compression = 4.0f; // Strong adiabatic Rankine-Hugoniot compression
+        state.is_snowplow_phase = false;
+    } else {
+        // Radiative pressure-driven Snowplow phase: R(t) \propto t^{1/4}
+        const float r_trans = 1.15f * std::pow(explosion_energy / std::max(ism_density, 0.1f), 0.2f) * std::pow(t_transition, 0.40f) * 65.0f;
+        state.radius = r_trans * std::pow(t / t_transition, 0.25f);
+        state.shock_velocity = (0.25f * state.radius) / t;
+        state.post_shock_compression = 12.0f; // High radiative isothermal compression -> initiates protostellar collapse
+        state.is_snowplow_phase = true;
+    }
+
+    return state;
+}
+
 } // namespace prakriti::celestial
 
 

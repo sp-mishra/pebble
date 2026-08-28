@@ -266,3 +266,50 @@ timeline.update(delta_time);
 | `prakriti` | Thermodynamic phase transitions, heat propagation, and physical particle impulses. |
 | `gati` | ECS entity property bindings and deterministic fixed-clock coordination. |
 | `kalpana` | Contour rendering, procedural fills, and Kubelka-Munk pigment animations. |
+
+---
+
+## 9. Non-Linear Camera Trauma & Exact Damped Spring Motion
+
+### 9.1 Visceral Screen-Shake with Perlin Noise ($\text{Trauma}^2$)
+Spandana implements Squirrel Eiserloh's non-linear trauma screen shake:
+$$\text{Shake} = \text{Trauma}^2 \times \text{MaxOffset} \times \text{Noise}(f \cdot t)$$
+
+```cpp
+#include "spandana/spandana.hpp"
+#include <iostream>
+
+int main() {
+    spandana::CameraShake shake;
+
+    // Trigger severe cosmic impact or supernova blast
+    shake.add_trauma(0.85f); // Trauma in [0, 1]
+
+    for (int frame = 0; frame < 60; ++frame) {
+        shake.update(0.016f); // Decays trauma over time (trauma -= decay * dt)
+        
+        pebble::math::vec2 offset = shake.get_offset();
+        float angle = shake.get_angle();
+
+        std::cout << "Frame " << frame << " -> Offset: (" << offset[0] << ", " << offset[1] << ") Angle: " << angle << "\n";
+    }
+}
+```
+
+### 9.2 Analytical Harmonic Spring Dynamics (Zero Numerical Drift)
+```cpp
+#include "spandana/spandana.hpp"
+
+// Critical damped spring (zeta = 1.0, omega = 15 rad/s)
+spandana::HarmonicSpring<float> spring{
+    .frequency = 15.0f,
+    .damping_ratio = 1.0f
+};
+
+float position = 0.0f;
+float velocity = 0.0f;
+float target = 100.0f;
+
+// Exact analytical closed-form evaluation without Euler integration drift
+spring.step(position, velocity, target, 0.016f);
+```

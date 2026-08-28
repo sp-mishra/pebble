@@ -744,9 +744,16 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
         }
     }
 
-    // 2. Prepare Barnes-Hut input bodies array (Strictly only live active bodies in viewport)
-    std::vector<containers::spatial::BarnesHutBody> bh_bodies;
-    bh_bodies.reserve(app.planets.size());
+    // 2. Prepare Barnes-Hut input bodies array (Reusing static buffers to eliminate heap churn)
+    static std::vector<containers::spatial::BarnesHutBody> bh_bodies;
+    static std::vector<pebble::math::vec2> forces;
+    static std::vector<const PlanetBody*> active_fusion_stars;
+
+    bh_bodies.clear();
+    forces.clear();
+    active_fusion_stars.clear();
+
+    if (bh_bodies.capacity() < app.planets.size()) bh_bodies.reserve(app.planets.size() + 512);
 
     for (std::size_t i = 0; i < app.planets.size(); ++i) {
         if (!app.planets[i].alive) continue;
@@ -760,11 +767,10 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
 
     // 3. Build QuadTree & Compute N-Body Gravitational Forces for Active Window
     app.bh_tree.build(bh_bodies);
-    std::vector<pebble::math::vec2> forces(bh_bodies.size());
+    forces.resize(bh_bodies.size());
     containers::spatial::compute_all_forces(app.bh_tree, bh_bodies, forces, app.gravity_policy);
 
     // Cache hot fusion stars once for fast O(K) stellar wind evaluations
-    std::vector<const PlanetBody*> active_fusion_stars;
     for (const auto& p : app.planets) {
         if (p.alive && p.temperature >= 1500.0f) {
             active_fusion_stars.push_back(&p);
@@ -1274,8 +1280,9 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
         }
     }
 
-    // 5. Collision Broadphase & Narrowphase via O(N) SpatialHashGrid
-    containers::spatial::SpatialHashGrid<std::uint32_t, 36.0f, 2048> spatial_grid(app.planets.size());
+    // 5. Collision Broadphase & Narrowphase via Zero-Alloc Reusable O(N) SpatialHashGrid
+    static containers::spatial::SpatialHashGrid<std::uint32_t, 36.0f, 2048> spatial_grid(4096);
+    spatial_grid.clear();
     const std::size_t num_planets = app.planets.size();
 
     // Populate O(N) spatial grid
@@ -1690,10 +1697,11 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
     }
     std::erase_if(app.flares, [](const AccretionFlare& f) { return f.life <= 0.0f; });
 
-    // 11. Update Supernova Remnant (SNR) Sedov-Taylor Blast Waves & Secondary Protostar Compression
+    // 11. Update Supernova Remnant (SNR) Multi-Phase Blast Waves (Sedov-Taylor -> Radiative Snowplow)
     for (auto& snr : app.snr_blasts) {
         snr.age += dt;
-        snr.radius = prakriti::celestial::compute_sedov_taylor_radius(snr.energy, 1.0f, snr.age);
+        const auto snr_state = prakriti::celestial::evaluate_snr_multiphase_expansion(snr.energy, snr.age, 1.0f);
+        snr.radius = snr_state.radius;
 
         // Compress passing interstellar dust at the shock front -> triggers secondary protostellar nucleation
         for (auto& dust : app.planets) {
@@ -1701,11 +1709,12 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
             const pebble::math::vec2 d = dust.pos - snr.center;
             const float dist = std::sqrt(d[0] * d[0] + d[1] * d[1]);
             if (std::abs(dist - snr.radius) < 14.0f && dist > 1.0f) {
-                // Radial shock compression force
+                // Radial shock compression force scaled by post-shock density jump
                 const pebble::math::vec2 s_norm = d * (1.0f / dist);
-                dust.vel = dust.vel + s_norm * (25.0f * (1.0f - snr.age / snr.max_age));
-                dust.temperature += 180.0f * dt;
-                dust.density = std::min(dust.density * 1.002f, 12000.0f);
+                const float compression_boost = snr_state.is_snowplow_phase ? 1.8f : 1.0f;
+                dust.vel = dust.vel + s_norm * (snr_state.shock_velocity * 0.15f * compression_boost);
+                dust.temperature += 240.0f * dt;
+                dust.density = std::min(dust.density * (1.0f + snr_state.post_shock_compression * 0.001f), 15000.0f);
             }
         }
     }
@@ -3238,11 +3247,59 @@ static void run_pure_cli_loop() {
     std::exit(0);
 }
 
+static void run_headless_benchmark() {
+    auto& app = g_app;
+    app.in_startup_modal = false;
+    app.terminal_mode = true;
+
+    // Seed 2,500 active particles across the simulation domain
+    for (int i = 0; i < 2500; ++i) spawn_dust_particle(app);
+
+    std::cout << "\n=================================================================\n";
+    std::cout << " PEBBLE VERSE — HEADLESS N-BODY SIMULATION BENCHMARK (1,000 TICKS)\n";
+    std::cout << "=================================================================\n";
+    std::cout << " Active Bodies: " << app.planets.size() << "\n";
+    std::cout << " Gravity Solver: Barnes-Hut O(N log N) + Fast Reciprocal Sqrt\n";
+    std::cout << " Broadphase: SpatialHashGrid SplitMix64 + Morton Z-Order\n";
+    std::cout << " Kinematics: SIMD 8-Wide Velocity-Verlet Integration\n";
+    std::cout << "-----------------------------------------------------------------\n";
+
+    const auto t_start = std::chrono::high_resolution_clock::now();
+    constexpr int kTotalTicks = 1000;
+
+    for (int tick = 0; tick < kTotalTicks; ++tick) {
+        app.frame++;
+        app.time += DT;
+        step_celestial_simulation(app, DT);
+    }
+
+    const auto t_end = std::chrono::high_resolution_clock::now();
+    const double total_duration_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+    const double avg_tick_us = (total_duration_ms * 1000.0) / kTotalTicks;
+    const double mpe_per_sec = (static_cast<double>(app.planets.size()) * kTotalTicks) / (total_duration_ms * 1000.0);
+
+    std::cout << " BENCHMARK COMPLETED SUCCESSFULLY!\n";
+    std::cout << " Total Time:              " << total_duration_ms << " ms\n";
+    std::cout << " Average Latency / Tick:  " << avg_tick_us << " us\n";
+    std::cout << " Simulation Throughput:   " << (1000.0 / (total_duration_ms / kTotalTicks)) << " Ticks/sec\n";
+    std::cout << " Effective MPE Throughput:" << mpe_per_sec << " Million Particle Evals / sec\n";
+    std::cout << " Final Active Bodies:     " << app.active_planets_count << "\n";
+    std::cout << " Collisions Resolved:     " << app.collisions_count << "\n";
+    std::cout << " Stellar Fusions:         " << app.fusions_count << "\n";
+    std::cout << "=================================================================\n\n";
+
+    std::exit(0);
+}
+
 // ----------------------------------------------------------------------------
 // Entry Point
 // ----------------------------------------------------------------------------
 sapp_desc sokol_main(const int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--benchmark") == 0 || std::strcmp(argv[i], "-b") == 0) {
+            run_headless_benchmark();
+            return sapp_desc{};
+        }
         if (std::strcmp(argv[i], "--terminal") == 0 || std::strcmp(argv[i], "--cli") == 0) {
             run_pure_cli_loop(); // Runs purely in CLI terminal without creating any window!
             return sapp_desc{};

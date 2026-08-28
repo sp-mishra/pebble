@@ -318,3 +318,59 @@ game.events().publish(HeatPulseEvent{.center = {2.0f, 1.0f}, .radius = 3.0f, .te
 ### 9.3 Unified Celestial System (`gati::systems::CelestialSystem`)
 - **Header**: `#include <gati/systems/celestial_system.hpp>`
 - **Purpose**: Reusable N-body celestial simulation system orchestrating Prakriti gravitational multipoles, $O(N)$ `SpatialHashGrid` broadphase collision impulse solving, and symplectic Verlet integration with NADI telemetry instrumentation.
+
+---
+
+## 10. End-to-End Open-World Celestial Engine Example
+
+```cpp
+#include "gati/gati.hpp"
+#include "gati/systems/celestial_system.hpp"
+#include "gati/world/spatial_tile_streamer.hpp"
+#include <iostream>
+
+struct Planet {
+    pebble::math::vec2 pos{0.0f, 0.0f};
+    pebble::math::vec2 vel{0.0f, 0.0f};
+    pebble::math::vec2 acc{0.0f, 0.0f};
+    float mass = 100.0f;
+    float radius = 5.0f;
+    bool alive = true;
+};
+
+int main() {
+    // 1. Initialize Gati Game Runtime & Celestial System
+    gati::Game game;
+    gati::systems::CelestialSystem celestial_sys(18000.0f, 0.5f);
+    prakriti::celestial::SectorCacheManager sector_cache(64);
+
+    // 2. Setup Spatial Tile Streamer for 2D Open World Viewport
+    gati::world::SpatialTileStreamer streamer(1024.0f, 256.0f); // 1024px tiles with 256px margin
+
+    std::vector<Planet> solar_system = {
+        {.pos = {0.0f, 0.0f}, .vel = {0.0f, 0.0f}, .mass = 10000.0f, .radius = 16.0f},  // Central Sun
+        {.pos = {120.0f, 0.0f}, .vel = {0.0f, 38.0f}, .mass = 10.0f, .radius = 2.5f},   // Orbiting Earth
+        {.pos = {220.0f, 0.0f}, .vel = {0.0f, 28.0f}, .mass = 80.0f, .radius = 6.0f}    // Gas Giant
+    };
+
+    // 3. Fixed-Rate Game Loop
+    constexpr float dt = 0.016f;
+    for (int frame = 0; frame < 600; ++frame) {
+        // Stream active world chunks around player camera
+        pebble::math::vec2 camera_pos = solar_system[1].pos;
+        streamer.update_viewport(camera_pos[0], camera_pos[1], 1280.0f, 720.0f,
+            [](int64_t tx, int64_t ty) {
+                // Chunk discovered: load sector data
+            },
+            [](int64_t tx, int64_t ty) {
+                // Chunk active in viewport
+            }
+        );
+
+        // Execute unified Gati celestial step
+        celestial_sys.step(solar_system, sector_cache, dt);
+    }
+
+    std::cout << "Earth new position: (" << solar_system[1].pos[0] << ", " << solar_system[1].pos[1] << ")\n";
+}
+```

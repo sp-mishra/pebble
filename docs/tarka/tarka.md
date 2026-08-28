@@ -307,6 +307,62 @@ smt_solver.bridge().assert_tarka(f);
 auto status = smt_solver.bridge().check_sat();  // solve_status::solved / unsatisfiable / deferred
 ```
 
-**Choose Tarka** when you need solver-agnostic term construction + dispatch as a substrate below Vākya/Lithe. *
-*Choose `vakya::types::tarka_smt_backend`** when you want Z3 arithmetic constraint solving wired into the Vakya type
-system via Tarka. **Choose `vakya::types::smt_constraint_solver<no_smt_backend>`** when you only need the deferred stub.
+---
+
+## 11. Master End-to-End SMT Solving Examples
+
+### 11.1 BitVector Arithmetic & Overflow Verification
+```cpp
+#include "tarka/tarka.hpp"
+#include "tarka/backends/z3_backend.hpp"
+#include <iostream>
+
+int main() {
+    tarka::Context ctx;
+    auto bv32 = ctx.make_sort(tarka::SortKind::BitVec, {}, 32);
+
+    // Symbols
+    auto a = ctx.make_symbol("a", bv32);
+    auto b = ctx.make_symbol("b", bv32);
+    auto max_val = ctx.make_value(std::uint32_t{0xFFFFFFFF}, bv32);
+
+    // Formula: a > 0 && b > 0 && (a + b < a) [Checking for unsigned 32-bit addition overflow]
+    auto zero = ctx.make_value(std::uint32_t{0}, bv32);
+    tarka::Term overflow_condition = (a > zero) && (b > zero) && ((a + b) < a);
+
+    tarka::RouterEngine<tarka::backend::z3_backend> solver;
+    solver.assert_formula(overflow_condition);
+
+    auto result = solver.check_sat();
+    if (result && *result == tarka::SatResult::Sat) {
+        std::cout << "BitVector addition overflow is SATISFIABLE!\n";
+        auto model_a = solver.get_value(a);
+        auto model_b = solver.get_value(b);
+        std::cout << "Witness: a = " << model_a->as_uint64() << ", b = " << model_b->as_uint64() << "\n";
+    }
+}
+```
+
+### 11.2 Asynchronous Portfolio Solver Race
+```cpp
+#include "tarka/tarka.hpp"
+#include "tarka/portfolio.hpp"
+#include "tarka/backends/z3_backend.hpp"
+#include <iostream>
+
+void solve_async_portfolio(tarka::Term formula) {
+    // Spawns parallel solvers with cooperative stop tokens; first definitive result wins
+    tarka::PortfolioEngine<tarka::backend::z3_backend> portfolio;
+    
+    portfolio.assert_formula(formula);
+    auto future_result = portfolio.check_sat_async();
+
+    // Do other work while solvers race in background...
+    auto final_sat = future_result.get();
+    if (final_sat == tarka::SatResult::Sat) {
+        std::cout << "Portfolio solved: SAT\n";
+    } else if (final_sat == tarka::SatResult::Unsat) {
+        std::cout << "Portfolio solved: UNSAT\n";
+    }
+}
+```

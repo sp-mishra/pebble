@@ -595,6 +595,75 @@ Located in `#include <prakriti/material/celestial.hpp>`:
 - **Fast 4-Way Unrolled Traversal**: Unrolls quadtree child expansion directly into the local execution stack and uses fast reciprocal square roots ($\frac{1}{\sqrt{r^2 + \epsilon^2}}$), eliminating dynamic recursion overhead.
 - **Multi-Scale Logarithmic Cosmic Zoom**: Provides smooth camera scaling from $0.25\times$ (Deep Universe cluster field) to $3.5\times$ (individual planetary surface and accretion ring close-ups).
 
+---
+
+## 52. Multi-Phase Supernova Remnant (SNR) Blast Wave Evolution
+- **Adiabatic Sedov-Taylor Stage ($R \propto t^{2/5}$)**: Early high-velocity expansion driven by core thermal energy.
+- **Radiative Snowplow Stage ($R \propto t^{1/4}$)**: Late-stage isothermal compression where post-shock density increases $\approx 12\times$, triggering secondary protostellar nucleation in interstellar dust.
+
+---
+
+## 53. High-Throughput Headless Benchmark Mode (`--benchmark`)
+- **Execution**: Run with `./build/src/app/pebble_verse --benchmark` or `-b`.
+- **Telemetry**: Measures pure C++23 compute latency across 1,000 fixed-step ticks, reporting:
+  - Average latency per tick ($\mu\text{s}$)
+  - Simulation frame throughput (Ticks/sec)
+  - Effective million particle evaluations per second (MPE/s)
+  - Dynamic collision, fusion, and nucleation metrics.
+
+---
+
+## 54. Zero-Heap Allocation Hot Path & Persistent Worker Pool
+- **Persistent Pravaha Thread Pool**: Reuses thread pool workers across simulation frames to eliminate OS thread spawning overhead.
+- **Static Arena Vector Recycling**: Recycles `bh_bodies`, `forces`, and `SpatialHashGrid` internal structures with $O(1)$ zero-reallocation resets, ensuring zero heap allocations on the hot simulation loop.
+
+---
+
+## 55. Master End-to-End Multiphysics & Celestial Simulation API
+
+```cpp
+#include "prakriti/prakriti.hpp"
+#include "prakriti/material/celestial.hpp"
+#include <iostream>
+
+int main() {
+    // 1. Evaluate Roche Lobe Overflow between Close Binary System
+    float primary_mass = 50.0f;
+    float primary_radius = 4.0f;
+    float host_mass = 200.0f;
+    float orbital_distance = 60.0f;
+    constexpr float dt = 0.016f;
+
+    auto rlof = prakriti::celestial::evaluate_roche_lobe_overflow(
+        primary_mass, primary_radius, host_mass, orbital_distance, dt
+    );
+
+    if (rlof.is_overflowing) {
+        std::cout << "Roche Lobe Overflow Active!\n";
+        std::cout << "Mass Transfer Rate: " << rlof.mass_transfer_rate << "\n";
+        std::cout << "Nozzle Width (L1):  " << rlof.nozzle_width << "\n";
+    }
+
+    // 2. Evaluate Supernova Remnant Blast Wave (Sedov-Taylor to Snowplow)
+    float explosion_energy = 5000.0f;
+    float blast_age = 1.2f; // Seconds after core collapse
+    auto snr = prakriti::celestial::evaluate_snr_multiphase_expansion(
+        explosion_energy, blast_age, 1.0f
+    );
+
+    std::cout << "SNR Shock Radius:      " << snr.radius << " px\n";
+    std::cout << "Shock Velocity:        " << snr.shock_velocity << " px/s\n";
+    std::cout << "Density Compression:   " << snr.post_shock_compression << "x ("
+              << (snr.is_snowplow_phase ? "Radiative Snowplow" : "Adiabatic Sedov-Taylor") << ")\n";
+
+    // 3. Thermodynamic Surface Hydrology & Atmosphere Retention
+    auto escape = prakriti::celestial::evaluate_atmospheric_escape(
+        primary_mass, primary_radius, 288.0f, 15.0f, dt
+    );
+    std::cout << "Retains Atmosphere:    " << (escape.retains_atmosphere ? "YES" : "NO") << "\n";
+}
+```
+
 
 
 

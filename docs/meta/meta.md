@@ -1244,3 +1244,107 @@ auto seq = meta::reflect_with<meta::adl_backend, TradeOrder>();
 When P2996 lands, only `reflect_backend_t<T>` and the backend dispatch need updating. All caller code remains unchanged.
 
 ---
+
+## 9. Master End-to-End Meta & Reflection Examples
+
+### 9.1 Generic Zero-Boilerplate JSON Serializer Generator
+Using `meta::for_each` and aggregate reflection to generate a complete JSON serializer at compile time:
+
+```cpp
+#include "meta/meta.hpp"
+#include <iostream>
+#include <sstream>
+#include <string>
+
+template <meta::Reflectable T>
+std::string to_json(const T& obj) {
+    std::ostringstream ss;
+    ss << "{";
+    bool first = true;
+
+    meta::for_each(meta::reflect<T>(), [&](auto field) {
+        if (!first) ss << ", ";
+        first = false;
+
+        ss << "\"" << field.name() << "\": ";
+        auto val = field.get(obj);
+        using ValType = std::decay_t<decltype(val)>;
+
+        if constexpr (std::is_same_v<ValType, std::string> || std::is_same_v<ValType, const char*>) {
+            ss << "\"" << val << "\"";
+        } else if constexpr (std::is_arithmetic_v<ValType>) {
+            ss << val;
+        } else if constexpr (meta::Reflectable<ValType>) {
+            ss << to_json(val); // Recursive nested reflection
+        }
+    });
+
+    ss << "}";
+    return ss.str();
+}
+
+struct Transform {
+    float x = 10.5f;
+    float y = -20.0f;
+    float scale = 1.0f;
+};
+
+struct Player {
+    std::string name = "Hero";
+    int health = 100;
+    Transform transform;
+};
+
+int main() {
+    Player p;
+    std::cout << "Generated JSON: " << to_json(p) << "\n";
+    // Output: {"name": "Hero", "health": 100, "transform": {"x": 10.5, "y": -20, "scale": 1}}
+}
+```
+
+### 9.2 Compile-Time Schema Fingerprinting for Binary Wire Protocols
+```cpp
+#include "meta/meta.hpp"
+#include <iostream>
+
+struct PacketHeader {
+    uint32_t magic;
+    uint16_t version;
+    uint32_t payload_size;
+};
+
+// Generates a 64-bit FNV-1a structural hash of all field names and types at compile time
+constexpr uint64_t kPacketSchemaHash = meta::schema_hash<PacketHeader>();
+
+static_assert(kPacketSchemaHash != 0);
+
+int main() {
+    std::cout << "PacketHeader Wire Protocol Schema Hash: 0x" << std::hex << kPacketSchemaHash << "\n";
+}
+```
+
+### 9.3 Type-Safe Enum-to-String and String-to-Enum Conversions
+```cpp
+#include "meta/meta.hpp"
+#include <iostream>
+
+enum class WeaponType {
+    Sword,
+    Bow,
+    MagicStaff,
+    LaserCannon
+};
+
+int main() {
+    // Enum to String
+    WeaponType w = WeaponType::LaserCannon;
+    std::string_view name = meta::enum_to_string(w);
+    std::cout << "Equipped Weapon: " << name << "\n"; // Output: "LaserCannon"
+
+    // String to Enum with std::expected error handling
+    auto parsed = meta::string_to_enum<WeaponType>("MagicStaff");
+    if (parsed.has_value()) {
+        std::cout << "Successfully parsed enum value: " << static_cast<int>(*parsed) << "\n";
+    }
+}
+```

@@ -1,140 +1,109 @@
 # B+ Tree (`pebble::containers::BPlusTree`)
 
-A high-performance, policy-based, zero-overhead **B+ Tree** container implemented in modern C++23/C++26 for Pebble.
+**`pebble::containers::BPlusTree`** (`include/containers/tree/bplus_tree.hpp`) is Pebble's high-performance, policy-based, zero-overhead **B+ Tree** container implemented in modern C++23/C++26. It features Structure-of-Arrays (SoA) node layouts, SIMD-accelerated key searches (Google Highway), intrusive freelist node recycling, transparent string-view lookups, and $O(N)$ bottom-up bulk loading.
 
 ---
 
-## 🚀 Key Architectural Highlights
+## 1. Architectural Overview & SoA Cache Alignment
 
-- **Structure-of-Arrays (SoA) Node Layout**:
-  - Keys and values in `LeafNode` are isolated into separate contiguous cache-aligned buffers.
-  - Key search and SIMD sweeps only touch key cache lines, avoiding cache pollutant value loads until values are actually accessed.
-- **Zero Virtual & Zero RTTI**: Pure compile-time policy-driven architecture with no dynamic polymorphism.
-- **Cache-Line Aligned Nodes**: 64-byte alignment ensures optimal L1/L2 cache locality and eliminates false sharing.
-- **SIMD Search Acceleration**: Google Highway SIMD support for vector-accelerated search across integer and float keys.
-- **Transparent / Heterogeneous Lookups**:
-  - Supports `std::is_transparent` comparators (e.g. `std::less<>`).
-  - Query with `std::string_view` or `const char*` on `std::string` keys with **zero allocations**.
-- **Hardware Software Prefetching**:
-  - Emits prefetch hints on sequential node traversal in `.scan()` and forward iteration.
-- **Intrusive Node Freelist Recycling**:
-  - Internal freelist retains up to `Traits::MaxRecycleNodes` deallocated nodes, eliminating memory allocator thrashing under heavy insert/delete churn.
-- **$O(N)$ Bottom-Up Bulk Loading**:
-  - `BPlusTree::from_sorted(begin, end)` builds balanced B+ trees bottom-up with minimal memory allocations.
+```
+                         B+ TREE NODE CACHE TOPOLOGY (64-BYTE ALIGNED)
+                         
+   InnerNode (Branching Routing):
+   ┌──────────────────────┬──────────────────────┬──────────────────────┐
+   │ Keys (SIMD Aligned)  │ k0 | k1 | k2 | k3    │ (Loaded in 1 AVX/NEON)│
+   ├──────────────────────┼──────────────────────┴──────────────────────┤
+   │ Child Pointers       │ ptr0 | ptr1 | ptr2 | ptr3 | ptr4            │
+   └──────────────────────┴─────────────────────────────────────────────┘
+                                  │
+                                  ▼
+   LeafNode (Data Storage - Structure of Arrays):
+   ┌──────────────────────┬─────────────────────────────────────────────┐
+   │ Keys Array (Contig.) │ "alpha" | "beta" | "delta" | "gamma"        │ <-- Clean Cache Lines
+   ├──────────────────────┼─────────────────────────────────────────────┤
+   │ Values Array (Sep.)  │ 100     | 200    | 300     | 400            │ <-- Only read on hit!
+   ├──────────────────────┼─────────────────────────────────────────────┤
+   │ Linked Leaf Pointers │ PrevLeaf* ◄────────► NextLeaf*              │ <-- Fast O(1) Scans
+   └──────────────────────┴─────────────────────────────────────────────┘
+```
 
 ---
 
-## 📦 Quick Start
+## 2. Key Algorithmic Mechanics
 
-### Ordered Map & Heterogeneous Lookups
+### 2.1 Highway SIMD Key Search
+For numeric keys (integers, floats), inner and leaf nodes leverage SIMD vector instructions to evaluate 8 to 16 key comparisons in a single CPU cycle:
+```cpp
+// Evaluates branch index using vector comparisons
+const auto keys_vec = hn::Load(d, &keys_[0]);
+const auto target_vec = hn::Set(d, search_key);
+const auto mask = hn::Lt(keys_vec, target_vec);
+const size_t branch_idx = hn::CountTrue(d, mask);
+```
 
+### 2.2 Intrusive Freelist Node Recycling
+To eliminate OS memory allocator thrashing during rapid insertion and deletion churn, `BPlusTree` retains an intrusive singly-linked freelist of up to `Traits::MaxRecycleNodes` deallocated nodes. Reallocated nodes reuse warm L1/L2 cache blocks immediately.
+
+---
+
+## 3. End-to-End API Guide
+
+### 3.1 Transparent Zero-Allocation Lookups & Range Scans
 ```cpp
 #include "containers/tree/bplus_tree.hpp"
+#include <iostream>
 #include <string>
 #include <string_view>
 
-using namespace pebble::containers;
-
 int main() {
-    // std::less<> enables heterogeneous / transparent lookups
-    BPlusTree<std::string, int, std::less<>> map;
+    // std::less<> enables heterogeneous / transparent string_view lookups
+    pebble::containers::BPlusTree<std::string, int, std::less<>> map;
 
-    // Insertion
+    // 1. Insertions
     map.insert_or_assign("alpha", 100);
-    map.insert_or_assign("beta", 200);
+    map.insert_or_assign("bravo", 200);
+    map.insert_or_assign("charlie", 300);
 
-    // Transparent lookup using string_view without temporary std::string allocation
-    std::string_view key = "alpha";
-    if (map.contains(key)) {
-        std::cout << "Value: " << map.at(key) << "\n";
+    // 2. Zero-Allocation Lookup using string_view
+    std::string_view query = "bravo";
+    if (map.contains(query)) {
+        std::cout << "Found " << query << ": " << map.at(query) << "\n";
     }
 
-    // High-throughput range scan callback
-    map.scan("a", "b~", [](std::string_view k, int val) {
-        std::cout << k << " -> " << val << "\n";
+    // 3. High-Throughput Range Scan
+    map.scan("a", "c~", [](std::string_view k, int val) {
+        std::cout << "Scan item: " << k << " = " << val << "\n";
     });
-
-    return 0;
 }
 ```
 
-### Custom Branching Factor / Traits
-
+### 3.2 $O(N)$ Bottom-Up Bulk Loading
 ```cpp
-struct CustomTraits {
-    static constexpr std::size_t LeafCapacity = 32;
-    static constexpr std::size_t InnerCapacity = 32;
-    static constexpr bool EnableSIMD = true;
+#include "containers/tree/bplus_tree.hpp"
+#include <vector>
+
+std::vector<std::pair<const int, std::string>> sorted_entries = {
+    {1, "first"}, {2, "second"}, {3, "third"}, {4, "fourth"}
 };
 
-pebble::containers::BPlusTree<uint64_t, uint64_t, std::less<uint64_t>, CustomTraits> tree;
+// Directly constructs a perfectly balanced B+ Tree in O(N) time
+auto tree = pebble::containers::BPlusTree<int, std::string>::from_sorted(
+    sorted_entries.begin(), sorted_entries.end()
+);
 ```
 
----
-
-## 🌊 Pravaha Multi-Threaded Parallel Execution
-
-Include `"containers/tree/bplus_tree_pravaha.hpp"` to run multi-threaded range scans and aggregations over `BPlusTree`:
-
+### 3.3 Pravaha Parallel Map-Reduce over B+ Tree
 ```cpp
 #include "containers/tree/bplus_tree.hpp"
 #include "containers/tree/bplus_tree_pravaha.hpp"
 
-using namespace pebble::containers;
-using namespace pebble::containers::pravaha;
+pebble::containers::BPlusMap<int, int> big_tree;
+// ... populate tree ...
 
-BPlusMap<int, int> map;
-// ... populate map ...
-
-// 1. Parallel Range Scan
-parallel_scan(map, 1000, 50000, [](int k, int v) {
-    // Process item concurrently across available CPU threads
-});
-
-// 2. Parallel Map-Reduce Sum
-long long sum = parallel_reduce(
-    map, 1000, 50000, 0LL,
+// Parallel Map-Reduce across tree leaf ranges
+long long total_sum = pebble::containers::pravaha::parallel_reduce(
+    big_tree, 0, 100000, 0LL,
     [](long long a, long long b) { return a + b; },
     [](int k, int v) { return static_cast<long long>(v); }
 );
 ```
-
----
-
-## 🧠 Smriti Zero-Heap Arena Allocation
-
-Integrate `BPlusTree` with `Smriti` bump memory pools:
-
-```cpp
-#include "containers/tree/bplus_tree.hpp"
-#include "mem/smriti.hpp"
-
-using namespace pebble::containers;
-
-smriti::pools::BumpPool<smriti::domains::SystemRAMDomain> pool{1024 * 1024}; // 1MB pool
-auto arena_map = make_smriti_bplus_map<int, std::string>(pool);
-
-arena_map.insert_or_assign(1, "instant");
-```
-
-### $O(N)$ Bulk Loading
-
-```cpp
-std::vector<std::pair<const int, std::string>> sorted_data = {
-    {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
-};
-
-auto tree = BPlusTree<int, std::string>::from_sorted(sorted_data.begin(), sorted_data.end());
-```
-
----
-
-## ⏱️ Algorithmic Complexity
-
-| Operation | Time Complexity | Notes |
-|:---|:---:|:---|
-| **Point Lookup (`find`, `contains`)** | $O(\log_B N)$ | SoA Cache-line optimized & SIMD-assisted |
-| **Insertion (`insert_or_assign`)** | $O(\log_B N)$ | Freelist recycled; auto-splits nodes |
-| **Deletion (`erase`)** | $O(\log_B N)$ | Automatic borrow/merge rebalancing |
-| **Range Scan (`scan`)** | $O(\log_B N + K)$ | Linear pointer traversal with hardware prefetching |
-| **Bulk Loading (`from_sorted`)** | $O(N)$ | Direct bottom-up construction |

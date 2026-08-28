@@ -498,6 +498,23 @@ TEST_CASE("fast unrolled barnes-hut gravity computation", "[containers][spatial]
     REQUIRE(std::abs(f2[1]) > std::abs(f2[0]) * 10.0f); // Y pull vastly dominates small X pull from body 1
 }
 
+TEST_CASE("snr multi-phase blast wave transition and compression", "[prakriti][celestial][snr_multiphase]") {
+    const float explosion_energy = 1000.0f;
+
+    // Early stage: Sedov-Taylor adiabatic phase (t = 0.2s)
+    const auto early_snr = prakriti::celestial::evaluate_snr_multiphase_expansion(explosion_energy, 0.2f, 1.0f);
+    REQUIRE(!early_snr.is_snowplow_phase);
+    REQUIRE(early_snr.radius > 0.0f);
+    REQUIRE(early_snr.shock_velocity > 0.0f);
+    REQUIRE(early_snr.post_shock_compression == Catch::Approx(4.0f));
+
+    // Late stage: Radiative pressure snowplow phase (t = 1.8s)
+    const auto late_snr = prakriti::celestial::evaluate_snr_multiphase_expansion(explosion_energy, 1.8f, 1.0f);
+    REQUIRE(late_snr.is_snowplow_phase);
+    REQUIRE(late_snr.radius > early_snr.radius);
+    REQUIRE(late_snr.post_shock_compression > early_snr.post_shock_compression);
+}
+
 
 
 
