@@ -661,30 +661,7 @@ evaluate_stellar_spectral_class(float mass, float temp_celsius) noexcept {
     return info;
 }
 
-// ── 19. Lin-Shu Galactic Spiral Arm Density Wave Theory ──────────────────────────────────────
 
-[[nodiscard]] inline pebble::math::vec2
-compute_lin_shu_spiral_density_wave(const pebble::math::vec2& pos, const pebble::math::vec2& galactic_center,
-                                    float galaxy_mass, float pattern_speed = 0.45f, int n_arms = 2) noexcept {
-    const pebble::math::vec2 r_vec = pos - galactic_center;
-    const float r = std::sqrt(r_vec[0] * r_vec[0] + r_vec[1] * r_vec[1]);
-    if (r < 12.0f || r > 500.0f) return pebble::math::vec2{0.0f, 0.0f};
-
-    const float theta = std::atan2(r_vec[1], r_vec[0]);
-    // Logarithmic Spiral Arm Phase: \Phi(r, \theta) = n * (\theta - \Omega_p * t) - k * \ln(r / r_0)
-    constexpr float pitch_angle_factor = 2.8f;
-    const float spiral_phase = static_cast<float>(n_arms) * theta - pitch_angle_factor * std::log(r / 20.0f);
-
-    // Lin-Shu Gravitational Potential Perturbation Force: F_wave = -\nabla \Phi_wave
-    const float wave_amp = (galaxy_mass * 0.035f) / (r + 30.0f);
-    const float force_azimuthal = -std::sin(spiral_phase) * wave_amp;
-    const float force_radial = -std::cos(spiral_phase) * wave_amp * 0.4f;
-
-    const pebble::math::vec2 r_hat = r_vec * (1.0f / r);
-    const pebble::math::vec2 theta_hat{-r_hat[1], r_hat[0]};
-
-    return r_hat * force_radial + theta_hat * force_azimuthal;
-}
 
 // ── 20. Stellar Wind & Coronal Mass Ejection (CME) Radiation Pressure ───────────────────────
 

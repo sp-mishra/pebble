@@ -391,8 +391,12 @@ static void spawn_dust_particle(PebbleVerseApp& app, bool user_spawn = false, fl
         };
     }
 
-    // Zero initial linear velocity: motion is born purely from mutual N-body gravity!
-    p.vel = pebble::math::vec2{0.0f, 0.0f};
+    // Organic Primordial Kinematics:
+    // Cold Jeans turbulence & thermal velocity dispersion (Maxwell-Boltzmann like)
+    // Smooth velocity perturbation prevents artificial radial collapse and allows natural angular momentum development
+    const float therm_speed = 1.2f + dist01(app.rng) * 2.8f;
+    const float therm_angle = dist01(app.rng) * 6.2831853f;
+    p.vel = pebble::math::vec2{std::cos(therm_angle), std::sin(therm_angle)} * therm_speed;
     p.prev_pos = p.pos;
 
     // Random micro-spin / angular velocity (radians/sec)
@@ -487,25 +491,12 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
     std::vector<pebble::math::vec2> forces(bh_bodies.size());
     containers::spatial::compute_all_forces(app.bh_tree, bh_bodies, forces, app.gravity_policy);
 
-    // Map forces back to planet bodies & apply relativistic Kerr frame-dragging
+    // Map forces back to planet bodies
     std::size_t bh_idx = 0;
     for (std::size_t i = 0; i < app.planets.size(); ++i) {
         if (!app.planets[i].alive) continue;
         const pebble::math::vec2 f_grav = forces[bh_idx++];
         app.planets[i].acc = f_grav * (1.0f / app.planets[i].mass);
-
-        // Relativistic Kerr Spacetime Frame-Dragging (Lense-Thirring Swirl)
-        for (const auto& bh : app.planets) {
-            if (!bh.alive || (&bh == &app.planets[i])) continue;
-            if (bh.is_singularity || bh.is_neutron_star || bh.mass > 600.0f) {
-                const auto drag = prakriti::celestial::compute_frame_dragging_swirl(
-                    app.planets[i].pos, bh.pos, bh.mass, bh.radius, bh.omega
-                );
-                if (drag.is_in_ergosphere) {
-                    app.planets[i].acc = app.planets[i].acc + drag.azimuthal_force * (1.0f / app.planets[i].mass);
-                }
-            }
-        }
 
         // Stellar Wind & Radiation Pressure (Pushes light dust outward from hot fusion stars)
         for (const auto& star : app.planets) {
@@ -531,16 +522,6 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                     });
                 }
             }
-        }
-
-        // Lin-Shu Galactic Spiral Arm Density Wave Perturbation:
-        // Organizes scattered disk stars and gas into dynamic rotating logarithmic spiral arms
-        if (app.config_dist_mode == 1 || app.planets.size() > 200) {
-            const pebble::math::vec2 galactic_center{FW * 0.5f, FH * 0.5f};
-            const pebble::math::vec2 f_spiral = prakriti::celestial::compute_lin_shu_spiral_density_wave(
-                app.planets[i].pos, galactic_center, app.total_mass, 0.35f, 2
-            );
-            app.planets[i].acc = app.planets[i].acc + f_spiral;
         }
 
         // Interactive gravity vortex
@@ -823,50 +804,6 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
         if (p.pos[0] > FW - p.radius) { p.pos[0] = FW - p.radius; p.vel[0] = -p.vel[0] * 0.7f; }
         if (p.pos[1] < p.radius) { p.pos[1] = p.radius; p.vel[1] = -p.vel[1] * 0.7f; }
         if (p.pos[1] > FH - p.radius) { p.pos[1] = FH - p.radius; p.vel[1] = -p.vel[1] * 0.7f; }
-    }
-
-    // Roche Limit Tidal Disruption & Planetary Accretion Ring Formation
-    for (std::size_t i = 0; i < app.planets.size(); ++i) {
-        if (!app.planets[i].alive || app.planets[i].mass < 250.0f) continue;
-        for (std::size_t j = 0; j < app.planets.size(); ++j) {
-            if (i == j || !app.planets[j].alive || app.planets[j].mass >= app.planets[i].mass * 0.20f) continue;
-
-            const pebble::math::vec2 dr = app.planets[j].pos - app.planets[i].pos;
-            const float dist2 = dr[0] * dr[0] + dr[1] * dr[1];
-            // Roche Limit: d_tidal = R_heavy * (2 * rho_heavy / rho_light)^(1/3)
-            const float roche_radius = prakriti::celestial::compute_roche_limit(
-                app.planets[i].radius, app.planets[i].density, app.planets[j].density
-            );
-
-            if (dist2 < roche_radius * roche_radius && dist2 > (app.planets[i].radius + 2.0f) * (app.planets[i].radius + 2.0f)) {
-                // Tidal disruption: shred passing moon into a shimmering concentric Keplerian planetary ring!
-                if (app.planets[j].mass > 6.0f && app.planets.size() < 1100) {
-                    const int n_ring_specs = (app.planets[j].mass > 40.0f) ? 8 : 4;
-                    const float shard_m = (app.planets[j].mass * 0.75f) / static_cast<float>(n_ring_specs);
-                    const float r_orbit = std::sqrt(dist2);
-                    app.planets[j].alive = false; // Original moon body consumed and dispersed into ring
-
-                    for (int k = 0; k < n_ring_specs; ++k) {
-                        const float angle = static_cast<float>(k) * (6.2831853f / static_cast<float>(n_ring_specs)) + dist01(app.rng) * 0.2f;
-                        const auto ring_p = prakriti::celestial::compute_ring_particle_keplerian(
-                            app.planets[i].pos, app.planets[i].mass, r_orbit * (0.92f + dist01(app.rng) * 0.16f), angle, shard_m
-                        );
-                        PlanetBody ring_body;
-                        ring_body.ent = app.world.spawn();
-                        ring_body.pos = ring_p.pos;
-                        ring_body.prev_pos = ring_body.pos;
-                        ring_body.vel = ring_p.vel + app.planets[i].vel;
-                        ring_body.mass = ring_p.mass;
-                        ring_body.density = app.planets[j].density;
-                        ring_body.radius = ring_p.radius;
-                        ring_body.temperature = app.planets[j].temperature + 60.0f;
-                        ring_body.type = app.planets[j].type;
-                        app.planets.push_back(ring_body);
-                    }
-                    app.fractures_count++;
-                }
-            }
-        }
     }
 
     // 5. Collision Narrowphase: 3-Way Regime (Elastic Rebound & Recoil, Ductile Merger, or Brittle Fragmentation)
@@ -1426,20 +1363,10 @@ static void render_gpu_frame(PebbleVerseApp& app) {
     }
 
     auto w2s = [&](const pebble::math::vec2& w_pos, bool is_lens = false) -> pebble::math::vec2 {
-        pebble::math::vec2 defl_pos = w_pos;
-        if (!is_lens) {
-            for (const auto* lens : massive_lenses) {
-                if (lens->pos[0] != w_pos[0] || lens->pos[1] != w_pos[1]) {
-                    const pebble::math::vec2 delta = prakriti::celestial::compute_einstein_micro_lensing(
-                        w_pos, lens->pos, lens->mass
-                    );
-                    defl_pos = defl_pos + delta;
-                }
-            }
-        }
+        (void)is_lens;
         return pebble::math::vec2{
-            (defl_pos[0] - app.camera_pos[0]) * app.camera_zoom + FW * 0.5f,
-            (defl_pos[1] - app.camera_pos[1]) * app.camera_zoom + FH * 0.5f
+            (w_pos[0] - app.camera_pos[0]) * app.camera_zoom + FW * 0.5f,
+            (w_pos[1] - app.camera_pos[1]) * app.camera_zoom + FH * 0.5f
         };
     };
 
@@ -1579,70 +1506,7 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         scene.add(kalpana::Node::shape(gw_ring, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.7f, 1.0f, alpha}, 0.75f)));
     }
 
-    // ── Cosmic Filament Web Bridges (Zel'dovich Approximation) ──
-    std::vector<const PlanetBody*> cosmic_nodes;
-    for (const auto& p : app.planets) {
-        if (p.alive && p.mass > 120.0f) cosmic_nodes.push_back(&p);
-    }
-    const std::size_t max_nodes = std::min(cosmic_nodes.size(), std::size_t(8));
-    for (std::size_t i = 0; i < max_nodes; ++i) {
-        for (std::size_t j = i + 1; j < max_nodes; ++j) {
-            const auto f_bridge = prakriti::celestial::compute_cosmic_filament(
-                cosmic_nodes[i]->pos, cosmic_nodes[i]->mass,
-                cosmic_nodes[j]->pos, cosmic_nodes[j]->mass, 480.0f
-            );
-            if (f_bridge.filament_density > 0.05f) {
-                const pebble::math::vec2 s_a = w2s(f_bridge.node_a);
-                const pebble::math::vec2 s_b = w2s(f_bridge.node_b);
-                kalpana::Path fil_line;
-                fil_line.move_to(s_a[0], s_a[1]);
-                fil_line.line_to(s_b[0], s_b[1]);
-                const float fil_alpha = f_bridge.filament_density * 0.22f;
-                scene.add(kalpana::Node::shape(fil_line, kalpana::Paint::stroke(kalpana::Color{0.4f, 0.25f, 0.75f, fil_alpha}, 1.2f)));
-            }
-        }
-    }
 
-    // ── Barycentric Multi-Star System Hierarchies (Jacobi Coordinates) ──
-    for (std::size_t i = 0; i < max_nodes; ++i) {
-        for (std::size_t j = i + 1; j < max_nodes; ++j) {
-            const auto pair = prakriti::celestial::detect_binary_barycenter(
-                i, j,
-                cosmic_nodes[i]->pos, cosmic_nodes[i]->vel, cosmic_nodes[i]->mass,
-                cosmic_nodes[j]->pos, cosmic_nodes[j]->vel, cosmic_nodes[j]->mass
-            );
-            if (pair.is_bound) {
-                const pebble::math::vec2 s_cm = w2s(pair.center_of_mass);
-                // Subtle barycentric crosshair
-                kalpana::Path cm_cross;
-                cm_cross.move_to(s_cm[0] - 4.0f, s_cm[1]); cm_cross.line_to(s_cm[0] + 4.0f, s_cm[1]);
-                cm_cross.move_to(s_cm[0], s_cm[1] - 4.0f); cm_cross.line_to(s_cm[0], s_cm[1] + 4.0f);
-                scene.add(kalpana::Node::shape(cm_cross, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.95f, 0.65f, 0.45f}, 0.8f)));
-            }
-        }
-    }
-
-    // ── Luminous Tidal Disruption Events (TDE) Stellar Spaghettification Streams ──
-    for (const auto& bh : app.planets) {
-        if (!bh.alive || (!bh.is_singularity && bh.type != CelestialType::BlackHoleSingularity)) continue;
-        for (const auto& star : app.planets) {
-            if (!star.alive || (&star == &bh) || star.is_singularity || star.mass < 15.0f) continue;
-            const pebble::math::vec2 d = star.pos - bh.pos;
-            const float dist = std::sqrt(d[0] * d[0] + d[1] * d[1]);
-            const auto tde = prakriti::celestial::compute_tde_spaghettification(star.mass, star.radius, bh.mass, dist);
-            if (tde.is_disrupting) {
-                // Parabolic spaghettified stream curve connecting star core to black hole ISCO disk
-                kalpana::Path tde_stream;
-                const pebble::math::vec2 s_star = w2s(star.pos);
-                const pebble::math::vec2 s_bh = w2s(bh.pos);
-                const pebble::math::vec2 mid = (s_star + s_bh) * 0.5f + pebble::math::vec2{-d[1], d[0]} * 0.18f * app.camera_zoom;
-                
-                tde_stream.move_to(s_star[0], s_star[1]);
-                tde_stream.quad_to(mid[0], mid[1], s_bh[0], s_bh[1]);
-                scene.add(kalpana::Node::shape(tde_stream, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.75f, 0.25f, 0.65f}, 2.0f * app.camera_zoom)));
-            }
-        }
-    }
 
     // 7. Relativistic Event Horizons, Photon Rings & ISCO (For Actual Compact Singularities & Stars)
     for (std::size_t idx = 0; idx < app.planets.size(); ++idx) {
@@ -2385,6 +2249,7 @@ static void event_cb(const sapp_event* e) {
                 case SAPP_KEYCODE_KP_ENTER:
                 case SAPP_KEYCODE_SPACE: {
                     // Apply parameters and launch pure autonomous physical simulation
+                    std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
                     app.in_startup_modal = false;
                     app.gravity_policy.G = app.config_grav_g;
                     app.gravity_policy.theta = app.config_bh_theta;
@@ -2396,25 +2261,43 @@ static void event_cb(const sapp_event* e) {
 
                     for (int i = 0; i < app.config_initial_dust_count; ++i) {
                         if (app.config_dist_mode == 0) {
-                            // Mode 0: True Isotropic Full-Grid Uniform Distribution
+                            // Mode 0: True Isotropic Uniform Field with Thermal Dispersion
                             spawn_dust_particle(app);
                         } else if (app.config_dist_mode == 1) {
-                            // Mode 1: Central Barycentric Cluster with wide dispersion
-                            std::normal_distribution<float> norm_x(FW * 0.5f, FW * 0.22f);
-                            std::normal_distribution<float> norm_y(FH * 0.5f, FH * 0.22f);
-                            const float rx = std::clamp(norm_x(app.rng), 20.0f, FW - 20.0f);
-                            const float ry = std::clamp(norm_y(app.rng), 20.0f, FH - 20.0f);
-                            spawn_dust_particle(app, true, rx, ry);
+                            // Mode 1: Rotating Barycentric Protogalactic Disk
+                            const float cx = FW * 0.5f;
+                            const float cy = FH * 0.5f;
+                            std::normal_distribution<float> norm_r(0.0f, FW * 0.18f);
+                            const float r = std::clamp(std::abs(norm_r(app.rng)) + 12.0f, 15.0f, FW * 0.42f);
+                            const float theta = dist01(app.rng) * 6.2831853f;
+                            const float px = cx + std::cos(theta) * r;
+                            const float py = cy + std::sin(theta) * r;
+
+                            spawn_dust_particle(app, true, px, py);
+
+                            // Organic Keplerian / Virial orbital speed: v \approx \sqrt{G * M(r) / r}
+                            auto& p_new = app.planets.back();
+                            const float expected_interior_mass = 15.0f * (r / 20.0f) * 12.0f;
+                            const float v_mag = std::sqrt((app.config_grav_g * expected_interior_mass) / std::max(r, 20.0f)) * 0.08f;
+                            const pebble::math::vec2 tangent{-std::sin(theta), std::cos(theta)};
+                            p_new.vel = tangent * v_mag + p_new.vel * 0.25f;
                         } else {
-                            // Mode 2: Dual Infall Colliding Protogalactic Clouds
+                            // Mode 2: Dual Infall Colliding Protogalactic Clouds with natural relative orbital velocity
                             const bool cloud2 = (i % 2 == 0);
-                            const float cx = cloud2 ? (FW * 0.72f) : (FW * 0.28f);
-                            const float cy = cloud2 ? (FH * 0.65f) : (FH * 0.35f);
-                            std::normal_distribution<float> norm_x(cx, 80.0f);
-                            std::normal_distribution<float> norm_y(cy, 80.0f);
-                            const float rx = std::clamp(norm_x(app.rng), 20.0f, FW - 20.0f);
-                            const float ry = std::clamp(norm_y(app.rng), 20.0f, FH - 20.0f);
-                            spawn_dust_particle(app, true, rx, ry);
+                            const float cx = cloud2 ? (FW * 0.65f) : (FW * 0.35f);
+                            const float cy = cloud2 ? (FH * 0.60f) : (FH * 0.40f);
+                            std::normal_distribution<float> norm_r(0.0f, 65.0f);
+                            const float r = std::clamp(std::abs(norm_r(app.rng)), 5.0f, 120.0f);
+                            const float theta = dist01(app.rng) * 6.2831853f;
+                            const float px = std::clamp(cx + std::cos(theta) * r, 20.0f, FW - 20.0f);
+                            const float py = std::clamp(cy + std::sin(theta) * r, 20.0f, FH - 20.0f);
+
+                            spawn_dust_particle(app, true, px, py);
+                            auto& p_new = app.planets.back();
+                            // Infall drift speed between the two clusters
+                            const pebble::math::vec2 drift = cloud2 ? pebble::math::vec2{-6.0f, -3.5f} : pebble::math::vec2{6.0f, 3.5f};
+                            const pebble::math::vec2 spin_v{-std::sin(theta) * 4.5f, std::cos(theta) * 4.5f};
+                            p_new.vel = drift + spin_v + p_new.vel * 0.2f;
                         }
                     }
                     break;
