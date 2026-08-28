@@ -490,5 +490,30 @@ Located in `#include <prakriti/material/celestial.hpp>`:
 ## 34. Magnetohydrodynamic (MHD) Magnetic Flux Tubes
 - Traces dipolar magnetic vector potentials $\vec{B}(\vec{r})$ and Birkeland current paths between rotating magnetized stars and millisecond pulsars.
 
+---
+
+## 35. Planetary Geology, Jeans Thermal Escape & Atmosphere Retention
+- **Jeans Parameter & Thermal Blowout**:
+  $$\lambda = \left(\frac{v_{\text{esc}}}{v_{\text{th}}}\right)^2, \quad v_{\text{esc}} = \sqrt{\frac{2GM}{R}}, \quad v_{\text{th}} = \sqrt{\frac{3 k_B T}{m_{\text{mol}}}}$$
+- Evaluates volatile gas retention vs. thermal atmospheric hydrodynamic blowout and stellar wind stripping.
+
+---
+
+## 36. Surface Hydrology, Ocean Condensation & Lithosphere Solidification
+- Tracks liquid water condensation into surface oceans ($T \in [-5, 95]^\circ\text{C}$) and tectonic plate crystallization ($T < 1000^\circ\text{C}$).
+
+---
+
+## 37. Quark-Gluon Plasma (QGP) / Strange Quark Stars
+- Implements the Witten strange matter hypothesis: massive neutron stars ($M \in [820, 950]$) transition into ultra-dense deconfined $u,d,s$ quark matter with an explosive violet energy flash.
+
+---
+
+## 38. Pulsar Timing Array (PTA) Gravitational Wave Modulation
+- **Fractional Frequency Perturbation**:
+  $$\frac{\delta \nu}{\nu} = -\frac{1}{2} h_{ij}(t)$$
+- Simulates nanosecond timing residuals on millisecond pulsar spin beacons in response to passing quadrupole gravitational wave strains.
+
+
 
 

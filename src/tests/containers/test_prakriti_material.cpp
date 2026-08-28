@@ -171,5 +171,47 @@ TEST_CASE("mhd magnetic flux tube between rotating stars", "[prakriti][celestial
     REQUIRE(tube.current_intensity > 0.0f);
 }
 
+TEST_CASE("planetary jeans atmospheric retention and escape", "[prakriti][celestial][jeans]") {
+    // 1. Massive, cold planet (M = 150, R = 4.0, T = 15 C) -> High retention
+    auto retained = prakriti::celestial::evaluate_jeans_atmospheric_escape(150.0f, 4.0f, 15.0f, 0.0f, 0.016f);
+    REQUIRE(retained.retains_atmosphere);
+    REQUIRE(retained.escape_velocity > retained.thermal_velocity);
+
+    // 2. Lightweight, hot asteroid (M = 8, R = 1.5, T = 800 C) -> Active blowout loss
+    auto escaped = prakriti::celestial::evaluate_jeans_atmospheric_escape(8.0f, 1.5f, 800.0f, 5.0f, 0.016f);
+    REQUIRE_FALSE(escaped.retains_atmosphere);
+    REQUIRE(escaped.jeans_loss_rate > 0.0f);
+}
+
+TEST_CASE("surface hydrology and liquid ocean condensation", "[prakriti][celestial][hydrology]") {
+    // Habitable temperate planet with water volatile content
+    auto hydro_hab = prakriti::celestial::evaluate_surface_hydrology_phase(22.0f, 0.4f, 120.0f);
+    REQUIRE(hydro_hab.in_habitable_zone);
+    REQUIRE(hydro_hab.crust_solidification > 0.8f);
+    REQUIRE(hydro_hab.ocean_coverage > 0.2f);
+
+    // Scorching molten magma planet (T = 1200 C) -> No liquid oceans
+    auto hydro_hot = prakriti::celestial::evaluate_surface_hydrology_phase(1200.0f, 0.4f, 120.0f);
+    REQUIRE_FALSE(hydro_hot.in_habitable_zone);
+    REQUIRE(hydro_hot.ocean_coverage == Catch::Approx(0.0f));
+}
+
+TEST_CASE("strange quark star deconfined phase transition", "[prakriti][celestial][strange_star]") {
+    // High-mass neutron star under extreme core pressure
+    auto trans = prakriti::celestial::evaluate_strange_star_transition(860.0f, true, 240.0f);
+    REQUIRE(trans.triggers_strange_star);
+    REQUIRE(trans.deconfined_energy_release > 0.0f);
+    REQUIRE(trans.strange_radius < 2.6f);
+}
+
+TEST_CASE("pulsar timing array nano-hertz gw modulation", "[prakriti][celestial][pta]") {
+    const float base_omega = 45.0f;
+    const float gw_strain = 0.4f;
+    auto pta = prakriti::celestial::evaluate_pulsar_gw_timing_residual(base_omega, gw_strain, 2.0f, 0.125f);
+    REQUIRE(pta.modulated_spin != base_omega);
+    REQUIRE(std::abs(pta.timing_shift_ns) > 0.0f);
+}
+
+
 
 

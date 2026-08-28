@@ -87,6 +87,7 @@ enum class CelestialType : std::uint8_t {
     SuperheatedPlasma,
     DegenerateDense,
     NeutronStar,
+    StrangeQuarkStar,
     BlackHoleSingularity
 };
 
@@ -109,6 +110,10 @@ struct PlanetBody {
     bool                alive = true;
     bool                is_singularity = false;   // Collapsed black hole state
     bool                is_neutron_star = false; // Dense pulsar state
+    bool                is_strange_star = false; // Deconfined Quark-Gluon Plasma state
+    float               atmosphere_mass = 0.0f;  // Volatile gaseous envelope
+    float               ocean_fraction = 0.0f;   // Liquid surface water coverage (0.0 to 1.0)
+    float               crust_solid = 1.0f;      // Solid lithosphere plate coverage
 
     // Gradual Contact Binary / Dumbbell Coalescence
     // When 2 bodies merge, they start as a contact binary joined at their tips.
@@ -334,13 +339,19 @@ static kalpana::Color get_celestial_color(const PlanetBody& p, SpectralViewMode 
     // ── Mode 0: Optical RGB True-Color Spectrum ──────────────────────────────
     kalpana::Color base;
 
-    // Check for Morgan-Keenan (MK) Stellar Spectral Classification for hot stellar cores
-    if (p.temperature > 1200.0f || p.mass >= 140.0f) {
+    // Check for Strange Quark Star (Deconfined Quark Matter)
+    if (p.is_strange_star || p.type == CelestialType::StrangeQuarkStar) {
+        base = kalpana::Color{0.75f, 0.15f, 1.0f, 1.0f}; // Deep Luminescent Violet
+    } else if (p.temperature > 1200.0f || p.mass >= 140.0f) {
+        // Check for Morgan-Keenan (MK) Stellar Spectral Classification for hot stellar cores
         const auto mk = prakriti::celestial::evaluate_stellar_spectral_class(p.mass, p.temperature);
         base = kalpana::Color{mk.r, mk.g, mk.b, 1.0f};
     } else {
         // High-luminance, high-contrast primary celestial spectral colors for terrestrial planetoids
-        if (p.density < 1500.0f) {
+        if (p.ocean_fraction > 0.3f) {
+            // Terraformed Habitable Planet with Surface Oceans
+            base = kalpana::Color{0.15f, 0.55f, 0.95f, 1.0f}; // Earth-like Deep Azure Ocean
+        } else if (p.density < 1500.0f) {
             base = kalpana::Color{0.25f, 0.95f, 1.00f, 1.0f}; // Ultra-Bright Cyan / Ice Blue
         } else if (p.density < 4500.0f) {
             base = kalpana::Color{1.00f, 0.90f, 0.25f, 1.0f}; // Radiant Solar Gold / Yellow (Silicate Rock)
@@ -980,10 +991,69 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
             p.density = p.mat_params.rest_density;
         }
 
+        // Strange Quark Star Phase Transition (Witten Strange Matter Hypothesis)
+        if (p.is_neutron_star && !p.is_strange_star) {
+            const auto strange_trans = prakriti::celestial::evaluate_strange_star_transition(p.mass, p.is_neutron_star, 220.0f);
+            if (strange_trans.triggers_strange_star) {
+                p.is_strange_star = true;
+                p.type = CelestialType::StrangeQuarkStar;
+                p.mat_params = prakriti::celestial::strange_quark_star();
+                p.density = p.mat_params.rest_density;
+                p.radius = strange_trans.strange_radius;
+                p.temperature = 9500.0f;
+
+                // Deconfined Quark Matter Flash
+                for (int s = 0; s < 28; ++s) {
+                    const float a = static_cast<float>(s) * (6.2831853f / 28.0f);
+                    const float spd = 60.0f + dist01(app.rng) * 70.0f;
+                    app.sparks.push_back(SparkParticle{
+                        .pos = p.pos,
+                        .vel = p.vel + pebble::math::vec2{std::cos(a), std::sin(a)} * spd,
+                        .radius = 2.0f,
+                        .life = 0.6f,
+                        .max_life = 0.6f,
+                        .color = kalpana::Color{0.75f, 0.15f, 1.0f, 1.0f} // Violet QGP sparks
+                    });
+                }
+            }
+        }
+
+        // ── Planetary Atmosphere Thermodynamics, Jeans Escape & Hydrology ──
+        if (p.mass >= 20.0f && p.mass <= 350.0f && !p.is_singularity && !p.is_neutron_star && !p.is_strange_star) {
+            // Find nearest stellar wind source
+            float wind_flux = 0.0f;
+            for (const auto& star : app.planets) {
+                if (!star.alive || (&star == &p) || star.temperature < 1200.0f) continue;
+                const pebble::math::vec2 d = p.pos - star.pos;
+                const float dist2 = d[0] * d[0] + d[1] * d[1] + 100.0f;
+                wind_flux += (star.radius * star.radius * 20.0f) / dist2;
+            }
+
+            // 1. Jeans Thermal Escape & Atmosphere Retention
+            const auto escape = prakriti::celestial::evaluate_jeans_atmospheric_escape(
+                p.mass, p.radius, p.temperature, wind_flux, sim_dt
+            );
+            if (escape.retains_atmosphere) {
+                p.atmosphere_mass = std::min(p.atmosphere_mass + 0.05f * sim_dt, p.mass * 0.08f);
+            } else {
+                p.atmosphere_mass = std::max(0.0f, p.atmosphere_mass - (escape.jeans_loss_rate + escape.wind_stripping_rate));
+            }
+
+            // 2. Surface Hydrology & Ocean Condensation
+            const float water_volatile_fraction = (p.type == CelestialType::IceCrust) ? 0.8f : (p.atmosphere_mass / std::max(p.mass, 1.0f));
+            const auto hydro = prakriti::celestial::evaluate_surface_hydrology_phase(
+                p.temperature, water_volatile_fraction, p.mass
+            );
+            p.ocean_fraction = hydro.ocean_coverage;
+            p.crust_solid = hydro.crust_solidification;
+        }
+
         // Recompute organic physical radius based on mass and material class:
         // Pure dust is ~0.8-1.2px, accumulating asteroids ~2-3px, large planets ~4-6px, stars and giants ~8-16px!
         if (p.is_singularity || p.type == CelestialType::BlackHoleSingularity) {
             p.radius = std::clamp(p.mass * 0.0035f + 2.8f, 3.0f, 12.0f);
+        } else if (p.is_strange_star || p.type == CelestialType::StrangeQuarkStar) {
+            p.radius = std::clamp(std::cbrt(p.mass) * 0.45f, 1.8f, 3.2f); // Ultra-dense Quark star
         } else if (p.is_neutron_star || p.type == CelestialType::NeutronStar) {
             p.radius = std::clamp(std::cbrt(p.mass) * 0.55f, 2.2f, 4.5f); // Compact degenerate core
         } else {
@@ -1781,26 +1851,37 @@ static void render_gpu_frame(PebbleVerseApp& app) {
             scene.add(kalpana::Node::shape(flux_path, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.95f, 1.0f, alpha}, 0.6f)));
         }
 
-        // 6d. Jacobi Orbital Hierarchy (Ultra-faint, ONLY between major massive stars and their primary moon)
-        if (app.tracked_planet_index >= 0 && app.tracked_planet_index < static_cast<int>(app.planets.size())) {
-            const auto& tracked = app.planets[app.tracked_planet_index];
-            if (tracked.alive) {
-                for (std::size_t j = 0; j < app.planets.size(); ++j) {
-                    if (static_cast<int>(j) == app.tracked_planet_index) continue;
-                    const auto& other = app.planets[j];
-                    if (!other.alive || other.mass < 150.0f) continue;
-                    const auto pair = prakriti::celestial::detect_binary_barycenter(
-                        app.tracked_planet_index, j, tracked.pos, tracked.vel, tracked.mass, other.pos, other.vel, other.mass
-                    );
-                    if (pair.is_bound) {
-                        const pebble::math::vec2 s1 = w2s(tracked.pos);
-                        const pebble::math::vec2 s2 = w2s(other.pos);
-                        kalpana::Path bond_line;
-                        bond_line.move_to(s1[0], s1[1]);
-                        bond_line.line_to(s2[0], s2[1]);
-                        scene.add(kalpana::Node::shape(bond_line, kalpana::Paint::stroke(kalpana::Color{0.2f, 0.85f, 0.45f, 0.04f}, 0.5f)));
-                        break; // Only link to closest parent
-                    }
+        // 6e. Planetary Atmospheric Haze & Strange Quark Star Deconfined Gluon Halos (Ultra-faint Sub-layer)
+        for (const auto& p : app.planets) {
+            if (!p.alive) continue;
+            const pebble::math::vec2 s_pos = w2s(p.pos);
+
+            // Planetary Atmosphere Glow
+            if (p.atmosphere_mass > 2.0f && p.mass < 400.0f) {
+                kalpana::Path atmo_ring;
+                atmo_ring.circle(s_pos[0], s_pos[1], (p.radius + 2.5f) * app.camera_zoom);
+                const float atmo_alpha = std::clamp(p.atmosphere_mass / (p.mass * 0.08f), 0.02f, 0.08f);
+                scene.add(kalpana::Node::shape(atmo_ring, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.75f, 1.0f, atmo_alpha}, 1.0f)));
+            }
+
+            // Strange Quark Star Deconfined Gluon Aura
+            if (p.is_strange_star || p.type == CelestialType::StrangeQuarkStar) {
+                kalpana::Path gluon_aura;
+                gluon_aura.circle(s_pos[0], s_pos[1], p.radius * 2.2f * app.camera_zoom);
+                scene.add(kalpana::Node::shape(gluon_aura, kalpana::Paint::stroke(kalpana::Color{0.8f, 0.2f, 1.0f, 0.12f}, 1.2f)));
+            }
+
+            // Pulsar Timing Array (PTA) GW Modulation Beacon
+            if (p.is_neutron_star && !app.gw_ripples.empty()) {
+                const float gw_strain = app.gw_ripples[0].amplitude;
+                const auto pta = prakriti::celestial::evaluate_pulsar_gw_timing_residual(p.omega, gw_strain, 1.2f, app.time);
+                if (std::abs(pta.timing_shift_ns) > 0.01f) {
+                    kalpana::Path pta_ray;
+                    const pebble::math::vec2 beam_dir{std::cos(p.angle), std::sin(p.angle)};
+                    const pebble::math::vec2 ray_end = s_pos + beam_dir * (22.0f * app.camera_zoom);
+                    pta_ray.move_to(s_pos[0], s_pos[1]);
+                    pta_ray.line_to(ray_end[0], ray_end[1]);
+                    scene.add(kalpana::Node::shape(pta_ray, kalpana::Paint::stroke(kalpana::Color{0.4f, 0.95f, 1.0f, 0.08f}, 0.8f)));
                 }
             }
         }

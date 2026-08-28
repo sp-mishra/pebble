@@ -258,6 +258,21 @@ evaluate_collision_regime(float m1, float m2, float v_rel, float avg_temp,
     return p;
 }
 
+// 9. Strange Quark Star (Deconfined u,d,s quark matter, intermediate between neutron star and black hole)
+[[nodiscard]] inline MaterialParams strange_quark_star() noexcept {
+    MaterialParams p;
+    p.rest_density = Scalar(4.2e7);       // 4.2 x 10^7 kg/m^3
+    p.heat_capacity = Scalar(0.05);
+    p.conductivity = Scalar(100000.0);
+    p.melt_temp = Scalar(1e7);
+    p.boil_temp = Scalar(5e7);
+    p.yield_strain = Scalar(0.98);
+    p.ultimate_strain = Scalar(0.99);
+    p.youngs_modulus = Scalar(1e16);
+    p.alpha = {Scalar(1e-14), Scalar(1e-11), Scalar(1e-8), Scalar(1e-5)};
+    return p;
+}
+
 // ── 5. Organic Stellar Evolution & Gravitational Collapse (Prakriti Physics Engine) ──────────
 
 enum class StellarPhase : std::uint8_t {
@@ -1066,6 +1081,118 @@ compute_mhd_flux_tube(const pebble::math::vec2& p1, float m1, float omega1,
     tube.field_strength = std::clamp(b_dipole * 0.5f, 0.02f, 0.95f);
     tube.current_intensity = std::clamp(b_dipole * 0.25f, 0.01f, 0.65f);
     return tube;
+}
+
+// ── 35. Planetary Geology, Jeans Thermal Escape & Atmosphere Retention ───────
+
+struct AtmosphericEscapeResult {
+    bool  retains_atmosphere = false;
+    float jeans_loss_rate = 0.0f;     // Mass loss rate due to thermal Jeans escape
+    float wind_stripping_rate = 0.0f; // Mass loss due to stellar radiation pressure
+    float escape_velocity = 0.0f;
+    float thermal_velocity = 0.0f;
+};
+
+// Evaluates planetary atmosphere retention vs. Jeans thermal escape & stellar wind stripping:
+// v_esc = \sqrt{2 G M / R},  v_th = \sqrt{3 k_B T / m_mol}
+[[nodiscard]] inline AtmosphericEscapeResult
+evaluate_jeans_atmospheric_escape(float planet_mass, float planet_radius, float planet_temp_celsius,
+                                  float stellar_wind_flux, float dt) noexcept {
+    AtmosphericEscapeResult res;
+    if (planet_mass < 5.0f || planet_radius < 0.5f) return res;
+
+    // Escape velocity: v_esc = \sqrt{2 * G * M / R}
+    res.escape_velocity = std::sqrt((2.0f * 18000.0f * planet_mass) / planet_radius);
+
+    // Thermal molecular speed: v_th \propto \sqrt{T_kelvin}
+    const float t_kelvin = std::max(10.0f, planet_temp_celsius + 273.15f);
+    res.thermal_velocity = std::sqrt(t_kelvin) * 14.5f;
+
+    // Jeans parameter \lambda = (v_esc / v_th)^2
+    const float lambda_jeans = (res.escape_velocity * res.escape_velocity) / (res.thermal_velocity * res.thermal_velocity + 1.0f);
+
+    if (lambda_jeans >= 6.0f) {
+        // High retention: strong gravity holds volatile atmosphere
+        res.retains_atmosphere = true;
+        // Residual thermal tail escape
+        res.jeans_loss_rate = std::clamp(std::exp(-lambda_jeans) * planet_mass * 0.005f * dt, 0.0f, 0.05f);
+    } else {
+        // Active Jeans blowout escape
+        res.retains_atmosphere = false;
+        res.jeans_loss_rate = std::clamp((6.0f - lambda_jeans) * 0.02f * planet_mass * dt, 0.001f, planet_mass * 0.2f);
+    }
+
+    // Unshielded stellar wind stripping
+    res.wind_stripping_rate = std::clamp(stellar_wind_flux * 0.008f * dt, 0.0f, 0.1f);
+    return res;
+}
+
+// ── 36. Surface Hydrology, Ocean Condensation & Continental Solidification ──
+
+struct PlanetarySurfaceState {
+    float ocean_coverage = 0.0f;     // 0.0 to 1.0 (Liquid surface water)
+    float crust_solidification = 0.0f;// 0.0 (molten magma) to 1.0 (solid lithosphere)
+    bool  in_habitable_zone = false;  // Temperature in 0 - 100 C range
+};
+
+// Evaluates surface liquid ocean condensation and tectonic plate cooling
+[[nodiscard]] inline PlanetarySurfaceState
+evaluate_surface_hydrology_phase(float temperature_celsius, float volatile_water_fraction,
+                                 float planet_mass) noexcept {
+    PlanetarySurfaceState state;
+    if (planet_mass < 15.0f || planet_mass > 400.0f) return state;
+
+    // Habitable thermal window for liquid water
+    state.in_habitable_zone = (temperature_celsius >= -5.0f && temperature_celsius <= 95.0f);
+
+    // Crust solidification: 1000 C -> 0 C transition
+    state.crust_solidification = std::clamp((1000.0f - temperature_celsius) / 900.0f, 0.0f, 1.0f);
+
+    // Surface ocean condensation: requires cool solid crust and water volatile inventory
+    if (state.in_habitable_zone && state.crust_solidification > 0.6f) {
+        state.ocean_coverage = std::clamp(volatile_water_fraction * 1.8f * state.crust_solidification, 0.0f, 0.85f);
+    }
+    return state;
+}
+
+// ── 37. Quark-Gluon Plasma (QGP) / Strange Quark Star Transition ──────────────
+
+struct StrangeStarTransition {
+    bool  triggers_strange_star = false;
+    float deconfined_energy_release = 0.0f;
+    float strange_radius = 2.6f;
+};
+
+// Evaluates transition into Strange Quark Star (Witten Strange Matter Hypothesis)
+[[nodiscard]] inline StrangeStarTransition
+evaluate_strange_star_transition(float mass, bool is_neutron_star, float core_pressure) noexcept {
+    StrangeStarTransition res;
+    // Massive neutron star collapse beyond Chandrasekhar / near TOV limit (M \in [820, 940])
+    if (is_neutron_star && mass >= 820.0f && mass < 950.0f && core_pressure > 180.0f) {
+        res.triggers_strange_star = true;
+        res.deconfined_energy_release = mass * 18.0f;
+        res.strange_radius = std::clamp(2.6f * (820.0f / mass), 1.8f, 2.8f);
+    }
+    return res;
+}
+
+// ── 38. Pulsar Timing Array (PTA) Gravitational Wave Modulation ───────────────
+
+struct PTATimingResidual {
+    float timing_shift_ns = 0.0f; // Nanosecond pulse arrival time residual
+    float modulated_spin = 0.0f;
+};
+
+// Evaluates spin beacon pulse modulation from quadrupole gravitational wave strain
+[[nodiscard]] inline PTATimingResidual
+evaluate_pulsar_gw_timing_residual(float base_omega, float gw_strain, float gw_chirp_freq, float time_sec) noexcept {
+    PTATimingResidual res;
+    // Fractional frequency perturbation: \delta \nu / \nu = -0.5 * h_ij(t)
+    const float gw_phase = std::sin(gw_chirp_freq * 6.2831853f * time_sec);
+    const float frac_perturbation = -0.5f * gw_strain * gw_phase;
+    res.modulated_spin = base_omega * (1.0f + frac_perturbation);
+    res.timing_shift_ns = gw_strain * 140.0f * gw_phase;
+    return res;
 }
 
 } // namespace prakriti::celestial
