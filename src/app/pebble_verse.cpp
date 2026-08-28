@@ -59,12 +59,12 @@ static constexpr float FH = static_cast<float>(H);
 static constexpr float DT = 1.0f / 60.0f;
 
 // Tunable Cosmic Parameters
-static constexpr float GRAVITATIONAL_G   = 480.0f;  // Balanced mutual N-body attraction
-static constexpr float PLUMMER_SOFTENING = 8.0f;    // Prevents extreme close-range divergence
-static constexpr float MAX_GRAV_FORCE    = 15000.0f; // Maximum acceleration clamp
-static constexpr float MAX_SPEED_CAP     = 45.0f;   // Maximum calm orbital speed (px/s)
-static constexpr float SIM_SPEED_FACTOR  = 0.45f;   // Gentle, observable time scaling
-static constexpr int   INITIAL_DUST_COUNT = 650;    // Number of in-situ dust particles
+static constexpr float GRAVITATIONAL_G   = 18000.0f; // Vigorous mutual N-body attraction
+static constexpr float PLUMMER_SOFTENING = 3.5f;     // Tight softening allows strong close-range pull
+static constexpr float MAX_GRAV_FORCE    = 35000.0f; // Maximum acceleration clamp
+static constexpr float MAX_SPEED_CAP     = 95.0f;    // Maximum dynamic orbital speed (px/s)
+static constexpr float SIM_SPEED_FACTOR  = 0.85f;    // Dynamic observable physical time scaling
+static constexpr int   INITIAL_DUST_COUNT = 650;     // Number of in-situ dust particles
 
 static auto VS_METAL =
     "#include <metal_stdlib>\nusing namespace metal;\n"
@@ -254,6 +254,13 @@ struct PebbleVerseApp {
     std::size_t fractures_count = 0;
     std::size_t gas_particles_count = 0;
 
+    // Dynamic Lagrangian Tracking Camera
+    int                tracked_planet_index = -1; // -1 = Global Wide Angle, >=0 = Target Body Index
+    pebble::math::vec2 camera_pos{FW * 0.5f, FH * 0.5f};
+    pebble::math::vec2 target_cam_pos{FW * 0.5f, FH * 0.5f};
+    float              camera_zoom = 1.0f;
+    float              target_zoom = 1.0f;
+
     // Interactive mouse & keyboard controls
     float mouse_x = 0.0f, mouse_y = 0.0f;
     bool mouse_down = false;
@@ -382,29 +389,14 @@ static void spawn_dust_particle(PebbleVerseApp& app, bool user_spawn = false, fl
     if (user_spawn) {
         p.pos = pebble::math::vec2{at_x, at_y};
     } else {
-        if (app.config_dist_mode == 1) {
-            // Mode 1: Central Barycentric Galactic Cluster
-            const float r = std::pow(dist01(app.rng), 0.65f) * (FH * 0.42f);
-            const float th = dist01(app.rng) * 6.2831853f;
-            p.pos = pebble::math::vec2{FW * 0.5f + std::cos(th) * r, FH * 0.5f + std::sin(th) * r};
-        } else if (app.config_dist_mode == 2) {
-            // Mode 2: Dual Infall Binary Accretion Clouds
-            const float side = (dist01(app.rng) < 0.5f) ? -1.0f : 1.0f;
-            const float cx = FW * 0.5f + side * (FW * 0.22f);
-            const float cy = FH * 0.5f + (dist01(app.rng) - 0.5f) * 60.0f;
-            const float r = std::pow(dist01(app.rng), 0.7f) * 110.0f;
-            const float th = dist01(app.rng) * 6.2831853f;
-            p.pos = pebble::math::vec2{cx + std::cos(th) * r, cy + std::sin(th) * r};
-        } else {
-            // Mode 0: Uniform Cosmic Primordial Field
-            p.pos = pebble::math::vec2{
-                40.0f + dist01(app.rng) * (FW - 80.0f),
-                40.0f + dist01(app.rng) * (FH - 80.0f)
-            };
-        }
+        // Spontaneous Quantum Matter Condensation across the entire active cosmic grid
+        p.pos = pebble::math::vec2{
+            20.0f + dist01(app.rng) * (FW - 40.0f),
+            20.0f + dist01(app.rng) * (FH - 40.0f)
+        };
     }
 
-    // Zero initial linear velocity: motion is born entirely from mutual N-body gravity!
+    // Zero initial linear velocity: motion is born purely from mutual N-body gravity!
     p.vel = pebble::math::vec2{0.0f, 0.0f};
     p.prev_pos = p.pos;
 
@@ -412,33 +404,34 @@ static void spawn_dust_particle(PebbleVerseApp& app, bool user_spawn = false, fl
     p.angle = dist01(app.rng) * 6.2831853f;
     p.omega = (dist01(app.rng) - 0.5f) * 4.0f;
 
-    // Randomize celestial material class and density
-    if (const float roll = dist01(app.rng); roll < 0.30f) {
+    // Randomize celestial material class influenced organically by current Universe Metallicity (Z)
+    const float roll = dist01(app.rng);
+    const float z_bias = app.cosmic_metallicity_z;
+    if (roll < std::max(0.10f, 0.40f - z_bias * 0.4f)) {
         p.type = CelestialType::IceCrust;
         p.mat_params = prakriti::celestial::ice_crust();
-        p.mass = 25.0f + dist01(app.rng) * 35.0f;
+        p.mass = 8.0f + dist01(app.rng) * 6.0f;
         p.temperature = -60.0f + dist01(app.rng) * 40.0f;
-    } else if (roll < 0.75f) {
+    } else if (roll < std::max(0.45f, 0.80f - z_bias * 0.2f)) {
         p.type = CelestialType::SilicateRock;
         p.mat_params = prakriti::celestial::silicate_rock();
-        p.mass = 50.0f + dist01(app.rng) * 60.0f;
-        p.temperature = 20.0f + dist01(app.rng) * 100.0f;
-    } else if (roll < 0.94f) {
+        p.mass = 12.0f + dist01(app.rng) * 10.0f;
+        p.temperature = 20.0f + dist01(app.rng) * 60.0f;
+    } else if (roll < 0.96f) {
         p.type = CelestialType::IronCore;
         p.mat_params = prakriti::celestial::iron_nickel_core();
-        p.mass = 120.0f + dist01(app.rng) * 140.0f;
-        p.temperature = 100.0f + dist01(app.rng) * 200.0f;
+        p.mass = 20.0f + dist01(app.rng) * 15.0f;
+        p.temperature = 80.0f + dist01(app.rng) * 100.0f;
     } else {
         p.type = CelestialType::MoltenMagma;
         p.mat_params = prakriti::celestial::molten_magma();
-        p.mass = 200.0f + dist01(app.rng) * 200.0f;
-        p.temperature = 1200.0f + dist01(app.rng) * 400.0f;
+        p.mass = 35.0f + dist01(app.rng) * 25.0f;
+        p.temperature = 1100.0f + dist01(app.rng) * 300.0f;
     }
 
     p.density = p.mat_params.rest_density;
-    // Micro cosmic dust specs (0.75px to 1.5px)
-    constexpr float kRadiusScale = 2.4f;
-    p.radius = std::clamp(kRadiusScale * std::sqrt(p.mass / p.density), 0.75f, 1.5f);
+    // Micro dust spec starts tiny (0.8px to 1.3px)
+    p.radius = std::clamp(std::pow(p.mass, 0.333f) * 0.42f, 0.75f, 1.4f);
 
     // Initial angular momentum: L = I * omega = (0.5 * m * r^2) * omega
     const float moment_of_inertia = 0.5f * p.mass * (p.radius * p.radius);
@@ -460,11 +453,24 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
 
     const auto t_start = std::chrono::high_resolution_clock::now();
 
-    // 1. Slow, subtle in-situ dust field condensation if population drops
+    // 1. Spontaneous Quantum Vacuum Matter Condensation (Continuous primordial replenishment)
     app.spawn_timer += sim_dt;
-    if (app.spawn_timer >= 0.40f && app.planets.size() < 250) {
+    if (app.spawn_timer >= 0.08f) {
         app.spawn_timer = 0.0f;
-        spawn_dust_particle(app);
+        
+        // When population decreases due to mergers, quantum vacuum matter spontaneously condenses across the cosmic grid!
+        const std::size_t target_pop = app.config_initial_dust_count;
+        if (app.planets.size() < target_pop) {
+            const int n_quantum_condensations = std::min(4, static_cast<int>((target_pop - app.planets.size()) / 15) + 1);
+            for (int k = 0; k < n_quantum_condensations; ++k) {
+                const auto q_event = prakriti::celestial::evaluate_quantum_vacuum_condensation(
+                    static_cast<float>(app.planets.size()), dist01(app.rng)
+                );
+                if (q_event.spawns_particle) {
+                    spawn_dust_particle(app);
+                }
+            }
+        }
     }
 
     // 2. Prepare Barnes-Hut input bodies array
@@ -486,12 +492,25 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
     std::vector<pebble::math::vec2> forces(bh_bodies.size());
     containers::spatial::compute_all_forces(app.bh_tree, bh_bodies, forces, app.gravity_policy);
 
-    // Map forces back to planet bodies
+    // Map forces back to planet bodies & apply relativistic Kerr frame-dragging
     std::size_t bh_idx = 0;
     for (std::size_t i = 0; i < app.planets.size(); ++i) {
         if (!app.planets[i].alive) continue;
         const pebble::math::vec2 f_grav = forces[bh_idx++];
         app.planets[i].acc = f_grav * (1.0f / app.planets[i].mass);
+
+        // Relativistic Kerr Spacetime Frame-Dragging (Lense-Thirring Swirl)
+        for (const auto& bh : app.planets) {
+            if (!bh.alive || (&bh == &app.planets[i])) continue;
+            if (bh.is_singularity || bh.is_neutron_star || bh.mass > 600.0f) {
+                const auto drag = prakriti::celestial::compute_frame_dragging_swirl(
+                    app.planets[i].pos, bh.pos, bh.mass, bh.radius, bh.omega
+                );
+                if (drag.is_in_ergosphere) {
+                    app.planets[i].acc = app.planets[i].acc + drag.azimuthal_force * (1.0f / app.planets[i].mass);
+                }
+            }
+        }
 
         // Interactive gravity vortex
         if (app.gravity_vortex || app.mouse_down) {
@@ -510,23 +529,41 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
         }
     }
 
-    // 4. Symplectic Velocity Verlet Integration & Radiative Cooling
+    // 4. Symplectic Velocity Verlet Integration, Cosmological Metric Expansion & Radiative Cooling
+    const pebble::math::vec2 cosmic_center{FW * 0.5f, FH * 0.5f};
+    constexpr float kHubbleConstant = 0.00035f; // Gentle cosmic background metric expansion
+
     for (auto& p : app.planets) {
         if (!p.alive) continue;
 
+        // Apply gentle Cosmological Hubble Metric Drift (v_H = H0 * (r - r_center))
+        const pebble::math::vec2 hubble_drift = prakriti::celestial::apply_hubble_metric_drift(
+            p.pos, cosmic_center, kHubbleConstant, sim_dt
+        );
+
         p.prev_pos = p.pos;
-        p.pos = p.pos + p.vel * sim_dt + p.acc * (0.5f * sim_dt * sim_dt);
+        p.pos = p.pos + p.vel * sim_dt + p.acc * (0.5f * sim_dt * sim_dt) + hubble_drift;
         p.vel = p.vel + p.acc * sim_dt;
 
         // Angular spin integration
         p.angle += p.omega * sim_dt;
 
-        // Gradual Contact Binary Coalescence Relaxation
-        // Tips slowly pull inward toward center of mass as matter relaxes into a sphere
+        // ── Contact Binary Dumbbell Coalescence & Inward Orbital Spiral ──
+        // Secondary lobe rotates with angular velocity around primary core and slowly sinks inward
         if (p.is_merging) {
             // Hotter/molten bodies relax faster into a circle; colder bodies hold dumbbell shape longer
-            const float viscosity_rate = (p.temperature > 900.0f) ? 0.70f : 0.35f;
+            const float viscosity_rate = (p.temperature > 900.0f) ? 0.65f : 0.30f;
             p.merge_progress += (sim_dt / p.merge_duration) * viscosity_rate;
+            
+            // Orbit the secondary lobe around the core while pulling it in
+            const float d_theta = p.omega * sim_dt;
+            const float cos_t = std::cos(d_theta);
+            const float sin_t = std::sin(d_theta);
+            const pebble::math::vec2 rotated_offset{
+                p.lobe2_offset[0] * cos_t - p.lobe2_offset[1] * sin_t,
+                p.lobe2_offset[0] * sin_t + p.lobe2_offset[1] * cos_t
+            };
+
             if (p.merge_progress >= 1.0f) {
                 p.merge_progress = 1.0f;
                 p.is_merging = false;
@@ -534,9 +571,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                 p.lobe2_radius = 0.0f;
                 p.lobe2_mass = 0.0f;
             } else {
-                // Decay secondary lobe offset inward toward center of mass
-                const float shrink = (1.0f - p.merge_progress);
-                p.lobe2_offset = p.lobe2_offset * (1.0f - sim_dt * 1.5f * viscosity_rate);
+                // Inward orbital decay towards center of mass
+                p.lobe2_offset = rotated_offset * (1.0f - sim_dt * 1.8f * viscosity_rate);
             }
         }
 
@@ -565,44 +601,90 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                 p.radius = evol.event_horizon_radius;
                 p.temperature = 12000.0f; // Relativistic accretion temperature
 
-                // Supernova Blast & Relativistic Shockwave Ejecta
-                for (int s = 0; s < 42; ++s) {
-                    const float a = static_cast<float>(s) * (6.2831853f / 42.0f);
-                    const float spd = 70.0f + dist01(app.rng) * 110.0f;
+                // ── Spectacular Core-Collapse Supernova Blast (Triple-Shell Relativistic Ejecta) ──
+                // Shell 1: Hyper-velocity relativistic plasma blast
+                for (int s = 0; s < 64; ++s) {
+                    const float a = static_cast<float>(s) * (6.2831853f / 64.0f) + (dist01(app.rng) - 0.5f) * 0.1f;
+                    const float spd = 90.0f + dist01(app.rng) * 140.0f;
                     app.sparks.push_back(SparkParticle{
                         .pos = p.pos,
                         .vel = p.vel + pebble::math::vec2{std::cos(a), std::sin(a)} * spd,
-                        .radius = 2.2f + dist01(app.rng) * 2.0f,
-                        .life = 0.9f + dist01(app.rng) * 0.4f,
-                        .max_life = 1.3f,
-                        .color = kalpana::Color{1.0f, 0.95f, 0.45f, 1.0f}
+                        .radius = 2.4f + dist01(app.rng) * 2.2f,
+                        .life = 1.2f + dist01(app.rng) * 0.6f,
+                        .max_life = 1.8f,
+                        .color = (s % 2 == 0) ? kalpana::Color{1.0f, 0.95f, 0.5f, 1.0f} : kalpana::Color{0.4f, 0.85f, 1.0f, 1.0f}
                     });
                 }
+                // Shell 2: Dense expanding fireball nebula cloud
+                for (int s = 0; s < 32; ++s) {
+                    const float a = dist01(app.rng) * 6.2831853f;
+                    const float spd = 20.0f + dist01(app.rng) * 45.0f;
+                    app.nebulae.push_back(NebulaGasParticle{
+                        .pos = p.pos,
+                        .vel = p.vel * 0.3f + pebble::math::vec2{std::cos(a), std::sin(a)} * spd,
+                        .radius = 3.5f + dist01(app.rng) * 3.0f,
+                        .life = 1.6f + dist01(app.rng) * 0.8f,
+                        .max_life = 2.4f,
+                        .color = kalpana::Color{1.0f, 0.35f, 0.1f, 0.65f}
+                    });
+                }
+                app.camera_shake.add_trauma(0.85f); // Visceral cosmic camera recoil
             } else if (evol.phase == prakriti::celestial::StellarPhase::NeutronStar && !p.is_neutron_star) {
                 p.is_neutron_star = true;
                 p.type = CelestialType::NeutronStar;
                 p.mat_params = prakriti::celestial::neutron_star();
                 p.density = p.mat_params.rest_density;
                 p.radius = evol.event_horizon_radius;
-                p.temperature = 4500.0f;
-                p.omega *= 3.5f; // Rapid pulsar spinup from conservation of angular momentum
+                p.temperature = 5500.0f;
+                
+                // ── Pulsar Conservation of Angular Momentum ($I_1 \omega_1 = I_2 \omega_2$) ──
+                // As the star compresses from $R \approx 12\text{px}$ down to $2.2\text{px}$, $\omega \propto (R_1/R_2)^2 \approx 30\times$ spinup!
+                const float prev_r = std::max(p.radius, 4.0f);
+                const float spin_factor = (prev_r * prev_r) / (evol.event_horizon_radius * evol.event_horizon_radius);
+                p.omega = std::clamp(p.omega * spin_factor * 1.5f + 35.0f, 35.0f, 75.0f); // High-speed millisecond pulsar spin (rad/s)
 
-                // Pulsar core shockwave
-                for (int s = 0; s < 24; ++s) {
-                    const float a = static_cast<float>(s) * (6.2831853f / 24.0f);
-                    const float spd = 40.0f + dist01(app.rng) * 60.0f;
+                // ── Radiant Pulsar Magnetar Core-Collapse Flash ──
+                for (int s = 0; s < 36; ++s) {
+                    const float a = static_cast<float>(s) * (6.2831853f / 36.0f);
+                    const float spd = 50.0f + dist01(app.rng) * 80.0f;
                     app.sparks.push_back(SparkParticle{
                         .pos = p.pos,
                         .vel = p.vel + pebble::math::vec2{std::cos(a), std::sin(a)} * spd,
-                        .radius = 1.6f + dist01(app.rng) * 1.5f,
-                        .life = 0.6f + dist01(app.rng) * 0.3f,
-                        .max_life = 0.9f,
-                        .color = kalpana::Color{0.4f, 0.95f, 1.0f, 1.0f}
+                        .radius = 1.8f + dist01(app.rng) * 1.6f,
+                        .life = 0.8f + dist01(app.rng) * 0.4f,
+                        .max_life = 1.2f,
+                        .color = kalpana::Color{0.3f, 0.95f, 1.0f, 1.0f} // Electric cyan magnetar sparks
                     });
                 }
+                app.camera_shake.add_trauma(0.40f);
             } else if (evol.phase == prakriti::celestial::StellarPhase::MainSequenceStar) {
                 p.type = CelestialType::SuperheatedPlasma;
             }
+        }
+
+        // ── Pulsar High-Speed Lighthouse Beams (Relativistic Polar Radio/Gamma Jets) ──
+        if (p.is_neutron_star && app.jets.size() < 300 && dist01(app.rng) < 0.65f) {
+            const float b_angle = p.angle; // Rotating lighthouse beam vector
+            const pebble::math::vec2 beam_dir1{std::cos(b_angle), std::sin(b_angle)};
+            const pebble::math::vec2 beam_dir2{-std::cos(b_angle), -std::sin(b_angle)};
+            const float b_spd = 140.0f + dist01(app.rng) * 60.0f;
+
+            app.jets.push_back(RelativisticJetParticle{
+                .pos = p.pos + beam_dir1 * (p.radius + 1.0f),
+                .vel = p.vel + beam_dir1 * b_spd,
+                .radius = 1.2f,
+                .life = 0.35f,
+                .max_life = 0.35f,
+                .color = kalpana::Color{0.3f, 0.95f, 1.0f, 0.95f} // Electric cyan pulsar lighthouse beam
+            });
+            app.jets.push_back(RelativisticJetParticle{
+                .pos = p.pos + beam_dir2 * (p.radius + 1.0f),
+                .vel = p.vel + beam_dir2 * b_spd,
+                .radius = 1.2f,
+                .life = 0.35f,
+                .max_life = 0.35f,
+                .color = kalpana::Color{0.3f, 0.95f, 1.0f, 0.95f}
+            });
         }
 
         // Prakriti Phase Engine: Boiling & Degassing at high temperatures (> 1400°C)
@@ -653,9 +735,16 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
             p.density = p.mat_params.rest_density;
         }
 
-        // Recompute radius (micro specs scaling)
-        constexpr float kRadiusScale = 2.4f;
-        p.radius = std::clamp(kRadiusScale * std::sqrt(p.mass / p.density), 0.75f, 2.2f);
+        // Recompute organic physical radius based on mass and material class:
+        // Pure dust is ~0.8-1.2px, accumulating asteroids ~2-3px, large planets ~4-6px, stars and giants ~8-16px!
+        if (p.is_singularity || p.type == CelestialType::BlackHoleSingularity) {
+            p.radius = std::clamp(p.mass * 0.0035f + 2.8f, 3.0f, 12.0f);
+        } else if (p.is_neutron_star || p.type == CelestialType::NeutronStar) {
+            p.radius = std::clamp(std::cbrt(p.mass) * 0.55f, 2.2f, 4.5f); // Compact degenerate core
+        } else {
+            // General planetary & stellar volume scaling (r \propto (M/\rho)^{1/3})
+            p.radius = std::clamp(std::cbrt(p.mass) * 0.65f, 0.75f, 18.0f);
+        }
 
         if (p.pos[0] < p.radius) { p.pos[0] = p.radius; p.vel[0] = -p.vel[0] * 0.7f; }
         if (p.pos[0] > FW - p.radius) { p.pos[0] = FW - p.radius; p.vel[0] = -p.vel[0] * 0.7f; }
@@ -663,11 +752,11 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
         if (p.pos[1] > FH - p.radius) { p.pos[1] = FH - p.radius; p.vel[1] = -p.vel[1] * 0.7f; }
     }
 
-    // Roche Limit Tidal Disruption Check for massive celestial nodes
+    // Roche Limit Tidal Disruption & Planetary Accretion Ring Formation
     for (std::size_t i = 0; i < app.planets.size(); ++i) {
-        if (!app.planets[i].alive || app.planets[i].mass < 350.0f) continue;
+        if (!app.planets[i].alive || app.planets[i].mass < 250.0f) continue;
         for (std::size_t j = 0; j < app.planets.size(); ++j) {
-            if (i == j || !app.planets[j].alive || app.planets[j].mass >= app.planets[i].mass * 0.15f) continue;
+            if (i == j || !app.planets[j].alive || app.planets[j].mass >= app.planets[i].mass * 0.20f) continue;
 
             const pebble::math::vec2 dr = app.planets[j].pos - app.planets[i].pos;
             const float dist2 = dr[0] * dr[0] + dr[1] * dr[1];
@@ -676,18 +765,32 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                 app.planets[i].radius, app.planets[i].density, app.planets[j].density
             );
 
-            if (dist2 < roche_radius * roche_radius && dist2 > (app.planets[i].radius + app.planets[j].radius) * (app.planets[i].radius + app.planets[j].radius)) {
-                // Tidal disruption: rip smaller body into an accretion stream of micro dust
-                if (app.planets[j].mass > 8.0f && app.planets.size() < 1200) {
-                    const float shard_m = app.planets[j].mass * 0.45f;
-                    app.planets[j].mass *= 0.55f;
-                    PlanetBody stream_spec = app.planets[j];
-                    stream_spec.ent = app.world.spawn();
-                    stream_spec.mass = shard_m;
-                    const pebble::math::vec2 tangent{-dr[1], dr[0]};
-                    stream_spec.vel = app.planets[j].vel + pebble::math::normalize(tangent) * 8.0f;
-                    stream_spec.temperature += 150.0f;
-                    app.planets.push_back(stream_spec);
+            if (dist2 < roche_radius * roche_radius && dist2 > (app.planets[i].radius + 2.0f) * (app.planets[i].radius + 2.0f)) {
+                // Tidal disruption: shred passing moon into a shimmering concentric Keplerian planetary ring!
+                if (app.planets[j].mass > 6.0f && app.planets.size() < 1100) {
+                    const int n_ring_specs = (app.planets[j].mass > 40.0f) ? 8 : 4;
+                    const float shard_m = (app.planets[j].mass * 0.75f) / static_cast<float>(n_ring_specs);
+                    const float r_orbit = std::sqrt(dist2);
+                    app.planets[j].alive = false; // Original moon body consumed and dispersed into ring
+
+                    for (int k = 0; k < n_ring_specs; ++k) {
+                        const float angle = static_cast<float>(k) * (6.2831853f / static_cast<float>(n_ring_specs)) + dist01(app.rng) * 0.2f;
+                        const auto ring_p = prakriti::celestial::compute_ring_particle_keplerian(
+                            app.planets[i].pos, app.planets[i].mass, r_orbit * (0.92f + dist01(app.rng) * 0.16f), angle, shard_m
+                        );
+                        PlanetBody ring_body;
+                        ring_body.ent = app.world.spawn();
+                        ring_body.pos = ring_p.pos;
+                        ring_body.prev_pos = ring_body.pos;
+                        ring_body.vel = ring_p.vel + app.planets[i].vel;
+                        ring_body.mass = ring_p.mass;
+                        ring_body.density = app.planets[j].density;
+                        ring_body.radius = ring_p.radius;
+                        ring_body.temperature = app.planets[j].temperature + 60.0f;
+                        ring_body.type = app.planets[j].type;
+                        app.planets.push_back(ring_body);
+                    }
+                    app.fractures_count++;
                 }
             }
         }
@@ -821,12 +924,72 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                     app.planets[i].lobe2_radius = app.planets[j].radius;
                     app.planets[i].lobe2_mass = app.planets[j].mass;
 
-                    // Update spin rate for merged body: omega = L / I
-                    constexpr float kRadiusScale = 2.4f;
-                    app.planets[i].radius = std::clamp(kRadiusScale * std::sqrt(m_total / d_mixed), 0.75f, 2.5f);
+                    // Update spin rate and organic radius for merged body: omega = L / I
+                    constexpr float kRadiusScale = 0.65f;
+                    app.planets[i].radius = std::max(0.6f, kRadiusScale * std::cbrt(m_total * 3000.0f / d_mixed));
                     const float new_inertia = 0.5f * m_total * (app.planets[i].radius * app.planets[i].radius);
                     app.planets[i].angular_momentum = l_total;
                     app.planets[i].omega = (new_inertia > 1e-4f) ? (l_total / new_inertia) : 0.0f;
+
+                    // ── Kilonova Explosion, r-Process Synthesis & Gamma-Ray Burst (GRB) ──
+                    const auto kn = prakriti::celestial::evaluate_kilonova_merger(
+                        app.planets[i].mass, app.planets[j].mass,
+                        app.planets[i].is_neutron_star, app.planets[j].is_neutron_star,
+                        app.planets[i].is_singularity, app.planets[j].is_singularity
+                    );
+
+                    if (kn.triggers_kilonova) {
+                        // Cosmic metallicity jump from r-process gold/platinum nucleosynthesis
+                        app.cosmic_metallicity_z = std::min(0.55f, app.cosmic_metallicity_z + kn.gold_platinum_yield);
+                        app.supernova_count++;
+
+                        // Expanding radioactive gold & violet kilonova nebula debris
+                        for (int k_idx = 0; k_idx < 40; ++k_idx) {
+                            const float a = dist01(app.rng) * 6.2831853f;
+                            const float spd = 35.0f + dist01(app.rng) * 65.0f;
+                            app.nebulae.push_back(NebulaGasParticle{
+                                .pos = p_cm,
+                                .vel = v_cm * 0.2f + pebble::math::vec2{std::cos(a), std::sin(a)} * spd,
+                                .radius = 3.0f + dist01(app.rng) * 2.5f,
+                                .life = 2.0f + dist01(app.rng) * 1.0f,
+                                .max_life = 3.0f,
+                                .color = (k_idx % 2 == 0) ? kalpana::Color{1.0f, 0.85f, 0.2f, 0.75f} : kalpana::Color{0.7f, 0.3f, 1.0f, 0.70f}
+                            });
+                        }
+
+                        // Collimated Relativistic Gamma-Ray Burst (GRB) twin jets
+                        const float grb_angle = app.planets[i].angle + 1.5707963f;
+                        const pebble::math::vec2 grb1{std::cos(grb_angle), std::sin(grb_angle)};
+                        const pebble::math::vec2 grb2{-std::cos(grb_angle), -std::sin(grb_angle)};
+                        for (int g = 0; g < 20; ++g) {
+                            const float g_spd = 220.0f + dist01(app.rng) * 140.0f;
+                            app.jets.push_back(RelativisticJetParticle{
+                                .pos = p_cm + grb1 * (app.planets[i].radius + 2.0f),
+                                .vel = v_cm + grb1 * g_spd,
+                                .radius = 2.2f,
+                                .life = 0.65f,
+                                .max_life = 0.65f,
+                                .color = kalpana::Color{1.0f, 0.95f, 0.4f, 1.0f} // Blinding white-gold GRB beam
+                            });
+                            app.jets.push_back(RelativisticJetParticle{
+                                .pos = p_cm + grb2 * (app.planets[i].radius + 2.0f),
+                                .vel = v_cm + grb2 * g_spd,
+                                .radius = 2.2f,
+                                .life = 0.65f,
+                                .max_life = 0.65f,
+                                .color = kalpana::Color{1.0f, 0.95f, 0.4f, 1.0f}
+                            });
+                        }
+                        app.camera_shake.add_trauma(0.70f);
+
+                        if (kn.forms_black_hole) {
+                            app.planets[i].is_singularity = true;
+                            app.planets[i].is_neutron_star = false;
+                            app.planets[i].type = CelestialType::BlackHoleSingularity;
+                            app.planets[i].mat_params = prakriti::celestial::black_hole_singularity();
+                            app.planets[i].density = app.planets[i].mat_params.rest_density;
+                        }
+                    }
 
                     // ── Gravitational Radiation Chirp Emission (Only for Extreme Relativistic Mergers) ──
                     const auto gw = prakriti::celestial::compute_gravitational_wave_emission(app.planets[i].mass, app.planets[j].mass, touch_dist, rel_speed);
@@ -1159,6 +1322,54 @@ static void render_gpu_frame(PebbleVerseApp& app) {
     kalpana::Scene scene;
     app.instanced_planets.begin();
 
+    // ── 0. Dynamic Lagrangian Tracking Camera Update ──
+    if (app.tracked_planet_index >= 0 && app.tracked_planet_index < static_cast<int>(app.planets.size())) {
+        const auto& tp = app.planets[app.tracked_planet_index];
+        if (tp.alive) {
+            app.target_cam_pos = tp.pos;
+            app.target_zoom = std::clamp(2.4f - (tp.radius / 10.0f), 1.4f, 3.2f);
+        } else {
+            app.tracked_planet_index = -1; // Reset if target merged or evaporated
+            app.target_cam_pos = pebble::math::vec2{FW * 0.5f, FH * 0.5f};
+            app.target_zoom = 1.0f;
+        }
+    } else {
+        app.target_cam_pos = pebble::math::vec2{FW * 0.5f, FH * 0.5f};
+        app.target_zoom = 1.0f;
+    }
+
+    // Smooth exponential damping interpolation
+    constexpr float cam_lerp = 0.08f;
+    app.camera_pos = app.camera_pos + (app.target_cam_pos - app.camera_pos) * cam_lerp;
+    app.camera_zoom = app.camera_zoom + (app.target_zoom - app.camera_zoom) * cam_lerp;
+
+    // Find top massive gravitational lenses for real-time Einstein micro-lensing
+    std::vector<const PlanetBody*> massive_lenses;
+    for (const auto& p : app.planets) {
+        if (p.alive && (p.is_singularity || p.mass > 300.0f)) {
+            massive_lenses.push_back(&p);
+            if (massive_lenses.size() >= 4) break;
+        }
+    }
+
+    auto w2s = [&](const pebble::math::vec2& w_pos, bool is_lens = false) -> pebble::math::vec2 {
+        pebble::math::vec2 defl_pos = w_pos;
+        if (!is_lens) {
+            for (const auto* lens : massive_lenses) {
+                if (lens->pos[0] != w_pos[0] || lens->pos[1] != w_pos[1]) {
+                    const pebble::math::vec2 delta = prakriti::celestial::compute_einstein_micro_lensing(
+                        w_pos, lens->pos, lens->mass
+                    );
+                    defl_pos = defl_pos + delta;
+                }
+            }
+        }
+        return pebble::math::vec2{
+            (defl_pos[0] - app.camera_pos[0]) * app.camera_zoom + FW * 0.5f,
+            (defl_pos[1] - app.camera_pos[1]) * app.camera_zoom + FH * 0.5f
+        };
+    };
+
     // 1. Batch Orbital Motion Trails & Accretion Halos
     for (const auto& p : app.planets) {
         if (p.trail_count > 1) {
@@ -1168,103 +1379,101 @@ static void render_gpu_frame(PebbleVerseApp& app) {
                 const float fade = 1.0f - static_cast<float>(t) / static_cast<float>(p.trail_count);
                 kalpana::Color t_col = col;
                 t_col.a = fade * 0.40f;
-                app.instanced_planets.add_instance(p.trail_history[idx][0], p.trail_history[idx][1], p.radius * fade * 0.85f, t_col);
+                const pebble::math::vec2 s_trail = w2s(p.trail_history[idx]);
+                app.instanced_planets.add_instance(s_trail[0], s_trail[1], p.radius * fade * 0.85f * app.camera_zoom, t_col);
             }
         }
         // Celestial Body Core & Contact Binary Lobe (Dumbbell shape)
         const kalpana::Color c = get_celestial_color(p, app.view_mode);
-        app.instanced_planets.add_instance(p.pos[0], p.pos[1], p.radius, c);
+        const pebble::math::vec2 s_pos = w2s(p.pos);
+        app.instanced_planets.add_instance(s_pos[0], s_pos[1], p.radius * app.camera_zoom, c);
 
-        // If in gradual coalescence, render the secondary connected lobe and bridging neck
-        if (p.is_merging && p.lobe2_radius > 0.4f) {
-            const pebble::math::vec2 lobe_pos = p.pos + p.lobe2_offset;
-            const float lobe_r = p.lobe2_radius * (1.0f - p.merge_progress * 0.5f);
+        // If in gradual coalescence, render the rotating dumbbell lobes and smooth bridging neck
+        if (p.is_merging && p.lobe2_radius > 0.3f) {
+            const pebble::math::vec2 lobe_pos = w2s(p.pos + p.lobe2_offset);
+            const float lobe_r = p.lobe2_radius * (1.0f - p.merge_progress * 0.45f) * app.camera_zoom;
             app.instanced_planets.add_instance(lobe_pos[0], lobe_pos[1], lobe_r, c);
 
-            // Connecting neck speck
-            const pebble::math::vec2 neck_pos = p.pos + p.lobe2_offset * 0.5f;
-            const float neck_r = std::min(p.radius, lobe_r) * 0.8f;
-            app.instanced_planets.add_instance(neck_pos[0], neck_pos[1], neck_r, c);
+            // Connecting fluid neck specks (Roche Lobe matter bridge)
+            for (float f : {0.33f, 0.66f}) {
+                const pebble::math::vec2 neck_pos = w2s(p.pos + p.lobe2_offset * f);
+                const float neck_r = (p.radius * (1.0f - f) + lobe_r * f) * 0.75f * (1.0f - p.merge_progress * 0.3f);
+                app.instanced_planets.add_instance(neck_pos[0], neck_pos[1], neck_r, c);
+            }
         }
     }
 
     // 2. Batch Evaporated Nebula Gas Clouds
     for (const auto& n : app.nebulae) {
-        app.instanced_planets.add_instance(n.pos[0], n.pos[1], n.radius, n.color);
+        const pebble::math::vec2 s_pos = w2s(n.pos);
+        app.instanced_planets.add_instance(s_pos[0], s_pos[1], n.radius * app.camera_zoom, n.color);
     }
 
     // 3. Batch Fire Sparks
     for (const auto& s : app.sparks) {
-        app.instanced_planets.add_instance(s.pos[0], s.pos[1], s.radius, s.color);
+        const pebble::math::vec2 s_pos = w2s(s.pos);
+        app.instanced_planets.add_instance(s_pos[0], s_pos[1], s.radius * app.camera_zoom, s.color);
     }
 
     // 4. Batch Relativistic Polar Matter Jets
     for (const auto& j : app.jets) {
-        app.instanced_planets.add_instance(j.pos[0], j.pos[1], j.radius, j.color);
+        const pebble::math::vec2 s_pos = w2s(j.pos);
+        app.instanced_planets.add_instance(s_pos[0], s_pos[1], j.radius * app.camera_zoom, j.color);
     }
 
     // 5. Batch Relativistic ISCO Accretion Flares
     for (const auto& f : app.flares) {
-        app.instanced_planets.add_instance(f.pos[0], f.pos[1], f.radius, f.color);
+        const pebble::math::vec2 s_pos = w2s(f.pos);
+        app.instanced_planets.add_instance(s_pos[0], s_pos[1], f.radius * app.camera_zoom, f.color);
     }
 
     // 6. Relativistic Gravitational Wave Space-time Ripples (Ultra-Subtle & Faint)
     for (const auto& gw : app.gw_ripples) {
-        const float alpha = std::clamp(gw.life / gw.max_life, 0.0f, 1.0f) * 0.18f; // Very faint whisper
+        const float alpha = std::clamp(gw.life / gw.max_life, 0.0f, 1.0f) * 0.18f;
+        const pebble::math::vec2 s_center = w2s(gw.center);
         kalpana::Path gw_ring;
-        gw_ring.circle(gw.center[0], gw.center[1], gw.radius);
+        gw_ring.circle(s_center[0], s_center[1], gw.radius * app.camera_zoom);
         scene.add(kalpana::Node::shape(gw_ring, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.7f, 1.0f, alpha}, 0.75f)));
     }
 
-    // 5. Planetary Velocity Indicators (for Top Massive Bodies)
-    {
-        // Find top 5 heaviest bodies
-        std::vector<const PlanetBody*> heavy_bodies;
-        heavy_bodies.reserve(app.planets.size());
-        for (const auto& p : app.planets) {
-            if (p.alive && p.mass > 40.0f) heavy_bodies.push_back(&p);
-        }
-        std::sort(heavy_bodies.begin(), heavy_bodies.end(), [](const PlanetBody* a, const PlanetBody* b) {
-            return a->mass > b->mass;
-        });
-
-        const std::size_t n_vectors = std::min(heavy_bodies.size(), std::size_t(5));
-        for (std::size_t i = 0; i < n_vectors; ++i) {
-            const auto* p = heavy_bodies[i];
-            const float v_mag = std::sqrt(p->vel[0] * p->vel[0] + p->vel[1] * p->vel[1]);
-            if (v_mag > 1.0f) {
-                // Velocity vector arrow
-                kalpana::Path v_arrow;
-                v_arrow.move_to(p->pos[0], p->pos[1]);
-                const pebble::math::vec2 v_end = p->pos + p->vel * 0.85f;
-                v_arrow.line_to(v_end[0], v_end[1]);
-                scene.add(kalpana::Node::shape(v_arrow, kalpana::Paint::stroke(kalpana::Color{0.2f, 0.9f, 0.7f, 0.45f}, 1.2f)));
-            }
-        }
-    }
-
-    // 6. Gravitational Lensing, Photon Rings & Relativistic Event Horizons
+    // 7. Relativistic Event Horizons, Photon Rings & ISCO (For Actual Compact Singularities & Stars)
     for (const auto& p : app.planets) {
         if (!p.alive) continue;
+        const pebble::math::vec2 s_pos = w2s(p.pos, p.is_singularity || p.mass > 300.0f);
         if (p.is_singularity || p.type == CelestialType::BlackHoleSingularity) {
-            // Relativistic Event Horizon (Black Void Core)
-            app.instanced_planets.add_instance(p.pos[0], p.pos[1], p.radius, kalpana::Color{0.01f, 0.01f, 0.03f, 1.0f});
+            // ── Relativistic Kerr Black Hole Anatomy ──
+            // Layer 1: Relativistic Ergosphere Frame-Dragging Swirl Aura
+            const float ergo_r = p.radius * 4.2f * app.camera_zoom;
+            app.instanced_planets.add_instance(s_pos[0], s_pos[1], ergo_r, kalpana::Color{0.5f, 0.2f, 0.95f, 0.16f});
 
-            // Glowing Superheated Accretion Ring (ISCO - Innermost Stable Circular Orbit)
-            const float photon_ring_r = p.radius * 2.2f;
-            app.instanced_planets.add_instance(p.pos[0], p.pos[1], photon_ring_r, kalpana::Color{1.0f, 0.65f, 0.2f, 0.85f});
+            // Layer 2: Glowing Superheated Accretion Disk (ISCO - Innermost Stable Circular Orbit)
+            const float isco_r = p.radius * 2.8f * app.camera_zoom;
+            app.instanced_planets.add_instance(s_pos[0], s_pos[1], isco_r, kalpana::Color{1.0f, 0.55f, 0.15f, 0.75f});
 
-            // Relativistic Gravitational Distortion Corona
-            const float warp_r = p.radius * 4.5f;
-            app.instanced_planets.add_instance(p.pos[0], p.pos[1], warp_r, kalpana::Color{0.6f, 0.3f, 1.0f, 0.25f});
-        } else if (p.mass > 250.0f) {
-            const float lens_r = p.radius * (1.8f + (p.mass / 1000.0f) * 1.5f);
-            kalpana::Color lens_col = (p.type == CelestialType::DegenerateDense)
-                ? kalpana::Color{0.7f, 0.4f, 1.0f, 0.22f} // Violet gravitational warp
-                : ((p.temperature > 1000.0f)
-                    ? kalpana::Color{1.0f, 0.6f, 0.1f, 0.18f}  // Incandescent thermal aura
-                    : kalpana::Color{0.3f, 0.7f, 1.0f, 0.15f}); // Subdued gravitational ring
-            app.instanced_planets.add_instance(p.pos[0], p.pos[1], lens_r, lens_col);
+            // Layer 3: Razor-Sharp Relativistic Photon Sphere / Einstein Ring
+            const float photon_ring_r = p.radius * 1.6f * app.camera_zoom;
+            app.instanced_planets.add_instance(s_pos[0], s_pos[1], photon_ring_r, kalpana::Color{1.0f, 0.92f, 0.65f, 0.95f});
+
+            // Layer 4: Absolute Pitch-Black Event Horizon ($R_s = \frac{2GM}{c^2}$) Void Core
+            // Renders on top with complete opacity so zero light escapes from within
+            app.instanced_planets.add_instance(s_pos[0], s_pos[1], p.radius * app.camera_zoom, kalpana::Color{0.005f, 0.005f, 0.012f, 1.0f});
+        } else if (p.is_neutron_star || p.type == CelestialType::NeutronStar) {
+            // Radiant Pulsar Magnetosphere Halo
+            const float pulsar_halo_r = p.radius * 2.5f * app.camera_zoom;
+            app.instanced_planets.add_instance(s_pos[0], s_pos[1], pulsar_halo_r, kalpana::Color{0.3f, 0.9f, 1.0f, 0.25f});
+
+            // High-Speed Pulsar Magnetic Dipole Sweeping Beams
+            const pebble::math::vec2 beam_vec{std::cos(p.angle), std::sin(p.angle)};
+            kalpana::Path dipole_beam;
+            const pebble::math::vec2 b1 = s_pos - beam_vec * (p.radius * 3.6f * app.camera_zoom);
+            const pebble::math::vec2 b2 = s_pos + beam_vec * (p.radius * 3.6f * app.camera_zoom);
+            dipole_beam.move_to(b1[0], b1[1]);
+            dipole_beam.line_to(b2[0], b2[1]);
+            scene.add(kalpana::Node::shape(dipole_beam, kalpana::Paint::stroke(kalpana::Color{0.4f, 0.95f, 1.0f, 0.85f}, 1.5f)));
+        } else if (p.temperature > 1800.0f && p.mass >= 220.0f) {
+            // Incandescent Fusion Star Corona (Only for genuine fusion stars!)
+            const float corona_r = p.radius * 1.8f * app.camera_zoom;
+            app.instanced_planets.add_instance(s_pos[0], s_pos[1], corona_r, kalpana::Color{1.0f, 0.6f, 0.1f, 0.20f});
         }
     }
 
@@ -1589,10 +1798,17 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         std::string z_str = "Z:0." + std::to_string(z_pct);
         draw_text(995.0f, 10.0f, z_str, kalpana::Color{1.0f, 0.75f, 0.3f, 0.95f}, 6.5f, 11.0f);
 
+        // Camera Tracking Indicator
+        if (app.tracked_planet_index >= 0) {
+            draw_text(1085.0f, 10.0f, "CAM:LOCKED", kalpana::Color{1.0f, 0.85f, 0.2f, 0.95f}, 6.5f, 11.0f);
+        } else {
+            draw_text(1085.0f, 10.0f, "CAM:WIDE", kalpana::Color{0.6f, 0.8f, 1.0f, 0.8f}, 6.5f, 11.0f);
+        }
+
         // Time Dilation Speed
         const int speed_pct = static_cast<int>(app.time_dilation * 100.0f);
         std::string time_str = "TIME:" + std::to_string(speed_pct / 100) + "." + std::to_string((speed_pct % 100) / 10) + "X";
-        draw_text(1085.0f, 10.0f, time_str, kalpana::Color{0.6f, 0.95f, 0.7f, 0.95f}, 6.5f, 11.0f);
+        draw_text(1185.0f, 10.0f, time_str, kalpana::Color{0.6f, 0.95f, 0.7f, 0.95f}, 6.5f, 11.0f);
     }
 
     // 7. Interactive Mouse Reticle
@@ -1970,6 +2186,35 @@ static void event_cb(const sapp_event* e) {
             case SAPP_KEYCODE_RIGHT_BRACKET:
             case SAPP_KEYCODE_EQUAL:
                 app.time_dilation = std::min(4.0f, app.time_dilation * 1.35f);
+                break;
+            case SAPP_KEYCODE_TAB: {
+                // Cycle tracking to next massive body (or reset if at end)
+                std::vector<int> heavy_indices;
+                for (int i = 0; i < static_cast<int>(app.planets.size()); ++i) {
+                    if (app.planets[i].alive && app.planets[i].mass > 70.0f) {
+                        heavy_indices.push_back(i);
+                    }
+                }
+                if (heavy_indices.empty()) {
+                    app.tracked_planet_index = -1;
+                } else {
+                    int curr_pos = -1;
+                    for (int k = 0; k < static_cast<int>(heavy_indices.size()); ++k) {
+                        if (heavy_indices[k] == app.tracked_planet_index) {
+                            curr_pos = k;
+                            break;
+                        }
+                    }
+                    if (curr_pos == -1 || curr_pos + 1 >= static_cast<int>(heavy_indices.size())) {
+                        app.tracked_planet_index = (curr_pos == -1) ? heavy_indices[0] : -1;
+                    } else {
+                        app.tracked_planet_index = heavy_indices[curr_pos + 1];
+                    }
+                }
+                break;
+            }
+            case SAPP_KEYCODE_ESCAPE:
+                app.tracked_planet_index = -1;
                 break;
             case SAPP_KEYCODE_V:
                 if (app.view_mode == SpectralViewMode::OpticalRGB) {

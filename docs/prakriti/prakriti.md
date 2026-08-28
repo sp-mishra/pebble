@@ -299,6 +299,13 @@ Located in `#include <prakriti/material/celestial.hpp>`:
 - **Neutron Star / Pulsar ($600 \le M < 1200$)**: Core collapse to degenerate neutron Fermi matter ($\rho = 2.5 \times 10^7\,\text{kg/m}^3$) with angular momentum conservation spinup.
 - **Black Hole Singularities ($M \ge 1200$)**: Tolman-Oppenheimer-Volkoff (TOV) collapse, 42-shard supernova blast, event horizon void, and relativistic photon ring.
 
+### 10.3 Relativistic Kerr Black Hole Anatomy & Event Horizon
+- **Absolute Event Horizon ($R_s = \frac{2GM}{c^2}$)**: Complete light-trapping black void core.
+- **Relativistic Photon Sphere (Einstein Ring)**: $R_{\text{photon}} \approx 1.5 R_s$ with sharp bent lensed light.
+- **ISCO Accretion Ring**: Superheated plasma matter disk orbiting at the Innermost Stable Circular Orbit ($R_{\text{isco}} \approx 3 R_s$).
+- **Ergosphere Swirl**: $R_{\text{ergo}} \approx 5.2 R_s$ with Lense-Thirring spacetime frame-dragging.
+- **Relativistic Polar Jets**: Hyper-velocity directional matter ejecta along the rotational spin axis perpendicular to the accretion plane.
+
 ### 10.2 Relativistic Gravitational Waves & Chirp Ripples
 - **Quadrupole Strain Formula**:
   $$h \approx \frac{\mu \omega^2}{d \cdot 1500}, \qquad \omega = \sqrt{\frac{G(M_1 + M_2)}{d^3}}$$
@@ -311,4 +318,50 @@ Located in `#include <prakriti/material/celestial.hpp>`:
 ### 10.4 Cosmic Nucleosynthesis & Chemical Evolution ($Z$)
 - Tracks $r$-process nucleosynthesis from supernovae and stellar burning:
   $$\text{Primordial } (H/He) \longrightarrow \text{Silicates/Carbon} \longrightarrow \text{Iron-Peak Ferromagnetic Cores}$$
+
+### 10.5 Kerr Metric Spacetime Frame-Dragging (Lense-Thirring Swirl)
+- **Ergosphere Swirl Boundary**: $R_{\text{ergo}} \approx 5.2 R_{\text{bh}}$.
+- Calculates azimuthal Lense-Thirring dragging acceleration $\vec{a}_{\text{drag}} = \frac{2J}{r^3} \hat{\theta}$ twisting orbital trajectories around spinning compact cores and Kerr black holes.
+
+### 10.6 Stellar Luminosity & Shadow Eclipse Rays
+- Projects directional umbra occlusion cones ($R_{\text{cone}} = \arctan(R_{\text{occ}} / d)$) behind dense cool planetoids obstructing high-temperature stellar radiation.
+
+### 10.7 Millisecond Pulsars & Rotating Lighthouse Beams
+- **Conservation of Angular Momentum Spinup**:
+  $$I_1 \omega_1 = I_2 \omega_2 \implies \omega_2 \approx \omega_1 \left(\frac{R_1}{R_2}\right)^2$$
+- Core collapse down to $R \approx 2.2\text{px}$ spins neutron stars up to high frequencies ($\omega \sim 35\text{--}75\,\text{rad/s}$).
+- Continuously casts rotating polar magnetic dipole beams and emits relativistic cyan particle jets sweeping through surrounding space.
+
+---
+
+## 11. Quantum Vacuum Matter Condensation & Continuous Accretion
+- **Spontaneous Vacuum Polarization**: $P_{\text{condense}} \propto \frac{1}{1 + \rho_{\text{local}} \cdot 0.05}$.
+- Spontaneously nucleates in-situ primordial cosmic dust grains at rest ($v=0$) across low-density cosmic voids.
+
+---
+
+## 12. Kilonova Explosions, r-Process Synthesis & Gamma-Ray Bursts (GRBs)
+- **Binary Neutron Star (BNS) & NSBH Mergers**:
+  - $r$-process nucleosynthesis enriches cosmic metallicity $Z$ with radioactive gold and platinum elements.
+  - Spawns expanding radioactive kilonova nebula debris and white-gold collimated relativistic Gamma-Ray Burst (GRB) beams.
+
+---
+
+## 13. Planetary & Accretion Ring Formation Dynamics
+- **Roche Limit Shredding**:
+  - Tidal forces rip passing moons below the Roche limit ($d \le R_{\text{heavy}} \sqrt[3]{2 \rho_{\text{heavy}} / \rho_{\text{light}}}$) into shimmering concentric Keplerian orbital rings with circular velocities $v = \sqrt{GM/r}$.
+
+---
+
+## 14. Gravitational Micro-Lensing Spacetime Deflection
+- **General Relativity Einstein Deflection**:
+  $$\hat{\alpha} = \frac{4GM}{c^2 b}$$
+- Bends background light rays and dust coordinates passing in close optical proximity to massive stars and black holes.
+
+---
+
+## 15. Cosmological Metric Expansion (Hubble Drift)
+- **Hubble's Law**:
+  $$\vec{v}_H = H_0 (\vec{r} - \vec{r}_{\text{center}})$$
+- Simulates background metric cosmic expansion smoothly across cosmological timescales.
 

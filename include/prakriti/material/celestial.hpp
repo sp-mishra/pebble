@@ -396,7 +396,6 @@ struct ISCOAccretionResult {
 [[nodiscard]] inline ISCOAccretionResult
 evaluate_isco_accretion(float body_dist, float bh_mass, float bh_radius) noexcept {
     ISCOAccretionResult res;
-    // ISCO boundary for Schwarzschild black hole: R_isco = 3 * R_s = 6 * GM/c^2
     const float isco_radius = bh_radius * 2.8f;
     if (body_dist <= isco_radius) {
         res.triggers_flare = true;
@@ -404,6 +403,167 @@ evaluate_isco_accretion(float body_dist, float bh_mass, float bh_radius) noexcep
         res.luminosity_boost = std::clamp((isco_radius - body_dist) / isco_radius, 0.2f, 1.0f);
     }
     return res;
+}
+
+// ── 9. Relativistic Ergosphere & Kerr Metric Frame-Dragging ─────────────────────────────────
+
+struct FrameDraggingEffect {
+    bool  is_in_ergosphere = false;
+    pebble::math::vec2 azimuthal_force{0.0f, 0.0f}; // Lense-Thirring dragging acceleration
+    float optical_shear_intensity = 0.0f;
+};
+
+// Computes spacetime frame-dragging around spinning Kerr black holes and pulsars
+[[nodiscard]] inline FrameDraggingEffect
+compute_frame_dragging_swirl(const pebble::math::vec2& p_pos, const pebble::math::vec2& bh_pos,
+                             float bh_mass, float bh_radius, float spin_omega) noexcept {
+    FrameDraggingEffect eff;
+    const pebble::math::vec2 d = p_pos - bh_pos;
+    const float dist_sq = d[0] * d[0] + d[1] * d[1];
+    const float dist = std::sqrt(dist_sq);
+
+    // Ergosphere boundary: R_ergo = 2 * R_isco \approx 5.6 * R_bh
+    const float ergo_radius = bh_radius * 5.2f;
+    if (dist < ergo_radius && dist > 1.0f) {
+        eff.is_in_ergosphere = true;
+        // Azimuthal tangential vector (perpendicular to radius)
+        const pebble::math::vec2 tangent{-d[1] / dist, d[0] / dist};
+        
+        // Lense-Thirring angular velocity: \omega_{LT} = 2 J / r^3 = (2 * I * spin) / r^3
+        const float r_norm = std::max(dist / ergo_radius, 0.08f);
+        const float drag_mag = (bh_mass * std::abs(spin_omega)) / (r_norm * r_norm * r_norm * 3200.0f);
+        
+        const float dir_sign = (spin_omega >= 0.0f) ? 1.0f : -1.0f;
+        eff.azimuthal_force = tangent * (drag_mag * dir_sign);
+        eff.optical_shear_intensity = std::clamp((ergo_radius - dist) / ergo_radius, 0.1f, 1.0f);
+    }
+    return eff;
+}
+
+// ── 10. Stellar Luminosity & Shadow Eclipse Rays ─────────────────────────────────────────────
+
+struct ShadowCone {
+    pebble::math::vec2 apex{0.0f, 0.0f};
+    pebble::math::vec2 axis{0.0f, 0.0f};
+    float              umbra_angle = 0.0f;
+    float              length = 0.0f;
+};
+
+[[nodiscard]] inline ShadowCone
+compute_stellar_shadow(const pebble::math::vec2& star_pos, const pebble::math::vec2& occluder_pos,
+                       float star_radius, float occluder_radius, float max_len = 160.0f) noexcept {
+    ShadowCone cone;
+    const pebble::math::vec2 dir = occluder_pos - star_pos;
+    const float d = std::sqrt(dir[0] * dir[0] + dir[1] * dir[1]);
+    if (d < 1.0f) return cone;
+
+    cone.apex = occluder_pos;
+    cone.axis = dir * (1.0f / d);
+    cone.length = max_len;
+    cone.umbra_angle = std::atan2(occluder_radius, d);
+    return cone;
+}
+
+// ── 11. Quantum Vacuum Matter Condensation & Pair Creation ────────────────────────────────
+
+struct QuantumFluctuationEvent {
+    bool  spawns_particle = false;
+    float particle_mass = 0.0f;
+    float thermal_energy = 0.0f;
+};
+
+// Evaluates spontaneous vacuum matter condensation based on cosmic background density and field voids
+[[nodiscard]] inline QuantumFluctuationEvent
+evaluate_quantum_vacuum_condensation(float local_density_field, float rand_sample) noexcept {
+    QuantumFluctuationEvent evt;
+    // Lower local matter density increases spontaneous vacuum fluctuation probability (Dirac sea polarization)
+    const float vacuum_potential = 1.0f / (1.0f + local_density_field * 0.05f);
+    if (rand_sample < vacuum_potential * 0.85f) {
+        evt.spawns_particle = true;
+        evt.particle_mass = 30.0f + (1.0f - rand_sample) * 45.0f;
+        evt.thermal_energy = 25.0f + rand_sample * 80.0f;
+    }
+    return evt;
+}
+
+// ── 12. Kilonova Explosions, r-Process Synthesis & Gamma-Ray Bursts (GRBs) ──────────────────
+
+struct KilonovaResult {
+    bool  triggers_kilonova = false;
+    float grb_beam_energy = 0.0f;
+    float gold_platinum_yield = 0.0f; // Heavy element enrichment delta_Z
+    float remnant_mass = 0.0f;
+    bool  forms_black_hole = false;
+};
+
+[[nodiscard]] inline KilonovaResult
+evaluate_kilonova_merger(float m1, float m2, bool is_neutron_1, bool is_neutron_2,
+                         bool is_bh_1, bool is_bh_2) noexcept {
+    KilonovaResult res;
+    // Binary Neutron Star (BNS) or Neutron Star-Black Hole (NSBH) coalescence
+    if ((is_neutron_1 && is_neutron_2) || (is_neutron_1 && is_bh_2) || (is_neutron_2 && is_bh_1)) {
+        res.triggers_kilonova = true;
+        const float total_m = m1 + m2;
+        res.remnant_mass = total_m * 0.88f; // ~12% mass converted to pure relativistic energy & ejecta
+        res.gold_platinum_yield = std::clamp((m1 * m2) / 45000.0f, 0.02f, 0.08f);
+        res.grb_beam_energy = total_m * 12.0f;
+        res.forms_black_hole = (total_m > 950.0f); // Exceeds TOV maximum mass for neutron degeneracy
+    }
+    return res;
+}
+
+// ── 13. Planetary & Accretion Ring Formation Dynamics ───────────────────────────────────────
+
+struct RingParticleSpec {
+    pebble::math::vec2 pos{0.0f, 0.0f};
+    pebble::math::vec2 vel{0.0f, 0.0f};
+    float              radius = 0.6f;
+    float              mass = 1.0f;
+};
+
+// Generates concentric Keplerian ring orbit particles for tidally disrupted moons
+[[nodiscard]] inline RingParticleSpec
+compute_ring_particle_keplerian(const pebble::math::vec2& host_pos, float host_mass,
+                                float ring_radius, float angle, float particle_mass = 1.5f) noexcept {
+    RingParticleSpec spec;
+    const float cos_a = std::cos(angle);
+    const float sin_a = std::sin(angle);
+    spec.pos = host_pos + pebble::math::vec2{cos_a, sin_a} * ring_radius;
+    
+    // Circular Keplerian orbital speed: v = \sqrt{G * M / r}
+    const float v_circ = std::sqrt(std::max(1.0f, (18000.0f * host_mass) / std::max(ring_radius, 1.0f)));
+    // Tangential orbital velocity vector
+    spec.vel = pebble::math::vec2{-sin_a, cos_a} * v_circ;
+    spec.mass = particle_mass;
+    spec.radius = 0.65f;
+    return spec;
+}
+
+// ── 14. Gravitational Micro-Lensing Spacetime Deflection ───────────────────────────────────
+
+[[nodiscard]] inline pebble::math::vec2
+compute_einstein_micro_lensing(const pebble::math::vec2& ray_pos, const pebble::math::vec2& lens_pos,
+                               float lens_mass, float min_impact = 4.0f) noexcept {
+    const pebble::math::vec2 d = ray_pos - lens_pos;
+    const float dist_sq = d[0] * d[0] + d[1] * d[1];
+    const float dist = std::sqrt(dist_sq);
+    if (dist < 1.0f) return pebble::math::vec2{0.0f, 0.0f};
+
+    // General Relativity Deflection Angle: \hat{\alpha} = \frac{4 G M}{c^2 b}
+    const float impact_param = std::max(dist, min_impact);
+    const float deflection_mag = (lens_mass * 1.8f) / (impact_param * impact_param + 64.0f);
+    // Radial deflection towards the gravitating lens
+    return pebble::math::vec2{-d[0] / dist, -d[1] / dist} * deflection_mag;
+}
+
+// ── 15. Cosmological Metric Expansion (Hubble Drift) ────────────────────────────────────────
+
+[[nodiscard]] inline pebble::math::vec2
+apply_hubble_metric_drift(const pebble::math::vec2& pos, const pebble::math::vec2& cosmic_center,
+                          float hubble_constant, float dt) noexcept {
+    // Hubble's Law: \vec{v}_H = H_0 \cdot \vec{r}
+    const pebble::math::vec2 r = pos - cosmic_center;
+    return r * (hubble_constant * dt);
 }
 
 } // namespace prakriti::celestial
