@@ -11,6 +11,7 @@
 #include "color/spectral.hpp"
 #include "color/pigment_catalog.hpp"
 #include "color/color_space.hpp"
+#include "color/blackbody.hpp"
 #include "geom/transform.hpp"
 #include "geom/path.hpp"
 #include "geom/path_modifier.hpp"

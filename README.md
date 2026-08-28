@@ -65,6 +65,8 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 * **NAryTree** (`include/containers/tree/NAryTree.hpp`) — Owning n-ary tree with SIMD batch traversals.
   * Documentation: [`docs/containers/NAryTree.md`](docs/containers/NAryTree.md)
 * **AABBTree** (`include/containers/tree/AABBTree.hpp`) — Bounding-volume hierarchy with SAH-lite sibling-merge insertion and refit rebalancing.
+* **QuadTree & Barnes-Hut N-Body Solver** (`include/containers/spatial/quadtree.hpp`, `include/containers/spatial/barnes_hut.hpp`) — Flat-array cache-coherent 2D QuadTree with Morton Z-order space-filling curve sorting and generic $O(N \log N)$ Barnes-Hut hierarchical multipole gravitational field solver with Pravaha parallelization and Highway SIMD sweeps.
+  * Documentation: [`docs/spatial/barnes_hut.md`](docs/spatial/barnes_hut.md)
 * **BPlusTree** (`include/containers/tree/bplus_tree.hpp`) — High-performance, policy-based cache-aligned B+ tree (`BPlusMap`, `BPlusSet`) with Highway SIMD search, Smriti arena compatibility, and $O(\log_B N + K)$ range scanning.
   * Documentation: [`docs/containers/bplus_tree.md`](docs/containers/bplus_tree.md)
 * **DisjointSet** & **union_find** (`include/containers/graph/DisjointSet.hpp`, `include/containers/union_find.hpp`) — Disjoint-set forests with union-by-rank, path compression, and path-splitting.
@@ -266,6 +268,7 @@ CMake automatically detects missing dependencies during configuration and seamle
   - `pebble_akriti`: Akruti geometry & Kalpana vector effects showcase (`src/app/pebble_akriti.cpp`).
   - `pebble_gati`: Gati realtime ECS, elemental chemistry & thermodynamics showcase (`src/app/pebble_gati.cpp`).
   - `pebble_prakriti`: Prakriti multiphysics, continuum fluids & XPBD showcase (`src/app/pebble_prakriti.cpp`).
+  - `pebble_verse`: N-Body planetary continuum & thermodynamic accretion engine (`src/app/pebble_verse.cpp`).
 
 ---
 

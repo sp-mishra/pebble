@@ -1,0 +1,178 @@
+#pragma once
+// ============================================================================
+// prakriti/material/celestial.hpp — Celestial & Planetary Matter Laws
+// ============================================================================
+// High-performance, header-only material physics for planetary simulation.
+// Extends Prakriti with celestial matter presets, inelastic impact heat conversion,
+// and Stefan-Boltzmann radiative thermal dissipation.
+// ============================================================================
+
+#include "../core/config.hpp"
+#include "../state/material_registry.hpp"
+#include "../material/phase.hpp"
+#include "containers/numeric/math_vector.hpp"
+
+#include <cmath>
+#include <algorithm>
+
+namespace prakriti::celestial {
+
+// ── 1. Celestial Material Presets ────────────────────────────────────────────
+
+// 1. Ice / Volatile Crust (Low density, volatile, low melting point)
+[[nodiscard]] inline MaterialParams ice_crust() noexcept {
+    MaterialParams p;
+    p.rest_density = Scalar(920);        // kg/m^3
+    p.heat_capacity = Scalar(2.1);       // kJ/(kg*K)
+    p.conductivity = Scalar(2.2);        // W/(m*K)
+    p.melt_temp = Scalar(0);             // 0 C
+    p.boil_temp = Scalar(100);           // 100 C
+    p.latent_heat_fusion = Scalar(334);
+    p.latent_heat_vapor = Scalar(2257);
+    p.yield_strain = Scalar(0.001);
+    p.ultimate_strain = Scalar(0.004);   // Brittle
+    p.youngs_modulus = Scalar(9e9);
+    p.alpha = {Scalar(1e-8), Scalar(1e-5), Scalar(1e-2), Scalar(1)};
+    p.visc = {Scalar(0), Scalar(0.05), Scalar(0.01), Scalar(0.001)};
+    return p;
+}
+
+// 2. Silicate Rock / Planetary Crust & Mantle (Medium density, rocky)
+[[nodiscard]] inline MaterialParams silicate_rock() noexcept {
+    MaterialParams p;
+    p.rest_density = Scalar(2800);       // kg/m^3
+    p.heat_capacity = Scalar(0.85);
+    p.conductivity = Scalar(2.5);
+    p.melt_temp = Scalar(1200);          // 1200 C -> Molten magma
+    p.boil_temp = Scalar(2800);          // 2800 C -> Vaporized rock gas
+    p.latent_heat_fusion = Scalar(400);
+    p.yield_strain = Scalar(0.005);
+    p.ultimate_strain = Scalar(0.015);
+    p.youngs_modulus = Scalar(7e10);
+    p.alpha = {Scalar(1e-9), Scalar(1e-6), Scalar(5e-3), Scalar(1)};
+    p.visc = {Scalar(0), Scalar(0.1), Scalar(0.5), Scalar(0.01)};
+    return p;
+}
+
+// 3. Iron-Nickel Core (High density, metallic, high thermal conductivity)
+[[nodiscard]] inline MaterialParams iron_nickel_core() noexcept {
+    MaterialParams p;
+    p.rest_density = Scalar(7870);       // kg/m^3
+    p.heat_capacity = Scalar(0.45);
+    p.conductivity = Scalar(50.0);
+    p.melt_temp = Scalar(1538);          // 1538 C
+    p.boil_temp = Scalar(2862);
+    p.latent_heat_fusion = Scalar(270);
+    p.yield_strain = Scalar(0.008);
+    p.ultimate_strain = Scalar(0.12);    // High ductility before fracture
+    p.youngs_modulus = Scalar(2.1e11);
+    p.alpha = {Scalar(1e-10), Scalar(1e-7), Scalar(2e-3), Scalar(1)};
+    p.visc = {Scalar(0), Scalar(0.2), Scalar(0.1), Scalar(0.005)};
+    return p;
+}
+
+// 4. Molten Magma / Planetary Lava (Liquid rock state)
+[[nodiscard]] inline MaterialParams molten_magma() noexcept {
+    MaterialParams p;
+    p.rest_density = Scalar(3100);       // kg/m^3
+    p.heat_capacity = Scalar(1.2);
+    p.conductivity = Scalar(3.0);
+    p.melt_temp = Scalar(800);
+    p.boil_temp = Scalar(2600);
+    p.latent_heat_fusion = Scalar(380);
+    p.yield_strain = Scalar(0.02);
+    p.ultimate_strain = Scalar(0.1);
+    p.youngs_modulus = Scalar(1e8);
+    p.alpha = {Scalar(1e-7), Scalar(1e-4), Scalar(5e-2), Scalar(1)};
+    p.visc = {Scalar(0), Scalar(0.5), Scalar(2.0), Scalar(0.02)}; // Viscous fluid
+    return p;
+}
+
+// 5. Superheated Stellar / Core Plasma
+[[nodiscard]] inline MaterialParams superheated_plasma() noexcept {
+    MaterialParams p;
+    p.rest_density = Scalar(1400);       // Compressed plasma gas
+    p.heat_capacity = Scalar(4.0);
+    p.conductivity = Scalar(100.0);
+    p.melt_temp = Scalar(-100);
+    p.boil_temp = Scalar(0);
+    p.yield_strain = Scalar(0.0);
+    p.ultimate_strain = Scalar(0.0);
+    p.youngs_modulus = Scalar(0);
+    p.alpha = {Scalar(1e-2), Scalar(1e-2), Scalar(1e-1), Scalar(1)};
+    p.visc = {Scalar(0.001), Scalar(0.001), Scalar(0.005), Scalar(0.001)};
+    return p;
+}
+
+// 6. Degenerate Dense Core / Neutron Singularity
+[[nodiscard]] inline MaterialParams degenerate_dense_matter() noexcept {
+    MaterialParams p;
+    p.rest_density = Scalar(50000);      // Extreme gravitational density
+    p.heat_capacity = Scalar(0.1);
+    p.conductivity = Scalar(1000.0);
+    p.melt_temp = Scalar(50000);
+    p.boil_temp = Scalar(100000);
+    p.yield_strain = Scalar(0.5);
+    p.ultimate_strain = Scalar(0.9);
+    p.youngs_modulus = Scalar(1e14);
+    p.alpha = {Scalar(1e-12), Scalar(1e-10), Scalar(1e-8), Scalar(1e-5)};
+    return p;
+}
+
+// ── 2. Impact Thermodynamics & Radiative Cooling ─────────────────────────────
+
+// Compute thermal energy generated by inelastic collision between two bodies
+// Returns added temperature for body 1 and body 2
+struct CollisionHeatResult {
+    float temp_delta_1 = 0.0f;
+    float temp_delta_2 = 0.0f;
+    float total_heat_energy = 0.0f;
+};
+
+[[nodiscard]] inline CollisionHeatResult
+compute_impact_heat(float m1, float m2, pebble::math::vec2 v1, pebble::math::vec2 v2,
+                    float c1, float c2, float restitution = 0.2f) noexcept {
+    if (m1 <= 0.0f || m2 <= 0.0f) return {};
+
+    const float total_mass = m1 + m2;
+    const float mu = (m1 * m2) / total_mass; // Reduced mass
+    const pebble::math::vec2 dv = v1 - v2;
+    const float dv2 = dv[0] * dv[0] + dv[1] * dv[1];
+
+    // Inelastic energy loss converted to thermal heat: \Delta Q = 0.5 * (1 - e^2) * mu * dv^2
+    const float inelast_factor = std::clamp(1.0f - restitution * restitution, 0.0f, 1.0f);
+    const float dQ = 0.5f * inelast_factor * mu * dv2 * 0.05f; // Scaled simulation units
+
+    CollisionHeatResult res;
+    res.total_heat_energy = dQ;
+    const float c_eff1 = std::max(c1, 0.1f);
+    const float c_eff2 = std::max(c2, 0.1f);
+
+    // Heat partitioned proportionally to opposing mass
+    res.temp_delta_1 = (dQ * (m2 / total_mass)) / (c_eff1 * m1);
+    res.temp_delta_2 = (dQ * (m1 / total_mass)) / (c_eff2 * m2);
+    return res;
+}
+
+// Stefan-Boltzmann radiative cooling in space: dT/dt = -\epsilon \sigma (T^4 - T_space^4) / (m c)
+[[nodiscard]] inline float
+apply_radiative_cooling(float current_temp_celsius, float mass, float radius,
+                        float dt, float emissivity = 0.85f, float t_space_celsius = -270.0f) noexcept {
+    if (mass <= 0.0f || dt <= 0.0f) return current_temp_celsius;
+
+    const float t_k = current_temp_celsius + 273.15f;
+    const float t_sp_k = t_space_celsius + 273.15f;
+    if (t_k <= t_sp_k) return current_temp_celsius;
+
+    // Simulation radiation cooling rate constant
+    constexpr float kRadCoeff = 1.5e-6f;
+    const float area = 3.14159265f * radius * radius;
+    const float rate = (kRadCoeff * emissivity * area / mass);
+
+    // Smooth temperature decay toward ambient space
+    const float dt_k = rate * std::max(t_k - t_sp_k, 0.0f) * dt;
+    const float new_t_k = std::max(t_k - dt_k, t_sp_k);
+    return new_t_k - 273.15f;
+}
+
+} // namespace prakriti::celestial
