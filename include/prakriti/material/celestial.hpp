@@ -175,4 +175,235 @@ apply_radiative_cooling(float current_temp_celsius, float mass, float radius,
     return new_t_k - 273.15f;
 }
 
+// ── 3. Roche Limit & Tidal Disruption ────────────────────────────────────────
+
+// Compute Roche tidal radius: d_tidal = R_heavy * (2 * rho_heavy / rho_light)^(1/3)
+[[nodiscard]] inline float
+compute_roche_limit(float r_heavy, float rho_heavy, float rho_light, float tidal_rigidity_factor = 2.2f) noexcept {
+    if (rho_light <= 0.0f || r_heavy <= 0.0f) return 0.0f;
+    const float density_ratio = std::max(0.01f, (2.0f * rho_heavy) / rho_light);
+    return r_heavy * std::cbrt(density_ratio) * tidal_rigidity_factor;
+}
+
+// ── 4. Contact Binary Dumbbell Coalescence & Collision Regimes ────────────────
+
+enum class CollisionRegime : std::uint8_t {
+    ElasticRecoil,        // Momentum rebound & spin torque
+    DuctileMerge,         // Contact binary dumbbell accretion
+    BrittleFracture,      // Catastrophic fragmentation into shards
+    MidMergeDisruption    // Shearing of the connecting neck bridge
+};
+
+struct CollisionDecision {
+    CollisionRegime regime = CollisionRegime::ElasticRecoil;
+    float restitution = 0.35f;
+    float friction = 0.25f;
+};
+
+// Evaluate collision outcome based on material properties, temperature, ductility, and impact speed
+[[nodiscard]] inline CollisionDecision
+evaluate_collision_regime(float m1, float m2, float v_rel, float avg_temp,
+                          bool is_molten_1, bool is_molten_2,
+                          bool is_merging_1, bool is_merging_2) noexcept {
+    // Check if violent crash strikes a delicate ongoing contact binary neck
+    if ((is_merging_1 || is_merging_2) && v_rel > 25.0f) {
+        return {.regime = CollisionRegime::MidMergeDisruption};
+    }
+
+    const float mass_ratio = std::max(m1, m2) / std::max(1.0f, std::min(m1, m2));
+    const bool is_molten = is_molten_1 || is_molten_2 || (avg_temp > 850.0f);
+
+    // Ductile Accretion: high temperature softening or strong mass capture
+    if (is_molten || (mass_ratio > 4.5f && v_rel < 30.0f) || (v_rel < 10.0f && avg_temp > 400.0f)) {
+        return {.regime = CollisionRegime::DuctileMerge};
+    }
+
+    // Brittle Fracture: cold solid bodies colliding at high impact velocities
+    if (!is_molten && v_rel > 38.0f) {
+        return {.regime = CollisionRegime::BrittleFracture};
+    }
+
+    // Elastic / Inelastic rebound
+    const float e = std::clamp(0.45f - (avg_temp / 3000.0f) * 0.35f, 0.08f, 0.65f);
+    return {.regime = CollisionRegime::ElasticRecoil, .restitution = e, .friction = 0.25f};
+}
+
+// 7. Organic Neutron Star / Pulsar (Super-dense degenerate neutron matter, strong magnetic field)
+[[nodiscard]] inline MaterialParams neutron_star() noexcept {
+    MaterialParams p;
+    p.rest_density = Scalar(2.5e7);       // 2.5 x 10^7 kg/m^3
+    p.heat_capacity = Scalar(0.08);
+    p.conductivity = Scalar(50000.0);
+    p.melt_temp = Scalar(5e6);
+    p.boil_temp = Scalar(1e7);
+    p.yield_strain = Scalar(0.9);
+    p.ultimate_strain = Scalar(0.95);
+    p.youngs_modulus = Scalar(1e14);
+    p.alpha = {Scalar(1e-12), Scalar(1e-9), Scalar(1e-6), Scalar(1e-3)};
+    return p;
+}
+
+// 8. Organic Black Hole / Gravitational Singularity (Zero volume, intense relativistic gravity)
+[[nodiscard]] inline MaterialParams black_hole_singularity() noexcept {
+    MaterialParams p;
+    p.rest_density = Scalar(1e9);        // Infinite/Extremely high compact density
+    p.heat_capacity = Scalar(0.01);
+    p.conductivity = Scalar(10000.0);
+    p.melt_temp = Scalar(1e6);
+    p.boil_temp = Scalar(1e7);
+    p.yield_strain = Scalar(1.0);
+    p.ultimate_strain = Scalar(1.0);
+    p.youngs_modulus = Scalar(1e18);
+    p.alpha = {Scalar(1e-15), Scalar(1e-12), Scalar(1e-9), Scalar(1e-6)};
+    return p;
+}
+
+// ── 5. Organic Stellar Evolution & Gravitational Collapse (Prakriti Physics Engine) ──────────
+
+enum class StellarPhase : std::uint8_t {
+    ColdPlanetoid,       // Asteroids, moons, terrestrial planets
+    Protostar,           // Kelvin-Helmholtz gravitational compression heating
+    MainSequenceStar,    // Stable Thermonuclear Fusion (Hydrogen/Helium burning)
+    SupermassiveGiant,   // Core collapse precursor
+    NeutronStar,         // Pulsar / Degenerate Fermi neutron core
+    BlackHoleSingularity // Complete gravitational collapse past event horizon
+};
+
+struct StellarEvolutionResult {
+    StellarPhase phase = StellarPhase::ColdPlanetoid;
+    float fusion_heat_rate = 0.0f;       // Thermonuclear energy release (dT/dt)
+    float core_compression_rate = 0.0f;  // Gravitational self-compression rate (d\rho/dt)
+    bool triggers_supernova = false;
+    float event_horizon_radius = 0.0f;
+};
+
+// Computes organic stellar evolution, self-gravitational compression, fusion ignition, and collapse thresholds
+[[nodiscard]] inline StellarEvolutionResult
+evaluate_stellar_evolution(float mass, float density, float current_temp, float radius, float dt) noexcept {
+    StellarEvolutionResult res;
+
+    // 1. Black Hole Singularity Regime (TOV limit: M >= 1200, extreme core temperature)
+    if (mass >= 1200.0f && (current_temp > 2800.0f || density > 10000.0f)) {
+        res.phase = StellarPhase::BlackHoleSingularity;
+        res.triggers_supernova = true;
+        res.event_horizon_radius = std::clamp(mass * 0.0035f + 2.5f, 2.8f, 10.0f);
+        return res;
+    }
+
+    // 2. Neutron Star / Pulsar Regime (Chandrasekhar limit: 600 <= M < 1200)
+    if (mass >= 600.0f && (current_temp > 2200.0f || density > 6500.0f)) {
+        res.phase = StellarPhase::NeutronStar;
+        res.triggers_supernova = true;
+        res.event_horizon_radius = 2.2f;
+        return res;
+    }
+
+    // 3. Superheated Main Sequence Fusion Star (M >= 220.0f)
+    if (mass >= 220.0f) {
+        res.phase = StellarPhase::MainSequenceStar;
+        const float fusion_factor = std::clamp((mass - 200.0f) / 600.0f, 0.2f, 1.0f);
+        res.fusion_heat_rate = (140.0f + fusion_factor * 260.0f) * dt;
+        res.core_compression_rate = 4.0f * dt;
+        return res;
+    }
+
+    // 4. Protostar Kelvin-Helmholtz Self-Compression (80.0f <= M < 220.0f)
+    if (mass >= 80.0f) {
+        res.phase = StellarPhase::Protostar;
+        const float compression_heat = (mass / 100.0f) * 45.0f * dt;
+        res.fusion_heat_rate = compression_heat;
+        res.core_compression_rate = 2.0f * dt;
+        return res;
+    }
+
+    // 5. Standard Cold / Sub-Stellar Body
+    res.phase = StellarPhase::ColdPlanetoid;
+    return res;
+}
+
+// ── 6. Relativistic Gravitational Radiation (Quadrupole Formula & Inspiral Chirp) ────────────
+
+struct GravitationalWaveChirp {
+    bool   emits_wave = false;
+    float  wave_amplitude = 0.0f;       // Strain amplitude h \propto (G / c^4) * (d^2 Q / dt^2)
+    float  energy_loss = 0.0f;          // Radiated energy dE/dt \propto \mu^2 M^{4/3} \omega^{10/3}
+    float  chirp_frequency = 0.0f;      // Orbital harmonic frequency
+};
+
+// Computes gravitational radiation strain and orbital decay from relativistic inspiral
+[[nodiscard]] inline GravitationalWaveChirp
+compute_gravitational_wave_emission(float m1, float m2, float dist, float v_rel) noexcept {
+    GravitationalWaveChirp chirp;
+    const float total_m = m1 + m2;
+    if (total_m < 800.0f || dist > 70.0f) return chirp;
+
+    const float mu = (m1 * m2) / total_m; // Reduced mass
+    const float d_safe = std::max(dist, 4.0f);
+    
+    // Relativistic orbital angular velocity: \omega = \sqrt{G M / r^3}
+    const float omega = std::sqrt((18000.0f * total_m) / (d_safe * d_safe * d_safe));
+    
+    // Quadrupole gravitational strain
+    const float strain = (mu * omega * omega) / (d_safe * 1500.0f);
+    if (strain > 0.02f) {
+        chirp.emits_wave = true;
+        chirp.wave_amplitude = std::clamp(strain, 0.02f, 1.5f);
+        chirp.energy_loss = strain * mu * 0.08f;
+        chirp.chirp_frequency = omega * 0.31830988f; // f = \omega / \pi
+    }
+    return chirp;
+}
+
+// ── 7. Cosmic Nucleosynthesis & Elemental Metallicity Index ──────────────────────────────────
+
+struct NucleosynthesisYield {
+    float hydrogen_helium = 0.90f; // Primordial light elements
+    float silicates_carbon = 0.08f; // Intermediate rocky metallicity
+    float iron_peak_metals = 0.02f; // Heavy ferromagnetic cores
+};
+
+// Enriches cosmic dust when stars fuse or supernovae detonate
+[[nodiscard]] inline NucleosynthesisYield
+evaluate_nucleosynthesis(float core_temp, float star_mass, bool is_supernova) noexcept {
+    NucleosynthesisYield yield;
+    if (is_supernova) {
+        // r-process explosive nucleosynthesis: ejects heavy metals & silicates
+        yield.hydrogen_helium = 0.20f;
+        yield.silicates_carbon = 0.45f;
+        yield.iron_peak_metals = 0.35f;
+    } else if (core_temp > 2800.0f) {
+        // Advanced CNO & Silicon-burning phase
+        yield.hydrogen_helium = 0.45f;
+        yield.silicates_carbon = 0.40f;
+        yield.iron_peak_metals = 0.15f;
+    } else if (core_temp > 1200.0f) {
+        // Triple-alpha carbon/oxygen fusion
+        yield.hydrogen_helium = 0.70f;
+        yield.silicates_carbon = 0.26f;
+        yield.iron_peak_metals = 0.04f;
+    }
+    return yield;
+}
+
+// ── 8. Innermost Stable Circular Orbit (ISCO) & Relativistic Accretion Flares ────────────────
+
+struct ISCOAccretionResult {
+    bool  triggers_flare = false;
+    float luminosity_boost = 0.0f;
+    float flare_radius = 0.0f;
+};
+
+[[nodiscard]] inline ISCOAccretionResult
+evaluate_isco_accretion(float body_dist, float bh_mass, float bh_radius) noexcept {
+    ISCOAccretionResult res;
+    // ISCO boundary for Schwarzschild black hole: R_isco = 3 * R_s = 6 * GM/c^2
+    const float isco_radius = bh_radius * 2.8f;
+    if (body_dist <= isco_radius) {
+        res.triggers_flare = true;
+        res.flare_radius = isco_radius;
+        res.luminosity_boost = std::clamp((isco_radius - body_dist) / isco_radius, 0.2f, 1.0f);
+    }
+    return res;
+}
+
 } // namespace prakriti::celestial

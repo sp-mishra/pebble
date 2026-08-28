@@ -286,3 +286,29 @@ for (int frame = 0; frame < 60; ++frame) {
 | `pravaha` | `pravaha.hpp` | Multi-core 4-color checkerboard domain parallelization (`PravahaBackend`). |
 | `akruti` | `akruti.hpp` | SDF obstacle collision projection and continuous collision raycasting. |
 | `observability` | `nadi.hpp` | Zero-overhead telemetry of kinetic energy, solver iterations, and temperature fields. |
+
+---
+
+## 10. Celestial Mechanics & Cosmological Relativistic Engine
+
+Located in `#include <prakriti/material/celestial.hpp>`:
+
+### 10.1 Organic Stellar Evolution & Core Collapse
+- **Kelvin-Helmholtz Protostar Heating**: $dE_{\text{th}} = \frac{3}{5}\frac{GM^2}{R}$ self-gravitational compression.
+- **Main Sequence Fusion Ignition ($M \ge 220$)**: Perpetually incandescent thermonuclear proton-proton chain heat release.
+- **Neutron Star / Pulsar ($600 \le M < 1200$)**: Core collapse to degenerate neutron Fermi matter ($\rho = 2.5 \times 10^7\,\text{kg/m}^3$) with angular momentum conservation spinup.
+- **Black Hole Singularities ($M \ge 1200$)**: Tolman-Oppenheimer-Volkoff (TOV) collapse, 42-shard supernova blast, event horizon void, and relativistic photon ring.
+
+### 10.2 Relativistic Gravitational Waves & Chirp Ripples
+- **Quadrupole Strain Formula**:
+  $$h \approx \frac{\mu \omega^2}{d \cdot 1500}, \qquad \omega = \sqrt{\frac{G(M_1 + M_2)}{d^3}}$$
+- Triggers dynamic concentric space-time metric ripples propagating across the cosmos during compact binary inspirals and coalescences.
+
+### 10.3 Innermost Stable Circular Orbit (ISCO) & Accretion Flares
+- **Schwarzschild ISCO Boundary**: $R_{\text{ISCO}} = 3 R_s = 6 \frac{GM}{c^2}$.
+- Computes explosive thermonuclear accretion luminosity bursts when celestial dust crosses the event horizon accretion threshold.
+
+### 10.4 Cosmic Nucleosynthesis & Chemical Evolution ($Z$)
+- Tracks $r$-process nucleosynthesis from supernovae and stellar burning:
+  $$\text{Primordial } (H/He) \longrightarrow \text{Silicates/Carbon} \longrightarrow \text{Iron-Peak Ferromagnetic Cores}$$
+
