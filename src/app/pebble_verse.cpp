@@ -26,8 +26,13 @@
 
 #define GATI_ENABLE_PRAKRITI 1
 #define GATI_ENABLE_AKRUTI 1
+#define BARNES_HUT_HAS_PRAVAHA 1
 
+#include "pravaha/pravaha.hpp"
 #include "containers/spatial/barnes_hut.hpp"
+#include "containers/spatial/spatial_hash_grid.hpp"
+#include "containers/dynamic/soa_vector.hpp"
+#include "gati/stepper/block_stepper.hpp"
 #include "containers/numeric/math_vector.hpp"
 #include "prakriti/material/celestial.hpp"
 #include "prakriti/celestial/sector_types.hpp"
@@ -1231,22 +1236,33 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
         }
     }
 
-    // 5. Collision Narrowphase: 3-Way Regime (Elastic Rebound & Recoil, Ductile Merger, or Brittle Fragmentation)
+    // 5. Collision Broadphase & Narrowphase via O(N) SpatialHashGrid
+    containers::spatial::SpatialHashGrid<std::uint32_t, 36.0f, 2048> spatial_grid(app.planets.size());
     const std::size_t num_planets = app.planets.size();
+
+    // Populate O(N) spatial grid
+    for (std::size_t i = 0; i < num_planets; ++i) {
+        if (app.planets[i].alive) {
+            spatial_grid.insert(static_cast<std::uint32_t>(i), app.planets[i].pos[0], app.planets[i].pos[1]);
+        }
+    }
+
     for (std::size_t i = 0; i < num_planets; ++i) {
         if (!app.planets[i].alive) continue;
         const float ri = app.planets[i].radius;
         const float xi = app.planets[i].pos[0];
         const float yi = app.planets[i].pos[1];
 
-        for (std::size_t j = i + 1; j < num_planets; ++j) {
-            if (!app.planets[j].alive) continue;
+        // O(1) local 3x3 neighborhood search via SpatialHashGrid
+        spatial_grid.for_each_neighbor(xi, yi, [&](std::uint32_t neighbor_idx, float nx, float ny) {
+            const std::size_t j = static_cast<std::size_t>(neighbor_idx);
+            if (j <= i || !app.planets[j].alive) return;
 
             const float min_dist = ri + app.planets[j].radius;
-            const float dx = app.planets[j].pos[0] - xi;
-            if (std::abs(dx) > min_dist) continue;
-            const float dy = app.planets[j].pos[1] - yi;
-            if (std::abs(dy) > min_dist) continue;
+            const float dx = nx - xi;
+            if (std::abs(dx) > min_dist) return;
+            const float dy = ny - yi;
+            if (std::abs(dy) > min_dist) return;
 
             const float dist2 = dx * dx + dy * dy;
 
@@ -1590,7 +1606,7 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                     }
                 }
             }
-        }
+        });
     }
 
     // 6. Update Spark/Fire Particles
@@ -1922,6 +1938,21 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         // Celestial Body Core & Contact Binary Lobe (Dumbbell shape)
         const kalpana::Color c = get_celestial_color(p, app.view_mode);
         const pebble::math::vec2 s_pos = w2s(p.pos);
+
+        // ── Relativistic Gravitational Lensing & Photon Sphere Halo Shader Simulation ──
+        if (p.is_singularity || p.type == CelestialType::BlackHoleSingularity || p.is_neutron_star) {
+            // 1. Photon Sphere & Outer Einstein Lensing Ring ($r_{\text{photon}} = 1.5 R_s$, $r_{\text{Einstein}} \propto \sqrt{M}$)
+            const float r_einstein = (p.radius * 2.8f + std::sqrt(p.mass) * 1.8f) * app.camera_zoom;
+            kalpana::Color einstein_col = p.is_singularity 
+                ? kalpana::Color{0.45f, 0.75f, 1.0f, 0.22f} 
+                : kalpana::Color{0.3f, 0.9f, 1.0f, 0.35f};
+            app.instanced_planets.add_instance(s_pos[0], s_pos[1], r_einstein, einstein_col);
+
+            // 2. Innermost Stable Circular Orbit (ISCO) Plasma Glow
+            const float r_isco = (p.radius * 1.6f) * app.camera_zoom;
+            app.instanced_planets.add_instance(s_pos[0], s_pos[1], r_isco, kalpana::Color{1.0f, 0.65f, 0.25f, 0.45f});
+        }
+
         app.instanced_planets.add_instance(s_pos[0], s_pos[1], p.radius * app.camera_zoom, c);
 
         // If in gradual coalescence, render the rotating dumbbell lobes and smooth bridging neck

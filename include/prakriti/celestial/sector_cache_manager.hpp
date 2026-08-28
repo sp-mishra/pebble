@@ -8,6 +8,7 @@
 #include "sector_types.hpp"
 #include "sector_generator.hpp"
 #include "sector_multipole.hpp"
+#include "petika/async_persistence_worker.hpp"
 #include "containers/cache/kosha.hpp"
 #include "glaze/glaze.hpp"
 #include <unordered_map>
@@ -22,7 +23,7 @@ namespace prakriti::celestial {
 class SectorCacheManager {
 public:
     explicit SectorCacheManager(std::size_t max_ram_sectors = 128)
-        : ram_cache_(max_ram_sectors) {}
+        : ram_cache_(max_ram_sectors), async_persister_() {}
 
     // Retrieves sector from RAM cache, persistent Glaze disk store, or procedurally nucleates
     [[nodiscard]] SectorData get_or_generate_sector(SectorKey key, std::uint64_t cosmic_seed = 13371337ULL) {
@@ -59,7 +60,7 @@ public:
         return new_sector;
     }
 
-    // Puts active evolved sector into Kosha RAM cache and registers it as a dormant macro-node
+    // Puts active evolved sector into Kosha RAM cache, registers dormant macro-node, and enqueues async persistence
     void freeze_sector(const SectorData& sector) {
         const std::uint64_t hid = hash_sector_key(sector.key);
         (void)ram_cache_.put(hid, sector);
@@ -77,6 +78,9 @@ public:
         } else {
             dormant_macro_nodes_.erase(hid);
         }
+
+        // Non-blocking async persistence via lock-free SPSC ring buffer worker (< 1 µs)
+        async_persister_.enqueue(sector, get_sector_filepath(sector.key));
     }
 
     // Wakes up a sector when entering active simulation window (unregisters from dormant macro nodes)
@@ -107,6 +111,7 @@ private:
     kosha::LRUCache<std::uint64_t, SectorData> ram_cache_;
     std::unordered_map<std::uint64_t, SectorData> discovered_sectors_;
     std::unordered_map<std::uint64_t, SectorMacroNode> dormant_macro_nodes_;
+    petika::AsyncPersistenceWorker<SectorData> async_persister_;
 };
 
 } // namespace prakriti::celestial

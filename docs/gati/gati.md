@@ -301,3 +301,16 @@ game.events().publish(HeatPulseEvent{.center = {2.0f, 1.0f}, .radius = 3.0f, .te
 | `akruti` | SAT 2-point manifold contact generation, continuous collision detection (CCD), and Voronoi fracture. |
 | `prakriti` | Multiphysics continuum simulation, XPBD mechanics, and fluid coupling. |
 | `pravaha` | Multi-threaded parallel system and chunk evaluation via task graphs. |
+
+---
+
+## 9. Generic Open-World Subsystems
+
+### 9.1 Spatial Tile Streamer (`gati::world::SpatialTileStreamer`)
+- **Header**: `#include <gati/world/spatial_tile_streamer.hpp>`
+- **Purpose**: Generic 2D viewport chunk/tile paging engine for massive open-world games (RPGs, RTS, space sims).
+- **Features**: SplitMix64 coordinate hashing, instant discovery detection, viewport culling margins, and zero-allocation per-frame coordinate traversal.
+
+### 9.2 Hierarchical Multi-Rate Stepper (`gati::stepper::HierarchicalBlockStepper`)
+- **Header**: `#include <gati/stepper/block_stepper.hpp>`
+- **Purpose**: Aarseth power-of-two acceleration rung calculator ($\Delta t / 2^k$), allowing high-speed entities or close binaries to step at micro-intervals while background entities advance at macro-intervals.

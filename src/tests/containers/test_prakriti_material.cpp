@@ -6,6 +6,11 @@
 #include "prakriti/material/eos.hpp"
 #include "prakriti/material/constitutive.hpp"
 #include "prakriti/state/material_registry.hpp"
+#include "containers/spatial/spatial_hash_grid.hpp"
+#include "containers/dynamic/soa_vector.hpp"
+#include "containers/spatial/barnes_hut.hpp"
+#include "gati/stepper/block_stepper.hpp"
+#include "gati/world/spatial_tile_streamer.hpp"
 
 using namespace prakriti;
 
@@ -279,6 +284,101 @@ TEST_CASE("dormant sector macro node collective gravity calculation", "[prakriti
 
     REQUIRE(a_coll[0] > 0.0f);
     REQUIRE(a_coll[1] > 0.0f);
+}
+
+TEST_CASE("spatial hash grid insertion and neighbor query", "[containers][spatial][spatial_hash_grid]") {
+    containers::spatial::SpatialHashGrid<std::uint32_t, 32.0f, 1024> grid(100);
+    grid.insert(1, 10.0f, 10.0f);
+    grid.insert(2, 15.0f, 12.0f);
+    grid.insert(3, 500.0f, 500.0f);
+
+    REQUIRE(grid.size() == 3);
+
+    std::vector<std::uint32_t> found;
+    grid.for_each_neighbor(12.0f, 11.0f, [&](std::uint32_t id, float x, float y) {
+        (void)x; (void)y;
+        found.push_back(id);
+    });
+
+    REQUIRE(found.size() == 2);
+    REQUIRE(std::find(found.begin(), found.end(), 1) != found.end());
+    REQUIRE(std::find(found.begin(), found.end(), 2) != found.end());
+    REQUIRE(std::find(found.begin(), found.end(), 3) == found.end());
+}
+
+TEST_CASE("soa vector contiguous column storage and swap pop", "[containers][dynamic][soa_vector]") {
+    containers::dynamic::SoAVector<float, float, int> soa;
+    soa.push_back(1.0f, 2.0f, 100);
+    soa.push_back(3.0f, 4.0f, 200);
+    soa.push_back(5.0f, 6.0f, 300);
+
+    REQUIRE(soa.size() == 3);
+
+    auto col0 = soa.get_column<0>();
+    REQUIRE(col0[0] == Catch::Approx(1.0f));
+    REQUIRE(col0[1] == Catch::Approx(3.0f));
+    REQUIRE(col0[2] == Catch::Approx(5.0f));
+
+    soa.swap_pop_back(0);
+    REQUIRE(soa.size() == 2);
+    REQUIRE(soa.get_column<0>()[0] == Catch::Approx(5.0f));
+}
+
+TEST_CASE("hierarchical block stepper rung computation", "[gati][stepper][block_stepper]") {
+    const auto rung_slow = gati::stepper::compute_acceleration_rung(0.001f, 10.0f);
+    const auto rung_fast = gati::stepper::compute_acceleration_rung(500.0f, 20.0f);
+
+    REQUIRE(rung_slow == 0);
+    REQUIRE(rung_fast >= 2);
+}
+
+TEST_CASE("static and small soa vector policy storage", "[containers][dynamic][soa_vector]") {
+    containers::dynamic::StaticSoAVector<8, float, float> static_soa;
+    static_soa.push_back(10.0f, 20.0f);
+    static_soa.push_back(30.0f, 40.0f);
+    REQUIRE(static_soa.size() == 2);
+    REQUIRE(static_soa.get_column<0>()[0] == Catch::Approx(10.0f));
+
+    containers::dynamic::SmallSoAVector<4, float, float> small_soa;
+    small_soa.push_back(100.0f, 200.0f);
+    REQUIRE(small_soa.size() == 1);
+    REQUIRE(small_soa.get_column<1>()[0] == Catch::Approx(200.0f));
+}
+
+TEST_CASE("gati spatial tile streamer viewport tracking", "[gati][world][spatial_tile_streamer]") {
+    gati::world::SpatialTileStreamer<320.0f, 200.0f> streamer;
+    std::size_t discovered = 0;
+    std::size_t active = 0;
+
+    streamer.update_viewport(
+        pebble::math::vec2{160.0f, 100.0f},
+        320.0f, 200.0f, 0.0f,
+        [&](const gati::world::TileCoord&) { ++discovered; },
+        [&](const gati::world::TileCoord&) { ++active; }
+    );
+
+    REQUIRE(discovered > 0);
+    REQUIRE(active > 0);
+    REQUIRE(streamer.visited_count() == discovered);
+}
+
+TEST_CASE("barnes hut parallel force sweep calculation", "[containers][spatial][barnes_hut]") {
+    containers::spatial::BarnesHutTree tree;
+    std::vector<containers::spatial::BarnesHutBody> bodies = {
+        {.pos = {0.0f, 0.0f}, .vel = {0.0f, 0.0f}, .mass = 1000.0f, .id = 0},
+        {.pos = {100.0f, 0.0f}, .vel = {0.0f, 0.0f}, .mass = 10.0f, .id = 1},
+        {.pos = {-100.0f, 0.0f}, .vel = {0.0f, 0.0f}, .mass = 10.0f, .id = 2}
+    };
+
+    tree.build(bodies);
+    std::vector<pebble::math::vec2> forces(bodies.size());
+    containers::spatial::compute_all_forces(tree, bodies, forces);
+
+    REQUIRE(forces.size() == 3);
+    // Body 1 at (100, 0) should feel gravitational pull towards (0, 0) (negative X force)
+    REQUIRE(forces[1][0] < 0.0f);
+    // Body 2 at (-100, 0) should feel gravitational pull towards (0, 0) (positive X force)
+    REQUIRE(forces[2][0] > 0.0f);
 }
 
 

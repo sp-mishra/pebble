@@ -42,4 +42,19 @@ compute_collective_macro_gravity(const pebble::math::vec2& target_pos,
     return a_grav;
 }
 
+// Evaluates the far-field gravitational acceleration vector produced by a distant sector:
+[[nodiscard]] inline pebble::math::vec2
+compute_sector_far_field_gravity(const pebble::math::vec2& target_pos,
+                                 const SectorData& distant_sector,
+                                 float grav_g = 18000.0f) noexcept {
+    SectorMacroNode macro{
+        .key = distant_sector.key,
+        .total_mass = distant_sector.total_mass,
+        .bx = distant_sector.barycenter_x,
+        .by = distant_sector.barycenter_y,
+        .q = distant_sector.quadrupole
+    };
+    return compute_collective_macro_gravity(target_pos, macro, grav_g);
+}
+
 } // namespace prakriti::celestial

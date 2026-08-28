@@ -271,21 +271,15 @@ inline void compute_all_forces(const BarnesHutTree& tree,
     if (out_forces.size() < n) return;
 
 #if defined(BARNES_HUT_HAS_PRAVAHA)
-    // Multi-threaded parallel force sweep
+    // Multi-threaded parallel force sweep via Pravaha task graph
     if (n >= 128) {
-        struct IndexRange {
-            std::size_t count;
-            [[nodiscard]] std::size_t size() const noexcept { return count; }
-            [[nodiscard]] std::size_t operator[](std::size_t i) const noexcept { return i; }
-        };
-
         pravaha::JThreadBackend backend(std::min<unsigned>(std::thread::hardware_concurrency(), 8u));
         pravaha::Runner<pravaha::JThreadBackend> runner(backend);
 
         auto task = pravaha::lazy_parallel_for(
-            IndexRange{n},
-            [&](std::size_t i) {
-                out_forces[i] = tree.compute_force(bodies[i].pos, bodies[i].mass, static_cast<std::uint32_t>(i), bodies, policy);
+            bodies,
+            [&](const BarnesHutBody& b) {
+                out_forces[b.id] = tree.compute_force(b.pos, b.mass, b.id, bodies, policy);
             },
             64
         );
