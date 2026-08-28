@@ -119,6 +119,29 @@ public:
         }, columns_);
     }
 
+    // High-Throughput SIMD Vectorized Verlet Integration for Kinematic Columns:
+    // Columns: [0]=x, [1]=y, [2]=vx, [3]=vy, [4]=ax, [5]=ay
+    void integrate_verlet_simd(float dt) noexcept requires (sizeof...(Components) >= 6) {
+        const std::size_t n = size();
+        auto* px = data<0>();
+        auto* py = data<1>();
+        auto* pvx = data<2>();
+        auto* pvy = data<3>();
+        const auto* pax = data<4>();
+        const auto* pay = data<5>();
+
+        const float half_dt2 = 0.5f * dt * dt;
+
+        // Auto-vectorized contiguous unrolled loop (8-wide SIMD)
+        #pragma clang loop vectorize(enable) interleave(enable)
+        for (std::size_t i = 0; i < n; ++i) {
+            px[i] += pvx[i] * dt + pax[i] * half_dt2;
+            py[i] += pvy[i] * dt + pay[i] * half_dt2;
+            pvx[i] += pax[i] * dt;
+            pvy[i] += pay[i] * dt;
+        }
+    }
+
 private:
     template <typename Tuple, std::size_t... Is>
     void push_back_tuple(Tuple&& t, std::index_sequence<Is...>) {

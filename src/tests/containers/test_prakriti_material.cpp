@@ -11,6 +11,7 @@
 #include "containers/spatial/barnes_hut.hpp"
 #include "gati/stepper/block_stepper.hpp"
 #include "gati/world/spatial_tile_streamer.hpp"
+#include "gati/systems/celestial_system.hpp"
 
 using namespace prakriti;
 
@@ -379,6 +380,79 @@ TEST_CASE("barnes hut parallel force sweep calculation", "[containers][spatial][
     REQUIRE(forces[1][0] < 0.0f);
     // Body 2 at (-100, 0) should feel gravitational pull towards (0, 0) (positive X force)
     REQUIRE(forces[2][0] > 0.0f);
+}
+
+TEST_CASE("gati celestial system unified simulation step", "[gati][systems][celestial_system]") {
+    gati::systems::CelestialSystem system(18000.0f, 0.5f);
+    prakriti::celestial::SectorCacheManager cache_mgr(8);
+
+    struct TestBody {
+        pebble::math::vec2 pos{0.0f, 0.0f};
+        pebble::math::vec2 vel{0.0f, 0.0f};
+        pebble::math::vec2 acc{0.0f, 0.0f};
+        float mass = 100.0f;
+        float radius = 5.0f;
+        bool alive = true;
+    };
+
+    std::vector<TestBody> bodies = {
+        {.pos = {0.0f, 0.0f}, .vel = {0.0f, 0.0f}, .mass = 5000.0f, .radius = 12.0f},
+        {.pos = {80.0f, 0.0f}, .vel = {0.0f, 25.0f}, .mass = 10.0f, .radius = 2.0f}
+    };
+
+    system.step(bodies, cache_mgr, 0.016f);
+
+    REQUIRE(bodies[1].pos[0] != 80.0f || bodies[1].pos[1] != 0.0f);
+    REQUIRE(bodies[1].acc[0] < 0.0f); // Accelerating toward central mass
+}
+
+TEST_CASE("relativistic doppler beaming asymmetry and precession", "[prakriti][celestial][doppler_beaming]") {
+    // Approaching beam (direction towards observer, positive X)
+    const pebble::math::vec2 beam_dir_approaching{1.0f, 0.0f};
+    const float doppler_blue = 1.0f + std::max(0.0f, beam_dir_approaching[0]) * 0.35f;
+
+    // Receding beam (direction away from observer, negative X)
+    const pebble::math::vec2 beam_dir_receding{-1.0f, 0.0f};
+    const float doppler_red = 1.0f - std::max(0.0f, -beam_dir_receding[0]) * 0.25f;
+
+    REQUIRE(doppler_blue > 1.0f);
+    REQUIRE(doppler_red < 1.0f);
+    REQUIRE(doppler_blue > doppler_red);
+}
+
+TEST_CASE("soa vector simd verlet integration", "[containers][dynamic][soa_vector]") {
+    // Columns: x, y, vx, vy, ax, ay
+    containers::dynamic::SoAVector<float, float, float, float, float, float> soa;
+    soa.push_back(0.0f, 0.0f, 10.0f, 20.0f, 2.0f, 4.0f);
+
+    const float dt = 0.5f;
+    soa.integrate_verlet_simd(dt);
+
+    // x_new = 0 + 10*0.5 + 2 * (0.5 * 0.25) = 5.0 + 0.25 = 5.25
+    // vx_new = 10 + 2*0.5 = 11.0
+    REQUIRE(soa.get_column<0>()[0] == Catch::Approx(5.25f));
+    REQUIRE(soa.get_column<2>()[0] == Catch::Approx(11.0f));
+}
+
+TEST_CASE("sph roche lobe gaseous planet tidal stripping", "[prakriti][celestial][sph_roche]") {
+    const pebble::math::vec2 donor_pos{0.0f, 0.0f};
+    const float donor_mass = 50.0f;
+    const float donor_radius = 8.0f; // Expanded gaseous envelope
+
+    const pebble::math::vec2 host_pos{30.0f, 0.0f};
+    const float host_mass = 1200.0f;
+    const float distance = 30.0f;
+
+    const auto strip_state = prakriti::celestial::evaluate_sph_roche_lobe_stripping(
+        donor_pos, donor_mass, donor_radius, host_pos, host_mass, distance
+    );
+
+    REQUIRE(strip_state.is_stripping);
+    REQUIRE(strip_state.roche_lobe_radius < donor_radius);
+    REQUIRE(strip_state.l1_lagrange_point[0] > donor_pos[0]);
+    REQUIRE(strip_state.l1_lagrange_point[0] < host_pos[0]);
+    REQUIRE(strip_state.mass_loss_rate > 0.0f);
+    REQUIRE(strip_state.stream_velocity > 0.0f);
 }
 
 

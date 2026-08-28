@@ -562,6 +562,27 @@ Located in `#include <prakriti/material/celestial.hpp>`:
 ## 46. Relativistic Gravitational Lensing & Photon Sphere Shaders
 - **Einstein Lensing Halo ($r_{\text{Einstein}} \propto \sqrt{M}$)**: Renders photon sphere rings ($r_{\text{photon}} = 1.5 R_s$) and curved Einstein deflection halos around active black hole singularities and neutron stars in the GPU instanced particle pipeline.
 
+---
+
+## 47. Relativistic Doppler Beaming & Lense-Thirring Precession
+- **Doppler Brightness Asymmetry ($\propto \delta^3$)**: Plasma jets approaching the observer appear blue-shifted and radiatively boosted, while receding jets appear red-shifted and dimmed.
+- **Lense-Thirring Precession**: Spacetime frame dragging induces angular precession on rotating magnetic axes, producing sweeping lighthouse spiral trajectories.
+
+---
+
+## 48. In-Situ Celestial Entity Spawners & Accretion Flare Doppler Shifts
+- **Interactive Spawning**:
+  - `B`: Injects an orbital inspiral Binary Black Hole pair.
+  - `P`: Injects a spinning Millisecond Pulsar with active magnetosphere.
+  - `S`: Injects a glowing Protostar with a 28-body Keplerian protoplanetary dust disk.
+- **Accretion Flare Doppler Shifts**: Dynamically color-shifts relativistic ISCO flares according to orbital velocity vectors.
+
+---
+
+## 49. SPH Gaseous Planet Roche Lobe Stripping & Fluid Stream Dynamics
+- **Eggleton Roche Lobe Equation**: Computes donor Roche radius $r_L(q, a)$ where $q = M_{\text{donor}} / M_{\text{host}}$.
+- **L1 Lagrange Nozzle Injection**: When a gas giant or star's envelope overflows $r_L$, matter is siphoned through the inner Lagrange point $L_1$ into an SPH continuum fluid particle stream feeding the host's accretion disk.
+
 
 
 

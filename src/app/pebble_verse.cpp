@@ -1056,29 +1056,67 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
             }
         }
 
-        // ── Pulsar High-Speed Lighthouse Beams (Relativistic Polar Radio/Gamma Jets) ──
+        // ── Pulsar / Kerr Black Hole Lense-Thirring Jet Precession & Relativistic Beams ──
         if (p.is_neutron_star && app.jets.size() < 300 && dist01(app.rng) < 0.65f) {
-            const float b_angle = p.angle; // Rotating lighthouse beam vector
+            // Lense-Thirring Precession: The spin axis precesses around the angular momentum vector
+            const float prec_rate = 0.85f; // Frame-dragging precession angular frequency
+            const float prec_wobble = std::sin(app.time * prec_rate + p.mass * 0.05f) * 0.22f; // Precession cone angle
+            const float b_angle = p.angle + prec_wobble;
+
             const pebble::math::vec2 beam_dir1{std::cos(b_angle), std::sin(b_angle)};
             const pebble::math::vec2 beam_dir2{-std::cos(b_angle), -std::sin(b_angle)};
             const float b_spd = 140.0f + dist01(app.rng) * 60.0f;
 
+            // Relativistic Doppler Beaming: Jet approaching viewer is blue-boosted, receding jet is dimmed
+            const float doppler_blue = 1.0f + std::max(0.0f, beam_dir1[0]) * 0.35f;
+            const float doppler_red  = 1.0f - std::max(0.0f, beam_dir2[0]) * 0.25f;
+
             app.jets.push_back(RelativisticJetParticle{
                 .pos = p.pos + beam_dir1 * (p.radius + 1.0f),
                 .vel = p.vel + beam_dir1 * b_spd,
-                .radius = 1.2f,
+                .radius = 1.2f * doppler_blue,
                 .life = 0.35f,
                 .max_life = 0.35f,
-                .color = kalpana::Color{0.3f, 0.95f, 1.0f, 0.95f} // Electric cyan pulsar lighthouse beam
+                .color = kalpana::Color{0.3f * doppler_blue, 0.95f * doppler_blue, 1.0f, 0.85f} // Doppler Blue-Shifted Jet
             });
             app.jets.push_back(RelativisticJetParticle{
                 .pos = p.pos + beam_dir2 * (p.radius + 1.0f),
                 .vel = p.vel + beam_dir2 * b_spd,
-                .radius = 1.2f,
+                .radius = 1.0f * doppler_red,
                 .life = 0.35f,
                 .max_life = 0.35f,
-                .color = kalpana::Color{0.3f, 0.95f, 1.0f, 0.95f}
+                .color = kalpana::Color{0.5f * doppler_red, 0.75f * doppler_red, 0.95f, 0.60f}  // Doppler Red-Shifted Jet
             });
+        }
+
+        // ── SPH Gaseous Planet / Star Roche Lobe Stripping & Fluid Stream Dynamics ──
+        if (p.mass > 5.0f && !p.is_singularity && app.nebulae.size() < 450) {
+            for (const auto& other : app.planets) {
+                if (!other.alive || &other == &p || other.mass < p.mass * 2.0f) continue;
+                const pebble::math::vec2 d = other.pos - p.pos;
+                const float dist = std::sqrt(d[0] * d[0] + d[1] * d[1]);
+                if (dist > 1.0f && dist < 120.0f) {
+                    const auto sph_strip = prakriti::celestial::evaluate_sph_roche_lobe_stripping(
+                        p.pos, p.mass, p.radius, other.pos, other.mass, dist
+                    );
+                    if (sph_strip.is_stripping && dist01(app.rng) < 0.35f) {
+                        const pebble::math::vec2 dir_to_host = (other.pos - p.pos) * (1.0f / dist);
+                        const pebble::math::vec2 tangent{-dir_to_host[1], dir_to_host[0]};
+                        const pebble::math::vec2 stream_vel = dir_to_host * sph_strip.stream_velocity + tangent * (p.omega * 0.5f);
+
+                        // SPH Fluid Siphoned Gas Particle
+                        app.nebulae.push_back(NebulaGasParticle{
+                            .pos = sph_strip.l1_lagrange_point,
+                            .vel = p.vel * 0.3f + stream_vel,
+                            .radius = 1.2f + dist01(app.rng) * 0.8f,
+                            .life = 1.2f,
+                            .max_life = 1.2f,
+                            .color = kalpana::Color{0.45f, 0.85f, 1.0f, 0.40f} // SPH Siphoned accretion stream
+                        });
+                        break;
+                    }
+                }
+            }
         }
 
         // Prakriti Phase Engine: Boiling & Degassing at high temperatures (> 1400°C)
@@ -1941,16 +1979,16 @@ static void render_gpu_frame(PebbleVerseApp& app) {
 
         // ── Relativistic Gravitational Lensing & Photon Sphere Halo Shader Simulation ──
         if (p.is_singularity || p.type == CelestialType::BlackHoleSingularity || p.is_neutron_star) {
-            // 1. Photon Sphere & Outer Einstein Lensing Ring ($r_{\text{photon}} = 1.5 R_s$, $r_{\text{Einstein}} \propto \sqrt{M}$)
-            const float r_einstein = (p.radius * 2.8f + std::sqrt(p.mass) * 1.8f) * app.camera_zoom;
+            // 1. Photon Sphere & Outer Einstein Lensing Ring ($r_{\text{photon}} = 1.5 R_s$, $r_{\text{Einstein}} \propto \sqrt{M}$) - Ultra-Subtle & Faint
+            const float r_einstein = (p.radius * 1.5f + std::sqrt(p.mass) * 0.45f) * app.camera_zoom;
             kalpana::Color einstein_col = p.is_singularity 
-                ? kalpana::Color{0.45f, 0.75f, 1.0f, 0.22f} 
-                : kalpana::Color{0.3f, 0.9f, 1.0f, 0.35f};
+                ? kalpana::Color{0.40f, 0.70f, 1.0f, 0.05f} 
+                : kalpana::Color{0.25f, 0.85f, 1.0f, 0.07f};
             app.instanced_planets.add_instance(s_pos[0], s_pos[1], r_einstein, einstein_col);
 
-            // 2. Innermost Stable Circular Orbit (ISCO) Plasma Glow
-            const float r_isco = (p.radius * 1.6f) * app.camera_zoom;
-            app.instanced_planets.add_instance(s_pos[0], s_pos[1], r_isco, kalpana::Color{1.0f, 0.65f, 0.25f, 0.45f});
+            // 2. Innermost Stable Circular Orbit (ISCO) Plasma Glow - Delicate & Thin
+            const float r_isco = (p.radius * 1.25f) * app.camera_zoom;
+            app.instanced_planets.add_instance(s_pos[0], s_pos[1], r_isco, kalpana::Color{1.0f, 0.60f, 0.20f, 0.10f});
         }
 
         app.instanced_planets.add_instance(s_pos[0], s_pos[1], p.radius * app.camera_zoom, c);
@@ -1988,10 +2026,17 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         app.instanced_planets.add_instance(s_pos[0], s_pos[1], j.radius * app.camera_zoom, j.color);
     }
 
-    // 5. Batch Relativistic ISCO Accretion Flares
+    // 5. Batch Relativistic ISCO Accretion Flares with Doppler Asymmetry
     for (const auto& f : app.flares) {
         const pebble::math::vec2 s_pos = w2s(f.pos);
-        app.instanced_planets.add_instance(s_pos[0], s_pos[1], f.radius * app.camera_zoom, f.color);
+        // Doppler boost based on tangential orbital position relative to camera center
+        const float dx_rel = f.pos[0] - app.camera_pos[0];
+        const float doppler_flare = 1.0f + std::clamp(dx_rel * 0.015f, -0.3f, 0.4f);
+        kalpana::Color f_col = f.color;
+        f_col.r = std::clamp(f_col.r * (2.0f - doppler_flare), 0.0f, 1.0f);
+        f_col.b = std::clamp(f_col.b * doppler_flare, 0.0f, 1.0f);
+        f_col.a = std::clamp(f_col.a * (0.7f + doppler_flare * 0.3f), 0.0f, 1.0f);
+        app.instanced_planets.add_instance(s_pos[0], s_pos[1], f.radius * app.camera_zoom, f_col);
     }
 
     // 6. Relativistic Gravitational Wave Space-time Ripples (Ultra-Subtle & Faint)
@@ -2506,6 +2551,20 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         std::string over_hud = app.show_analytics_overlays ? "OVERLAYS:ON" : "OVERLAYS:OFF";
         kalpana::Color over_col = app.show_analytics_overlays ? kalpana::Color{0.4f, 0.95f, 0.5f, 0.95f} : kalpana::Color{0.6f, 0.6f, 0.6f, 0.75f};
         draw_text(1250.0f, 10.0f, over_hud, over_col, 5.5f, 10.0f);
+
+        // 6) NADI Real-Time Compute Sparkline Waveform (Ultra-Faint Mini Wave in Top Right)
+        if (app.show_analytics_overlays) {
+            kalpana::Path spark_line;
+            const float sx_base = 545.0f;
+            const float sy_base = 24.0f;
+            const float comp_h = std::clamp(app.compute_ms * 2.0f, 1.0f, 12.0f);
+            spark_line.move_to(sx_base, sy_base);
+            spark_line.line_to(sx_base + 15.0f, sy_base - comp_h * 0.4f);
+            spark_line.line_to(sx_base + 30.0f, sy_base - comp_h * 0.8f);
+            spark_line.line_to(sx_base + 45.0f, sy_base - comp_h * 0.5f);
+            spark_line.line_to(sx_base + 60.0f, sy_base);
+            scene.add(kalpana::Node::shape(spark_line, kalpana::Paint::stroke(kalpana::Color{0.85f, 0.45f, 1.0f, 0.40f}, 0.8f)));
+        }
     }
 
     // 7. Interactive Mouse Reticle
@@ -3037,6 +3096,84 @@ static void event_cb(const sapp_event* e) {
                     app.view_mode = SpectralViewMode::OpticalRGB;
                 }
                 break;
+            case SAPP_KEYCODE_B: {
+                // Spawn Inspiral Binary Black Holes at cursor
+                const pebble::math::vec2 spawn_pos = app.camera_pos;
+                PlanetBody bh1, bh2;
+                bh1.ent = app.world.spawn();
+                bh1.pos = spawn_pos + pebble::math::vec2{-25.0f, 0.0f};
+                bh1.prev_pos = bh1.pos;
+                bh1.vel = pebble::math::vec2{0.0f, -22.0f};
+                bh1.mass = 450.0f;
+                bh1.radius = 3.5f;
+                bh1.type = CelestialType::BlackHoleSingularity;
+                bh1.mat_params = prakriti::celestial::black_hole_singularity();
+                bh1.is_singularity = true;
+
+                bh2.ent = app.world.spawn();
+                bh2.pos = spawn_pos + pebble::math::vec2{25.0f, 0.0f};
+                bh2.prev_pos = bh2.pos;
+                bh2.vel = pebble::math::vec2{0.0f, 22.0f};
+                bh2.mass = 450.0f;
+                bh2.radius = 3.5f;
+                bh2.type = CelestialType::BlackHoleSingularity;
+                bh2.mat_params = prakriti::celestial::black_hole_singularity();
+                bh2.is_singularity = true;
+
+                app.planets.push_back(bh1);
+                app.planets.push_back(bh2);
+                break;
+            }
+            case SAPP_KEYCODE_P: {
+                // Spawn Millisecond Pulsar with Magnetosphere
+                PlanetBody pulsar;
+                pulsar.ent = app.world.spawn();
+                pulsar.pos = app.camera_pos;
+                pulsar.prev_pos = pulsar.pos;
+                pulsar.vel = pebble::math::vec2{0.0f, 0.0f};
+                pulsar.mass = 350.0f;
+                pulsar.radius = 2.4f;
+                pulsar.temperature = 7500.0f;
+                pulsar.omega = 45.0f;
+                pulsar.is_neutron_star = true;
+                pulsar.type = CelestialType::NeutronStar;
+                pulsar.mat_params = prakriti::celestial::neutron_star();
+                app.planets.push_back(pulsar);
+                break;
+            }
+            case SAPP_KEYCODE_S: {
+                // Spawn Glowing Protostar with Protoplanetary Disk
+                PlanetBody star;
+                star.ent = app.world.spawn();
+                star.pos = app.camera_pos;
+                star.prev_pos = star.pos;
+                star.vel = pebble::math::vec2{0.0f, 0.0f};
+                star.mass = 650.0f;
+                star.radius = 6.0f;
+                star.temperature = 4200.0f;
+                star.type = CelestialType::SuperheatedPlasma;
+                star.mat_params = prakriti::celestial::superheated_plasma();
+                app.planets.push_back(star);
+
+                // Surrounding Protoplanetary dust ring
+                std::uniform_real_distribution<float> d01(0.0f, 1.0f);
+                for (int d = 0; d < 28; ++d) {
+                    const float a = (static_cast<float>(d) / 28.0f) * 6.2831853f;
+                    const float r = 35.0f + d01(app.rng) * 45.0f;
+                    const float spd = std::sqrt((app.config_grav_g * star.mass) / r);
+                    PlanetBody dust;
+                    dust.ent = app.world.spawn();
+                    dust.pos = star.pos + pebble::math::vec2{std::cos(a), std::sin(a)} * r;
+                    dust.prev_pos = dust.pos;
+                    dust.vel = pebble::math::vec2{-std::sin(a), std::cos(a)} * spd;
+                    dust.mass = 0.5f;
+                    dust.radius = 0.9f;
+                    dust.type = CelestialType::SilicateRock;
+                    dust.mat_params = prakriti::celestial::silicate_rock();
+                    app.planets.push_back(dust);
+                }
+                break;
+            }
             case SAPP_KEYCODE_SPACE:
                 app.paused = !app.paused;
                 break;

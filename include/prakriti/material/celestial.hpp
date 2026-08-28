@@ -1195,6 +1195,52 @@ evaluate_pulsar_gw_timing_residual(float base_omega, float gw_strain, float gw_c
     return res;
 }
 
+// ── 39. SPH Gaseous Planet Roche Lobe Stripping & Fluid Stream Dynamics ────────
+
+struct SPHRocheStrippingState {
+    bool  is_stripping = false;
+    float roche_lobe_radius = 0.0f;
+    float mass_loss_rate = 0.0f;
+    float stream_velocity = 0.0f;
+    pebble::math::vec2 l1_lagrange_point{0.0f, 0.0f};
+};
+
+// Eggleton approximation for Roche Lobe Radius:
+// r_L / a = \frac{0.49 q^{2/3}}{0.6 q^{2/3} + \ln(1 + q^{1/3})}, where q = M_donor / M_accretor
+[[nodiscard]] inline SPHRocheStrippingState
+evaluate_sph_roche_lobe_stripping(const pebble::math::vec2& donor_pos, float donor_mass, float donor_radius,
+                                  const pebble::math::vec2& host_pos, float host_mass,
+                                  float distance) noexcept {
+    SPHRocheStrippingState state;
+    if (distance <= 0.1f || donor_mass <= 0.1f || host_mass <= 0.1f) return state;
+
+    const float q = std::clamp(donor_mass / host_mass, 1e-4f, 1e4f);
+    const float q_1_3 = std::cbrt(q);
+    const float q_2_3 = q_1_3 * q_1_3;
+
+    // Eggleton's Roche lobe radius formula
+    const float r_lobe_ratio = (0.49f * q_2_3) / (0.6f * q_2_3 + std::log(1.0f + q_1_3));
+    state.roche_lobe_radius = distance * r_lobe_ratio;
+
+    // Tidal stripping triggers if donor envelope overflows its Roche lobe
+    if (donor_radius > state.roche_lobe_radius) {
+        state.is_stripping = true;
+        const float overflow_depth = donor_radius - state.roche_lobe_radius;
+        state.mass_loss_rate = std::clamp(overflow_depth / donor_radius, 0.01f, 1.0f) * (donor_mass * 0.35f);
+
+        // Compute L1 Lagrange nozzle location between donor and host
+        const pebble::math::vec2 d = host_pos - donor_pos;
+        const float dir_len = std::sqrt(d[0] * d[0] + d[1] * d[1]);
+        const pebble::math::vec2 unit_d = (dir_len > 1e-3f) ? (d * (1.0f / dir_len)) : pebble::math::vec2{1.0f, 0.0f};
+
+        // L1 point is approximately at donor_pos + unit_d * r_L
+        state.l1_lagrange_point = donor_pos + unit_d * state.roche_lobe_radius;
+        state.stream_velocity = std::sqrt((18000.0f * host_mass) / std::max(distance, 10.0f)) * 0.45f;
+    }
+
+    return state;
+}
+
 } // namespace prakriti::celestial
 
 

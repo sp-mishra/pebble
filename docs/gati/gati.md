@@ -314,3 +314,7 @@ game.events().publish(HeatPulseEvent{.center = {2.0f, 1.0f}, .radius = 3.0f, .te
 ### 9.2 Hierarchical Multi-Rate Stepper (`gati::stepper::HierarchicalBlockStepper`)
 - **Header**: `#include <gati/stepper/block_stepper.hpp>`
 - **Purpose**: Aarseth power-of-two acceleration rung calculator ($\Delta t / 2^k$), allowing high-speed entities or close binaries to step at micro-intervals while background entities advance at macro-intervals.
+
+### 9.3 Unified Celestial System (`gati::systems::CelestialSystem`)
+- **Header**: `#include <gati/systems/celestial_system.hpp>`
+- **Purpose**: Reusable N-body celestial simulation system orchestrating Prakriti gravitational multipoles, $O(N)$ `SpatialHashGrid` broadphase collision impulse solving, and symplectic Verlet integration with NADI telemetry instrumentation.
