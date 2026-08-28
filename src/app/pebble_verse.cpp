@@ -564,8 +564,27 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
     const pebble::math::vec2 cosmic_center{FW * 0.5f, FH * 0.5f};
     constexpr float kHubbleConstant = 0.00035f; // Gentle cosmic background metric expansion
 
-    for (auto& p : app.planets) {
+    for (std::size_t i = 0; i < app.planets.size(); ++i) {
+        auto& p = app.planets[i];
         if (!p.alive) continue;
+
+        // ── 2.5PN Gravitational Radiation Reaction Drag between Binary Black Holes ──
+        if (p.is_singularity || p.type == CelestialType::BlackHoleSingularity) {
+            for (std::size_t j = i + 1; j < app.planets.size(); ++j) {
+                auto& other = app.planets[j];
+                if (!other.alive || (!other.is_singularity && other.type != CelestialType::BlackHoleSingularity)) continue;
+                const pebble::math::vec2 d = other.pos - p.pos;
+                const float dist = std::sqrt(d[0] * d[0] + d[1] * d[1]);
+                const float r_isco = (p.radius + other.radius) * 1.5f;
+                const auto smbh = prakriti::celestial::evaluate_smbh_inspiral(p.mass, other.mass, dist, r_isco);
+                if (smbh.is_in_inspiral) {
+                    const pebble::math::vec2 drag_dir = pebble::math::normalize(d);
+                    // Gravitational radiation reaction accelerates inspiral decay
+                    p.vel = p.vel + drag_dir * (smbh.post_newtonian_drag * sim_dt * 0.5f);
+                    other.vel = other.vel - drag_dir * (smbh.post_newtonian_drag * sim_dt * 0.5f);
+                }
+            }
+        }
 
         // Apply gentle Cosmological Hubble Metric Drift (v_H = H0 * (r - r_center))
         const pebble::math::vec2 hubble_drift = prakriti::celestial::apply_hubble_metric_drift(
@@ -1401,6 +1420,53 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         };
     };
 
+    // ── 0. Sub-Layer: Spacetime Curvature & Geodesic Grid (Faint Background Layer) ──
+    {
+        constexpr int grid_cols = 36;
+        constexpr int grid_rows = 22;
+        const float dx = FW / static_cast<float>(grid_cols);
+        const float dy = FH / static_cast<float>(grid_rows);
+
+        auto warp_vertex = [&](float gx, float gy) -> pebble::math::vec2 {
+            pebble::math::vec2 pt{gx, gy};
+            for (const auto* lens : massive_lenses) {
+                const auto defl = prakriti::celestial::compute_spacetime_geodesic_deflection(
+                    pt, lens->pos, lens->mass, 18.0f
+                );
+                pt = pt + defl;
+            }
+            return w2s(pt, true);
+        };
+
+        // Horizontal geodesic lines
+        for (int r = 0; r <= grid_rows; ++r) {
+            const float gy = static_cast<float>(r) * dy;
+            kalpana::Path h_line;
+            const pebble::math::vec2 start_pt = warp_vertex(0.0f, gy);
+            h_line.move_to(start_pt[0], start_pt[1]);
+            for (int c = 1; c <= grid_cols; ++c) {
+                const float gx = static_cast<float>(c) * dx;
+                const pebble::math::vec2 p_w = warp_vertex(gx, gy);
+                h_line.line_to(p_w[0], p_w[1]);
+            }
+            scene.add(kalpana::Node::shape(h_line, kalpana::Paint::stroke(kalpana::Color{0.14f, 0.28f, 0.55f, 0.16f}, 0.85f)));
+        }
+
+        // Vertical geodesic lines
+        for (int c = 0; c <= grid_cols; ++c) {
+            const float gx = static_cast<float>(c) * dx;
+            kalpana::Path v_line;
+            const pebble::math::vec2 start_pt = warp_vertex(gx, 0.0f);
+            v_line.move_to(start_pt[0], start_pt[1]);
+            for (int r = 1; r <= grid_rows; ++r) {
+                const float gy = static_cast<float>(r) * dy;
+                const pebble::math::vec2 p_w = warp_vertex(gx, gy);
+                v_line.line_to(p_w[0], p_w[1]);
+            }
+            scene.add(kalpana::Node::shape(v_line, kalpana::Paint::stroke(kalpana::Color{0.14f, 0.28f, 0.55f, 0.16f}, 0.85f)));
+        }
+    }
+
     // 1. Batch Orbital Motion Trails & Accretion Halos
     for (const auto& p : app.planets) {
         if (p.trail_count > 1) {
@@ -1533,10 +1599,33 @@ static void render_gpu_frame(PebbleVerseApp& app) {
     }
 
     // 7. Relativistic Event Horizons, Photon Rings & ISCO (For Actual Compact Singularities & Stars)
-    for (const auto& p : app.planets) {
+    for (std::size_t idx = 0; idx < app.planets.size(); ++idx) {
+        const auto& p = app.planets[idx];
         if (!p.alive) continue;
         const pebble::math::vec2 s_pos = w2s(p.pos, p.is_singularity || p.mass > 300.0f);
         if (p.is_singularity || p.type == CelestialType::BlackHoleSingularity) {
+            // ── Binary Black Hole Tidal Distortion & Shared Accretion Bridge ──
+            for (std::size_t o_idx = idx + 1; o_idx < app.planets.size(); ++o_idx) {
+                const auto& other = app.planets[o_idx];
+                if (!other.alive || (!other.is_singularity && other.type != CelestialType::BlackHoleSingularity)) continue;
+                const pebble::math::vec2 d = other.pos - p.pos;
+                const float dist = std::sqrt(d[0] * d[0] + d[1] * d[1]);
+                const float mutual_isco = (p.radius + other.radius) * 3.2f;
+                if (dist < mutual_isco) {
+                    // Mutual ISCO plasma bridge linking both event horizons
+                    const pebble::math::vec2 s_other = w2s(other.pos, true);
+                    kalpana::Path isco_bridge;
+                    isco_bridge.move_to(s_pos[0], s_pos[1]);
+                    isco_bridge.line_to(s_other[0], s_other[1]);
+                    const float bridge_thick = std::max(2.0f, (p.radius + other.radius) * 1.2f * app.camera_zoom);
+                    scene.add(kalpana::Node::shape(isco_bridge, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.65f, 0.2f, 0.85f}, bridge_thick)));
+                    
+                    // Shared Common Ergosphere Envelope
+                    const pebble::math::vec2 s_mid = (s_pos + s_other) * 0.5f;
+                    app.instanced_planets.add_instance(s_mid[0], s_mid[1], dist * 1.1f * app.camera_zoom, kalpana::Color{0.6f, 0.25f, 1.0f, 0.25f});
+                }
+            }
+
             // ── Relativistic Kerr Black Hole Anatomy ──
             // Layer 1: Relativistic Ergosphere Frame-Dragging Swirl Aura
             const float ergo_r = p.radius * 4.2f * app.camera_zoom;

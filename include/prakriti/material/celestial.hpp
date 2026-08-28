@@ -775,4 +775,20 @@ compute_cosmic_filament(const pebble::math::vec2& p1, float m1,
     return f;
 }
 
+// ── 23. Spacetime Curvature & Geodesic Grid Embedding ──────────────────────────────────────
+
+[[nodiscard]] inline pebble::math::vec2
+compute_spacetime_geodesic_deflection(const pebble::math::vec2& grid_pt,
+                                      const pebble::math::vec2& mass_pos,
+                                      float mass, float softening = 24.0f) noexcept {
+    const pebble::math::vec2 d = mass_pos - grid_pt;
+    const float dist_sq = d[0] * d[0] + d[1] * d[1];
+    const float dist = std::sqrt(dist_sq);
+    if (dist < 1.0f) return pebble::math::vec2{0.0f, 0.0f};
+
+    // 2D Spacetime Curvature Warping: \Delta \vec{x} = \frac{G M}{r^2 + \epsilon^2} \hat{r}
+    const float pinch_mag = (mass * 0.45f) / (dist_sq + softening * softening);
+    return pebble::math::vec2{d[0] / dist, d[1] / dist} * std::min(pinch_mag, 16.0f);
+}
+
 } // namespace prakriti::celestial

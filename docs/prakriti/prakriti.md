@@ -410,3 +410,10 @@ Located in `#include <prakriti/material/celestial.hpp>`:
 ## 22. Cosmic Filament Web (Zel'dovich Approximation)
 - Evaluates large-scale structure filamentary bridges linking galactic clusters and dark matter gravitational potential wells across cosmological scales.
 
+---
+
+## 23. Sub-Layer Spacetime Curvature & Geodesic Grid Embedding
+- **General Relativity Coordinate Warping**:
+  $$\Delta \vec{x} = \frac{GM_i}{r_i^2 + \epsilon^2} \hat{r}_i$$
+- Renders an authentic Einstein rubber-sheet curvature mesh as a sub-layer beneath all particles, pinching grid intersections radially towards gravitating stars, pulsars, and black holes with faint, clean opacity ($\alpha \approx 0.16$).
+
