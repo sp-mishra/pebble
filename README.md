@@ -98,13 +98,14 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
   * Comprehensive Zero-to-Hero Tutorial: [`docs/tutorials/tensor.md`](docs/tutorials/tensor.md)
 * **Math Vectors & Game Graphics Primitives** (`include/containers/numeric/math_vector.hpp`) — Stack-allocated, zero-heap, `constexpr`-enabled linear algebra primitives (`vec2`, `vec3`, `vec4`, `quat`, `mat4`), ray optics (`reflect`, `refract`), camera view (`look_at`), projection (`perspective`), and quaternion slerp built on `static_tensor`.
   * Documentation: [`docs/containers/math_vector.md`](docs/containers/math_vector.md)
-* **Akruti** (`include/akruti/`) — Header-only, concept-based 2D shape, geometry, narrowphase, CCD, CSG, and fracture system.
+* **Akruti** (`include/akruti/`) — Header-only, concept-based 2D shape, geometry, narrowphase, CCD, CSG, fracture, and layout system.
   * `Shape` concept, analytic primitives (`Circle`, `Box`, `Segment`, `Capsule`, `HalfPlane`, `ConvexPoly`), Andrew's monotone chain convex hull (`akruti/hull.hpp`).
   * Queries (`raycast`, `closest_point`, `point_inside`, `winding_number`).
   * GJK boolean intersection, EPA penetration depth/normal, and separation distance (`akruti/gjk.hpp`).
   * Continuous collision detection (conservative advancement TOI and speculative anti-tunneling bounds in `akruti/ccd.hpp`).
   * Constructive Solid Geometry (`akruti/csg.hpp`) with `Union`, `Subtract`, `Intersect`, `SmoothUnion`, `Offset`, `Transform`.
   * Advanced fracture pipeline (**Khanda** in `akruti/khanda.hpp`) with Voronoi partitioning, ear-clipping triangulation, convex decomposition, Poisson-disk sampling with impact densification, and exact polar moment of inertia.
+  * 2D Layout Engine (**`akruti::layout`** in `akruti/layout.hpp`) backed by `NAryTree` authoring, baked SoA flexbox execution, relative constraint DAG solving via `LiteGraph`, spatial hash hit testing (`SpatialHash`), phase-aware dirty tracking, and debug overlay renderer.
   * Bulk scene orchestrator (`akruti/scene/`) backed by SoA batches, dynamic `AABBTree` BVH, and optional `pravaha` task graph execution.
   * Documentation: [`docs/akruti/akruti.md`](docs/akruti/akruti.md)
 * **Prakriti** (`include/prakriti/`) — Unified material-state 2D continuum simulator, 100x multi-physics acceleration engine (Prakriti 2.0), and **Celestial Cosmological Relativistic Engine** (`include/prakriti/material/celestial.hpp`).

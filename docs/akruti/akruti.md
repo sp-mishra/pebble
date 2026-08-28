@@ -270,6 +270,58 @@ for (const auto& shard : shards) {
 |:---|:---|:---|
 | `pebble::math` | `math_vector.hpp` | `vec2`, `mat2`, `aabb2`, `dot`, `cross`, `perp`, `normalize`. |
 | `containers` | `AABBTree.hpp` | Dynamic broadphase bounding volume hierarchy. |
+| `containers` | `containers/tree/NAryTree.hpp` | Authoring hierarchical layout tree representation (`LayoutTree`). |
+| `containers` | `containers/graph/LiteGraph.hpp` | Relative layout constraint DAG graph solver (`constraints_graph`). |
 | `containers` | `static_vector.hpp` | Inlined polygon vertices (`ConvexPoly<N>`) with zero heap allocation. |
 | `mem` | `LinearArena.hpp` | Flat Arena CSG AST allocations and Voronoi clipping scratch memory. |
 | `pravaha` | `pravaha.hpp` | Chunked multi-threaded parallel execution of scene queries. |
+
+---
+
+## 10. `akruti::layout` — 2D Layout Engine
+
+`akruti::layout` provides a CPU baseline 2D layout engine. It decouples high-level UI tree authoring from flat, cache-coherent Structure-of-Arrays (SoA) layout execution:
+
+- **Authoring Layer**: Uses `NAryTree<LayoutNode>` (`LayoutTree`) to build hierarchical UI layouts.
+- **Baking & Execution**: Bakes tree hierarchies into contiguous vectors (`parent`, `child_count`, `axis`, `width`, `height`, `flex_grow`, `padding`, `margin`).
+- **4-Phase Execution Pipeline**:
+  1. **Measure Pass** (Bottom-Up): Computes intrinsic element and text content sizes (`text_measure_callback`).
+  2. **Place Pass** (Top-Down): Solves Flexbox main/cross axis layout, alignments (`Align`, `Justify`), flex distribution, padding, and margins.
+  3. **Constraints Pass**: Evaluates parent matching (`match_parent_width`, `match_parent_height`), centering, and relative anchor offsets via `LiteGraph`.
+  4. **Clip Pass** (Top-Down): Computes hierarchy clipping bounds (`Bounds2D` intersection) for overflow modes (`Overflow::Clip`, `Overflow::Scroll`).
+- **Spatial Hash**: Grid-based spatial hash index (`SpatialHash`) enabling $O(1)$ hit testing (`hit_test(x, y)`).
+- **Phase-Aware Invalidation**: `mark_dirty(node, mask)` propagates dirty flags up ancestor paths without re-evaluating unchanged subtrees.
+- **Snapshots & Debugging**: Built-in snapshot ring buffer (`take_snapshot`, `restore_snapshot`) and customizable debug overlay renderer (`DebugOverlay`).
+
+### Usage Example
+```cpp
+#include <akruti/layout.hpp>
+
+using namespace akruti::layout;
+
+// 1. Author Layout Tree
+LayoutTree tree;
+
+LayoutNode container;
+container.style.axis = Axis::Column;
+container.style.width = SizeSpec::Px(400.0f);
+container.style.height = SizeSpec::Px(600.0f);
+container.style.padding = Edges{.l = 16.0f, .t = 16.0f, .r = 16.0f, .b = 16.0f};
+auto root_id = tree.insert(nullptr, container);
+
+LayoutNode flex_child;
+flex_child.style.flex_grow = 1.0f;
+tree.insert(root_id, flex_child);
+
+// 2. Bake and Solve Layout
+Engine engine;
+engine.bake(tree);
+
+Bounds2D viewport{{0.0f, 0.0f}, {400.0f, 600.0f}};
+engine.solve(viewport);
+
+// 3. Query Results & Hit Test
+Rect2D child_rect = engine.rect[1]; // x, y, w, h
+auto hit_node = engine.hit_test(100.0f, 100.0f);
+```
+

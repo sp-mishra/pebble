@@ -42,6 +42,7 @@
 #include "morph.hpp"
 #include "deform.hpp"
 #include "body.hpp"
+#include "layout.hpp"
 
 // Scene layer
 #include "scene/parallel.hpp"
