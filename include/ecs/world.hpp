@@ -306,24 +306,39 @@ public:
             if ((!try_store<Rest>() || ...)) return;
         }
 
-        // Auto-select smallest store for driving loop when multi-component query
-        constexpr std::size_t N = 1 + sizeof...(Rest);
-        if constexpr (N > 1) {
-            std::size_t p_size = p_store->size();
-            std::size_t min_size = p_size;
-            std::size_t min_idx = 0;
-            std::size_t idx = 1;
-            ((try_store<Rest>()->size() < min_size ? (min_size = try_store<Rest>()->size(), min_idx = idx, 0) : (++idx, 0)), ...);
-
-            for (auto&& [entity_idx, comp] : p_store->pairs()) {
-                if (!(has_idx<Rest>(entity_idx) && ...)) continue;
-                Entity e{entity_idx, slots_[entity_idx - 1].generation};
-                fn(e, comp, *try_store<Rest>()->try_get(entity_idx)...);
-            }
-        } else {
+        if constexpr (sizeof...(Rest) == 0) {
             for (auto&& [entity_idx, comp] : p_store->pairs()) {
                 Entity e{entity_idx, slots_[entity_idx - 1].generation};
                 fn(e, comp);
+            }
+        } else {
+            // Find smallest store among all query types
+            std::size_t min_size = p_store->size();
+            std::size_t min_idx = 0;
+            std::size_t curr_idx = 1;
+            ((try_store<Rest>()->size() < min_size ? (min_size = try_store<Rest>()->size(), min_idx = curr_idx, 0) : (++curr_idx, 0)), ...);
+
+            // Execute iteration driven by the smallest store
+            if (min_idx == 0) {
+                for (auto&& [entity_idx, comp] : p_store->pairs()) {
+                    if (!(has_idx<Rest>(entity_idx) && ...)) continue;
+                    Entity e{entity_idx, slots_[entity_idx - 1].generation};
+                    fn(e, comp, *try_store<Rest>()->try_get(entity_idx)...);
+                }
+            } else {
+                // Secondary store is smallest - iterate lead and probe companion stores
+                std::size_t branch_idx = 1;
+                auto dispatch_lead = [&]<Component Lead>(ComponentStore<Lead>* lead_store) {
+                    if (min_idx == branch_idx) {
+                        for (auto&& [entity_idx, _] : lead_store->pairs()) {
+                            if (!has_idx<Primary>(entity_idx) || !(has_idx<Rest>(entity_idx) && ...)) continue;
+                            Entity e{entity_idx, slots_[entity_idx - 1].generation};
+                            fn(e, *p_store->try_get(entity_idx), *try_store<Rest>()->try_get(entity_idx)...);
+                        }
+                    }
+                    ++branch_idx;
+                };
+                (dispatch_lead(try_store<Rest>()), ...);
             }
         }
     }
@@ -337,14 +352,37 @@ public:
             if ((!try_store<Rest>() || ...)) return;
         }
 
-        for (auto&& [entity_idx, comp] : p_store->pairs()) {
-            if constexpr (sizeof...(Rest) > 0) {
-                if (!(has_idx<Rest>(entity_idx) && ...)) continue;
-                Entity e{entity_idx, slots_[entity_idx - 1].generation};
-                fn(e, comp, *try_store<Rest>()->try_get(entity_idx)...);
-            } else {
+        if constexpr (sizeof...(Rest) == 0) {
+            for (auto&& [entity_idx, comp] : p_store->pairs()) {
                 Entity e{entity_idx, slots_[entity_idx - 1].generation};
                 fn(e, comp);
+            }
+        } else {
+            // Find smallest store among all query types
+            std::size_t min_size = p_store->size();
+            std::size_t min_idx = 0;
+            std::size_t curr_idx = 1;
+            ((try_store<Rest>()->size() < min_size ? (min_size = try_store<Rest>()->size(), min_idx = curr_idx, 0) : (++curr_idx, 0)), ...);
+
+            if (min_idx == 0) {
+                for (auto&& [entity_idx, comp] : p_store->pairs()) {
+                    if (!(has_idx<Rest>(entity_idx) && ...)) continue;
+                    Entity e{entity_idx, slots_[entity_idx - 1].generation};
+                    fn(e, comp, *try_store<Rest>()->try_get(entity_idx)...);
+                }
+            } else {
+                std::size_t branch_idx = 1;
+                auto dispatch_lead = [&]<Component Lead>(const ComponentStore<Lead>* lead_store) {
+                    if (min_idx == branch_idx) {
+                        for (auto&& [entity_idx, _] : lead_store->pairs()) {
+                            if (!has_idx<Primary>(entity_idx) || !(has_idx<Rest>(entity_idx) && ...)) continue;
+                            Entity e{entity_idx, slots_[entity_idx - 1].generation};
+                            fn(e, *p_store->try_get(entity_idx), *try_store<Rest>()->try_get(entity_idx)...);
+                        }
+                    }
+                    ++branch_idx;
+                };
+                (dispatch_lead(try_store<Rest>()), ...);
             }
         }
     }

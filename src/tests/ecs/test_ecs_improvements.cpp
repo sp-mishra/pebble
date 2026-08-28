@@ -227,3 +227,91 @@ TEST_CASE("ECS Improvements: Archetype Columnar Storage", "[ecs][archetype]") {
     REQUIRE(&arch1_ref == &arch1);
     REQUIRE(storage.archetype_count() == 2);
 }
+
+TEST_CASE("ECS Improvements: Auto-Lead-Store Dynamic Join View", "[ecs][view][lead_store]") {
+    pebble::ecs::World world;
+
+    // Create 100 entities with Pos
+    for (int i = 0; i < 100; ++i) {
+        auto e = world.spawn();
+        world.add(e, Pos{static_cast<float>(i), static_cast<float>(i * 2)});
+    }
+
+    // Attach Vel to only 5 of them (Vel is the smaller lead store)
+    for (std::uint32_t i = 1; i <= 5; ++i) {
+        pebble::ecs::Entity e{i, 1};
+        world.add(e, Vel{10.0f, 20.0f});
+    }
+
+    REQUIRE(world.store<Pos>().size() == 100);
+    REQUIRE(world.store<Vel>().size() == 5);
+
+    int visited_count = 0;
+    // View queried as <Pos, Vel> should automatically evaluate Vel as the smaller lead store and visit exactly 5 matching entities
+    world.view<Pos, Vel>([&](pebble::ecs::Entity, Pos& p, const Vel& v) {
+        REQUIRE(p.y == p.x * 2.0f);
+        REQUIRE(v.dx == 10.0f);
+        REQUIRE(v.dy == 20.0f);
+        p.x += v.dx;
+        ++visited_count;
+    });
+
+    REQUIRE(visited_count == 5);
+}
+
+TEST_CASE("ECS Improvements: ErasedStore Type-Erased Ops (Zero Virtual)", "[ecs][erased_store]") {
+    pebble::ecs::ComponentStore<Pos> pos_store(1024);
+    pos_store.set(1, Pos{42.0f, 84.0f});
+    pos_store.set(2, Pos{10.0f, 20.0f});
+
+    pebble::ecs::ErasedStore erased{
+        .data = &pos_store,
+        .destroy = nullptr,
+        .erase = [](void* p, std::uint32_t idx) noexcept {
+            static_cast<pebble::ecs::ComponentStore<Pos>*>(p)->erase_by_index(idx);
+        },
+        .set_raw = nullptr,
+        .set_tick = nullptr,
+        .size = [](const void* p) noexcept -> std::size_t {
+            return static_cast<const pebble::ecs::ComponentStore<Pos>*>(p)->size();
+        },
+        .has = [](const void* p, std::uint32_t idx) noexcept -> bool {
+            return static_cast<const pebble::ecs::ComponentStore<Pos>*>(p)->has(idx);
+        },
+        .type_id = 1
+    };
+
+    REQUIRE(erased.get_size() == 2);
+    REQUIRE(erased.contains(1));
+    REQUIRE(erased.contains(2));
+    REQUIRE_FALSE(erased.contains(3));
+
+    erased.erase_by_index(1);
+    REQUIRE(erased.get_size() == 1);
+    REQUIRE_FALSE(erased.contains(1));
+    REQUIRE(erased.contains(2));
+}
+
+TEST_CASE("ECS Improvements: PagedSparse On-Demand Page Allocation", "[ecs][paged_sparse]") {
+    pebble::ecs::PagedSparse<std::uint32_t, 1024> paged_sparse;
+
+    REQUIRE(paged_sparse.allocated_pages() == 0);
+    REQUIRE_FALSE(paged_sparse.has(100));
+
+    paged_sparse[100] = 42;
+    REQUIRE(paged_sparse.allocated_pages() == 1);
+    REQUIRE(paged_sparse.has(100));
+    REQUIRE(paged_sparse.get(100) == 42);
+
+    // Access high entity ID spanning to another page on-demand
+    paged_sparse[3500] = 999;
+    REQUIRE(paged_sparse.allocated_pages() == 2);
+    REQUIRE(paged_sparse.has(3500));
+    REQUIRE(paged_sparse.get(3500) == 999);
+
+    paged_sparse.erase(100);
+    REQUIRE_FALSE(paged_sparse.has(100));
+    REQUIRE(paged_sparse.has(3500));
+}
+
+

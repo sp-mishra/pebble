@@ -41,7 +41,7 @@ Include: `#include <ecs/ecs.hpp>`
    - `SchedulerPolicy`: `AutoSchedulerPolicy` (topological graph execution) or `ManualSchedulerPolicy`.
    - `SparsePolicy`: `PagedSparsePolicy` (on-demand 4KB page chunks) or `FlatSparsePolicy`.
 4. **Auto-Lead-Store Dense Join View (`World::view`)** (`include/ecs/world.hpp`):
-   - Iterates across the store containing the smallest number of active components (the *lead store*) and performs branch-free $O(1)$ direct sparse-index probes into companion component stores.
+   - Dynamically evaluates component store sizes and automatically drives iteration through the smallest store (*lead store*), executing branchless $O(1)$ sparse probes into companion stores for optimal iteration efficiency.
 5. **Arena-Backed Command Buffer (`CommandBuffer`)** (`include/ecs/command_buffer.hpp`):
    - Records structural mutations (`spawn`, `despawn`, `add`, `remove`, `emplace`) into a `smriti::pools::LinearArena` bump allocator.
    - Zero `std::function` heap allocations. Thread-local recording with `LocalCommandBuffer`.
