@@ -11,6 +11,7 @@
 #include "color_space.hpp"
 #include "akruti_spectral_km.hpp"
 
+#include "containers/dynamic/SmallVector.hpp"
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -299,7 +300,7 @@ struct SpectralGradientStop {
 };
 
 struct SpectralGradient {
-    std::vector<SpectralGradientStop> stops;
+    containers::dynamic::SmallVector<SpectralGradientStop, 8> stops;
 
     [[nodiscard]] SpectralColor sample(float t) const noexcept {
         if (stops.empty()) return SpectralColor{};
@@ -320,7 +321,8 @@ struct SpectralGradient {
 
 [[nodiscard]] inline SpectralColor sample_spectral_gradient(
     std::span<const SpectralGradientStop> stops, float t) noexcept {
-    SpectralGradient g{.stops = std::vector<SpectralGradientStop>(stops.begin(), stops.end())};
+    SpectralGradient g;
+    for (const auto& s : stops) { (void)g.stops.push_back(s); }
     return g.sample(t);
 }
 

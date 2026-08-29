@@ -117,3 +117,48 @@ TEST_CASE("Gati: Reactive Collision Cue Manager", "[gati][reactive_cues]") {
     REQUIRE(triggered_count == 1);
 }
 
+TEST_CASE("Gati: SpatialTileStreamer fires on_evict for tiles leaving viewport", "[gati][world][streamer]") {
+    gati::world::SpatialTileStreamer<320.0f, 200.0f> streamer;
+
+    std::vector<gati::world::TileCoord> discovered, active, evicted;
+
+    // First viewport: covers tile (0,0)
+    streamer.update_viewport(
+        pebble::math::vec2(160.0f, 100.0f), 320.0f, 200.0f, 0.0f,
+        [&](gati::world::TileCoord c) { discovered.push_back(c); },
+        [&](gati::world::TileCoord c) { active.push_back(c); },
+        [&](gati::world::TileCoord c) { evicted.push_back(c); }
+    );
+
+    REQUIRE(discovered.size() >= 1);
+    REQUIRE(active.size() >= 1);
+    REQUIRE(evicted.empty()); // nothing to evict on first frame
+
+    active.clear(); evicted.clear();
+
+    // Move camera far right: tile (0,0) should be evicted
+    streamer.update_viewport(
+        pebble::math::vec2(2000.0f, 100.0f), 320.0f, 200.0f, 0.0f,
+        [&](gati::world::TileCoord c) { discovered.push_back(c); },
+        [&](gati::world::TileCoord c) { active.push_back(c); },
+        [&](gati::world::TileCoord c) { evicted.push_back(c); }
+    );
+
+    REQUIRE_FALSE(evicted.empty()); // tile (0,0) should be evicted
+}
+
+TEST_CASE("Gati: SpatialTileStreamer update_viewport backward-compat (no on_evict)", "[gati][world][streamer]") {
+    gati::world::SpatialTileStreamer<320.0f, 200.0f> streamer;
+
+    int disc_count = 0, active_count = 0;
+    // Old 2-callback API still compiles and works
+    streamer.update_viewport(
+        pebble::math::vec2(160.0f, 100.0f), 320.0f, 200.0f, 0.0f,
+        [&](gati::world::TileCoord) { ++disc_count; },
+        [&](gati::world::TileCoord) { ++active_count; }
+    );
+
+    REQUIRE(disc_count >= 1);
+    REQUIRE(active_count >= 1);
+}
+

@@ -102,8 +102,9 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
   * `Shape` concept, analytic primitives (`Circle`, `Box`, `Segment`, `Capsule`, `HalfPlane`, `ConvexPoly`), Andrew's monotone chain convex hull (`akruti/hull.hpp`).
   * Queries (`raycast`, `closest_point`, `point_inside`, `winding_number`).
   * GJK boolean intersection, EPA penetration depth/normal, and separation distance (`akruti/gjk.hpp`).
-  * Continuous collision detection (conservative advancement TOI and speculative anti-tunneling bounds in `akruti/ccd.hpp`).
-  * Constructive Solid Geometry (`akruti/csg.hpp`) with `Union`, `Subtract`, `Intersect`, `SmoothUnion`, `Offset`, `Transform`.
+  * Continuous collision detection (conservative advancement TOI and speculative anti-tunneling bounds in `akruti/ccd.hpp`). Swept AABB fast-reject culls ~80% of non-colliding pairs before entering the advancement loop.
+  * Constructive Solid Geometry (`akruti/csg.hpp`) with `Union`, `Subtract`, `Intersect`, `SmoothUnion`, `SmoothSubtract`, `SmoothIntersect`, `Offset`, `Transform`. Smooth variants use polynomial C1-continuous blending (`k` radius).
+  * `Shape` concept now requires `centroid()` in addition to `sdf`, `aabb`, `support`. All primitives (Circle, Box, Capsule, ConvexPoly, etc.) provide analytic or shoelace-formula centroids.
   * Advanced fracture pipeline (**Khanda** in `akruti/khanda.hpp`) with Voronoi partitioning, ear-clipping triangulation, convex decomposition, Poisson-disk sampling with impact densification, and exact polar moment of inertia.
   * 2D Layout Engine (**`akruti::layout`** in `akruti/layout.hpp`) backed by `NAryTree` authoring, baked SoA flexbox execution, relative constraint DAG solving via `LiteGraph`, spatial hash hit testing (`SpatialHash`), phase-aware dirty tracking, and debug overlay renderer.
   * Bulk scene orchestrator (`akruti/scene/`) backed by SoA batches, dynamic `AABBTree` BVH, and optional `pravaha` task graph execution.
@@ -117,6 +118,7 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
     * Documentation: [`docs/prakriti/prakriti.md`](docs/prakriti/prakriti.md)
 * **Gati** (`include/gati/`) — High-performance, header-only C++23/C++26 realtime game runtime and entity orchestration engine.
    * Fixed-step deterministic clock with presentation render interpolation (`alpha`), static `SystemStack` pipeline, Catmull-Rom animation splines & state machines, lock-free `EventBus`, input mapping, and Akruti (geometry/broadphase/narrowphase) + Prakriti (physics/joints) bridges.
+   * `SpatialTileStreamer` now fires `on_evict` callbacks for tiles leaving the viewport, enabling resource cleanup (textures, ECS entities) for streamed-out chunks. Backward-compatible 2-callback API preserved.
    * Directly uses `pebble::math` linear algebra primitives and `pravaha` parallel execution.
    * Documentation: [`docs/gati/gati.md`](docs/gati/gati.md)
 * **Spandana** (`include/spandana/`) — Plug & Play Contract-Based 2D Animation, Easing, Springs, IK, and Node-Graph World EDSL.
@@ -128,6 +130,7 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
    * Documentation: [`docs/dhvani/dhvani.md`](docs/dhvani/dhvani.md)
 * **Kalpana** (`include/kalpana/`) — 2D Graphics Language, Spectral Color Science, Procedural Fills & Physics Brushes.
    * Native 16-band Kubelka–Munk subtractive pigment mixing, named pigment catalog with extensible custom curves, HSL/OkLab conversions, Rebelle-inspired physics brushes (`WaterPhysicsParams`, `PigmentImpastoParams`), composable `EffectChain` EDSL (`operator|`, `operator>>`), layer compositing with customizable `LayerCombiner` policies, procedural fills (paper texture, marble, wood, grain) with plug-and-play noise generators, geometry modifiers (`offset`, `roughen`, `smooth`, `simplify`), declarative scene authoring EDSL (`NodeBuilder`, `TextBuilder`, `shape()`, `text()`, `operator<<`), and monomorphized render backends (headless capture, Sokol GFX GPU, Notcurses terminal).
+   * `SpectralGradient` supports up to 8 stops via `SmallVector<GradientStop, 8>` — zero heap for typical gradients. `BasicPath::from_svg(d)` parses SVG `d` attribute strings (M/L/C/Q/A/Z). `EffectChain` now includes `dof(focus_point, focal_range, max_blur_radius)` depth-of-field effect.
    * Documentation: [`docs/kalpana/kalpana.md`](docs/kalpana/kalpana.md)
 
 ---

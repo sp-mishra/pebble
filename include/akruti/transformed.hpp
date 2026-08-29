@@ -69,6 +69,17 @@ struct TransformedShape {
         const Vec2<Scalar> sup_rot{c * sup_local.x - s * sup_local.y, s * sup_local.x + c * sup_local.y};
         return sup_rot + position;
     }
+
+    [[nodiscard]] Vec2<Scalar> centroid() const noexcept {
+        const Vec2<Scalar> local = shape.centroid();
+        if (std::fabs(angle) < Scalar(1e-7)) {
+            return local + position;
+        }
+        const Scalar c = std::cos(angle);
+        const Scalar s = std::sin(angle);
+        const Vec2<Scalar> rot{c * local.x - s * local.y, s * local.x + c * local.y};
+        return rot + position;
+    }
 };
 
 template <Shape S>

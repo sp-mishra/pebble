@@ -77,6 +77,7 @@ concept Shape = requires(const S& s, pebble::math::vec2 p, pebble::math::vec2 d)
     { s.sdf(p) }      -> std::convertible_to<float>;              // Signed distance (d < 0 inside)
     { s.aabb() }      -> std::same_as<pebble::math::aabb2>;       // Conservative axis-aligned bounding box
     { s.support(d) }  -> std::convertible_to<pebble::math::vec2>; // Extreme point along direction d
+    { s.centroid() }  -> std::convertible_to<pebble::math::vec2>; // Geometric centroid (mass center for uniform density)
 };
 ```
 
@@ -175,6 +176,10 @@ using namespace akruti::expr;
 auto shape_union        = shape_a | shape_b;        // Union (min(sdf_a, sdf_b))
 auto shape_intersect    = shape_a & shape_b;        // Intersection (max(sdf_a, sdf_b))
 auto shape_difference   = shape_a - shape_b;        // Difference (max(sdf_a, -sdf_b))
+
+// Smooth CSG Operators (polynomial C1-continuous blending, k = blend radius)
+auto smooth_sub    = csg_smooth_subtract(shape_a, shape_b, /*k=*/0.3f);  // organic hole-punching
+auto smooth_inter  = csg_smooth_intersect(shape_a, shape_b, /*k=*/0.2f); // rounded-lens intersection
 
 // Geometric Transformers
 auto shell   = csg_shell(shape_a, /*thickness=*/0.5f); // |sdf| - t

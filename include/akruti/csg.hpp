@@ -22,7 +22,7 @@ namespace akruti {
 struct CsgNode;
 using CsgPtr = std::unique_ptr<CsgNode>;
 
-enum class CsgOp { Union, Subtract, Intersect, SmoothUnion, ChamferUnion, Shell, Morph, Offset, Transform };
+enum class CsgOp { Union, Subtract, Intersect, SmoothUnion, SmoothSubtract, SmoothIntersect, ChamferUnion, Shell, Morph, Offset, Transform };
 
 using CsgLeaf = std::variant<Circle, Segment, Capsule, Box, OrientedBox, Triangle, RoundedBox, HalfPlane, ConvexPoly<8>, CubicBezierCurve, CatmullRomSpline>;
 
@@ -56,6 +56,18 @@ struct CsgNode {
                 const Scalar h = std::clamp(Scalar(0.5) + Scalar(0.5) * (db - da) / std::max(k, Scalar(1e-6)),
                                             Scalar(0), Scalar(1));
                 return db * (1 - h) + da * h - k * h * (1 - h);
+            }
+            case CsgOp::SmoothSubtract: {
+                const Scalar da = a->sdf(p), db = b->sdf(p);
+                const Scalar h = std::clamp(Scalar(0.5) - Scalar(0.5) * (da + db) / std::max(k, Scalar(1e-6)),
+                                            Scalar(0), Scalar(1));
+                return da * (1 - h) + (-db) * h + k * h * (1 - h);
+            }
+            case CsgOp::SmoothIntersect: {
+                const Scalar da = a->sdf(p), db = b->sdf(p);
+                const Scalar h = std::clamp(Scalar(0.5) - Scalar(0.5) * (db - da) / std::max(k, Scalar(1e-6)),
+                                            Scalar(0), Scalar(1));
+                return db * (1 - h) + da * h + k * h * (1 - h);
             }
             case CsgOp::ChamferUnion: {
                 const Scalar da = a->sdf(p), db = b->sdf(p);
@@ -120,6 +132,16 @@ template <Shape S>
     n->is_leaf = false; n->op = CsgOp::Offset; n->a = std::move(a); n->k = r;
     return n;
 }
+[[nodiscard]] inline CsgPtr csg_smooth_subtract(CsgPtr a, CsgPtr b, Scalar k) {
+    auto n = std::make_unique<CsgNode>();
+    n->is_leaf = false; n->op = CsgOp::SmoothSubtract; n->a = std::move(a); n->b = std::move(b); n->k = k;
+    return n;
+}
+[[nodiscard]] inline CsgPtr csg_smooth_intersect(CsgPtr a, CsgPtr b, Scalar k) {
+    auto n = std::make_unique<CsgNode>();
+    n->is_leaf = false; n->op = CsgOp::SmoothIntersect; n->a = std::move(a); n->b = std::move(b); n->k = k;
+    return n;
+}
 [[nodiscard]] inline CsgPtr csg_transform(CsgPtr a, Mat2<Scalar> rot, Vec t) {
     auto n = std::make_unique<CsgNode>();
     n->is_leaf = false; n->op = CsgOp::Transform; n->a = std::move(a);
@@ -165,6 +187,45 @@ struct OpShell {
 struct OpOffset {
     static constexpr Scalar eval(Scalar a, Scalar r) noexcept { return a - r; }
 };
+
+// Smooth subtract: polynomial variant — negative inside B-carved region of A
+struct OpSmoothSubtract {
+    Scalar k{0.1f};
+    [[nodiscard]] Scalar operator()(Scalar da, Scalar db) const noexcept {
+        const Scalar h = std::clamp(Scalar(0.5) - Scalar(0.5) * (da + db) / std::max(k, Scalar(1e-6)),
+                                    Scalar(0), Scalar(1));
+        return da * (1 - h) + (-db) * h + k * h * (1 - h);
+    }
+};
+// Smooth intersect: polynomial variant — C1 at intersection boundary
+struct OpSmoothIntersect {
+    Scalar k{0.1f};
+    [[nodiscard]] Scalar operator()(Scalar da, Scalar db) const noexcept {
+        const Scalar h = std::clamp(Scalar(0.5) - Scalar(0.5) * (db - da) / std::max(k, Scalar(1e-6)),
+                                    Scalar(0), Scalar(1));
+        return db * (1 - h) + da * h + k * h * (1 - h);
+    }
+};
+
+template <class Op, class Left, class Right>
+struct BinaryExprK {
+    Left  left;
+    Right right;
+    Op    op{};
+
+    [[nodiscard]] Scalar sdf(Vec p) const noexcept {
+        return op(left.sdf(p), right.sdf(p));
+    }
+};
+
+template <class L, class R>
+[[nodiscard]] constexpr auto csg_smooth_subtract(L l, R r, Scalar k = 0.1f) noexcept {
+    return BinaryExprK<OpSmoothSubtract, L, R>{l, r, OpSmoothSubtract{k}};
+}
+template <class L, class R>
+[[nodiscard]] constexpr auto csg_smooth_intersect(L l, R r, Scalar k = 0.1f) noexcept {
+    return BinaryExprK<OpSmoothIntersect, L, R>{l, r, OpSmoothIntersect{k}};
+}
 
 template <class L, class R>
 [[nodiscard]] constexpr auto csg_union(L l, R r) noexcept {

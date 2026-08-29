@@ -150,4 +150,11 @@ struct BackdropBlurEffect {
     friend constexpr bool operator==(const BackdropBlurEffect&, const BackdropBlurEffect&) = default;
 };
 
+struct DepthOfFieldEffect {
+    pebble::math::vec2 focus_point{0.0f, 0.0f};
+    float focal_range   = 100.0f;
+    float max_blur_radius = 8.0f;
+    friend constexpr bool operator==(const DepthOfFieldEffect&, const DepthOfFieldEffect&) = default;
+};
+
 } // namespace kalpana

@@ -38,7 +38,8 @@ using EffectData = std::variant<
     SpectralBloomEffect,
     PigmentGranulationEffect,
     EdgeDarkeningEffect,
-    BackdropBlurEffect
+    BackdropBlurEffect,
+    DepthOfFieldEffect
 >;
 
 class EffectNode {
@@ -152,6 +153,14 @@ public:
 
     [[nodiscard]] static EffectNode backdrop_blur(float radius = 20.0f) noexcept {
         return EffectNode(BackdropBlurEffect{.radius = radius});
+    }
+
+    [[nodiscard]] static EffectNode dof(pebble::math::vec2 focus_point = {0.0f, 0.0f},
+                                        float focal_range = 100.0f,
+                                        float max_blur_radius = 8.0f) noexcept {
+        return EffectNode(DepthOfFieldEffect{.focus_point = focus_point,
+                                             .focal_range = focal_range,
+                                             .max_blur_radius = max_blur_radius});
     }
 
     [[nodiscard]] const EffectData& data() const noexcept { return data_; }

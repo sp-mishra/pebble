@@ -19,6 +19,7 @@ struct ShapeStore {
     Scalar (*sdf_fn)(const void*, Vec) noexcept = nullptr;
     AABB<Scalar> (*aabb_fn)(const void*) noexcept = nullptr;
     Vec (*support_fn)(const void*, Vec) noexcept = nullptr;
+    Vec (*centroid_fn)(const void*) noexcept = nullptr;
 
     constexpr ShapeStore() noexcept {
         set(Circle{.center = {0, 0}, .radius = 0.5f});
@@ -69,6 +70,9 @@ struct ShapeStore {
         support_fn = [](const void* ptr, Vec d) noexcept -> Vec {
             return static_cast<const S*>(ptr)->support(d);
         };
+        centroid_fn = [](const void* ptr) noexcept -> Vec {
+            return static_cast<const S*>(ptr)->centroid();
+        };
     }
 
     [[nodiscard]] Scalar sdf(Vec p) const noexcept {
@@ -81,6 +85,10 @@ struct ShapeStore {
 
     [[nodiscard]] Vec support(Vec d) const noexcept {
         return support_fn ? support_fn(storage, d) : Vec{};
+    }
+
+    [[nodiscard]] Vec centroid() const noexcept {
+        return centroid_fn ? centroid_fn(storage) : Vec{};
     }
 
     template <class S>

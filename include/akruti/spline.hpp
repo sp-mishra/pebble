@@ -123,6 +123,10 @@ struct CubicBezierCurve {
         }
         return best;
     }
+
+    [[nodiscard]] constexpr Vec2<Scalar> centroid() const noexcept {
+        return (p0 + p1 + p2 + p3) * Scalar(0.25);
+    }
 };
 
 // ── Catmull-Rom Multi-Segment Spline ────────────────────────────────────────
@@ -245,6 +249,13 @@ struct CatmullRomSpline {
             best = best + d * (radius / d_len);
         }
         return best;
+    }
+
+    [[nodiscard]] Vec2<Scalar> centroid() const noexcept {
+        if (points.empty()) return Vec2<Scalar>{};
+        Vec2<Scalar> sum{};
+        for (const auto& v : points) sum = sum + v;
+        return sum * (Scalar(1) / Scalar(points.size()));
     }
 };
 

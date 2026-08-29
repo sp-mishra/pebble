@@ -127,11 +127,11 @@ All procedural fills satisfy `noise::noise_generator`:
 
 | Module | Types & APIs | Description |
 |:---|:---|:---|
-| **Color Science** | `SpectralColor`, `SpectralGradient`, `pigments::*`, `colors::*` | 16-band absorption/scattering spectrums, subtractive mixing `.mix(other, ratio)`, RGB/OkLab conversions. |
+| **Color Science** | `SpectralColor`, `SpectralGradient`, `pigments::*`, `colors::*` | 16-band absorption/scattering spectrums, subtractive mixing `.mix(other, ratio)`, RGB/OkLab conversions. `SpectralGradient` holds up to 8 stops via `SmallVector<GradientStop, 8>` — zero heap for ≤8 stops. |
 | **Brush Engine** | `SpectralBrush`, `BrushPreset`, `DynamicsBinding` | Rebelle watercolor physics (`water_flow`, `drying_rate`, `impasto_height`), pressure/tilt response. |
-| **Effects** | `EffectChain`, `shadow()`, `blur()`, `glow()`, `bloom()` | Small-Buffer Optimized pipeline combiners via `operator\|` and `operator>>`. |
+| **Effects** | `EffectChain`, `shadow()`, `blur()`, `glow()`, `bloom()`, `dof()` | Small-Buffer Optimized pipeline combiners via `operator\|` and `operator>>`. `dof(focus_point, focal_range, max_blur_radius)` adds depth-of-field bokeh blur keyed by distance from focus point. |
 | **Procedural Fills**| `ProceduralFill::watercolor_paper()`, `marble()`, `wood()` | Noise-driven parametric vector fill shaders. |
-| **Path Modifiers** | `roughen()`, `smooth()`, `simplify()`, `offset()`, `warp()` | Non-destructive operator pipe modifiers (`path \| roughen(...) \| smooth(...)`). |
+| **Path Modifiers** | `roughen()`, `smooth()`, `simplify()`, `offset()`, `warp()`, `BasicPath::from_svg()` | Non-destructive operator pipe modifiers. `from_svg(d)` parses SVG `d` attribute strings (M/L/C/Q/A/Z commands) into a `BasicPath`. |
 | **Scene EDSL** | `Scene`, `shape()`, `text()`, `NodeBuilder`, `operator<<` | Fluent declarative canvas scene builder. |
 
 ---

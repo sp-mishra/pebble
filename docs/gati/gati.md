@@ -309,7 +309,17 @@ game.events().publish(HeatPulseEvent{.center = {2.0f, 1.0f}, .radius = 3.0f, .te
 ### 9.1 Spatial Tile Streamer (`gati::world::SpatialTileStreamer`)
 - **Header**: `#include <gati/world/spatial_tile_streamer.hpp>`
 - **Purpose**: Generic 2D viewport chunk/tile paging engine for massive open-world games (RPGs, RTS, space sims).
-- **Features**: SplitMix64 coordinate hashing, instant discovery detection, viewport culling margins, and zero-allocation per-frame coordinate traversal.
+- **Features**: SplitMix64 coordinate hashing, instant discovery detection, viewport culling margins, zero-allocation per-frame coordinate traversal, and eviction callbacks for tiles leaving the viewport.
+- **`update_viewport` signature** (3-callback form):
+  ```cpp
+  streamer.update_viewport(camera_pos, viewport_w, viewport_h, margin_ratio,
+      on_discover,  // (TileCoord) → first time tile enters
+      on_active,    // (TileCoord) → every frame tile is in viewport
+      on_evict      // (TileCoord) → fires when tile leaves viewport (resource cleanup)
+  );
+  ```
+  A 2-callback backward-compatible overload is also provided (no `on_evict`).
+- **Internal tracking**: `prev_active_tiles_` is a `containers::static_vector<TileCoord, 256>` — zero heap for up to 256 simultaneously active tiles.
 
 ### 9.2 Hierarchical Multi-Rate Stepper (`gati::stepper::HierarchicalBlockStepper`)
 - **Header**: `#include <gati/stepper/block_stepper.hpp>`

@@ -42,8 +42,11 @@ Include: `#include <ecs/ecs.hpp>`
    - `SparsePolicy`: `PagedSparsePolicy` (on-demand 4KB page chunks) or `FlatSparsePolicy`.
 4. **Auto-Lead-Store Dense Join View (`World::view`)** (`include/ecs/world.hpp`):
    - Dynamically evaluates component store sizes and automatically drives iteration through the smallest store (*lead store*), executing branchless $O(1)$ sparse probes into companion stores for optimal iteration efficiency.
+   - Supports `Without<Cs...>` exclusion filter: `world.view<Position>(Without<Frozen>{}, fn)` skips entities with any excluded component. Zero cost when no exclusion is specified.
+   - `chunk_view<Components...>(fn)` passes `std::span<C>` slices for SoA-friendly SIMD processing; falls back to per-entity iteration for `SparseSetStoragePolicy`.
 5. **Arena-Backed Command Buffer (`CommandBuffer`)** (`include/ecs/command_buffer.hpp`):
    - Records structural mutations (`spawn`, `despawn`, `add`, `remove`, `emplace`) into a `smriti::pools::LinearArena` bump allocator.
+   - `spawn_batch(N)` records N deferred spawns in a single arena entry, returning a `std::span<Entity>` of placeholder handles; expanded to N generational allocations on `flush_commands()`.
    - Zero `std::function` heap allocations. Thread-local recording with `LocalCommandBuffer`.
 6. **Reactive Observers & Relations (`include/ecs/observer.hpp`, `include/ecs/relation.hpp`)**:
    - `OnAdd<C>` and `OnRemove<C>` hooks without virtual dispatch or `std::function` closures.

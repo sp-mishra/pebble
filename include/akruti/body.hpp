@@ -53,6 +53,11 @@ struct DynamicBody {
         return ts.support(d);
     }
 
+    [[nodiscard]] Vec2<Scalar> centroid() const noexcept {
+        const TransformedShape ts{shape, Vec{position[0], position[1]}, angle};
+        return ts.centroid();
+    }
+
     void step(Scalar dt, pebble::math::vec2 gravity = {0.0f, 0.0f}) noexcept {
         if (inv_mass <= 0.0f) return;
         linear_vel = linear_vel + (gravity + force * inv_mass) * dt;

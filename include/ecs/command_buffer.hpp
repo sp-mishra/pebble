@@ -74,6 +74,39 @@ public:
         return mem;
     }
 
+    [[nodiscard]] Entity spawn() {
+        Entity placeholder{};
+        std::lock_guard<std::mutex> lock(mutex_);
+        headers_.push_back(CmdHeader{
+            .op = CmdOp::Spawn,
+            .type_id = 0,
+            .entity = placeholder,
+            .payload_size = 0,
+            .destruct = nullptr
+        });
+        payloads_.push_back(nullptr);
+        spawn_out_.push_back(placeholder);
+        return spawn_out_.back();
+    }
+
+    std::span<Entity> spawn_batch(std::size_t n) {
+        if (n == 0) return {};
+        std::lock_guard<std::mutex> lock(mutex_);
+        const std::size_t start = spawn_out_.size();
+        for (std::size_t i = 0; i < n; ++i) {
+            spawn_out_.push_back(Entity{});
+            headers_.push_back(CmdHeader{
+                .op = CmdOp::Spawn,
+                .type_id = 0,
+                .entity = Entity{},
+                .payload_size = 0,
+                .destruct = nullptr
+            });
+            payloads_.push_back(nullptr);
+        }
+        return std::span<Entity>(spawn_out_.data() + start, n);
+    }
+
     void despawn(Entity e) {
         std::lock_guard<std::mutex> lock(mutex_);
         headers_.push_back(CmdHeader{
@@ -137,7 +170,9 @@ public:
         for (std::size_t i = 0; i < local_hdrs.size(); ++i) {
             const auto& hdr = local_hdrs[i];
             void* payload = local_payloads[i];
-            if (hdr.op == CmdOp::Despawn) {
+            if (hdr.op == CmdOp::Spawn) {
+                (void)w.spawn();
+            } else if (hdr.op == CmdOp::Despawn) {
                 w.despawn(hdr.entity);
             } else if (hdr.op == CmdOp::Add && payload) {
                 w.add_by_type_id(hdr.entity, hdr.type_id, payload);
@@ -151,6 +186,7 @@ public:
 
         std::lock_guard<std::mutex> lock(mutex_);
         arena_.reset();
+        spawn_out_.clear();
     }
 
     [[nodiscard]] bool empty() const noexcept {
@@ -185,6 +221,7 @@ private:
     smriti::pools::LinearArena arena_;
     std::vector<CmdHeader> headers_;
     std::vector<void*> payloads_;
+    std::vector<Entity> spawn_out_;
 };
 
 static_assert(!std::is_polymorphic_v<CommandBuffer>, "CommandBuffer must have zero virtual functions");

@@ -29,6 +29,7 @@
 #include "contact_cache.hpp"
 #include "island_solver.hpp"
 #include "simulation.hpp"
+#include "world/spatial_tile_streamer.hpp"
 
 namespace gati {
 

@@ -20,6 +20,8 @@ struct Tag {
 
 struct Disabled {};
 
+struct Frozen {};
+
 struct Name {
     const char* str = nullptr;
 };
@@ -149,4 +151,33 @@ TEST_CASE("ECS: Deferred CommandBuffer Execution", "[ecs][commands]") {
 
     // After flush, entity has been despawned
     REQUIRE_FALSE(world.alive(e1));
+}
+
+TEST_CASE("ECS: view with Without<C> excludes matching entities", "[ecs][view][filter]") {
+    pebble::ecs::World world;
+
+    for (int i = 0; i < 10; ++i) {
+        auto e = world.spawn();
+        world.add(e, Velocity{pebble::math::vec2(float(i), 0.0f)});
+        if (i < 5) {
+            world.add(e, Frozen{});
+        }
+    }
+
+    int count = 0;
+    world.view<Velocity>(pebble::ecs::Without<Frozen>{}, [&](pebble::ecs::Entity, Velocity&) {
+        ++count;
+    });
+    REQUIRE(count == 5);
+}
+
+TEST_CASE("ECS: CommandBuffer spawn_batch creates N entities on flush", "[ecs][commands][spawn]") {
+    pebble::ecs::World world;
+
+    std::span<pebble::ecs::Entity> batch = world.commands().spawn_batch(5);
+    REQUIRE(batch.size() == 5);
+
+    REQUIRE(world.entity_count() == 0);
+    world.flush_commands();
+    REQUIRE(world.entity_count() == 5);
 }

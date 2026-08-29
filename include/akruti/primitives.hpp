@@ -22,7 +22,8 @@ struct Circle {
     [[nodiscard]] constexpr Box2 aabb() const noexcept {
         return {{center.x - radius, center.y - radius}, {center.x + radius, center.y + radius}};
     }
-    [[nodiscard]] Vec support(Vec d) const noexcept { return center + d.normalized() * radius; }
+    [[nodiscard]] constexpr Vec support(Vec d) const noexcept { return center + d.normalized() * radius; }
+    [[nodiscard]] constexpr Vec centroid() const noexcept { return center; }
 };
 
 // ── Segment (thick=0 line) ──────────────────────────────────────────────────────
@@ -38,6 +39,7 @@ struct Segment {
         return {{std::min(a.x, b.x), std::min(a.y, b.y)}, {std::max(a.x, b.x), std::max(a.y, b.y)}};
     }
     [[nodiscard]] constexpr Vec support(Vec d) const noexcept { return d.dot(a) >= d.dot(b) ? a : b; }
+    [[nodiscard]] constexpr Vec centroid() const noexcept { return (a + b) * Scalar(0.5); }
 };
 
 // ── Capsule (segment inflated by radius) ─────────────────────────────────────────
@@ -54,6 +56,7 @@ struct Capsule {
         const Vec base = d.dot(a) >= d.dot(b) ? a : b;
         return base + d.normalized() * radius;
     }
+    [[nodiscard]] constexpr Vec centroid() const noexcept { return (a + b) * Scalar(0.5); }
 };
 
 // ── Axis-aligned box (center + half-extents) ──────────────────────────────────────
@@ -72,6 +75,7 @@ struct Box {
     [[nodiscard]] constexpr Vec support(Vec d) const noexcept {
         return {center.x + (d.x >= 0 ? half.x : -half.x), center.y + (d.y >= 0 ? half.y : -half.y)};
     }
+    [[nodiscard]] constexpr Vec centroid() const noexcept { return center; }
 };
 
 // ── Oriented Bounding Box (OBB: center + half + rotation) ─────────────────────────
@@ -109,6 +113,7 @@ struct OrientedBox {
                             d_local.y >= 0 ? half.y : -half.y};
         return center + rot * sup_local;
     }
+    [[nodiscard]] constexpr Vec centroid() const noexcept { return center; }
 };
 
 // ── Triangle: exact 2D barycentric distance ───────────────────────────────────────
@@ -146,6 +151,7 @@ struct Triangle {
         if (db >= da && db >= dc) return b;
         return c;
     }
+    [[nodiscard]] constexpr Vec centroid() const noexcept { return (a + b + c) * (Scalar(1) / Scalar(3)); }
 };
 
 // ── Rounded Box (Box with corner radius) ──────────────────────────────────────────
@@ -169,6 +175,7 @@ struct RoundedBox {
                         center.y + (d.y >= 0 ? inner_half.y : -inner_half.y)};
         return b_sup + d.normalized() * radius;
     }
+    [[nodiscard]] constexpr Vec centroid() const noexcept { return center; }
 };
 
 // ── Arc / Sector (FOV cone / radar sensor primitive) ──────────────────────────────
@@ -241,6 +248,7 @@ struct Sector {
         return center + Vec{rot.m00 * best_p.x + rot.m01 * best_p.y,
                             rot.m10 * best_p.x + rot.m11 * best_p.y};
     }
+    [[nodiscard]] constexpr Vec centroid() const noexcept { return center; }
 };
 
 // ── Half-plane: signed distance to a line through `point` with unit outward `normal`.
@@ -257,6 +265,7 @@ struct HalfPlane {
         // Unbounded; project a far point against the ray direction.
         return point - normal.normalized() * (d.dot(normal) > 0 ? Scalar(0) : Scalar(1e18));
     }
+    [[nodiscard]] constexpr Vec centroid() const noexcept { return point; }
 };
 
 // ── Convex polygon (CCW winding). Verts in a fixed-capacity buffer (no heap). ─────
@@ -298,6 +307,37 @@ struct ConvexPoly {
         }
         return verts[best];
     }
+
+    [[nodiscard]] Vec centroid() const noexcept {
+        // Shoelace centroid for CCW polygon
+        if (verts.empty()) return Vec{};
+        if (verts.size() == 1) return verts[0];
+        Scalar area = 0, cx = 0, cy = 0;
+        const std::size_t n = verts.size();
+        for (std::size_t i = 0, j = n - 1; i < n; j = i++) {
+            const Scalar cross_val = verts[j].x * verts[i].y - verts[i].x * verts[j].y;
+            area += cross_val;
+            cx += (verts[j].x + verts[i].x) * cross_val;
+            cy += (verts[j].y + verts[i].y) * cross_val;
+        }
+        area *= Scalar(0.5);
+        if (std::fabs(area) < Scalar(1e-12)) {
+            Vec sum{};
+            for (const auto& v : verts) sum = sum + v;
+            return sum * (Scalar(1) / Scalar(n));
+        }
+        const Scalar inv = Scalar(1) / (Scalar(6) * area);
+        return {cx * inv, cy * inv};
+    }
+
+    [[nodiscard]] static ConvexPoly<4> from_aabb(Box2 box) noexcept {
+        ConvexPoly<4> p;
+        (void)p.verts.push_back({box.lo[0], box.lo[1]});
+        (void)p.verts.push_back({box.hi[0], box.lo[1]});
+        (void)p.verts.push_back({box.hi[0], box.hi[1]});
+        (void)p.verts.push_back({box.lo[0], box.hi[1]});
+        return p;
+    }
 };
 
 // ── Rounded Convex Polygon ────────────────────────────────────────────────────────
@@ -311,6 +351,7 @@ struct RoundedPoly {
     [[nodiscard]] Vec support(Vec d) const noexcept {
         return base.support(d) + d.normalized() * radius;
     }
+    [[nodiscard]] Vec centroid() const noexcept { return base.centroid(); }
 };
 
 // ── Chain / Polyline (with ghost vertices to prevent edge snagging) ───────────────
@@ -371,6 +412,13 @@ struct ChainShape {
         const Vec e = v1 - v0;
         return perp(e).normalized(); // Outward CCW 90-degree normal
     }
+
+    [[nodiscard]] Vec centroid() const noexcept {
+        if (verts.empty()) return Vec{};
+        Vec sum{};
+        for (const auto& v : verts) sum = sum + v;
+        return sum * (Scalar(1) / Scalar(verts.size()));
+    }
 };
 
 // ── GridSDF / Discrete 2D Texture Signed Distance Field ──────────────────────────
@@ -428,6 +476,7 @@ struct GridSDF {
         const Box box{Vec(bounds.center()), Vec(bounds.extent()) * 0.5f};
         return box.support(d);
     }
+    [[nodiscard]] Vec centroid() const noexcept { return Vec(bounds.center()); }
 };
 
 static_assert(Shape<Circle>);

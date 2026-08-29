@@ -15,6 +15,8 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <string_view>
+#include <charconv>
 
 namespace kalpana {
 
@@ -169,6 +171,84 @@ public:
     void clear() noexcept {
         verbs_.clear();
         pts_.clear();
+    }
+
+    // ── SVG path `d` string parser ──────────────────────────────────────────
+    // Parses M/m L/l C/c Q/q A/a Z/z commands from an SVG `d` attribute string.
+    // Arc (A/a) is approximated as a line to the arc endpoint (sufficient for import).
+    [[nodiscard]] static BasicPath from_svg(std::string_view d) {
+        BasicPath p;
+        const char* it = d.data();
+        const char* end = d.data() + d.size();
+
+        auto skip_ws = [&]() {
+            while (it < end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r' || *it == ',')) ++it;
+        };
+
+        auto parse_float = [&](float& out) -> bool {
+            skip_ws();
+            if (it >= end) return false;
+            auto [ptr, ec] = std::from_chars(it, end, out);
+            if (ec != std::errc{}) return false;
+            it = ptr;
+            return true;
+        };
+
+        float cx = 0.0f, cy = 0.0f;
+        char cmd = 0;
+
+        while (it < end) {
+            skip_ws();
+            if (it >= end) break;
+            if ((*it >= 'A' && *it <= 'Z') || (*it >= 'a' && *it <= 'z')) {
+                cmd = *it++;
+            }
+            bool rel = (cmd >= 'a' && cmd <= 'z');
+            char base = rel ? (char)(cmd - 32) : cmd;
+            float x, y;
+
+            if (base == 'M') {
+                if (!parse_float(x) || !parse_float(y)) break;
+                if (rel) { x += cx; y += cy; }
+                p.move_to(x, y);
+                cx = x; cy = y;
+                cmd = rel ? 'l' : 'L'; // subsequent coords are implicit LineTo
+            } else if (base == 'L') {
+                if (!parse_float(x) || !parse_float(y)) break;
+                if (rel) { x += cx; y += cy; }
+                p.line_to(x, y);
+                cx = x; cy = y;
+            } else if (base == 'C') {
+                float x1, y1, x2, y2, xe, ye;
+                if (!parse_float(x1) || !parse_float(y1) ||
+                    !parse_float(x2) || !parse_float(y2) ||
+                    !parse_float(xe) || !parse_float(ye)) break;
+                if (rel) { x1+=cx; y1+=cy; x2+=cx; y2+=cy; xe+=cx; ye+=cy; }
+                p.cubic_to(x1, y1, x2, y2, xe, ye);
+                cx = xe; cy = ye;
+            } else if (base == 'Q') {
+                float x1, y1, xe, ye;
+                if (!parse_float(x1) || !parse_float(y1) ||
+                    !parse_float(xe) || !parse_float(ye)) break;
+                if (rel) { x1+=cx; y1+=cy; xe+=cx; ye+=cy; }
+                p.quad_to(x1, y1, xe, ye);
+                cx = xe; cy = ye;
+            } else if (base == 'A') {
+                // rx ry x-rot large-arc-flag sweep-flag x y — approximate as line to endpoint
+                float rx, ry, xrot, laf, sf;
+                if (!parse_float(rx) || !parse_float(ry) || !parse_float(xrot) ||
+                    !parse_float(laf) || !parse_float(sf) ||
+                    !parse_float(x) || !parse_float(y)) break;
+                if (rel) { x += cx; y += cy; }
+                p.line_to(x, y);
+                cx = x; cy = y;
+            } else if (base == 'Z') {
+                p.close();
+            } else {
+                ++it; // skip unknown command
+            }
+        }
+        return p;
     }
 
     friend bool operator==(const BasicPath&, const BasicPath&) = default;

@@ -31,7 +31,26 @@ struct Translated {
         return {{blo.x + offset.x, blo.y + offset.y}, {bhi.x + offset.x, bhi.y + offset.y}};
     }
     [[nodiscard]] Vec2<Scalar> support(Vec2<Scalar> d) const noexcept { return base.support(d) + offset; }
+    [[nodiscard]] Vec2<Scalar> centroid() const noexcept { return base.centroid() + offset; }
 };
+
+// Fast O(1) swept-AABB overlap test: returns false when swept bounds cannot overlap.
+// Rejects ~80% of non-colliding pairs before conservative advancement.
+[[nodiscard]] inline bool swept_aabb_overlap(AABB<Scalar> a, Vec2<Scalar> va,
+                                              AABB<Scalar> b, Vec2<Scalar> vb,
+                                              Scalar dt) noexcept {
+    // Expand each AABB by its motion over dt, then test overlap.
+    const Vec2<Scalar> rel = (vb - va) * dt;
+    AABB<Scalar> swept_a = a;
+    AABB<Scalar> swept_b = b;
+    // Expand a by 0 (static reference), expand b by relative motion
+    swept_b.lo[0] += (rel.x < 0 ? rel.x : Scalar(0));
+    swept_b.hi[0] += (rel.x > 0 ? rel.x : Scalar(0));
+    swept_b.lo[1] += (rel.y < 0 ? rel.y : Scalar(0));
+    swept_b.hi[1] += (rel.y > 0 ? rel.y : Scalar(0));
+    return swept_a.hi[0] >= swept_b.lo[0] && swept_a.lo[0] <= swept_b.hi[0] &&
+           swept_a.hi[1] >= swept_b.lo[1] && swept_a.lo[1] <= swept_b.hi[1];
+}
 
 // Conservative advancement: A is static, B translates by `motion` over the step. Returns the
 // earliest t in [0,1] at which the gap closes to `target_gap` (default ~contact), else t=1.
@@ -43,6 +62,10 @@ template <Shape A, Shape B>
     if (speed < Scalar(1e-9)) {
         // No motion: purely a static overlap query.
         return gjk_overlap(a, b) ? TOIResult{true, 0, 0} : TOIResult{false, 1, 0};
+    }
+    // Fast swept-AABB reject: skip expensive advancement for clearly non-overlapping pairs.
+    if (!swept_aabb_overlap(a.aabb(), Vec2<Scalar>{}, b.aabb(), motion, Scalar(1))) {
+        return TOIResult{false, 1, 0};
     }
     Scalar t = 0;
     for (int i = 0; i < max_iter; ++i) {

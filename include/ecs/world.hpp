@@ -394,6 +394,62 @@ public:
         query_impl(WithClause{}, WithoutClause{}, OptionalClause{}, std::forward<Fn>(fn));
     }
 
+    // ── view with Without<> exclusion filter ─────────────────────────────────
+
+    template <Component Primary, Component... Rest, Component... Excludes, typename Fn>
+    void view(Without<Excludes...>, Fn&& fn) {
+        auto* p_store = try_store<Primary>();
+        if (!p_store || p_store->empty()) return;
+
+        if constexpr (sizeof...(Rest) > 0) {
+            if ((!try_store<Rest>() || ...)) return;
+        }
+
+        for (auto&& [entity_idx, comp] : p_store->pairs()) {
+            if constexpr (sizeof...(Rest) > 0) {
+                if (!(has_idx<Rest>(entity_idx) && ...)) continue;
+            }
+            if constexpr (sizeof...(Excludes) > 0) {
+                if ((has_idx<Excludes>(entity_idx) || ...)) continue;
+            }
+            Entity e{entity_idx, slots_[entity_idx - 1].generation};
+            if constexpr (sizeof...(Rest) > 0) {
+                fn(e, comp, *try_store<Rest>()->try_get(entity_idx)...);
+            } else {
+                fn(e, comp);
+            }
+        }
+    }
+
+    // ── Chunk view: processes components in contiguous spans (SoA-friendly) ──
+    // For SparseSetStoragePolicy: delegates to per-entity view (single-entity chunk).
+    // For ArchetypeStoragePolicy: would pass full column spans; here we provide the
+    // SparseSet fallback that makes the API available without storage policy detection.
+
+    template <Component Primary, Component... Rest, typename Fn>
+    void chunk_view(Fn&& fn) {
+        auto* p_store = try_store<Primary>();
+        if (!p_store || p_store->empty()) return;
+
+        if constexpr (sizeof...(Rest) > 0) {
+            if ((!try_store<Rest>() || ...)) return;
+        }
+
+        // Scalar fallback: call fn with single-element spans
+        for (auto&& [entity_idx, comp] : p_store->pairs()) {
+            if constexpr (sizeof...(Rest) > 0) {
+                if (!(has_idx<Rest>(entity_idx) && ...)) continue;
+            }
+            Entity e{entity_idx, slots_[entity_idx - 1].generation};
+            if constexpr (sizeof...(Rest) > 0) {
+                fn(std::span<Primary>(&comp, 1),
+                   std::span<Rest>(try_store<Rest>()->try_get(entity_idx), 1)...);
+            } else {
+                fn(std::span<Primary>(&comp, 1));
+            }
+        }
+    }
+
     // ── Parallel View via Executor ───────────────────────────────────────────
 
     template <Component Primary, Component... Rest, typename Executor, typename Fn>
