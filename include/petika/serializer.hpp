@@ -5,6 +5,7 @@
 
 #include "petika/engine.hpp"
 
+#include <compare>
 #include <concepts>
 #include <cstdint>
 #include <cstring>
@@ -17,7 +18,7 @@
 
 namespace petika {
     // ============================================================================
-    // § 1  Serializer Concept & Implementations
+    // § 1  Serializer Concepts & Implementations
     // ============================================================================
 
     template <typename S, typename K, typename V>
@@ -27,6 +28,10 @@ namespace petika {
         { S::deserialize_key(sv) } -> std::convertible_to<K>;
         { S::deserialize_value(sv) } -> std::convertible_to<V>;
     };
+
+    // Concept: serializer whose deserialize returns owning strings (safe to keep beyond buffer lifetime).
+    template <typename S>
+    concept SerializerOwns = std::is_same_v<decltype(S::deserialize_key(std::string_view{})), std::string>;
 
     struct StringSerializer {
         static std::string serialize_key(const std::string& k) { return k; }
@@ -72,42 +77,51 @@ namespace petika {
             return val;
         }
 
-        // Specializations for std::string / std::string_view
+        // Specializations for std::string
         static std::string serialize_key(const std::string& k) { return k; }
         static std::string serialize_value(const std::string& v) { return v; }
         static std::string deserialize_key(std::string_view sv) { return std::string(sv); }
         static std::string deserialize_value(std::string_view sv) { return std::string(sv); }
     };
 
-    // Helper to binary-pack WAL frame payloads
-    // Format: [uint8_t op][uint32_t key_len][key_bytes][uint32_t val_len][val_bytes]
+    // ViewSerializer: zero-copy views into WAL buffer memory.
+    // Only valid while the underlying WAL buffer is alive (recovery path / zero-copy reads).
+    struct ViewSerializer {
+        static std::string_view serialize_key(std::string_view k) { return k; }
+        static std::string_view serialize_value(std::string_view v) { return v; }
+        static std::string_view deserialize_key(std::string_view sv) { return sv; }
+        static std::string_view deserialize_value(std::string_view sv) { return sv; }
+    };
+
+    // ============================================================================
+    // § 2  WAL Payload Codec
+    // ============================================================================
+
+    // Wire format: [uint8_t op][uint32_t key_len][key_bytes][uint32_t val_len][val_bytes]
     struct WalPayloadCodec {
+        // Returns byte count written. `buf` must be at least encode_size(k, v) bytes.
+        static std::size_t encode_size(std::string_view k, std::string_view v) noexcept {
+            return sizeof(std::uint8_t) + 2 * sizeof(std::uint32_t) + k.size() + v.size();
+        }
+
+        // Zero-allocation variant: writes into caller-supplied buffer, returns bytes written.
+        static std::size_t encode_to(std::byte* buf, EntryOp op,
+                                      std::string_view k, std::string_view v) noexcept {
+            const auto k_len = static_cast<std::uint32_t>(k.size());
+            const auto v_len = static_cast<std::uint32_t>(v.size());
+            std::byte* p = buf;
+            *reinterpret_cast<std::uint8_t*>(p) = static_cast<std::uint8_t>(op); p += 1;
+            std::memcpy(p, &k_len, 4); p += 4;
+            if (k_len) { std::memcpy(p, k.data(), k_len); p += k_len; }
+            std::memcpy(p, &v_len, 4); p += 4;
+            if (v_len) { std::memcpy(p, v.data(), v_len); p += v_len; }
+            return static_cast<std::size_t>(p - buf);
+        }
+
+        // Heap-allocating variant preserved for compatibility.
         static std::vector<std::byte> encode(EntryOp op, std::string_view k, std::string_view v) {
-            const std::uint32_t k_len = static_cast<std::uint32_t>(k.size());
-            const std::uint32_t v_len = static_cast<std::uint32_t>(v.size());
-            const std::size_t total = sizeof(std::uint8_t) + sizeof(std::uint32_t) + k_len + sizeof(std::uint32_t) +
-                v_len;
-
-            std::vector<std::byte> buf(total);
-            std::byte* ptr = buf.data();
-
-            *reinterpret_cast<std::uint8_t*>(ptr) = static_cast<std::uint8_t>(op);
-            ptr += sizeof(std::uint8_t);
-
-            std::memcpy(ptr, &k_len, sizeof(std::uint32_t));
-            ptr += sizeof(std::uint32_t);
-            if (k_len > 0) {
-                std::memcpy(ptr, k.data(), k_len);
-                ptr += k_len;
-            }
-
-            std::memcpy(ptr, &v_len, sizeof(std::uint32_t));
-            ptr += sizeof(std::uint32_t);
-            if (v_len > 0) {
-                std::memcpy(ptr, v.data(), v_len);
-                ptr += v_len;
-            }
-
+            std::vector<std::byte> buf(encode_size(k, v));
+            encode_to(buf.data(), op, k, v);
             return buf;
         }
 
@@ -143,21 +157,39 @@ namespace petika {
             std::vector<std::byte> out(bytes);
             auto* p = out.data();
             *reinterpret_cast<std::uint8_t*>(p) = static_cast<std::uint8_t>(EntryOp::Batch); ++p;
-            const auto count = static_cast<std::uint32_t>(records.size()); std::memcpy(p, &count, sizeof(count)); p += sizeof(count);
-            for (const auto& r : records) { const auto n = static_cast<std::uint32_t>(r.size()); std::memcpy(p, &n, sizeof(n)); p += sizeof(n); std::memcpy(p, r.data(), n); p += n; }
+            const auto count = static_cast<std::uint32_t>(records.size());
+            std::memcpy(p, &count, sizeof(count)); p += sizeof(count);
+            for (const auto& r : records) {
+                const auto n = static_cast<std::uint32_t>(r.size());
+                std::memcpy(p, &n, sizeof(n)); p += sizeof(n);
+                std::memcpy(p, r.data(), n); p += n;
+            }
             return out;
         }
+
         static std::optional<std::vector<std::vector<std::byte>>> decode_batch(std::span<const std::byte> payload) {
-            if (payload.size() < 1 + sizeof(std::uint32_t) || static_cast<EntryOp>(*reinterpret_cast<const std::uint8_t*>(payload.data())) != EntryOp::Batch) return std::nullopt;
-            auto* p = payload.data() + 1; auto remaining = payload.size() - 1; std::uint32_t count{}; std::memcpy(&count, p, sizeof(count)); p += sizeof(count); remaining -= sizeof(count);
-            std::vector<std::vector<std::byte>> out; out.reserve(count);
-            for (std::uint32_t i = 0; i < count; ++i) { if (remaining < sizeof(std::uint32_t)) return std::nullopt; std::uint32_t n{}; std::memcpy(&n, p, sizeof(n)); p += sizeof(n); remaining -= sizeof(n); if (n > remaining) return std::nullopt; out.emplace_back(p, p + n); p += n; remaining -= n; }
+            if (payload.size() < 1 + sizeof(std::uint32_t) ||
+                static_cast<EntryOp>(*reinterpret_cast<const std::uint8_t*>(payload.data())) != EntryOp::Batch)
+                return std::nullopt;
+            auto* p = payload.data() + 1;
+            auto remaining = payload.size() - 1;
+            std::uint32_t count{};
+            std::memcpy(&count, p, sizeof(count)); p += sizeof(count); remaining -= sizeof(count);
+            std::vector<std::vector<std::byte>> out;
+            out.reserve(count);
+            for (std::uint32_t i = 0; i < count; ++i) {
+                if (remaining < sizeof(std::uint32_t)) return std::nullopt;
+                std::uint32_t n{};
+                std::memcpy(&n, p, sizeof(n)); p += sizeof(n); remaining -= sizeof(n);
+                if (n > remaining) return std::nullopt;
+                out.emplace_back(p, p + n); p += n; remaining -= n;
+            }
             return remaining == 0 ? std::optional{std::move(out)} : std::nullopt;
         }
     };
 
     // ============================================================================
-    // § 2  Comparators
+    // § 3  Comparators
     // ============================================================================
 
     struct LexicalComparator {
@@ -165,5 +197,18 @@ namespace petika {
         constexpr bool operator()(const T& a, const T& b) const noexcept {
             return a < b;
         }
+
+        // Three-way comparison for scan optimisation: one branch instead of two.
+        template <typename T>
+        constexpr auto three_way(const T& a, const T& b) const noexcept {
+            return a <=> b;
+        }
     };
+
+    // Concept: comparator that provides three_way for optimised scan termination.
+    template <typename C, typename T>
+    concept ThreeWayComparator = requires(const C& c, const T& a, const T& b) {
+        { c.three_way(a, b) } -> std::same_as<std::strong_ordering>;
+    };
+
 } // namespace petika

@@ -8,21 +8,26 @@
 
 ```
                                 PETIKA STORAGE ARCHITECTURE
-                                
+
   ┌────────────────────────────────────────────────────────────────────────────────────────┐
   │                                    APPLICATION LAYER                                   │
-  │     put(), get(), erase(), contains(), scan(), range_query(), txn(), snapshot()        │
+  │  put(), get(), erase(), scan(), scan_view(), transaction(), snapshot()                 │
   └──────────────────────────────────────────┬─────────────────────────────────────────────┘
                                              │
   ┌──────────────────────────────────────────┴─────────────────────────────────────────────┐
-  │                                 petika::Store<K, V, Engine>                            │
+  │        petika::Petika<Engine, Serializer, Comparator, DurabilityPolicy,                │
+  │                        TelemetryPolicy, ConcurrencyPolicy,                             │
+  │                        WriteBuffer, BloomFilter>                                       │
   │                                                                                        │
   │  Storage Engines (Zero-Virtual Concepts):    Common Infrastructure Substrate:          │
-  │  - JournaledSkipEngine (O(log N) SkipList)   - petika::AsyncPersistenceWorker (SPSC)   │
-  │  - MVCCJournaledSkipEngine (SI Isolation)    - nitya::Nitya (Durable WAL & Segmented)  │
-  │  - BTreeEngine (B+Tree Block Store)          - utils::setu (Zero-Copy MMap Windows)    │
-  │  - LSMEngine (SSTable MemTable / Compaction) - mem::smriti (Arena Allocation Pools)    │
-  │                                              - observability::nadi (Pulse Telemetry)   │
+  │  - JournaledSkipEngine (O(log N) SkipList)   - petika::AsyncPersistenceWorker          │
+  │  - MvccJournaledSkipEngine (SI Isolation)        (SerializationPolicy, binary_sem)     │
+  │  - BTreeEngine (B+Tree Block Store)          - GroupCommitPolicy<N> / ImmediateCommit  │
+  │  - LSMEngine (SSTable MemTable / Compaction) - nitya::wal<> (Durable WAL & Segmented)  │
+  │                                              - utils::setu (Zero-Copy MMap Windows)    │
+  │  Policies:                                   - mem::smriti (Arena Allocation Pools)    │
+  │  - ConcurrencyPolicy: shared_mutex/NullMutex - observability::nadi (Pulse Telemetry)   │
+  │  - BloomFilterPolicy<Bits> / NoBloomFilter   - SnapshotGCPolicy: NoGC/EpochBasedGC    │
   └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -38,7 +43,9 @@
 
 ### 2.2 Lock-Free Background Persistence (`petika::AsyncPersistenceWorker`)
 - **Header**: `#include <petika/async_persistence_worker.hpp>`
-- **Architecture**: Single-Producer Single-Consumer (SPSC) lock-free ring buffer offloading synchronous disk serialization and Glaze JSON encoding from the main simulation thread.
+- **Architecture**: Single-Producer Single-Consumer (SPSC) lock-free ring buffer offloading synchronous disk serialization from the main simulation thread.
+- **Wake latency**: `std::binary_semaphore` — background thread wakes in microseconds after `enqueue()` (no polling sleep).
+- **Serialization**: pluggable `SerializationPolicy` template param (default `GlazeJsonPolicy`); swap for binary/CBOR without changing call sites.
 - **Throughput**: Zero main-thread blocking latency; handles bursts of $>100,000\,\text{ops/sec}$ with background asynchronous OS `fsync` calls.
 
 ---
@@ -220,4 +227,79 @@ kosha::adapter::PetikaAdapter<StrCache> cache{"/tmp/petika_cache", StrCache{1024
 
 cache.put("session_id", "auth_token_xyz");
 auto token = cache.get("session_id");
+```
+
+---
+
+## 6. Policy Reference
+
+`Petika<Engine, Serializer, Comparator, DurabilityPolicy, TelemetryPolicy, ConcurrencyPolicy, WriteBuffer, BloomFilter>`
+
+| Parameter | Default | Alternatives | Purpose |
+|---|---|---|---|
+| `Engine` | — (required) | `JournaledSkipEngine`, `MvccJournaledSkipEngine` | Storage engine |
+| `Serializer` | `StringSerializer` | `BinarySerializer`, `ViewSerializer` | Key/value encode/decode |
+| `Comparator` | `LexicalComparator` | Custom (supply `operator()` + `three_way()`) | Key ordering & scan termination |
+| `DurabilityPolicy` | `nitya::wal<>` | Custom WAL with matching `append`/`sync`/`recover` API | Write-ahead log backend |
+| `TelemetryPolicy` | `nitya::nadi_telemetry` | `nitya::null_telemetry` | Tracing/profiling spans |
+| `ConcurrencyPolicy` | `std::shared_mutex` | `NullMutex` (single-threaded) | Reader/writer lock |
+| `WriteBuffer` | `ImmediateCommitPolicy` | `GroupCommitPolicy<N>` | WAL write coalescing |
+| `BloomFilter` | `NoBloomFilter` | `BloomFilterPolicy<Bits>` | Probabilistic miss-skip |
+
+### Pre-built Aliases
+
+| Alias | Engine | Mutex | Notes |
+|---|---|---|---|
+| `StringSkipStore` | `MvccJournaledSkipEngine<string,string>` | `std::shared_mutex` | Default multi-threaded string store |
+| `SkipStore<K,V>` | `MvccJournaledSkipEngine<K,V>` | `std::shared_mutex` | Typed MVCC store |
+| `MvccSkipStore<K,V>` | `MvccJournaledSkipEngine<K,V>` | `std::shared_mutex` | Explicit MVCC alias |
+| `SingleVersionSkipStore<K,V>` | `JournaledSkipEngine<K,V>` | `std::shared_mutex` | Single-version last-write-wins |
+| `SingleVersionStringSkipStore` | `JournaledSkipEngine<string,string>` | `std::shared_mutex` | Single-version string store |
+| `SingleThreadSkipStore<K,V>` | `MvccJournaledSkipEngine<K,V>` | `NullMutex` | Zero-overhead single-threaded store |
+| `BloomSkipStore<K,V,Bits>` | `MvccJournaledSkipEngine<K,V>` | `std::shared_mutex` | Bloom-filtered for miss-heavy reads |
+
+### `scan_view()` — C++23 Range-Compatible Scan
+
+```cpp
+// Range-for over [start, end) — no manual callback required.
+for (const auto& entry : store.scan_view("user:100", "user:200")) {
+    std::cout << entry.key << " => " << entry.value << " @ lsn=" << entry.lsn << "\n";
+}
+
+// Compose with std::ranges
+auto keys = store.scan_view("a", "z")
+    | std::views::transform([](const auto& e) { return e.key; });
+```
+
+### `SingleThreadSkipStore` — Zero-Cost Single-Threaded Use
+
+```cpp
+// NullMutex: all lock/unlock calls optimised away by the compiler.
+petika::SingleThreadSkipStore<std::string, double> local_store{opts};
+local_store.put("pi", 3.14159);
+local_store.put("e",  2.71828);
+for (const auto& entry : local_store.scan_view("a", "z")) {
+    std::cout << entry.key << " = " << entry.value << "\n";
+}
+```
+
+### `AsyncPersistenceWorker` — Sub-Millisecond Wake Latency
+
+`AsyncPersistenceWorker` uses `std::binary_semaphore` to wake the background
+thread within microseconds of `enqueue()`. The 5ms polling sleep from earlier
+versions is gone. The `SerializationPolicy` template parameter (default:
+`GlazeJsonPolicy`) allows swapping JSON for binary/CBOR formats without
+changing call sites.
+
+```cpp
+// Custom binary policy example:
+struct MsgpackPolicy {
+    template <typename T>
+    static bool serialize(const T& data, std::string& out) {
+        // ... msgpack encoding ...
+        return true;
+    }
+};
+petika::AsyncPersistenceWorker<MyRecord, 256, MsgpackPolicy> worker;
+worker.enqueue(MyRecord{...}, "/path/to/output.bin");
 ```

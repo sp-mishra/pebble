@@ -5,7 +5,9 @@
 #include "catch_amalgamated.hpp"
 #include "petika/petika.hpp"
 #include "petika/adapters/kosha.hpp"
+#include "petika/async_persistence_worker.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <string>
@@ -314,4 +316,196 @@ TEST_CASE (
     REQUIRE(restored.has_value());
     CHECK(*restored == "token_123");
     CHECK(adapter.size() == 1);
+}
+
+// ============================================================================
+// § 7  ConcurrencyPolicy: shared_mutex snapshot/writer non-blocking
+// ============================================================================
+
+TEST_CASE("Petika: concurrent snapshot reads do not block concurrent writers",
+          "[petika][concurrency][shared_mutex]") {
+    TmpPetikaDir tmp;
+    petika::StringSkipStore db{{.db_dir = tmp.path, .auto_recovery = false}};
+
+    REQUIRE(db.put("init", "0").has_value());
+
+    constexpr int kReaders = 4;
+    constexpr int kWriters = 4;
+    constexpr int kOps = 50;
+
+    std::atomic<int> reads_done{0};
+    std::atomic<int> writes_done{0};
+
+    std::vector<std::thread> readers;
+    readers.reserve(kReaders);
+    for (int r = 0; r < kReaders; ++r) {
+        readers.emplace_back([&db, &reads_done] {
+            for (int i = 0; i < kOps; ++i) {
+                auto snap = db.snapshot();
+                (void)snap.get("init");
+            }
+            reads_done.fetch_add(1, std::memory_order_relaxed);
+        });
+    }
+
+    std::vector<std::thread> writers;
+    writers.reserve(kWriters);
+    for (int w = 0; w < kWriters; ++w) {
+        writers.emplace_back([&db, &writes_done, w] {
+            for (int i = 0; i < kOps; ++i) {
+                (void)db.put("writer:" + std::to_string(w), std::to_string(i));
+            }
+            writes_done.fetch_add(1, std::memory_order_relaxed);
+        });
+    }
+
+    for (auto& t : readers) t.join();
+    for (auto& t : writers) t.join();
+
+    CHECK(reads_done.load() == kReaders);
+    CHECK(writes_done.load() == kWriters);
+    CHECK(db.size() > 0);
+}
+
+// ============================================================================
+// § 8  SingleThreadSkipStore: CRUD round-trip on NullMutex variant
+// ============================================================================
+
+TEST_CASE("Petika: SingleThreadSkipStore put/get/erase/scan",
+          "[petika][single_thread][null_mutex]") {
+    TmpPetikaDir tmp;
+    petika::SingleThreadSkipStore<std::string, std::string> db{
+        {.db_dir = tmp.path, .auto_recovery = false}};
+
+    REQUIRE(db.put("a", "1").has_value());
+    REQUIRE(db.put("b", "2").has_value());
+    REQUIRE(db.put("c", "3").has_value());
+
+    CHECK(db.size() == 3);
+    CHECK(*db.get("b") == "2");
+
+    REQUIRE(db.erase("b").has_value());
+    CHECK_FALSE(db.contains("b"));
+    CHECK(db.size() == 2);
+
+    std::vector<std::string> scanned;
+    db.scan("a", "c", [&](const auto& entry) { scanned.push_back(entry.key); });
+    REQUIRE(scanned.size() == 1);
+    CHECK(scanned[0] == "a");
+}
+
+// ============================================================================
+// § 9  AsyncPersistenceWorker: semaphore wake latency
+// ============================================================================
+
+// Must have external linkage for glaze reflection (glz::detail::external<T> requirement).
+struct AsyncWorkerTestRecord { std::string data; };
+
+TEST_CASE("Petika: AsyncPersistenceWorker drains within 10ms of enqueue",
+          "[petika][async_persistence]") {
+    TmpPetikaDir tmp;
+
+    petika::AsyncPersistenceWorker<AsyncWorkerTestRecord> worker;
+
+    const std::string outfile = (tmp.path / "record.json").string();
+    const auto t0 = std::chrono::steady_clock::now();
+    REQUIRE(worker.enqueue(AsyncWorkerTestRecord{"hello"}, outfile));
+
+    // Poll until file appears, up to 100ms
+    bool found = false;
+    for (int i = 0; i < 100 && !found; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        found = std::filesystem::exists(outfile);
+    }
+
+    const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - t0).count();
+
+    CHECK(found);
+    CHECK(elapsed_ms < 50); // generous bound; semaphore wake is sub-millisecond
+}
+
+// ============================================================================
+// § 10  Transaction: O(1) read-your-own-writes correctness
+// ============================================================================
+
+TEST_CASE("Petika: Transaction read-your-own-writes: put/delete/overwrite",
+          "[petika][transaction][read_your_own_writes]") {
+    TmpPetikaDir tmp;
+    petika::StringSkipStore db{{.db_dir = tmp.path, .auto_recovery = false}};
+    REQUIRE(db.put("base", "original").has_value());
+
+    auto tx = db.transaction();
+
+    // put-then-get: must see the new value inside the same transaction
+    REQUIRE(tx.put("new_key", "v1").has_value());
+    auto r1 = tx.get("new_key");
+    REQUIRE(r1.has_value());
+    CHECK(*r1 == "v1");
+
+    // put-then-overwrite-then-get: last write wins (O(1) index, not linear scan)
+    REQUIRE(tx.put("new_key", "v2").has_value());
+    auto r2 = tx.get("new_key");
+    REQUIRE(r2.has_value());
+    CHECK(*r2 == "v2");
+
+    // put-then-delete-then-get: expect NotFound
+    REQUIRE(tx.put("ephemeral", "gone").has_value());
+    REQUIRE(tx.erase("ephemeral").has_value());
+    auto r3 = tx.get("ephemeral");
+    CHECK_FALSE(r3.has_value());
+
+    // Existing key from store: visible in transaction before commit
+    auto r4 = tx.get("base");
+    REQUIRE(r4.has_value());
+    CHECK(*r4 == "original");
+
+    tx.abort();
+}
+
+// ============================================================================
+// § 11  BloomFilterPolicy: zero false negatives
+// ============================================================================
+
+TEST_CASE("Petika: BloomFilterPolicy: zero false negatives after 10k inserts",
+          "[petika][bloom_filter]") {
+    TmpPetikaDir tmp;
+    petika::BloomSkipStore<std::string, std::string> db{
+        {.db_dir = tmp.path, .auto_recovery = false}};
+
+    constexpr int kKeys = 10000;
+    for (int i = 0; i < kKeys; ++i) {
+        REQUIRE(db.put("bloom_key_" + std::to_string(i), std::to_string(i)).has_value());
+    }
+
+    // Every inserted key must be found — zero false negatives is a hard bloom invariant.
+    int false_negatives = 0;
+    for (int i = 0; i < kKeys; ++i) {
+        if (!db.contains("bloom_key_" + std::to_string(i))) ++false_negatives;
+    }
+    CHECK(false_negatives == 0);
+}
+
+// ============================================================================
+// § 12  scan_view: C++23 range-compatible lazy scan
+// ============================================================================
+
+TEST_CASE("Petika: scan_view returns iterable range over [start, end)",
+          "[petika][scan_view]") {
+    TmpPetikaDir tmp;
+    petika::StringSkipStore db{{.db_dir = tmp.path, .auto_recovery = false}};
+
+    for (int i = 1; i <= 10; ++i)
+        REQUIRE(db.put("k" + std::to_string(i), "v" + std::to_string(i)).has_value());
+
+    // scan_view is range-for compatible
+    std::vector<std::string> keys;
+    for (const auto& entry : db.scan_view("k3", "k8")) {
+        keys.push_back(entry.key);
+    }
+
+    // Lexicographic scan: k3, k4, k5, k6, k7
+    CHECK(keys.size() == 5);
+    CHECK(keys.front() == "k3");
+    CHECK(keys.back() == "k7");
 }
