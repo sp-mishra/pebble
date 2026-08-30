@@ -23,7 +23,15 @@ This tutorial assumes **zero prior knowledge of Z3 or formal methods**. Every co
 12. [Act 10: Talking SMT-LIB2 (Parsing & Serializing Scripts)](#act-10-talking-smt-lib2-parsing--serializing-scripts)
 13. [Act 11: Trust But Mathematically Verify (Model Validator)](#act-11-trust-but-mathematically-verify-model-validator)
 14. [Act 12: Parallel Races (Competitive Multi-Engine Portfolio)](#act-12-parallel-races-competitive-multi-engine-portfolio)
-15. [Quick API Reference & Cheat Sheet](#15-quick-api-reference--cheat-sheet)
+15. [Quick API Reference & Cheat Sheet](#quick-api-reference--cheat-sheet)
+
+*Advanced Acts (Tarka native-engine internals & scaling):*
+
+16. [Act 13: The Router Room (Capability-Based Backend Selection)](#act-13-the-router-room)
+17. [Act 14: The Impossible Roster (Pigeonhole — Scaling UNSAT & Deep Learning)](#act-14-the-impossible-roster)
+18. [Act 15: The Constant-Folding Forge (Preprocessing Corner Cases)](#act-15-the-constant-folding-forge)
+19. [Act 16: The Shrinking Blueprint (E-Graph DAG Node Counting)](#act-16-the-shrinking-blueprint)
+20. [Act 17: The Time-Traveling Ledger (Incremental Solving with push/pop)](#act-17-the-time-traveling-ledger)
 
 ---
 
@@ -42,6 +50,43 @@ $$\text{Rules \& Invariants} \longrightarrow \text{Tarka Solver} \longrightarrow
   - **Linear Arithmetic (`QF_LRA`/`QF_LIA`)**: Exact equations and inequalities ($3x + 4.5y \le 100$) evaluated over exact fractions without floating-point error.
   - **Arrays (`QF_AX`)**: Unbounded key-value maps supporting `select` (read) and `store` (write) operations.
   - **Uninterpreted Functions (`QF_UF`)**: Abstract functions satisfying the congruence axiom ($x = y \implies f(x) = f(y)$).
+
+### How Tarka *thinks*: the DPLL(T) loop (intuition)
+
+You never need to touch these gears, but knowing they exist makes every later Act click into place.
+
+Imagine the solver as a **detective with two assistants**:
+
+1. **The Boolean skeleton (CDCL SAT core).** Tarka first forgets *what* each atom means and treats each one
+   ($x < 10$, $\text{select}(A,i)=v$, …) as a plain true/false light switch. It then plays a fast guessing game:
+   flip a switch (a **decision**), race through the forced consequences (**Boolean Constraint Propagation** —
+   "if this is on, that must be off"), and when two forced consequences collide it has found a **conflict**. From
+   the conflict it *learns a new rule* (a **learned clause**) so it never repeats that mistake, jumps back
+   (**backjump**), and tries again. This learn-from-failure loop is **CDCL** (Conflict-Driven Clause Learning).
+
+2. **The theory assistants (the "T" in DPLL(T)).** Whenever the skeleton settles on a consistent set of switches,
+   each theory (arithmetic, arrays, bitvectors, UF) checks whether that combination is *actually possible in its
+   domain*. If arithmetic notices the switches imply both $x \ge 5$ and $x \le 3$, it shouts "impossible!" and hands
+   back a **theory lemma** — a new rule the skeleton must respect. The skeleton adds it and keeps going. This
+   hand-off repeats until the whole thing is consistent (**Sat**) or every path is exhausted (**Unsat**).
+
+Three levers make this fast, all always-on in Tarka's native engine:
+
+- **VSIDS branching** — which switch to flip next? Tarka keeps an *activity score* per variable, bumps the ones
+  involved in recent conflicts, and always branches on the hottest one, popped from a
+  `containers::associative::order_heap` in $O(\log n)$. Conflicts steer the search toward the hard part of the problem.
+- **LBD-tiered clause learning** — learned rules are graded by **LBD** (how many decision levels they glue together).
+  Low-LBD "glue" clauses are gold and kept; noisy high-LBD ones are periodically dropped so memory stays bounded.
+- **Adaptive restarts** — when progress stalls, Tarka abandons the current guess-tree and restarts (keeping what it
+  learned), using an exponential-moving-average of recent LBD to decide *when*.
+
+### The theory lattice & the router (intuition)
+
+A formula's **theory signature** is just the set of theories its operators touch. `x < 10 && p` touches
+arithmetic + Boolean; `select(store(A,i,v),i)` touches arrays. A backend is **eligible** only if it can handle
+everything in the signature. `RouterEngine<Backends...>` computes the signature once, filters to eligible backends,
+and picks one — so `RouterEngine<z3_backend>` can *never* silently answer a query Z3 doesn't support, and a
+single-backend engine always routes to its one backend. You will see this in [Act 13](#act-13-the-router-room).
 
 ---
 
@@ -527,16 +572,208 @@ void act12_portfolio_solving() {
 
 ---
 
+## Act 13: The Router Room
+
+### The Problem
+You built `RouterEngine` with several backends. Which one actually answered your last query? A wrong choice — a
+backend that silently lacks a theory — would be a soundness disaster. Tarka never guesses by index; it computes the
+formula's **theory signature** and filters to capable backends. `active_index()` tells you where the query landed.
+
+```cpp
+void act13_router_room() {
+    Context ctx;
+    auto i_sort = ctx.int_sort();
+    auto x = ctx.make_symbol("x", i_sort);
+    auto k = ctx.make_int(7, i_sort);
+
+    // Single native backend: the only capable engine, so it always lands at index 0.
+    RouterEngine<backend::native> solver;
+    auto r = solver.solve((x < k) || (x == k));   // solve() = assert + check in one call
+    if (r && is_conclusive(*r)) {                  // is_conclusive: Sat or Unsat (not Unknown/Deferred)
+        std::cout << "[Act 13] Answered by backend #" << solver.active_index()
+                  << " -> " << (*r == SatResult::Sat ? "SAT" : "UNSAT") << "\n";
+    }
+    // With RouterEngine<backend::native, backend::z3_backend>, a QF_LIA query still routes
+    // to the first *capable* backend; an unsupported query can never select an incapable one.
+}
+```
+
+**Key idea:** routing is a capability-mask filter over the *compile-time* backend set. There are no hardcoded solver
+names, and a backend that cannot handle the signature is simply never eligible.
+
+---
+
+## Act 14: The Impossible Roster
+
+### The Mystery
+The Quartermaster insists he can assign **$N+1$ distinct sailors** to **$N$ distinct bunks**, one sailor per bunk, no
+two sharing. This is the classic **pigeonhole principle**: provably impossible. Proving *impossibility* is where CDCL
+shines — the solver must exhaustively refute every arrangement, and its **conflict-driven clause learning** plus
+**LBD-tiered** clause database are what keep that search tractable.
+
+We encode $p_{s,b}$ = "sailor $s$ sleeps in bunk $b$":
+- **Each sailor gets a bunk:** for every sailor $s$, $\bigvee_b p_{s,b}$.
+- **No bunk is shared:** for every bunk $b$ and sailors $s \ne s'$, $\neg(p_{s,b} \land p_{s',b})$.
+
+```cpp
+void act14_pigeonhole(int N) {
+    Context ctx;
+    auto bool_s = ctx.bool_sort();
+
+    // p[s][b] : sailor s occupies bunk b.  (N+1) sailors, N bunks.
+    std::vector<std::vector<Term>> p(N + 1);
+    for (int s = 0; s <= N; ++s)
+        for (int b = 0; b < N; ++b)
+            p[s].push_back(ctx.make_symbol("p_" + std::to_string(s) + "_" + std::to_string(b), bool_s));
+
+    RouterEngine<backend::native> solver;
+
+    // (1) every sailor is placed in at least one bunk
+    for (int s = 0; s <= N; ++s) {
+        Term some_bunk = p[s][0];
+        for (int b = 1; b < N; ++b) some_bunk = some_bunk || p[s][b];
+        solver.assert_formula(some_bunk);
+    }
+    // (2) no two sailors share a bunk
+    for (int b = 0; b < N; ++b)
+        for (int s = 0; s <= N; ++s)
+            for (int t = s + 1; t <= N; ++t)
+                solver.assert_formula(!(p[s][b] && p[t][b]));
+
+    auto res = solver.check_sat();
+    if (res && *res == SatResult::Unsat)
+        std::cout << "[Act 14] Pigeonhole(" << N << "): provably impossible (UNSAT), "
+                     "refuted by conflict-driven learning.\n";
+}
+```
+
+> **Scaling note.** Pigeonhole is exponentially hard for pure resolution, so keep $N$ modest (say $\le 8$) in a
+> tutorial run. It is the canonical stress test for the CDCL learning + restart machinery described in §1.
+
+---
+
+## Act 15: The Constant-Folding Forge
+
+### The Idea
+Before a single SAT variable is created, Tarka's `simplifier` evaporates arithmetic and Boolean sub-terms whose value
+is already fixed. Fewer atoms reach the encoder, so the solver starts smaller. This is pure rewriting — no search.
+
+```cpp
+void act15_constant_folding() {
+    Context ctx;
+    auto i = ctx.int_sort();
+    auto two = ctx.make_int(2, i), three = ctx.make_int(3, i), five = ctx.make_int(5, i);
+
+    // (2 + 3) * 5  folds bottom-up to the literal 25.
+    Term inner = ctx.make_term(Op::Add, i, {two, three});
+    Term expr  = ctx.make_term(Op::Mul, i, {inner, five});
+    Term folded = simplifier::simplify(expr);
+    if (auto v = ctx.int_literal(folded.ptr()->payload_hash))
+        std::cout << "[Act 15] (2+3)*5 folded to " << *v << "\n";   // 25
+
+    // Relational literals collapse to a Boolean constant: (3 < 4) -> true.
+    Term rel = (three < five);
+    std::cout << "[Act 15] 3<5 folds to "
+              << (simplifier::simplify(rel).op() == Op::True ? "true" : "not-true") << "\n";
+
+    // A *symbolic* operand blocks the fold — the Add survives untouched.
+    auto x = ctx.make_symbol("x", i);
+    Term mixed = ctx.make_term(Op::Add, i, {x, three});
+    std::cout << "[Act 15] x+3 stays symbolic: "
+              << (simplifier::simplify(mixed).op() == Op::Add ? "yes" : "no") << "\n";
+
+    // Boolean identities: !!p -> p, p && true -> p, p || true -> true.
+    auto b = ctx.bool_sort();
+    auto pv = ctx.make_symbol("p", b);
+    Term nnp = ctx.make_term(Op::Not, b, {ctx.make_term(Op::Not, b, {pv})});
+    std::cout << "[Act 15] !!p simplifies back to p: "
+              << (simplifier::simplify(nnp).ptr() == pv.ptr() ? "yes" : "no") << "\n";
+}
+```
+
+---
+
+## Act 16: The Shrinking Blueprint
+
+### The Idea
+Terms are **hash-consed**: two structurally identical sub-terms are the *same* node in memory. So the true size of a
+formula is its number of **distinct** nodes (a DAG count), not the inflated count a naive tree walk would give.
+`egraph_node_count_dag` measures the real size, and the equality-saturation optimizer only accepts a rewrite when it
+genuinely shrinks that DAG.
+
+```cpp
+void act16_dag_size() {
+    Context ctx;
+    auto i = ctx.int_sort();
+    auto x = ctx.make_symbol("x", i);
+
+    // g = x + x   (nodes: g, x)
+    Term g = ctx.make_term(Op::Add, i, {x, x});
+    // top = g + x (adds top; g and x already exist)  -> 3 distinct nodes, not 5
+    Term top = ctx.make_term(Op::Add, i, {g, x});
+
+    std::cout << "[Act 16] distinct nodes in (x+x)+x = " << egraph_node_count_dag(top) << "\n"; // 3
+
+    Term optimized = egraph_optimize(top);   // never grows the DAG; falls back to the input if no win
+    std::cout << "[Act 16] optimized term still valid: " << (optimized.valid() ? "yes" : "no") << "\n";
+}
+```
+
+> **Why it matters:** the old tree count double-counted every shared sub-term, so "after $\ge$ before" always held and
+> the optimizer never fired. The DAG count is what lets equality saturation actually accept a smaller term.
+
+---
+
+## Act 17: The Time-Traveling Ledger
+
+### The Problem
+An auditor explores *hypotheticals*: "assume the harbor tax passes — still solvable? Now undo that and assume the
+lighthouse levy instead." Re-building the whole formula each time is wasteful. Tarka supports **incremental** solving:
+`push()` opens a new scope, assertions stack on top, and `pop()` rewinds exactly to the previous checkpoint — keeping
+all the clauses the solver learned underneath.
+
+```cpp
+void act17_incremental() {
+    Context ctx;
+    auto i = ctx.int_sort();
+    auto x = ctx.make_symbol("x", i);
+    RouterEngine<backend::native> solver;
+
+    // Baseline fact that survives every hypothetical.
+    solver.assert_formula(x >= ctx.make_int(0, i));
+
+    solver.push();                                   // ---- enter hypothetical A ----
+    solver.assert_formula(x == ctx.make_int(5, i));
+    auto a = solver.check_sat();                     // SAT: x = 5 satisfies x >= 0
+    std::cout << "[Act 17] hypothetical A: " << (a && *a == SatResult::Sat ? "SAT" : "UNSAT") << "\n";
+    solver.pop();                                    // ---- discard A, keep the baseline ----
+
+    solver.push();                                   // ---- enter hypothetical B ----
+    solver.assert_formula(x < ctx.make_int(0, i));   // contradicts baseline x >= 0
+    auto bres = solver.check_sat();                  // UNSAT
+    std::cout << "[Act 17] hypothetical B: " << (bres && *bres == SatResult::Unsat ? "UNSAT" : "SAT") << "\n";
+    solver.pop();
+}
+```
+
+**Key idea:** `push`/`pop` are a stack of assertion scopes. Facts asserted before the first `push` form the durable
+baseline; each `pop` undoes exactly one scope without throwing away learned clauses that remain valid.
+
+---
+
 ## 15. Quick API Reference & Cheat Sheet
 
 | Category | API Call | Description |
-|---|---|---|
 | **Sort Creation** | `ctx.bool_sort()`, `ctx.int_sort()`, `ctx.real_sort()`, `ctx.bv_sort(N)`, `ctx.array_sort(I, E)`, `ctx.function_sort(D, R)` | Allocate canonical 16-byte sort handles |
 | **Constants** | `ctx.make_bool(b)`, `ctx.make_int(v, s)`, `ctx.make_real(num, den)`, `ctx.make_value(bits, bv_sort)` | Construct typed constant values |
 | **Symbols** | `ctx.make_symbol("name", sort)` | Construct symbolic variable |
 | **BitVector Ops** | `Op::BvAdd`, `Op::BvSub`, `Op::BvMul`, `Op::BvUdiv`, `Op::BvSdiv`, `Op::BvUrem`, `Op::BvSrem`, `Op::BvAnd`, `Op::BvOr`, `Op::BvXor`, `Op::BvShl`, `Op::BvLshr`, `Op::BvAshr`, `Op::BvUlt`, `Op::BvSlt` | Exact bit-blasted operations |
 | **Array Ops** | `Op::Select`, `Op::Store` | Memory map reads and writes |
-| **Solving** | `solver.assert_formula(t)`, `solver.check_sat()`, `solver.check_sat_assuming(assumptions)` | Drive the DPLL(T) solver |
+| **Solving** | `solver.assert_formula(t)`, `solver.check_sat()`, `solver.solve(t)`, `solver.check_sat_assuming(assumptions)` | Drive the DPLL(T) solver; `solve` = assert + check |
+| **Incremental** | `solver.push()`, `solver.pop()` | Stack/rewind assertion scopes for hypotheticals (Act 17) |
+| **Routing** | `solver.active_index()`, `is_conclusive(res)` | Which backend answered; whether a result is Sat/Unsat (not Unknown/Deferred) |
 | **Model** | `solver.get_value(t)`, `model_validator::format_model(m)`, `model_validator::validate(asserts, m)` | Extract, format, and verify SAT certificates |
 | **Diagnostics** | `solver.get_unsat_core()` | Extract minimal contradictory sub-formulas |
+| **Preprocessing** | `simplifier::simplify(t)`, `egraph_optimize(t)`, `egraph_node_count_dag(t)` | Const-fold/normalize (Act 15); equality-saturation shrink & DAG size (Act 16) |
+| **Decision heap** | `containers::associative::order_heap<Cmp>` (`insert`/`remove_max`/`increase`/`decrease`/`contains`/`clear`) | Generic mutable-key max-heap backing VSIDS branching (§1) |
 | **SMT-LIB2** | `parse_smt2_lexy(str)` or `parse_smt2_samasa(str)`, then `lower_to_tarka(...)` | Parse through shared IR; print benchmarks |
