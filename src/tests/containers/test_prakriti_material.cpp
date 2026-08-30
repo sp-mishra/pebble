@@ -434,6 +434,149 @@ TEST_CASE("soa vector simd verlet integration", "[containers][dynamic][soa_vecto
     REQUIRE(soa.get_column<2>()[0] == Catch::Approx(11.0f));
 }
 
+// ============================================================================
+// SoAVector enhanced API tests
+// ============================================================================
+
+TEST_CASE("soa_vector resize fills all columns with provided values", "[containers][dynamic][soa_vector]") {
+    containers::dynamic::SoAVector<float, int> soa;
+    soa.resize(4, 1.5f, 7);
+
+    REQUIRE(soa.size() == 4);
+    for (std::size_t i = 0; i < 4; ++i) {
+        REQUIRE(soa.get_column<0>()[i] == Catch::Approx(1.5f));
+        REQUIRE(soa.get_column<1>()[i] == 7);
+    }
+}
+
+TEST_CASE("soa_vector resize with defaults zero-inits", "[containers][dynamic][soa_vector]") {
+    containers::dynamic::SoAVector<float, float> soa;
+    soa.resize(3);
+    REQUIRE(soa.size() == 3);
+    REQUIRE(soa.get_column<0>()[0] == Catch::Approx(0.0f));
+    REQUIRE(soa.get_column<1>()[2] == Catch::Approx(0.0f));
+}
+
+TEST_CASE("soa_vector pop_back removes last element", "[containers][dynamic][soa_vector]") {
+    containers::dynamic::SoAVector<float, int> soa;
+    soa.push_back(1.0f, 10);
+    soa.push_back(2.0f, 20);
+    soa.push_back(3.0f, 30);
+    soa.pop_back();
+    REQUIRE(soa.size() == 2);
+    REQUIRE(soa.get_column<0>()[1] == Catch::Approx(2.0f));
+    REQUIRE(soa.get_column<1>()[1] == 20);
+}
+
+TEST_CASE("soa_vector erase_if removes matching elements via swap-pop", "[containers][dynamic][soa_vector]") {
+    containers::dynamic::SoAVector<float, int> soa;
+    for (int i = 0; i < 6; ++i)
+        soa.push_back(static_cast<float>(i), i);
+
+    // Erase all even ints (col<1> % 2 == 0): removes indices 0,2,4
+    const std::size_t removed = soa.erase_if([](float, int v) { return v % 2 == 0; });
+
+    REQUIRE(removed == 3);
+    REQUIRE(soa.size() == 3);
+    // Remaining values are odd
+    for (std::size_t i = 0; i < soa.size(); ++i) {
+        const int v = soa.get_column<1>()[i];
+        REQUIRE(v % 2 == 1);
+    }
+}
+
+TEST_CASE("soa_vector erase_if on empty container is a no-op", "[containers][dynamic][soa_vector]") {
+    containers::dynamic::SoAVector<float, float> soa;
+    const std::size_t removed = soa.erase_if([](float, float) { return true; });
+    REQUIRE(removed == 0);
+    REQUIRE(soa.empty());
+}
+
+TEST_CASE("soa_vector append_range merges two SoAs", "[containers][dynamic][soa_vector]") {
+    containers::dynamic::SoAVector<float, int> a, b;
+    a.push_back(1.0f, 1);
+    a.push_back(2.0f, 2);
+    b.push_back(3.0f, 3);
+    b.push_back(4.0f, 4);
+
+    a.append_range(b);
+    REQUIRE(a.size() == 4);
+    REQUIRE(a.get_column<0>()[2] == Catch::Approx(3.0f));
+    REQUIRE(a.get_column<1>()[3] == 4);
+}
+
+TEST_CASE("soa_vector row() extracts tuple at index", "[containers][dynamic][soa_vector]") {
+    containers::dynamic::SoAVector<float, int, double> soa;
+    soa.push_back(1.5f, 42, 3.14);
+    soa.push_back(2.5f, 99, 2.71);
+
+    const auto [f, i, d] = soa.row(1);
+    REQUIRE(f == Catch::Approx(2.5f));
+    REQUIRE(i == 99);
+    REQUIRE(d == Catch::Approx(2.71));
+}
+
+TEST_CASE("soa_vector transform_columns dispatches kernel over aligned pointers", "[containers][dynamic][soa_vector]") {
+    containers::dynamic::SoAVector<float, float> soa;
+    for (int i = 0; i < 8; ++i)
+        soa.push_back(static_cast<float>(i), 0.0f);
+
+    // Kernel: col1[i] = col0[i] * 2
+    soa.transform_columns<0, 1>([](float* src, float* dst, std::size_t n) {
+        SOA_VECTORIZE
+        for (std::size_t i = 0; i < n; ++i)
+            dst[i] = src[i] * 2.0f;
+    });
+
+    for (std::size_t i = 0; i < 8; ++i)
+        REQUIRE(soa.get_column<1>()[i] == Catch::Approx(static_cast<float>(i) * 2.0f));
+}
+
+TEST_CASE("soa_vector scale_column multiplies and biases", "[containers][dynamic][soa_vector]") {
+    containers::dynamic::SoAVector<float> soa;
+    for (int i = 0; i < 4; ++i) soa.push_back(2.0f);
+    soa.scale_column<0>(3.0f, 1.0f); // x*3+1 = 7
+    for (std::size_t i = 0; i < 4; ++i)
+        REQUIRE(soa.get_column<0>()[i] == Catch::Approx(7.0f));
+}
+
+TEST_CASE("soa_vector clamp_column keeps values in [lo, hi]", "[containers][dynamic][soa_vector]") {
+    containers::dynamic::SoAVector<float> soa;
+    soa.push_back(-5.0f);
+    soa.push_back(3.0f);
+    soa.push_back(15.0f);
+    soa.clamp_column<0>(0.0f, 10.0f);
+    REQUIRE(soa.get_column<0>()[0] == Catch::Approx(0.0f));
+    REQUIRE(soa.get_column<0>()[1] == Catch::Approx(3.0f));
+    REQUIRE(soa.get_column<0>()[2] == Catch::Approx(10.0f));
+}
+
+TEST_CASE("soa_vector AlignedSoAVector provides >=32-byte column alignment", "[containers][dynamic][soa_vector][aligned]") {
+    containers::dynamic::AlignedSoAVector<float, float> soa;
+    soa.resize(64);
+    const auto* p0 = soa.data<0>();
+    const auto* p1 = soa.data<1>();
+    REQUIRE(reinterpret_cast<std::uintptr_t>(p0) % 32 == 0);
+    REQUIRE(reinterpret_cast<std::uintptr_t>(p1) % 32 == 0);
+}
+
+TEST_CASE("soa_vector double-precision verlet integration", "[containers][dynamic][soa_vector]") {
+    containers::dynamic::SoAVector<double, double, double, double, double, double> soa;
+    soa.push_back(0.0, 0.0, 10.0, 20.0, 2.0, 4.0);
+    const double dt = 0.5;
+    soa.integrate_verlet_simd(dt);
+    // x_new = 0 + 10*0.5 + 2*(0.5*0.25) = 5.25
+    REQUIRE(soa.get_column<0>()[0] == Catch::Approx(5.25));
+    REQUIRE(soa.get_column<2>()[0] == Catch::Approx(11.0));
+}
+
+TEST_CASE("soa_vector get() element access matches get_column", "[containers][dynamic][soa_vector]") {
+    containers::dynamic::SoAVector<float, int> soa;
+    soa.push_back(3.14f, 42);
+    REQUIRE(soa.get<0>(0) == Catch::Approx(3.14f));
+    REQUIRE(soa.get<1>(0) == 42);
+}
+
 TEST_CASE("sph roche lobe gaseous planet tidal stripping", "[prakriti][celestial][sph_roche]") {
     const pebble::math::vec2 donor_pos{0.0f, 0.0f};
     const float donor_mass = 50.0f;
