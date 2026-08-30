@@ -1433,14 +1433,14 @@ namespace ts {
         static auto clip(const E &expr, T min_val, T max_val) {
             using StoragePolicy = typename E::storage_policy;
             using CompPolicy = typename E::computation_policy;
-            
+
             const auto &tensor = expr.self();
             auto shape = get_shape(tensor);
             DynamicTensor<T, StoragePolicy, CompPolicy> result(shape);
-            
+
             std::vector<size_t> idx(shape.size(), 0);
             const size_t size = calculate_size_dyn(shape);
-            
+
             for (size_t i = 0; i < size; ++i) {
                 size_t temp_i = i;
                 for (int d = static_cast<int>(idx.size()) - 1; d >= 0; --d) {
@@ -1453,6 +1453,173 @@ namespace ts {
                 result.data()[i] = std::clamp(val, min_val, max_val);
             }
             return result;
+        }
+
+        // ----------------------------------------------------------------
+        // BLAS primitives — blocked gemm, gemv, axpy, nrm2, syrk
+        // All algorithms are expressed over raw data pointers for speed.
+        // ----------------------------------------------------------------
+
+        // gemm: C ← α·A·B + β·C   (row-major, cache-blocked)
+        // A: M×K, B: K×N, C: M×N
+        template<typename T, typename SP, typename CP>
+        static void gemm(T alpha,
+                         const DynamicTensor<T,SP,CP>& A,
+                         const DynamicTensor<T,SP,CP>& B,
+                         T beta,
+                         DynamicTensor<T,SP,CP>& C) {
+            const auto& as = A.shape();
+            const auto& bs = B.shape();
+            const auto& cs = C.shape();
+            if (as.size() != 2 || bs.size() != 2 || cs.size() != 2)
+                throw std::invalid_argument("gemm: all tensors must be rank-2");
+            const size_t M = as[0], K = as[1], N = bs[1];
+            if (bs[0] != K || cs[0] != M || cs[1] != N)
+                throw std::invalid_argument("gemm: incompatible shapes");
+
+            const T* a = A.data();
+            const T* b = B.data();
+            T*       c = C.data();
+            if (!a || !b || !c) throw std::runtime_error("gemm: null data pointer");
+
+            // scale C by beta first
+            if (beta == T{0}) {
+                std::fill(c, c + M * N, T{0});
+            } else if (beta != T{1}) {
+                for (size_t i = 0; i < M * N; ++i) c[i] *= beta;
+            }
+
+            // cache-blocked gemm — panel sizes tuned for L1/L2 on typical hardware
+            constexpr size_t MC = 64, KC = 256, NC = 128;
+            for (size_t ii = 0; ii < M; ii += MC) {
+                const size_t ib = std::min(MC, M - ii);
+                for (size_t kk = 0; kk < K; kk += KC) {
+                    const size_t kb = std::min(KC, K - kk);
+                    for (size_t jj = 0; jj < N; jj += NC) {
+                        const size_t nb = std::min(NC, N - jj);
+                        // micro-kernel: ib × nb panel
+                        for (size_t i = 0; i < ib; ++i) {
+                            const T* ar = a + (ii + i) * K + kk;
+                            T*       cr = c + (ii + i) * N + jj;
+                            for (size_t j = 0; j < nb; ++j) {
+                                T sum = T{0};
+                                for (size_t k = 0; k < kb; ++k)
+                                    sum += ar[k] * b[(kk + k) * N + (jj + j)];
+                                cr[j] += alpha * sum;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // gemv: y ← α·A·x + β·y   A: M×N, x: N, y: M
+        template<typename T, typename SP, typename CP>
+        static void gemv(T alpha,
+                         const DynamicTensor<T,SP,CP>& A,
+                         const DynamicTensor<T,SP,CP>& x,
+                         T beta,
+                         DynamicTensor<T,SP,CP>& y) {
+            const auto& as = A.shape();
+            const auto& xs = x.shape();
+            const auto& ys = y.shape();
+            if (as.size() != 2 || xs.size() != 1 || ys.size() != 1)
+                throw std::invalid_argument("gemv: A must be rank-2, x and y rank-1");
+            const size_t M = as[0], N = as[1];
+            if (xs[0] != N || ys[0] != M)
+                throw std::invalid_argument("gemv: incompatible shapes");
+
+            const T* ap = A.data();
+            const T* xp = x.data();
+            T*       yp = y.data();
+            if (!ap || !xp || !yp) throw std::runtime_error("gemv: null data pointer");
+
+            if (beta == T{0}) std::fill(yp, yp + M, T{0});
+            else if (beta != T{1}) for (size_t i = 0; i < M; ++i) yp[i] *= beta;
+
+            for (size_t i = 0; i < M; ++i) {
+                T sum = T{0};
+                const T* row = ap + i * N;
+                for (size_t j = 0; j < N; ++j) sum += row[j] * xp[j];
+                yp[i] += alpha * sum;
+            }
+        }
+
+        // axpy: y ← α·x + y   (vectors of same length)
+        template<typename T, typename SP, typename CP>
+        static void axpy(T alpha,
+                         const DynamicTensor<T,SP,CP>& x,
+                         DynamicTensor<T,SP,CP>& y) {
+            const size_t n = x.size();
+            if (y.size() != n)
+                throw std::invalid_argument("axpy: x and y must have the same number of elements");
+            const T* xp = x.data();
+            T*       yp = y.data();
+            if (!xp || !yp) throw std::runtime_error("axpy: null data pointer");
+            for (size_t i = 0; i < n; ++i) yp[i] += alpha * xp[i];
+        }
+
+        // nrm2: ‖x‖₂ (Euclidean norm)
+        template<typename T, typename SP, typename CP>
+        static T nrm2(const DynamicTensor<T,SP,CP>& x) {
+            const size_t n = x.size();
+            const T* xp = x.data();
+            if (!xp) throw std::runtime_error("nrm2: null data pointer");
+            T sum = T{0};
+            for (size_t i = 0; i < n; ++i) sum += xp[i] * xp[i];
+            return static_cast<T>(std::sqrt(static_cast<double>(sum)));
+        }
+
+        // syrk: C ← α·A·Aᵀ + β·C   (symmetric rank-k update, upper/lower tri)
+        // A: M×K, C: M×M symmetric
+        template<typename T, typename SP, typename CP>
+        static void syrk(T alpha,
+                         const DynamicTensor<T,SP,CP>& A,
+                         T beta,
+                         DynamicTensor<T,SP,CP>& C,
+                         bool upper = true) {
+            const auto& as = A.shape();
+            const auto& cs = C.shape();
+            if (as.size() != 2 || cs.size() != 2)
+                throw std::invalid_argument("syrk: A must be rank-2, C must be rank-2");
+            const size_t M = as[0], K = as[1];
+            if (cs[0] != M || cs[1] != M)
+                throw std::invalid_argument("syrk: C must be M×M");
+
+            const T* ap = A.data();
+            T*       cp = C.data();
+            if (!ap || !cp) throw std::runtime_error("syrk: null data pointer");
+
+            if (beta == T{0}) std::fill(cp, cp + M * M, T{0});
+            else if (beta != T{1}) for (size_t i = 0; i < M * M; ++i) cp[i] *= beta;
+
+            // only fill upper (or lower) triangle + diagonal
+            for (size_t i = 0; i < M; ++i) {
+                const size_t j_start = upper ? i : 0;
+                const size_t j_end   = upper ? M : i + 1;
+                for (size_t j = j_start; j < j_end; ++j) {
+                    T sum = T{0};
+                    for (size_t k = 0; k < K; ++k)
+                        sum += ap[i * K + k] * ap[j * K + k];
+                    const T val = cp[i * M + j] + alpha * sum;
+                    cp[i * M + j] = val;
+                    cp[j * M + i] = val; // mirror
+                }
+            }
+        }
+
+        // matmul convenience: C = A·B  (calls gemm with α=1, β=0)
+        template<typename T, typename SP, typename CP>
+        static DynamicTensor<T,SP,CP> matmul(
+                const DynamicTensor<T,SP,CP>& A,
+                const DynamicTensor<T,SP,CP>& B) {
+            const auto& as = A.shape();
+            const auto& bs = B.shape();
+            if (as.size() != 2 || bs.size() != 2)
+                throw std::invalid_argument("matmul: both tensors must be rank-2");
+            DynamicTensor<T,SP,CP> C({as[0], bs[1]});
+            gemm<T,SP,CP>(T{1}, A, B, T{0}, C);
+            return C;
         }
     };
 
@@ -1737,6 +1904,58 @@ namespace ts {
     template<typename StructT, size_t InlineCap = 64>
     using soa_storage_policy = SoAStoragePolicy<StructT, InlineCap>;
     using arrow_string_storage = ArrowStringStorage;
+
+    // --- BLAS free functions (delegate to CP static methods) ---
+    // gemm: C ← α·A·B + β·C
+    template<typename T, typename SP, typename CP>
+    void gemm(T alpha,
+              const DynamicTensor<T,SP,CP>& A,
+              const DynamicTensor<T,SP,CP>& B,
+              T beta,
+              DynamicTensor<T,SP,CP>& C) {
+        CP::template gemm<T,SP,CP>(alpha, A, B, beta, C);
+    }
+
+    // gemv: y ← α·A·x + β·y
+    template<typename T, typename SP, typename CP>
+    void gemv(T alpha,
+              const DynamicTensor<T,SP,CP>& A,
+              const DynamicTensor<T,SP,CP>& x,
+              T beta,
+              DynamicTensor<T,SP,CP>& y) {
+        CP::template gemv<T,SP,CP>(alpha, A, x, beta, y);
+    }
+
+    // axpy: y ← α·x + y
+    template<typename T, typename SP, typename CP>
+    void axpy(T alpha,
+              const DynamicTensor<T,SP,CP>& x,
+              DynamicTensor<T,SP,CP>& y) {
+        CP::template axpy<T,SP,CP>(alpha, x, y);
+    }
+
+    // nrm2: ‖x‖₂
+    template<typename T, typename SP, typename CP>
+    T nrm2(const DynamicTensor<T,SP,CP>& x) {
+        return CP::template nrm2<T,SP,CP>(x);
+    }
+
+    // syrk: C ← α·A·Aᵀ + β·C (symmetric rank-k update)
+    template<typename T, typename SP, typename CP>
+    void syrk(T alpha,
+              const DynamicTensor<T,SP,CP>& A,
+              T beta,
+              DynamicTensor<T,SP,CP>& C,
+              bool upper = true) {
+        CP::template syrk<T,SP,CP>(alpha, A, beta, C, upper);
+    }
+
+    // matmul: C = A·B (convenience; calls gemm with α=1, β=0)
+    template<typename T, typename SP, typename CP>
+    DynamicTensor<T,SP,CP> matmul(const DynamicTensor<T,SP,CP>& A,
+                                   const DynamicTensor<T,SP,CP>& B) {
+        return CP::template matmul<T,SP,CP>(A, B);
+    }
 
 } // namespace ts
 

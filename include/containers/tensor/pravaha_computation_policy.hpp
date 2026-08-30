@@ -693,6 +693,205 @@ namespace ts {
                 return std::clamp(x, min_val, max_val);
             });
         }
+
+        // ----------------------------------------------------------------
+        // BLAS primitives — row-parallel via Pravaha task graph
+        // ----------------------------------------------------------------
+
+        // gemm: C ← α·A·B + β·C  (row-parallel outer loop)
+        template<typename T, typename SP, typename CP>
+        static void gemm(T alpha,
+                         const DynamicTensor<T,SP,CP>& A,
+                         const DynamicTensor<T,SP,CP>& B,
+                         T beta,
+                         DynamicTensor<T,SP,CP>& C) {
+            const auto& as = A.shape();
+            const auto& bs = B.shape();
+            const auto& cs = C.shape();
+            if (as.size() != 2 || bs.size() != 2 || cs.size() != 2)
+                throw std::invalid_argument("gemm: all tensors must be rank-2");
+            const size_t M = as[0], K = as[1], N = bs[1];
+            if (bs[0] != K || cs[0] != M || cs[1] != N)
+                throw std::invalid_argument("gemm: incompatible shapes");
+
+            const T* a = A.data();
+            const T* b = B.data();
+            T*       c = C.data();
+            if (!a || !b || !c) throw std::runtime_error("gemm: null data pointer");
+
+            if (beta == T{0}) std::fill(c, c + M * N, T{0});
+            else if (beta != T{1}) for (size_t i = 0; i < M * N; ++i) c[i] *= beta;
+
+            if (M * N < 1024) {
+                DefaultComputationPolicy::template gemm<T,SP,CP>(alpha, A, B, T{1}, C);
+                return;
+            }
+
+            const size_t chunk_rows = std::max<size_t>(1, M / (std::max<size_t>(1, std::thread::hardware_concurrency()) * 2));
+            auto chunks = pravaha::StaticChunkingPolicy::chunks(M, chunk_rows);
+            pravaha::Runner<pravaha::JThreadBackend> runner;
+
+            for (size_t ci = 0; ci < chunks.size(); ++ci) {
+                const auto range = chunks[ci];
+                auto cmd = pravaha::TaskCommand::make([a, b, c, range, K, N, alpha]() {
+                    constexpr size_t KC = 256, NC = 128;
+                    for (size_t i = range.begin; i < range.end; ++i) {
+                        for (size_t kk = 0; kk < K; kk += KC) {
+                            const size_t kb = std::min(KC, K - kk);
+                            for (size_t jj = 0; jj < N; jj += NC) {
+                                const size_t nb = std::min(NC, N - jj);
+                                const T* ar = a + i * K + kk;
+                                T*       cr = c + i * N + jj;
+                                for (size_t j = 0; j < nb; ++j) {
+                                    T sum = T{0};
+                                    for (size_t k = 0; k < kb; ++k)
+                                        sum += ar[k] * b[(kk + k) * N + (jj + j)];
+                                    cr[j] += alpha * sum;
+                                }
+                            }
+                        }
+                    }
+                });
+                runner.backend_ref().submit(std::move(cmd));
+            }
+            runner.backend_ref().drain();
+        }
+
+        // gemv: y ← α·A·x + β·y  (row-parallel)
+        template<typename T, typename SP, typename CP>
+        static void gemv(T alpha,
+                         const DynamicTensor<T,SP,CP>& A,
+                         const DynamicTensor<T,SP,CP>& x,
+                         T beta,
+                         DynamicTensor<T,SP,CP>& y) {
+            const auto& as = A.shape();
+            const auto& xs = x.shape();
+            const auto& ys = y.shape();
+            if (as.size() != 2 || xs.size() != 1 || ys.size() != 1)
+                throw std::invalid_argument("gemv: A must be rank-2, x and y rank-1");
+            const size_t M = as[0], N = as[1];
+            if (xs[0] != N || ys[0] != M)
+                throw std::invalid_argument("gemv: incompatible shapes");
+
+            const T* ap = A.data();
+            const T* xp = x.data();
+            T*       yp = y.data();
+            if (!ap || !xp || !yp) throw std::runtime_error("gemv: null data pointer");
+
+            if (beta == T{0}) std::fill(yp, yp + M, T{0});
+            else if (beta != T{1}) for (size_t i = 0; i < M; ++i) yp[i] *= beta;
+
+            if (M < 256) {
+                DefaultComputationPolicy::template gemv<T,SP,CP>(alpha, A, x, T{1}, y);
+                return;
+            }
+
+            const size_t chunk_rows = std::max<size_t>(1, M / (std::max<size_t>(1, std::thread::hardware_concurrency()) * 2));
+            auto chunks = pravaha::StaticChunkingPolicy::chunks(M, chunk_rows);
+            pravaha::Runner<pravaha::JThreadBackend> runner;
+
+            for (size_t ci = 0; ci < chunks.size(); ++ci) {
+                const auto range = chunks[ci];
+                auto cmd = pravaha::TaskCommand::make([ap, xp, yp, range, N, alpha]() {
+                    for (size_t i = range.begin; i < range.end; ++i) {
+                        T sum = T{0};
+                        const T* row = ap + i * N;
+                        for (size_t j = 0; j < N; ++j) sum += row[j] * xp[j];
+                        yp[i] += alpha * sum;
+                    }
+                });
+                runner.backend_ref().submit(std::move(cmd));
+            }
+            runner.backend_ref().drain();
+        }
+
+        // axpy: y ← α·x + y  (parallel chunks)
+        template<typename T, typename SP, typename CP>
+        static void axpy(T alpha,
+                         const DynamicTensor<T,SP,CP>& x,
+                         DynamicTensor<T,SP,CP>& y) {
+            const size_t n = x.size();
+            if (y.size() != n)
+                throw std::invalid_argument("axpy: x and y must have the same size");
+            const T* xp = x.data();
+            T*       yp = y.data();
+            if (!xp || !yp) throw std::runtime_error("axpy: null data pointer");
+
+            if (n < 2048) {
+                for (size_t i = 0; i < n; ++i) yp[i] += alpha * xp[i];
+                return;
+            }
+
+            const size_t chunk_sz = optimal_chunk_size(n);
+            auto chunks = pravaha::StaticChunkingPolicy::chunks(n, chunk_sz);
+            pravaha::Runner<pravaha::JThreadBackend> runner;
+
+            for (size_t ci = 0; ci < chunks.size(); ++ci) {
+                const auto range = chunks[ci];
+                auto cmd = pravaha::TaskCommand::make([xp, yp, range, alpha]() {
+                    for (size_t i = range.begin; i < range.end; ++i)
+                        yp[i] += alpha * xp[i];
+                });
+                runner.backend_ref().submit(std::move(cmd));
+            }
+            runner.backend_ref().drain();
+        }
+
+        // nrm2: ‖x‖₂  (parallel partial sums)
+        template<typename T, typename SP, typename CP>
+        static T nrm2(const DynamicTensor<T,SP,CP>& x) {
+            const size_t n = x.size();
+            const T* xp = x.data();
+            if (!xp) throw std::runtime_error("nrm2: null data pointer");
+
+            if (n < 2048) {
+                T sum = T{0};
+                for (size_t i = 0; i < n; ++i) sum += xp[i] * xp[i];
+                return static_cast<T>(std::sqrt(static_cast<double>(sum)));
+            }
+
+            const size_t chunk_sz = optimal_chunk_size(n);
+            auto chunks = pravaha::StaticChunkingPolicy::chunks(n, chunk_sz);
+            std::vector<T> partial(chunks.size(), T{0});
+            pravaha::Runner<pravaha::JThreadBackend> runner;
+
+            for (size_t ci = 0; ci < chunks.size(); ++ci) {
+                const auto range = chunks[ci];
+                auto cmd = pravaha::TaskCommand::make([xp, &partial, ci, range]() {
+                    T s = T{0};
+                    for (size_t i = range.begin; i < range.end; ++i) s += xp[i] * xp[i];
+                    partial[ci] = s;
+                });
+                runner.backend_ref().submit(std::move(cmd));
+            }
+            runner.backend_ref().drain();
+            T sum = std::accumulate(partial.begin(), partial.end(), T{0});
+            return static_cast<T>(std::sqrt(static_cast<double>(sum)));
+        }
+
+        // syrk: C ← α·A·Aᵀ + β·C  (delegates to scalar; symmetric pattern)
+        template<typename T, typename SP, typename CP>
+        static void syrk(T alpha,
+                         const DynamicTensor<T,SP,CP>& A,
+                         T beta,
+                         DynamicTensor<T,SP,CP>& C,
+                         bool upper = true) {
+            DefaultComputationPolicy::template syrk<T,SP,CP>(alpha, A, beta, C, upper);
+        }
+
+        // matmul: C = A·B
+        template<typename T, typename SP, typename CP>
+        static DynamicTensor<T,SP,CP> matmul(
+                const DynamicTensor<T,SP,CP>& A,
+                const DynamicTensor<T,SP,CP>& B) {
+            const auto& as = A.shape();
+            const auto& bs = B.shape();
+            if (as.size() != 2 || bs.size() != 2)
+                throw std::invalid_argument("matmul: both tensors must be rank-2");
+            DynamicTensor<T,SP,CP> C({as[0], bs[1]});
+            gemm<T,SP,CP>(T{1}, A, B, T{0}, C);
+            return C;
+        }
     };
 
     using pravaha_computation_policy = PravahaComputationPolicy;
