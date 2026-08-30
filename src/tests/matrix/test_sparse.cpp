@@ -176,3 +176,22 @@ TEST_CASE("CsrMatrix: from_triplets validates dimensions and indices", "[sparse]
     }
 }
 
+TEST_CASE("CsrMatrix: spmv_into matches spmv and validates output size", "[sparse][spmv]") {
+    std::vector<std::size_t> rows = {0,0,1,1,1,2,2};
+    std::vector<std::size_t> cols = {0,1,0,1,2,1,2};
+    std::vector<float> vals = {2.f,-1.f,-1.f,2.f,-1.f,-1.f,2.f};
+    auto A = CsrMatrix<float>::from_triplets(3, 3, rows, cols, vals);
+
+    Vector<float> x(3); x[0]=1.f; x[1]=2.f; x[2]=3.f;
+    Vector<float> y(3, -99.f);
+    spmv_into(A, x, y);
+    auto y_ref = spmv(A, x);
+
+    REQUIRE(y.size() == y_ref.size());
+    for (std::size_t i = 0; i < y.size(); ++i)
+        CHECK(y[i] == Catch::Approx(y_ref[i]).margin(1e-6f));
+
+    Vector<float> bad_out(2, 0.f);
+    CHECK_THROWS_AS(spmv_into(A, x, bad_out), std::invalid_argument);
+}
+

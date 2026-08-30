@@ -40,11 +40,12 @@ TEST_CASE("bench_spmv: 5-pt stencil 128×128 bandwidth", "[bench][spmv][perf]") 
     Vector<float> x(N, 1.f);
 
     // warm-up
-    auto y = spmv(A, x);
+    Vector<float> y(N, 0.f);
+    spmv_into(A, x, y);
 
     constexpr int reps = 20;
     auto t0 = std::chrono::high_resolution_clock::now();
-    for (int r=0;r<reps;++r) y = spmv(A, x);
+    for (int r=0;r<reps;++r) spmv_into(A, x, y);
     auto t1 = std::chrono::high_resolution_clock::now();
 
     double ms = elapsed_ms(t0, t1) / reps;
@@ -63,11 +64,12 @@ TEST_CASE("bench_spmv: 5-pt stencil 256×256 throughput", "[bench][spmv][perf]")
     auto A = build_stencil_csr(n);
     std::size_t N = n*n;
     Vector<float> x(N, 1.f);
-    auto y = spmv(A, x);  // warm-up
+    Vector<float> y(N, 0.f);
+    spmv_into(A, x, y);  // warm-up
 
     constexpr int reps = 10;
     auto t0 = std::chrono::high_resolution_clock::now();
-    for (int r=0;r<reps;++r) y = spmv(A, x);
+    for (int r=0;r<reps;++r) spmv_into(A, x, y);
     auto t1 = std::chrono::high_resolution_clock::now();
 
     double ms = elapsed_ms(t0, t1) / reps;

@@ -218,20 +218,34 @@ namespace ga {
     };
 
     // -----------------------------------------------------------------------
-    // spmv — y ← A·x  (CSR, row-parallel via index loop)
+    // spmv_into — y ← A·x (CSR) into preallocated output
+    // -----------------------------------------------------------------------
+    template<typename T>
+    void spmv_into(const CsrMatrix<T>& A, const Vector<T>& x, Vector<T>& y) {
+        if (A.ncols != x.size())
+            throw std::invalid_argument("spmv: dimension mismatch");
+        if (y.size() != A.nrows)
+            throw std::invalid_argument("spmv_into: output size mismatch");
+        const T* x_data = x.data();
+        T* y_data = y.data();
+        // row-parallel: each row is independent
+        for (std::size_t i = 0; i < A.nrows; ++i) {
+            const std::size_t row_beg = A.row_ptr[i];
+            const std::size_t row_end = A.row_ptr[i+1];
+            T s = T{0};
+            for (std::size_t jj = row_beg; jj < row_end; ++jj)
+                s += A.values[jj] * x_data[A.col_idx[jj]];
+            y_data[i] = s;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // spmv — y ← A·x  (CSR, returns new vector)
     // -----------------------------------------------------------------------
     template<typename T>
     [[nodiscard]] Vector<T> spmv(const CsrMatrix<T>& A, const Vector<T>& x) {
-        if (A.ncols != x.size())
-            throw std::invalid_argument("spmv: dimension mismatch");
         Vector<T> y(A.nrows, T{0});
-        // row-parallel: each row is independent
-        for (std::size_t i = 0; i < A.nrows; ++i) {
-            T s = T{0};
-            for (std::size_t jj = A.row_ptr[i]; jj < A.row_ptr[i+1]; ++jj)
-                s += A.values[jj] * x(A.col_idx[jj]);
-            y(i) = s;
-        }
+        spmv_into(A, x, y);
         return y;
     }
 
@@ -262,11 +276,14 @@ namespace ga {
         if (A.ncols != B.rows())
             throw std::invalid_argument("spmm: dimension mismatch");
         Matrix<T,SP,CP> C(A.nrows, B.cols(), T{0});
+        const std::size_t b_cols = B.cols();
         for (std::size_t i = 0; i < A.nrows; ++i) {
-            for (std::size_t jj = A.row_ptr[i]; jj < A.row_ptr[i+1]; ++jj) {
+            const std::size_t row_beg = A.row_ptr[i];
+            const std::size_t row_end = A.row_ptr[i+1];
+            for (std::size_t jj = row_beg; jj < row_end; ++jj) {
                 std::size_t j = A.col_idx[jj];
-                T aij = A.values[jj];
-                for (std::size_t k = 0; k < B.cols(); ++k)
+                const T aij = A.values[jj];
+                for (std::size_t k = 0; k < b_cols; ++k)
                     C(i, k) += aij * B(j, k);
             }
         }

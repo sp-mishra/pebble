@@ -126,12 +126,16 @@ if (r) {                        // has_value → converged / stopped
 **Line searches**: `Armijo<T>` (backtracking), `Wolfe<T>` (strong-Wolfe, midpoint-bisection zoom),
 `MoreThuente<T>` (strong-Wolfe with safeguarded cubic/quadratic interpolation — fewer f/∇f evals,
 robust on ill-scaled problems; drop-in for `Wolfe`, same 6-arg signature). **Stop**: `DefaultStop<T>`
-composes grad-norm / step / Δf / max-iter predicates. Non-default policies are passed to the ctor:
+composes grad-norm / step / Δf / max-iter predicates. `DefaultStop` also supports
+`relative_grad_tol=true`, which scales `grad_tol` once from the initial gradient norm
+(`effective_grad_tol = grad_tol * max(1, ||g(x0)||)`) for better behavior across objective scaling.
+Non-default policies are passed to the ctor:
 
 ```cpp
 kalpa::Armijo<double> ls; ls.alpha0 = 1.0;
-kalpa::Solver<kalpa::TrustRegionNewtonCG<double>, kalpa::Derivatives<kalpa::Dual,double>,
-              kalpa::Armijo<double>> s{ {}, {}, ls };
+kalpa::DefaultStop<double> stop; stop.relative_grad_tol = true;
+ kalpa::Solver<kalpa::TrustRegionNewtonCG<double>, kalpa::Derivatives<kalpa::Dual,double>,
+               kalpa::Armijo<double>> s{ {}, {}, ls, stop };
 ```
 
 ---
@@ -334,6 +338,7 @@ iteration. Sinks:
 |:---|:---|
 | `NoTelemetry` *(default)* | empty type; emit compiles away — zero bytes, zero cost |
 | `FullTrace<T>` | records every `IterState` in `rows`; `size()`, `back()` |
+| `SparseTrace<T>` | configurable sparse recording (`stride`, `min_rel_drop`) for long runs |
 | `ProgressBar<T>` | TTY progress (`ProgressBar<double>{stderr}`) |
 | `Callback<Fn>` via `on_iteration(fn)` | fires a user monitor each iteration (custom stop) |
 | `NadiSink<Backend>` | routes pulses to a `nadi` sink backend |
@@ -371,7 +376,7 @@ std::size_t iteration; }`. `explain(d)` formats the message plus a remediation `
 | `<kalpa/algo/constrained.hpp>` | projections, ProjectedGradient, Frank–Wolfe, QP, LP, exact LP, `SQP`, `SQP_Ineq`, ALM, InteriorPoint |
 | `<kalpa/algo/least_squares.hpp>` | `LevenbergMarquardt`, `GaussNewton`, `SerialJacobian` / `ParallelJacobian` (also in `kalpa_all.hpp`) |
 | `<kalpa/algo/global.hpp>` | Nelder–Mead, DE, SA, CMA-ES, `Rng`, eval policies |
-| `<kalpa/introspect/telemetry.hpp>` | `FullTrace`, `ProgressBar`, `Callback`, `NadiSink`, diagnosis helpers |
+| `<kalpa/introspect/telemetry.hpp>` | `FullTrace`, `SparseTrace`, `ProgressBar`, `Callback`, `NadiSink`, diagnosis helpers |
 | `<kalpa/kalpa_all.hpp>` | everything above (prototyping) |
 
 **Guarantees** (asserted in `test_introspect.cpp`): `std::is_empty_v<NoTelemetry>` and
@@ -393,8 +398,11 @@ unused `Derivatives` modes and unused algorithm templates are never instantiated
   Jacobian fill — the normal-equation / QR solve, ratio test, and residual sweep are cheap next to `m`
   AD passes — and the parallel path is validated against the serial one in `test_least_squares.cpp`.
 - **Caching.** Quasi-Newton curvature pairs and reusable factorizations are held in `kosha::LRUCache`.
-- **Determinism.** Global methods take an explicit seeded `Rng`, so a fixed seed replays an identical
-  trajectory — a property the test suite pins.
+- **Line-search warm-start.** Solver reuses the last accepted step length as the next line-search
+  initial trial (when the line-search policy exposes the warm-start overload), typically reducing
+  backtracking/zoom evaluations on smooth local phases.
+ - **Determinism.** Global methods take an explicit seeded `Rng`, so a fixed seed replays an identical
+   trajectory — a property the test suite pins.
 
 ### Tests
 

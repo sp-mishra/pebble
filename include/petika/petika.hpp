@@ -808,10 +808,14 @@ namespace petika {
             auto stream = wal_->recover(from_lsn);
 
             for (const auto& rec : stream) {
-                auto parsed = WalPayloadCodec::decode(rec.payload);
-                if (!parsed) continue;
+                // Peek the op byte directly: a Batch envelope has a distinct
+                // layout ([op][count][frames…]) that the single-record decode()
+                // cannot parse, so routing on decode() alone would silently skip
+                // every coalesced GroupCommit batch on recovery.
+                if (rec.payload.empty()) continue;
+                const auto op = static_cast<EntryOp>(
+                    static_cast<std::uint8_t>(rec.payload[0]));
 
-                auto [op, k_sv, v_sv] = *parsed;
                 if (op == EntryOp::Batch) {
                     auto batch = WalPayloadCodec::decode_batch(rec.payload);
                     if (!batch) return std::unexpected(StorageError::CorruptedRecord);
@@ -835,6 +839,11 @@ namespace petika {
                     }
                     ++replayed; manifest_.last_lsn = rec.lsn; continue;
                 }
+                // Non-batch record: parse with the single-record decoder.
+                auto parsed = WalPayloadCodec::decode(rec.payload);
+                if (!parsed) continue;
+                auto [_, k_sv, v_sv] = *parsed;
+
                 key_type key{};
                 value_type val{};
 

@@ -26,10 +26,12 @@
 
 #include <kalpa/core/solver.hpp>
 #include <observability/nadi.hpp>
+#include <cmath>
 #include <cstddef>
 #include <cstdio>
 #include <string>
 #include <vector>
+#include <limits>
 
 namespace kalpa {
 
@@ -100,6 +102,35 @@ namespace kalpa {
                        Field<"alpha", double>{ static_cast<double>(s.alpha) } };
             // scope emits Begin now + End at destruction — one pulse per iter.
         }
+    };
+
+    // =======================================================================
+    // SparseTrace — records only selected iterations to cap telemetry memory.
+    // Records iter 0 always, then every `stride` iter and/or when objective
+    // drops by at least `min_rel_drop` relative to the previous recorded row.
+    // =======================================================================
+    template<typename T>
+    struct SparseTrace {
+        struct Row { T f, grad_norm, step, alpha; std::size_t iter; };
+        std::vector<Row> rows;
+        std::size_t stride{10};
+        T min_rel_drop{static_cast<T>(0)};
+        T last_recorded_f{std::numeric_limits<T>::infinity()};
+
+        template<typename State>
+        void record(const State& s) {
+            const bool first = rows.empty();
+            const bool stride_hit = (stride > 0) && ((s.iter % stride) == 0);
+            const bool significant_drop =
+                std::isfinite(last_recorded_f) && last_recorded_f != T{0} &&
+                ((last_recorded_f - s.f) / std::abs(last_recorded_f) >= min_rel_drop);
+            if (!(first || stride_hit || significant_drop)) return;
+            rows.push_back(Row{s.f, s.grad_norm, s.step, s.alpha, s.iter});
+            last_recorded_f = s.f;
+        }
+
+        [[nodiscard]] std::size_t size() const noexcept { return rows.size(); }
+        [[nodiscard]] const Row& back() const { return rows.back(); }
     };
 
     // =======================================================================

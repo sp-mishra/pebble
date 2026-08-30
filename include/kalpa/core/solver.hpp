@@ -22,6 +22,7 @@
 #include <kalpa/core/concepts.hpp>
 #include <kalpa/core/problem.hpp>
 #include <containers/matrix/dense.hpp>
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <expected>
@@ -97,18 +98,29 @@ namespace kalpa {
     // =======================================================================
     template<typename T>
     struct DefaultStop {
-        T           grad_tol{static_cast<T>(1e-6)};
+        T           grad_tol{static_cast<T>(1e-8)};
         T           step_tol{static_cast<T>(1e-12)};
-        std::size_t max_iter{1000};
+        std::size_t max_iter{2000};
+        bool        relative_grad_tol{false};
+        T           grad_scale{T{1}};
+
+        // Optional one-time scaling from the starting gradient norm.
+        void init(const IterState<T>& s) {
+            grad_scale = relative_grad_tol ? std::max(T{1}, s.grad_norm) : T{1};
+        }
+
+        [[nodiscard]] T effective_grad_tol() const {
+            return grad_tol * grad_scale;
+        }
 
         [[nodiscard]] bool done(const IterState<T>& s) const {
-            if (s.grad_norm <= grad_tol) return true;
+            if (s.grad_norm <= effective_grad_tol()) return true;
             if (s.iter > 0 && s.step <= step_tol) return true;
             if (s.iter >= max_iter) return true;
             return false;
         }
         [[nodiscard]] bool converged(const IterState<T>& s) const {
-            return s.grad_norm <= grad_tol || (s.iter > 0 && s.step <= step_tol);
+            return s.grad_norm <= effective_grad_tol() || (s.iter > 0 && s.step <= step_tol);
         }
     };
 
@@ -164,9 +176,15 @@ namespace kalpa {
         template<typename F, typename V>
         [[nodiscard]] T search(const F& f, const V& x, const V& dir,
                                T fx, const V& g) const {
+            return search(f, x, dir, fx, g, alpha0);
+        }
+
+        template<typename F, typename V>
+        [[nodiscard]] T search(const F& f, const V& x, const V& dir,
+                               T fx, const V& g, T alpha_init) const {
             const T gTd = detail::dot(g, dir);
             if (gTd >= T{0}) return T{0};            // not a descent direction
-            T alpha = alpha0;
+            T alpha = (std::isfinite(alpha_init) && alpha_init > T{0}) ? alpha_init : alpha0;
             V trial(x.size());
             for (std::size_t k = 0; k < max_backtracks; ++k) {
                 for (std::size_t i = 0; i < x.size(); ++i) trial[i] = x[i] + alpha * dir[i];
@@ -191,10 +209,17 @@ namespace kalpa {
         template<typename F, typename Deriv, typename V>
         [[nodiscard]] T search(const F& f, const Deriv& deriv,
                                const V& x, const V& dir, T fx, const V& g) const {
+            return search(f, deriv, x, dir, fx, g, alpha0);
+        }
+
+        template<typename F, typename Deriv, typename V>
+        [[nodiscard]] T search(const F& f, const Deriv& deriv,
+                               const V& x, const V& dir, T fx, const V& g,
+                               T alpha_init) const {
             const std::size_t n = x.size();
             const T phi0 = fx;
             const T dphi0 = detail::dot(g, dir);
-            if (dphi0 >= T{0}) return T{0};
+            if (dphi0 >= T{0}) return T{0};              // not a descent direction
 
             auto eval = [&](T a, T& phi, T& dphi) {
                 V trial(n), gt(n);
@@ -205,7 +230,7 @@ namespace kalpa {
             };
 
             T a_prev = T{0}, phi_prev = phi0;
-            T a = alpha0;
+            T a = (std::isfinite(alpha_init) && alpha_init > T{0}) ? alpha_init : alpha0;
             for (std::size_t it = 0; it < max_iter; ++it) {
                 T phi, dphi; eval(a, phi, dphi);
                 if (phi > phi0 + c1 * a * dphi0 || (it > 0 && phi >= phi_prev))
@@ -263,6 +288,13 @@ namespace kalpa {
         template<typename F, typename Deriv, typename V>
         [[nodiscard]] T search(const F& f, const Deriv& deriv,
                                const V& x, const V& dir, T fx, const V& g) const {
+            return search(f, deriv, x, dir, fx, g, alpha0);
+        }
+
+        template<typename F, typename Deriv, typename V>
+        [[nodiscard]] T search(const F& f, const Deriv& deriv,
+                               const V& x, const V& dir, T fx, const V& g,
+                               T alpha_init) const {
             const std::size_t n = x.size();
             const T phi0  = fx;
             const T dphi0 = detail::dot(g, dir);
@@ -280,7 +312,7 @@ namespace kalpa {
             // flips once a minimizer is trapped between al and au.
             T al = T{0}, phial = phi0, dphial = dphi0;
             T au = T{0}, phiau = phi0, dphiau = dphi0;
-            T a  = alpha0;
+            T a  = (std::isfinite(alpha_init) && alpha_init > T{0}) ? alpha_init : alpha0;
             bool bracketed = false;
             const T c2abs = -c2 * dphi0;                 // strong-curvature RHS
 
@@ -370,6 +402,7 @@ namespace kalpa {
         solve(const Prob& prob, const ga::Vector<T>& x0) {
             const auto& f = prob.objective;
             const std::size_t n = x0.size();
+            alpha_hint_ = T{1};
 
             IterState<T> s;
             s.x = x0; s.g = ga::Vector<T>(n); s.dir = ga::Vector<T>(n);
@@ -381,6 +414,8 @@ namespace kalpa {
                 return std::unexpected(Diagnosis{Cause::NaNTrap, "objective is NaN/Inf at x0", 0});
             deriv_.grad(f, s.x, s.g);
             s.grad_norm = detail::nrm2(s.g);
+
+            if constexpr (requires { stop_.init(s); }) stop_.init(s);
 
             alg_.reset(n);
 
@@ -394,9 +429,10 @@ namespace kalpa {
                 // line search
                 const T alpha = do_line_search(f, s);
                 if (alpha <= T{0})
-                    return std::unexpected(Diagnosis{Cause::LineSearchFail,
-                        "line search failed to find a descent step", s.iter});
-                s.alpha = alpha;
+                     return std::unexpected(Diagnosis{Cause::LineSearchFail,
+                         "line search failed to find a descent step", s.iter});
+                 s.alpha = alpha;
+                 alpha_hint_ = alpha;
 
                 // step + project onto domain
                 ga::Vector<T> xn(n), xp(n);
@@ -434,8 +470,12 @@ namespace kalpa {
     private:
         template<typename F>
         T do_line_search(const F& f, const IterState<T>& s) {
-            if constexpr (requires { line_.search(f, deriv_, s.x, s.dir, s.f, s.g); })
+            if constexpr (requires { line_.search(f, deriv_, s.x, s.dir, s.f, s.g, alpha_hint_); })
+                return line_.search(f, deriv_, s.x, s.dir, s.f, s.g, alpha_hint_);
+            else if constexpr (requires { line_.search(f, deriv_, s.x, s.dir, s.f, s.g); })
                 return line_.search(f, deriv_, s.x, s.dir, s.f, s.g);
+            else if constexpr (requires { line_.search(f, s.x, s.dir, s.f, s.g, alpha_hint_); })
+                return line_.search(f, s.x, s.dir, s.f, s.g, alpha_hint_);
             else
                 return line_.search(f, s.x, s.dir, s.f, s.g);
         }
@@ -445,7 +485,8 @@ namespace kalpa {
         [[no_unique_address]] LineSrch  line_;
         [[no_unique_address]] Stop      stop_;
         [[no_unique_address]] Telem     telem_;
-    };
+        T alpha_hint_{T{1}};
+     };
 
 } // namespace kalpa
 

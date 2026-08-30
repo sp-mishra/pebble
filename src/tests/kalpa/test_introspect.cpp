@@ -129,3 +129,25 @@ TEST_CASE("kalpa: telemetry does not alter the optimum", "[kalpa][introspect]") 
     CHECK(rp->x[0] == Catch::Approx(rb->x[0]).margin(1e-9));
     CHECK(rp->x[1] == Catch::Approx(rb->x[1]).margin(1e-9));
 }
+
+TEST_CASE("kalpa: SparseTrace records sparsely and preserves order", "[kalpa][introspect][trace]") {
+    SparseTrace<double> trace;
+    trace.stride = 3;
+    trace.min_rel_drop = 0.20;
+
+    for (std::size_t k = 0; k < 10; ++k) {
+        IterState<double> s;
+        s.iter = k;
+        s.alpha = 1.0;
+        s.step = 0.1;
+        s.grad_norm = 10.0 - static_cast<double>(k);
+        s.f = 100.0 - 8.0 * static_cast<double>(k);
+        trace.record(s);
+    }
+
+    REQUIRE(trace.size() >= 4);
+    CHECK(trace.rows.front().iter == 0);
+    CHECK(trace.rows.back().iter == 9);
+    for (std::size_t i = 1; i < trace.size(); ++i)
+        CHECK(trace.rows[i].iter > trace.rows[i - 1].iter);
+}

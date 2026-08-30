@@ -56,7 +56,9 @@ TEST_CASE("Anukrama: a transaction has one terminal commit", "[anukrama][mvcc][t
     auto tx = values.begin();
     tx.put("once", 1);
     REQUIRE(tx.commit().has_value());
-    CHECK(tx.commit().error() == anukrama::error::transaction_finished);
+    const auto second_commit = tx.commit();
+    REQUIRE_FALSE(second_commit.has_value());
+    CHECK(second_commit.error() == anukrama::error::transaction_finished);
 }
 
 TEST_CASE("Anukrama: externally ordered durable commits and snapshot scans", "[anukrama][mvcc][durable][scan]") {
@@ -190,4 +192,3 @@ TEST_CASE("anukrama: prune retains min-active-visible version", "[anukrama][prun
     values.prune();
     CHECK(values.get("k") == 3);
 }
-
