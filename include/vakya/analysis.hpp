@@ -1,7 +1,7 @@
 #pragma once
 
 // =============================================================================
-// vakya/analysis.hpp — semantic analysis driver (V3, opt-in)
+// vakya/analysis.hpp — semantic analysis driver (opt-in)
 //
 // C++23, header-only, no virtual, no macros.
 // Namespace: vakya::types

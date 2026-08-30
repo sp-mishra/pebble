@@ -1,12 +1,12 @@
 #pragma once
 
 // =============================================================================
-// vakya/types/capability.hpp — capability descriptor + mask (V3, opt-in)
+// vakya/types/capability.hpp — capability descriptor + mask (opt-in)
 //
 // C++23, header-only, no virtual, no macros.
 // Namespace: vakya::types
 //
-// Capabilities become first-class constraints in V3.
+// Capabilities become first-class constraints in the reasoning layer.
 // requires_capability(T, Cap) lowers to constraint_kind::requires_cap.
 // Simple membership: rule solver. Path-sensitive: Tarka SMT solver.
 //

@@ -1,5 +1,5 @@
 // =============================================================================
-// test_vakya_v3.cpp — Unit tests for the V3 constraint-reasoning stack.
+// test_vakya_reasoning.cpp — Unit tests for the constraint-reasoning stack.
 //
 // Verifies:
 //   containers/descriptor_registry.hpp
@@ -91,7 +91,7 @@ TEST_CASE (
 
 "descriptor_registry: register and find by id"
 ,
-"[v3][registry]"
+"[reasoning][registry]"
 )
  {
     containers::descriptor_registry<test_desc> reg;
@@ -117,7 +117,7 @@ TEST_CASE (
 
 "descriptor_registry: find_by_name"
 ,
-"[v3][registry]"
+"[reasoning][registry]"
 )
  {
     containers::descriptor_registry<test_desc> reg;
@@ -143,7 +143,7 @@ TEST_CASE (
 
 "descriptor_registry: by_category"
 ,
-"[v3][registry]"
+"[reasoning][registry]"
 )
  {
     containers::descriptor_registry<test_desc> reg;
@@ -171,7 +171,7 @@ TEST_CASE (
 
 "descriptor_registry: duplicate stable_id overwrites"
 ,
-"[v3][registry]"
+"[reasoning][registry]"
 )
  {
     containers::descriptor_registry<test_desc> reg;
@@ -204,7 +204,7 @@ TEST_CASE (
 
 "type_registry: make_builtin_type_registry discovers primitives"
 ,
-"[v3][type_registry]"
+"[reasoning][type_registry]"
 )
  {
     auto reg = make_builtin_type_registry();
@@ -230,7 +230,7 @@ TEST_CASE (
 
 "capability_registry: 5 builtin capabilities"
 ,
-"[v3][capability]"
+"[reasoning][capability]"
 )
  {
     auto reg = make_builtin_capability_registry();
@@ -250,7 +250,7 @@ TEST_CASE (
 
 "capability_mask: has_capability / add_capability"
 ,
-"[v3][capability]"
+"[reasoning][capability]"
 )
  {
     capability_mask mask = 0;
@@ -269,7 +269,7 @@ TEST_CASE (
 
 "effect_registry: 5 builtin effects"
 ,
-"[v3][effect]"
+"[reasoning][effect]"
 )
  {
     auto reg = make_builtin_effect_registry();
@@ -288,7 +288,7 @@ TEST_CASE (
 
 "effect_mask: has_effect / add_effect"
 ,
-"[v3][effect]"
+"[reasoning][effect]"
 )
  {
     effect_mask mask = 0;
@@ -307,7 +307,7 @@ TEST_CASE (
 
 "constraint_registry: same_type routes to unify"
 ,
-"[v3][constraint_registry]"
+"[reasoning][constraint_registry]"
 )
  {
     auto reg = make_builtin_constraint_registry();
@@ -327,7 +327,7 @@ TEST_CASE (
 
 "constraint_registry: equivalent routes to egraph"
 ,
-"[v3][constraint_registry]"
+"[reasoning][constraint_registry]"
 )
  {
     auto reg = make_builtin_constraint_registry();
@@ -346,7 +346,7 @@ TEST_CASE (
 
 "solve_batch: routes constraints and returns solved status"
 ,
-"[v3][solve_batch]"
+"[reasoning][solve_batch]"
 )
  {
     type_arena arena;
@@ -385,7 +385,7 @@ TEST_CASE (
 
 "analysis_store: update and find"
 ,
-"[v3][analysis_store]"
+"[reasoning][analysis_store]"
 )
  {
     analysis_store store;
@@ -412,7 +412,7 @@ TEST_CASE (
 
 "analysis_store: update_for expr-keyed"
 ,
-"[v3][analysis_store]"
+"[reasoning][analysis_store]"
 )
  {
     analysis_store store;
@@ -437,7 +437,7 @@ TEST_CASE (
 
 "analysis_store: discover_impl iterates"
 ,
-"[v3][analysis_store]"
+"[reasoning][analysis_store]"
 )
  {
     analysis_store store;
@@ -461,7 +461,7 @@ TEST_CASE (
 
 "shape: intern_shape and shape_rank"
 ,
-"[v3][shape]"
+"[reasoning][shape]"
 )
  {
     type_arena arena;
@@ -486,7 +486,7 @@ TEST_CASE (
 
 "shape: make_matmul_constraints inner dim constraint"
 ,
-"[v3][shape]"
+"[reasoning][shape]"
 )
  {
     type_arena arena;
@@ -520,7 +520,7 @@ TEST_CASE (
 
 "type_rewrite_engine: Optional idempotence"
 ,
-"[v3][type_rewrite]"
+"[reasoning][type_rewrite]"
 )
  {
     type_arena arena;
@@ -553,7 +553,7 @@ TEST_CASE (
 
 "type_rewrite_engine: normalize is idempotent"
 ,
-"[v3][type_rewrite]"
+"[reasoning][type_rewrite]"
 )
  {
     type_arena arena;
@@ -576,7 +576,7 @@ TEST_CASE (
 
 "typed_pattern: typed<> combinator basic"
 ,
-"[v3][typed_pattern]"
+"[reasoning][typed_pattern]"
 )
  {
     using namespace vakya::typed_pattern;
@@ -614,7 +614,7 @@ TEST_CASE (
 
 "typed_pattern: trait<> combinator"
 ,
-"[v3][typed_pattern]"
+"[reasoning][typed_pattern]"
 )
  {
     using namespace vakya::typed_pattern;
@@ -646,7 +646,7 @@ TEST_CASE (
 
 "verify: no_smt_backend returns deferred"
 ,
-"[v3][verify]"
+"[reasoning][verify]"
 )
  {
     analysis_store store;
@@ -670,7 +670,7 @@ TEST_CASE (
 
 "verify: all_proven false for deferred report"
 ,
-"[v3][verify]"
+"[reasoning][verify]"
 )
  {
     analysis_store store;
@@ -694,7 +694,7 @@ TEST_CASE (
 
 "query: effect_pred filters correctly"
 ,
-"[v3][query]"
+"[reasoning][query]"
 )
  {
     using namespace vakya::query;
@@ -724,7 +724,7 @@ TEST_CASE (
 
 "query: capability_pred filters correctly"
 ,
-"[v3][query]"
+"[reasoning][query]"
 )
  {
     using namespace vakya::query;
@@ -749,7 +749,7 @@ TEST_CASE (
 
 "query: proven_pred filters correctly"
 ,
-"[v3][query]"
+"[reasoning][query]"
 )
  {
     using namespace vakya::query;
@@ -775,7 +775,7 @@ TEST_CASE (
 
 "query: composed predicates filter correctly"
 ,
-"[v3][query]"
+"[reasoning][query]"
 )
  {
     using namespace vakya::query;
@@ -812,7 +812,7 @@ TEST_CASE (
 
 "analyze: inferred type stored in analysis_store"
 ,
-"[v3][analyze]"
+"[reasoning][analyze]"
 )
  {
     type_arena arena;

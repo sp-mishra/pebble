@@ -224,7 +224,8 @@ struct AppState {
     int bone_root = -1;
     int bone_arm = -1;
 
-    std::optional<pebble::spandana::edsl::ParticleBurstAction> burst;
+    std::optional<pebble::spandana::edsl::ParticleBurstAction<64>> burst;
+    containers::static_vector<pebble::spandana::edsl::Particle, 64>  burst_particles;
     float burst_age = 0.0f;
     float burst_life = 0.0f;
 
@@ -872,7 +873,7 @@ static void step_sim_bodies(float dt) {
 
 static void start_burst(pebble::math::vec2 origin) {
     auto& app = g_app;
-    app.burst = pebble::spandana::edsl::particle_burst()
+    app.burst = pebble::spandana::edsl::particle_burst(app.burst_particles)
         .at(origin)
         .count(48)
         .speed(70.0f, 210.0f)
@@ -1025,7 +1026,7 @@ static void build_scene(kalpana::Scene& scene) {
     }
 
     if (app.burst) {
-        const auto& particles = app.burst->particles();
+        const auto& particles = app.burst_particles;
         for (const auto& p : particles) {
             float life_t = std::max(0.0f, 1.0f - p.age / std::max(0.001f, p.lifetime));
             kalpana::Path dot;

@@ -14,20 +14,20 @@ namespace pebble::spandana::edsl {
 // The target world is optional: bind one via `into(world)` and on_start() delegates to
 // prakriti::World::apply_radial_impulse; left unbound it is an inert descriptor (no simulation
 // in Spandana). This keeps the fluent verb usable without a world in scope.
-class RadialImpulseAction : public IAnimationAction {
+class RadialImpulseAction {
 public:
     RadialImpulseAction(pebble::math::vec2 center, float radius, float magnitude,
                         prakriti::World<>* world, ResourceKey key)
         : center_(center), radius_(radius), magnitude_(magnitude), world_(world), key_(key) {}
 
-    void on_start() override {
+    void on_start() {
         // Delegate to Prakriti: outward impulse to every dynamic particle within radius.
         if (world_) world_->apply_radial_impulse(center_, radius_, magnitude_);
     }
 
-    void update(float, float) override {}
-    [[nodiscard]] float duration() const noexcept override { return 0.0f; } // Instantaneous
-    [[nodiscard]] ResourceKey resource_key() const noexcept override { return key_; }
+    void update(float, float) noexcept {}
+    [[nodiscard]] float duration() const noexcept { return 0.0f; } // Instantaneous
+    [[nodiscard]] ResourceKey resource_key() const noexcept { return key_; }
 
     [[nodiscard]] pebble::math::vec2 center() const noexcept { return center_; }
     [[nodiscard]] float radius() const noexcept { return radius_; }

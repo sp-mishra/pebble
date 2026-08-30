@@ -16,15 +16,20 @@
 namespace pebble::spandana::edsl {
 
 // 1. Assign Material Action
-class SetMaterialAction : public IAnimationAction {
+class SetMaterialAction {
 public:
     SetMaterialAction(pebble::ecs::World& world, pebble::ecs::Entity entity,
                       gati::MaterialComponent mat, ResourceKey key)
         : world_(world), entity_(entity), mat_(mat), key_(key) {
+        // Material assignment is zero-duration setup (duration()==0): the
+        // component must exist as soon as the action is scheduled so that
+        // queries and later same-frame actions see the initial state, not only
+        // after the first timeline.update(). Applying here is idempotent with
+        // the on_start() call below (both overwrite with the same mat_).
         apply();
     }
 
-    void on_start() override {
+    void on_start() {
         apply();
     }
 
@@ -37,9 +42,9 @@ public:
         }
     }
 
-    void update(float, float) override {}
-    [[nodiscard]] float duration() const noexcept override { return 0.0f; }
-    [[nodiscard]] ResourceKey resource_key() const noexcept override { return key_; }
+    void update(float, float) noexcept {}
+    [[nodiscard]] float duration() const noexcept { return 0.0f; }
+    [[nodiscard]] ResourceKey resource_key() const noexcept { return key_; }
 
 private:
     pebble::ecs::World&     world_;
@@ -91,14 +96,14 @@ inline SetMaterialBuilder set_material(pebble::ecs::World& world, pebble::ecs::E
 }
 
 // 2. Continuous Heat / Thermal Source Action
-class ApplyHeatAction : public IAnimationAction {
+class ApplyHeatAction {
 public:
     ApplyHeatAction(pebble::ecs::World& world, pebble::math::vec2 center,
                     float radius, float target_temp, float duration, ResourceKey key)
         : world_(world), center_(center), radius_(radius),
           target_temp_(target_temp), duration_(duration), key_(key) {}
 
-    void update(float, float dt) override {
+    void update(float, float dt) noexcept {
         const float r2 = radius_ * radius_;
         world_.view<gati::MaterialComponent, gati::Transform>([&](pebble::ecs::Entity,
                                                                   gati::MaterialComponent& mat,
@@ -114,8 +119,8 @@ public:
         });
     }
 
-    [[nodiscard]] float duration() const noexcept override { return duration_; }
-    [[nodiscard]] ResourceKey resource_key() const noexcept override { return key_; }
+    [[nodiscard]] float duration() const noexcept { return duration_; }
+    [[nodiscard]] ResourceKey resource_key() const noexcept { return key_; }
 
 private:
     pebble::ecs::World& world_;

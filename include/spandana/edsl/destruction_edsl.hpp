@@ -8,7 +8,7 @@
 
 namespace pebble::spandana::edsl {
 
-class ShatterEntityAction : public IAnimationAction {
+class ShatterEntityAction {
 public:
     ShatterEntityAction(pebble::ecs::World& world, pebble::ecs::Entity target,
                         pebble::math::vec2 impact_point, std::size_t shard_count,
@@ -16,13 +16,13 @@ public:
         : world_(world), target_(target), impact_(impact_point),
           shard_count_(shard_count), impulse_mag_(impulse_mag), key_(key) {}
 
-    void on_start() override {
+    void on_start() {
         DestructionEngine::shatter_entity_in_world(world_, target_, impact_, shard_count_, impulse_mag_);
     }
 
-    void update(float, float) override {}
-    [[nodiscard]] float duration() const noexcept override { return 0.0f; } // Instantaneous
-    [[nodiscard]] ResourceKey resource_key() const noexcept override { return key_; }
+    void update(float, float) noexcept {}
+    [[nodiscard]] float duration() const noexcept { return 0.0f; } // Instantaneous
+    [[nodiscard]] ResourceKey resource_key() const noexcept { return key_; }
 
 private:
     pebble::ecs::World& world_;

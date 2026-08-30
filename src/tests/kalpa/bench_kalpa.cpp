@@ -2,7 +2,10 @@
 #include <kalpa/kalpa.hpp>
 #include <kalpa/algo/unconstrained.hpp>
 #include <kalpa/algo/global.hpp>
+#include <kalpa/algo/least_squares.hpp>
+#include <kalpa/algo/constrained.hpp>
 #include <containers/matrix/dense.hpp>
+#include <vector>
 
 using namespace kalpa;
 
@@ -87,4 +90,69 @@ TEST_CASE("kalpa bench: serial vs parallel population evaluation", "[kalpa][benc
         DifferentialEvolution<double, ParallelEval> de; de.max_gen = 120; de.pop_size = 60;
         return de.solve(SepQuad{}, lo, hi, Rng{2025})->f;
     };
+}
+
+// ===========================================================================
+// Nonlinear least-squares scaling. Residuals rᵢ(x) = xᵢ − i over m = n comps
+// (SepQuad's per-term structure as an NLS): minimum xᵢ = i, ‖r‖ = 0. Scales
+// with the residual/parameter count.
+// ===========================================================================
+namespace {
+    // r_i(x) = x[i] − i. One residual functor per component, built at a fixed
+    // index; file scope for the templated call operator.
+    struct ResIdx {
+        std::size_t i;
+        template<typename V> auto operator()(const V& x) const {
+            using S = typename V::value_type;
+            return x[i] - S(static_cast<double>(i));
+        }
+    };
+    std::vector<ResIdx> make_residuals(std::size_t n) {
+        std::vector<ResIdx> r; r.reserve(n);
+        for (std::size_t i = 0; i < n; ++i) r.push_back(ResIdx{i});
+        return r;
+    }
+    double run_lm(std::size_t n) {
+        LevenbergMarquardt<double> lm;
+        auto r = lm.solve(make_residuals(n), zeros(n));
+        return r.has_value() ? r->residual_norm : 1e9;
+    }
+}
+
+TEST_CASE("kalpa bench: Levenberg–Marquardt scaling", "[kalpa][bench][!benchmark]") {
+    CHECK(run_lm(50) < 1e-6);      // correctness guard
+
+    BENCHMARK("LM  n=10")  { return run_lm(10); };
+    BENCHMARK("LM  n=50")  { return run_lm(50); };
+    BENCHMARK("LM  n=200") { return run_lm(200); };
+}
+
+// ===========================================================================
+// Inequality-SQP timing on the canonical  min ‖x‖²  s.t.  2−x₀−x₁ ≤ 0.
+// ===========================================================================
+namespace {
+    struct BenchSumSq2 {
+        template<typename V> auto operator()(const V& x) const { return x[0]*x[0] + x[1]*x[1]; }
+    };
+    struct BenchIneqGe2 {
+        template<typename V> auto operator()(const V& x) const {
+            using S = typename V::value_type; return S{2} - x[0] - x[1];
+        }
+    };
+    double run_sqp_ineq() {
+        std::vector<BenchIneqGe2> ineq{ BenchIneqGe2{} };
+        std::vector<BenchIneqGe2> eq{};                 // empty; reuse type
+        SQP_Ineq<double> sqp;
+        ga::Vector<double> x0(2, 0.0);
+        // empty eq set of a distinct dummy type would work too; use no equalities
+        std::vector<BenchSumSq2> none{};
+        auto r = sqp.solve(BenchSumSq2{}, x0, Derivatives<Dual,double>{}, none, ineq);
+        return r.has_value() ? r->f : 1e9;
+    }
+}
+
+TEST_CASE("kalpa bench: inequality SQP timing", "[kalpa][bench][!benchmark]") {
+    CHECK(run_sqp_ineq() == Catch::Approx(2.0).margin(1e-2));
+
+    BENCHMARK("SQP_Ineq  (2 var, 1 ineq)") { return run_sqp_ineq(); };
 }

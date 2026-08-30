@@ -123,3 +123,36 @@ TEST_CASE("kalpa: different seeds give different DE trajectories", "[kalpa][glob
     // near-certain to differ before full convergence
     CHECK(a->x[0] != b->x[0]);
 }
+
+// ===========================================================================
+// Bayesian optimization — GP surrogate + EI / LCB acquisition. Coarse gates:
+// BO is sample-efficient but not high-precision in a few dozen evaluations.
+//   Sphere on [−4,4]², seed 7 → drives f well below the random-init best.
+// ===========================================================================
+TEST_CASE("kalpa: Bayesian optimization descends the sphere", "[kalpa][global][bo]") {
+    BayesianOptimization<double> bo;
+    bo.init_samples = 8; bo.max_iter = 40; bo.cand_pool = 512; bo.length_scale = 2.0;
+    auto r = bo.solve(Sphere{}, vN({-4.0,-4.0}), vN({4.0,4.0}), Rng{7});
+    REQUIRE(r.has_value());
+    CHECK(r->f < 1e-1);
+    CHECK(std::sqrt(r->x[0]*r->x[0] + r->x[1]*r->x[1]) < 0.5);
+}
+
+TEST_CASE("kalpa: Bayesian optimization is deterministic under a fixed seed", "[kalpa][global][bo][determinism]") {
+    BayesianOptimization<double> bo; bo.init_samples = 6; bo.max_iter = 20;
+    auto a = bo.solve(Sphere{}, vN({-4.0,-4.0}), vN({4.0,4.0}), Rng{123});
+    auto b = bo.solve(Sphere{}, vN({-4.0,-4.0}), vN({4.0,4.0}), Rng{123});
+    REQUIRE(a.has_value()); REQUIRE(b.has_value());
+    CHECK(a->f == b->f);
+    CHECK(a->x[0] == b->x[0]);
+    CHECK(a->x[1] == b->x[1]);
+}
+
+TEST_CASE("kalpa: Bayesian optimization LCB variant also reduces f", "[kalpa][global][bo]") {
+    BayesianOptimization<double> bo;
+    bo.init_samples = 8; bo.max_iter = 40; bo.length_scale = 2.0;
+    bo.acq = Acquisition::LowerConfidenceBound; bo.beta = 2.0;
+    auto r = bo.solve(Sphere{}, vN({-4.0,-4.0}), vN({4.0,4.0}), Rng{11});
+    REQUIRE(r.has_value());
+    CHECK(r->f < 1.0);                 // LCB explores more; coarser gate than EI
+}

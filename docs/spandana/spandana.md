@@ -22,6 +22,7 @@ Include: `#include <spandana/spandana.hpp>`
    - [How to Optimize Further (Extreme Timeline Throughput)](#52-how-to-optimize-further-extreme-timeline-throughput)
    - [How to Improve Motion Quality & Spring Smoothness](#53-how-to-improve-motion-quality--spring-smoothness)
    - [Configuration Trade-Off Matrix](#54-configuration-trade-off-matrix)
+   - [Auto-Sonification (Spandana ⇄ Dhvani)](#55-auto-sonification-spandana--dhvani)
 6. [Declarative World EDSL Grammar & Syntax Reference](#6-declarative-world-edsl-grammar--syntax-reference)
 7. [Zero-to-Hero Tutorial](#7-zero-to-hero-tutorial)
    - [Step 1: Instantiating the Timeline & Resource Keys](#step-1-instantiating-the-timeline--resource-keys)
@@ -142,13 +143,14 @@ $$\text{Angle} = \text{Perlin}(\text{seed}_3, t \cdot \omega) \cdot T^2 \cdot \t
 | Header / Module | Key Classes & Functions | Description |
 |:---|:---|:---|
 | `spandana/easing.hpp` | `ease::in_quad`, `ease::out_elastic`, `ease::in_out_bounce` | 32 standard Penner easing functions. |
-| `spandana/spring.hpp` | `AnalyticalSpringDamper`, `.update(dt)` | Exact analytical damped harmonic oscillator. |
+| `spandana/spring.hpp` | `AnalyticalSpringDamper`, `AngleSpringDamper`, `.step(pos, vel, target, dt)` | Exact analytical damped harmonic oscillator; angle variant takes the shortest arc across the ±π wrap. Coefficients ($\omega_0, \zeta$) are precomputed once at construction. |
 | `spandana/ik.hpp` | `TwoBoneIK`, `FABRIK2D`, `.solve(base, target)` | Analytical and iterative inverse kinematics solvers. |
 | `spandana/cloth.hpp` | `ClothVerlet2D`, `.step(dt)`, `.to_chain<N>()` | Verlet distance cloth with Akruti collision conversion. |
 | `spandana/destruction.hpp`| `DestructionEngine`, `.shatter(entity, point)` | Procedural Voronoi fracture with exact mass properties. |
 | `spandana/blend_space.hpp` | `BlendSpace2D`, `.evaluate(vx, vy)` | Parametric 2D directional blend space. |
 | `spandana/skeleton.hpp` | `Skeleton2D`, `.set_bone_pose()`, `.skin()` | Hierarchical 2D skeletal FK and linear blend skinning. |
-| `spandana/timeline.hpp` | `Timeline`, `.add(Actions...)`, `.update(dt)` | Multi-track orchestrator with automatic DAG scheduling. |
+| `spandana/timeline.hpp` | `Timeline`, `.add(Actions...)`, `.update(dt)` | Multi-track orchestrator with automatic DAG scheduling. Actions are stored via a no-virtual small-buffer type-erased `Action` (inline `InlineBytes` storage, free-function vtable, no heap, no RTTI). |
+| `spandana/edsl/audio_policy.hpp` | `auto_sonify(profile)`, `SimProfile`, `NullSonifier`, `DhvaniSonifier`, `sound_palette()` | **Opt-in** Dhvani auto-sonification. A compile-time `Sonifier` policy turns a simulation profile + prakriti material state into the right procedural cue. Default `NullSonifier` is an empty type — zero bytes, zero calls. |
 
 ---
 
@@ -160,9 +162,12 @@ $$\text{Angle} = \text{Perlin}(\text{seed}_3, t \cdot \omega) \cdot T^2 \cdot \t
 |:---|:---|:---|:---|
 | `spring_stiffness` | `AnalyticalSpringDamper` | `100.0f` | Spring return force multiplier. |
 | `spring_damping` | `AnalyticalSpringDamper` | `10.0f` | Velocity damping rate ($\zeta = c / (2\sqrt{km})$). |
+| `stiffness` / `damping` | `AngleSpringDamper` | `180.0f` / `12.0f` | Angular spring defaults; shortest-arc wrapping applied before the analytic step. |
 | `trauma_decay_rate` | `CameraTrauma` | `1.5f / s` | Rate of camera shake recovery. |
 | `cloth_substeps` | `ClothVerlet2D` | `4` | Constraint relaxation sweeps per frame. |
 | `max_active_actions`| `Timeline` | `64` | Inlined action buffer capacity (zero heap allocations). |
+| `InlineBytes` | `BasicAction` | `192` | Small-buffer size for the type-erased action; fits every shipped EDSL action (largest is `SetMaterialAction`, 152B). An action larger than this fails a `static_assert` (no silent heap fallback). |
+| `master_volume` | `DhvaniSonifier` | `1.0f` | Scales every emitted cue's volume. `NullSonifier` (default) emits nothing. |
 
 ### 5.2 How to Optimize Further (Extreme Timeline Throughput)
 1. **Leverage Automatic Parallelism**: Group non-conflicting entity tweens into a single `timeline.add(...)` call — Spandana schedules them across Pravaha task threads with zero lock overhead.
@@ -185,6 +190,35 @@ $$\text{Angle} = \text{Perlin}(\text{seed}_3, t \cdot \omega) \cdot T^2 \cdot \t
 
 ---
 
+## 5.5 Auto-Sonification (Spandana ⇄ Dhvani)
+
+Spandana can drive [Dhvani](../dhvani/dhvani.md) procedural audio directly from a simulation, so *the type of simulation decides the sound* — no manually authored cues. This is a **compile-time policy**, not a runtime dependency: the `Sonifier` concept selects the behavior, and the default `NullSonifier` is an empty type that (via `[[no_unique_address]]`) costs **zero bytes** and compiles every sonify call away. Audio is therefore fully opt-in and zero-overhead when unused.
+
+| Piece | Role |
+|:---|:---|
+| `SimProfile` | The event class being voiced: `Impact`, `Fracture`, `Friction`, `Fluid`, `Thermal`, `Explosion`. |
+| `SonifyContext` | Normalized prakriti/gati state: `density`, `temperature`, `pressure` (prakriti) + `intensity` (gati). |
+| `sound_palette(profile, ctx)` | The single mapping from `SimProfile` + context → a `SonifyCue` (Dhvani cue name + volume + pitch). Pitch is modulated by the acoustic material derived through `dhvani::from_prakriti_material`. |
+| `NullSonifier` | Default policy. Empty, no-op, zero-overhead. |
+| `DhvaniSonifier` | Active policy. Holds a `dhvani::SoundBus*` and plays the palette's cue. |
+| `auto_sonify(profile)` | Timeline directive builder. `.from(density,temp,pressure).intensity(i).via(sonifier)`. |
+
+```cpp
+#include <spandana/edsl/audio_policy.hpp>   // opt-in; NOT pulled by the umbrella
+using namespace pebble::spandana::edsl;
+
+dhvani::SoundBus bus;
+timeline.add(
+    auto_sonify(SimProfile::Fracture)
+        .from(/*density*/ 0.9f, /*temp*/ 0.0f, /*pressure*/ 0.2f)
+        .intensity(0.95f)
+        .via(DhvaniSonifier{&bus}));   // omit .via(...) → NullSonifier, silent & free
+```
+
+The cue names live in the shared `dhvani::DhvaniCue` registry (the one spelling of each procedural voice), so the physics collision bridge (`GatiSoundBridge`) and the Spandana palette agree by construction.
+
+---
+
 ## 6. Declarative World EDSL Grammar & Syntax Reference
 
 ```cpp
@@ -201,8 +235,12 @@ radial_impulse().at(explosion_center).magnitude(1000.0f).radius(10.0f);
 
 // FX & Destruction
 shake_camera(camera).trauma(0.8f).duration(0.4s);
-particle_burst().at(pos).count(64).speed(20.0f, 100.0f);
+particle_burst(particle_buffer).at(pos).count(64).speed(20.0f, 100.0f); // writes into caller-owned buffer
 shatter_entity(glass_pane).at(hit_point).shards(12);
+
+// Auto-Sonification (opt-in; drives Dhvani from the simulation profile)
+auto_sonify(SimProfile::Fracture).from(density, temp, pressure).intensity(0.9f)
+    .via(DhvaniSonifier{&sound_bus});
 ```
 
 ---

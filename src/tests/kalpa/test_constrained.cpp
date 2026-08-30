@@ -197,3 +197,133 @@ TEST_CASE("kalpa: Frank-Wolfe converges over a box domain", "[kalpa][constrained
     CHECK(r->x[0] == Catch::Approx(1.0).margin(1e-2));
     CHECK(r->x[1] == Catch::Approx(1.0).margin(1e-2));
 }
+
+// ===========================================================================
+// File-scope oracles for SQP / ALM (member templates need namespace scope).
+//   f(x) = x₀² + x₁² ;  single equality  c(x) = x₀ + x₁ − 2 = 0.
+//   KKT optimum at (1,1), f=2, multiplier λ=2.
+// ===========================================================================
+namespace {
+    struct SumSq2 {
+        template<typename V> auto operator()(const V& x) const {
+            return x[0]*x[0] + x[1]*x[1];
+        }
+    };
+    struct Eq_sum2 {                     // c(x) = x₀ + x₁ − 2
+        template<typename V> auto operator()(const V& x) const {
+            using S = typename V::value_type;
+            return x[0] + x[1] - S{2};
+        }
+    };
+}
+
+// ===========================================================================
+// Interior-point (Mehrotra) on a convex QP:
+//   min ½‖x‖²  s.t.  x₀ + x₁ = 1,  x ≥ 0   →  (0.5, 0.5), f = 0.25.
+// ===========================================================================
+TEST_CASE("kalpa: interior-point solves an equality+bound QP", "[kalpa][constrained][ipm]") {
+    ga::Matrix<double> H(2, 2, 0.0); H(0,0)=1; H(1,1)=1;   // ½xᵀHx = ½‖x‖²
+    ga::Vector<double> c = v2(0.0, 0.0);
+    ga::Matrix<double> A(1, 2, 0.0); A(0,0)=1; A(0,1)=1;   // x₀+x₁ = 1
+    ga::Vector<double> b(1); b[0]=1.0;
+
+    InteriorPoint<double> ipm;
+    auto r = ipm.solve(H, c, A, b);
+    REQUIRE(r.has_value());
+    CHECK(r->x[0] == Catch::Approx(0.5).margin(1e-6));
+    CHECK(r->x[1] == Catch::Approx(0.5).margin(1e-6));
+    CHECK(r->f    == Catch::Approx(0.25).margin(1e-6));
+}
+
+// Interior-point vs. revised simplex on the same LP (H = 0):
+//   max x+y s.t. x+y ≤ 4, x ≤ 3  → vertex (3,1) (with slacks), f(−x−y) = −4.
+TEST_CASE("kalpa: interior-point matches simplex on an LP", "[kalpa][constrained][ipm][lp]") {
+    ga::Matrix<double> A(2, 4, 0.0);
+    A(0,0)=1; A(0,1)=1; A(0,2)=1;               // x+y+s1 = 4
+    A(1,0)=1;           A(1,3)=1;               // x   +s2 = 3
+    ga::Vector<double> b = v2(4.0, 3.0);
+    ga::Vector<double> c(4, 0.0); c[0]=-1; c[1]=-1;   // min −x−y
+    ga::Matrix<double> H0(4, 4, 0.0);            // LP ⇒ H = 0
+
+    InteriorPoint<double> ipm;
+    auto r = ipm.solve(H0, c, A, b);
+    REQUIRE(r.has_value());
+    CHECK(r->x[0] == Catch::Approx(3.0).margin(1e-5));
+    CHECK(r->x[1] == Catch::Approx(1.0).margin(1e-5));
+    CHECK(r->f    == Catch::Approx(-4.0).margin(1e-5));
+}
+
+// ===========================================================================
+// SQP on  min x₀²+x₁²  s.t.  x₀+x₁−2 = 0   →  (1,1).
+// ===========================================================================
+TEST_CASE("kalpa: SQP solves an equality-constrained NLP", "[kalpa][constrained][sqp]") {
+    std::vector<Eq_sum2> cons{ Eq_sum2{} };
+    SQP<double> sqp;
+    auto r = sqp.solve(SumSq2{}, v2(-1.0, 3.0), Derivatives<Dual,double>{}, cons);
+    REQUIRE(r.has_value());
+    CHECK(r->x[0] == Catch::Approx(1.0).margin(1e-5));
+    CHECK(r->x[1] == Catch::Approx(1.0).margin(1e-5));
+}
+
+// ===========================================================================
+// Augmented Lagrangian on the same NLP → (1,1); inner solver is LBFGS.
+// ===========================================================================
+TEST_CASE("kalpa: augmented Lagrangian solves the equality NLP", "[kalpa][constrained][alm]") {
+    std::vector<Eq_sum2> cons{ Eq_sum2{} };
+    AugmentedLagrangian<double> alm;
+    Solver<LBFGS<double>, Derivatives<Dual,double>, Wolfe<double>> inner;
+    auto r = alm.solve(SumSq2{}, v2(-1.0, 3.0), Derivatives<Dual,double>{}, cons, inner);
+    REQUIRE(r.has_value());
+    CHECK(r->x[0] == Catch::Approx(1.0).margin(1e-4));
+    CHECK(r->x[1] == Catch::Approx(1.0).margin(1e-4));
+}
+
+// ===========================================================================
+// Inequality-constrained SQP (active-set inner QP).
+//   min x₀²+x₁²  s.t.  2 − x₀ − x₁ ≤ 0   (i.e. x₀+x₁ ≥ 2)   →  (1,1), f=2.
+// The constraint is active at the optimum; μ ≥ 0 and complementarity μ·c = 0.
+// ===========================================================================
+namespace {
+    struct Ineq_sum_ge2 {                // c(x) = 2 − x₀ − x₁ ≤ 0
+        template<typename V> auto operator()(const V& x) const {
+            using S = typename V::value_type;
+            return S{2} - x[0] - x[1];
+        }
+    };
+    struct Ineq_x0_le1 {                 // c(x) = x₀ − 1 ≤ 0
+        template<typename V> auto operator()(const V& x) const {
+            using S = typename V::value_type;
+            return x[0] - S{1};
+        }
+    };
+}
+
+TEST_CASE("kalpa: inequality SQP reaches the active-constraint optimum", "[kalpa][constrained][sqp]") {
+    std::vector<Eq_sum2>       eq{};                 // no equalities
+    std::vector<Ineq_sum_ge2>  ineq{ Ineq_sum_ge2{} };
+    SQP_Ineq<double> sqp;
+    auto r = sqp.solve(SumSq2{}, v2(0.0, 0.0), Derivatives<Dual,double>{}, eq, ineq);
+    REQUIRE(r.has_value());
+    CHECK(r->x[0] == Catch::Approx(1.0).margin(1e-4));
+    CHECK(r->x[1] == Catch::Approx(1.0).margin(1e-4));
+    CHECK(r->f    == Catch::Approx(2.0).margin(1e-3));
+    // KKT certificate: stationary, primal-feasible, complementary, μ ≥ 0.
+    CHECK(r->kkt_stationarity     < 1e-4);
+    CHECK(r->primal_infeasibility < 1e-5);
+    CHECK(r->complementarity      < 1e-4);
+    CHECK(r->dual_infeasibility   < 1e-6);           // μ ≥ 0 satisfied
+}
+
+// Inactive constraint: the unconstrained min (0,0) is already feasible for
+// x₀ ≤ 1, so SQP_Ineq should return it with a slack (inactive) inequality.
+TEST_CASE("kalpa: inequality SQP leaves an inactive constraint slack", "[kalpa][constrained][sqp]") {
+    std::vector<Eq_sum2>     eq{};
+    std::vector<Ineq_x0_le1> ineq{ Ineq_x0_le1{} };
+    SQP_Ineq<double> sqp;
+    auto r = sqp.solve(SumSq2{}, v2(0.5, 0.5), Derivatives<Dual,double>{}, eq, ineq);
+    REQUIRE(r.has_value());
+    CHECK(r->x[0] == Catch::Approx(0.0).margin(1e-4));
+    CHECK(r->x[1] == Catch::Approx(0.0).margin(1e-4));
+    CHECK(r->primal_infeasibility < 1e-6);           // −1 ≤ 0 feasible
+    CHECK(r->kkt_stationarity     < 1e-4);
+}

@@ -351,6 +351,94 @@ namespace kalpa {
         }
     };
 
+    // =======================================================================
+    // Nesterov accelerated gradient — heavy-ball with a lookahead gradient.
+    //   Unlike Momentum (which uses ∇f at x), Nesterov evaluates the gradient
+    //   at the extrapolated point  x + μv,  giving the O(1/k²) rate on smooth
+    //   convex objectives. The Solver already passes deriv/f to direction(),
+    //   so the lookahead gradient is computed here without any Solver change.
+    //       xₗ = x + μv;   g̃ = ∇f(xₗ);   v ← μv − g̃;   d = v
+    // =======================================================================
+    template<typename T>
+    struct Nesterov {
+        T mu{static_cast<T>(0.9)};
+        ga::Vector<T> v;
+        void reset(std::size_t n) { v = ga::Vector<T>(n, T{0}); }
+
+        template<typename D, typename F>
+        void direction(const D& deriv, const F& f, const IterState<T>& s, ga::Vector<T>& out) {
+            const std::size_t n = s.g.size();
+            ga::Vector<T> xl(n), gl(n);
+            for (std::size_t i = 0; i < n; ++i) xl[i] = s.x[i] + mu * v[i];
+            deriv.grad(f, xl, gl);
+            for (std::size_t i = 0; i < n; ++i) {
+                v[i] = mu * v[i] - gl[i];
+                out[i] = v[i];
+            }
+            // Descent safeguard: d = v is built from the lookahead gradient
+            // ∇f(x+μv), but the line search tests descent (dᵀg) against the
+            // gradient at the CURRENT x. When the two disagree (dᵀg ≥ 0) the
+            // Armijo search has no valid bracket and the solve aborts with
+            // LineSearchFail. Restart the momentum from steepest descent, exactly
+            // as ConjugateGradient does, so a descent direction is guaranteed.
+            T dg{};
+            for (std::size_t i = 0; i < n; ++i) dg += out[i] * s.g[i];
+            if (dg >= T{0}) {
+                for (std::size_t i = 0; i < n; ++i) { v[i] = -s.g[i]; out[i] = v[i]; }
+            }
+        }
+        // The Solver moves by αd = α·v, but the velocity recurrence above reuses
+        // the *unscaled* v. When Armijo shrinks α<1 the carried momentum no longer
+        // matches the realized step, so v drifts and compounds into a divergent
+        // overshoot on well-conditioned problems (gnorm grows, Armijo starves).
+        // Rebind v to the step actually taken (x1−x0) so momentum stays consistent.
+        void update(const ga::Vector<T>& x0, const ga::Vector<T>&,
+                    const ga::Vector<T>& x1, const ga::Vector<T>&) {
+            for (std::size_t i = 0; i < x0.size(); ++i) v[i] = x1[i] - x0[i];
+        }
+    };
+
+    // =======================================================================
+    // DFP — dense inverse-Hessian quasi-Newton, rank-2 (Davidon–Fletcher–Powell).
+    //   The additive dual of BFGS above. Same direction d = −H·g; the update
+    //   is the simpler rank-2 form
+    //       H ← H + (s sᵀ)/(sᵀy) − (Hy)(Hy)ᵀ/(yᵀHy)
+    //   with the curvature guard sᵀy > 0 (pair with Wolfe to preserve it).
+    // =======================================================================
+    template<typename T>
+    struct DFP {
+        ga::Matrix<T> H;   // inverse Hessian approximation
+        bool init{false};
+        void reset(std::size_t n) { H = ga::Matrix<T>::identity(n); init = true; }
+
+        template<typename D, typename F>
+        void direction(const D&, const F&, const IterState<T>& s, ga::Vector<T>& out) {
+            const std::size_t n = s.g.size();
+            for (std::size_t i = 0; i < n; ++i) {
+                T acc{};
+                for (std::size_t j = 0; j < n; ++j) acc += H(i, j) * s.g[j];
+                out[i] = -acc;
+            }
+        }
+
+        void update(const ga::Vector<T>& x0, const ga::Vector<T>& g0,
+                    const ga::Vector<T>& x1, const ga::Vector<T>& g1) {
+            const std::size_t n = x0.size();
+            ga::Vector<T> sv(n), yv(n);
+            for (std::size_t i = 0; i < n; ++i) { sv[i] = x1[i] - x0[i]; yv[i] = g1[i] - g0[i]; }
+            const T sy = detail::dot(sv, yv);
+            if (sy <= T{0}) return;
+            ga::Vector<T> Hy(n);
+            for (std::size_t i = 0; i < n; ++i) { T a{}; for (std::size_t j=0;j<n;++j) a += H(i,j)*yv[j]; Hy[i]=a; }
+            const T yHy = detail::dot(yv, Hy);
+            if (yHy <= T{0}) return;
+            // H ← H + s sᵀ/sy − Hy (Hy)ᵀ/yHy
+            for (std::size_t i = 0; i < n; ++i)
+                for (std::size_t j = 0; j < n; ++j)
+                    H(i,j) += sv[i]*sv[j] / sy - Hy[i]*Hy[j] / yHy;
+        }
+    };
+
 } // namespace kalpa
 
 #endif // PEBBLE_KALPA_ALGO_UNCONSTRAINED_HPP

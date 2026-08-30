@@ -1,7 +1,7 @@
 #pragma once
 
 // =============================================================================
-// vakya/types/type_registry.hpp — runtime type-descriptor registry (V3, opt-in)
+// vakya/types/type_registry.hpp — runtime type-descriptor registry (opt-in)
 //
 // C++23, header-only, no virtual, no macros.
 // Namespace: vakya::types

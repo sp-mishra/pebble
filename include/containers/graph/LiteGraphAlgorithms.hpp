@@ -29,12 +29,29 @@ namespace litegraph {
         NoPath
     };
 
+    // Node reordering strategy applied at freeze time. The compact-index space is
+    // permuted, but original<->compact id maps stay consistent so results remain
+    // invariant under relabeling.
+    enum class Reorder {
+        Original,   // active_node_ids() order (default; zero cost).
+        DegreeDesc, // highest out-degree first — improves locality for gather kernels.
+        Bfs         // BFS discovery order from the lowest compact node — cache-friendly.
+    };
+
+    // Opt-in freeze configuration. Defaults reproduce the historical behaviour
+    // (outgoing-only, no reordering) so no caller pays for what it does not use.
+    struct CsrFreezeOptions {
+        bool build_incoming = false;
+        Reorder reorder = Reorder::Original;
+    };
+
     // ----------- Frozen CSR Graph -----------
     template <typename EdgeT, DirectednessTag Directedness = Directed>
     class CsrGraph {
     public:
         using edge_type = EdgeT;
         using directed_tag = Directedness;
+        using weight_type = double;
 
         [[nodiscard]] std::size_t node_count() const noexcept { return compact_to_original_.size(); }
         [[nodiscard]] std::size_t edge_count() const noexcept { return targets_.size(); }
@@ -77,7 +94,11 @@ namespace litegraph {
             return std::span(edge_ids_).subspan(begin, end - begin);
         }
 
-        [[nodiscard]] std::span<const EdgeT> out_edge_data(const std::size_t compact_node_index) const {
+        // Edge payloads are only materialised for non-arithmetic EdgeT; arithmetic
+        // payloads live in edge_weights() (as double) to avoid duplicate storage.
+        template <typename T = EdgeT>
+        [[nodiscard]] std::enable_if_t<!std::is_arithmetic_v<T>, std::span<const EdgeT>>
+        out_edge_data(const std::size_t compact_node_index) const {
             if (compact_node_index >= node_count()) {
                 throw std::out_of_range("CSR compact node index out of range.");
             }
@@ -96,79 +117,251 @@ namespace litegraph {
         [[nodiscard]] const std::vector<std::size_t>& offsets() const noexcept { return offsets_; }
         [[nodiscard]] const std::vector<NodeId>& targets() const noexcept { return targets_; }
 
+        // ---- Incoming (reverse) CSR — present only when built via CsrFreezeOptions ----
+        [[nodiscard]] bool has_incoming() const noexcept { return incoming_enabled_; }
+
+        [[nodiscard]] const std::vector<std::size_t>& in_offsets() const noexcept { return in_offsets_; }
+
+        // Compact source node indices, one per incoming arc.
+        [[nodiscard]] const std::vector<NodeId>& in_sources() const noexcept { return in_sources_; }
+
+        // For each incoming arc, the position of the mirrored outgoing arc — lets
+        // gather kernels read edge_weights()/edge_ids() without duplicating them.
+        [[nodiscard]] const std::vector<std::size_t>& in_edge_pos() const noexcept { return in_edge_pos_; }
+
+        [[nodiscard]] std::size_t in_degree_csr(const std::size_t compact_node_index) const {
+            if (!incoming_enabled_ || compact_node_index >= node_count()) return 0;
+            return in_offsets_[compact_node_index + 1] - in_offsets_[compact_node_index];
+        }
+
+        [[nodiscard]] std::span<const NodeId> in_neighbors(const std::size_t compact_node_index) const {
+            if (!incoming_enabled_ || compact_node_index >= node_count()) return {};
+            const std::size_t begin = in_offsets_[compact_node_index];
+            const std::size_t end = in_offsets_[compact_node_index + 1];
+            return std::span(in_sources_).subspan(begin, end - begin);
+        }
+
+        // Structural self-check on the frozen arrays.
+        [[nodiscard]] std::expected<void, GraphError> validate() const {
+            const std::size_t n = node_count();
+            if (offsets_.size() != n + 1) return std::unexpected(GraphError::OffsetSizeMismatch);
+            for (std::size_t i = 0; i < n; ++i) {
+                if (offsets_[i] > offsets_[i + 1]) return std::unexpected(GraphError::OffsetsNotMonotonic);
+            }
+            if (offsets_.back() != targets_.size()) return std::unexpected(GraphError::OffsetSizeMismatch);
+            if (edge_ids_.size() != targets_.size()) return std::unexpected(GraphError::ParallelArrayLengthMismatch);
+            if (edge_weights_enabled_ && edge_weights_.size() != targets_.size()) {
+                return std::unexpected(GraphError::ParallelArrayLengthMismatch);
+            }
+            for (const NodeId t : targets_) {
+                if (t.value >= n) return std::unexpected(GraphError::TargetOutOfRange);
+            }
+            if (incoming_enabled_) {
+                if (in_offsets_.size() != n + 1) return std::unexpected(GraphError::IncomingInconsistent);
+                if (in_offsets_.back() != in_sources_.size()) return std::unexpected(GraphError::IncomingInconsistent);
+                if (in_sources_.size() != targets_.size() || in_edge_pos_.size() != targets_.size()) {
+                    return std::unexpected(GraphError::IncomingInconsistent);
+                }
+                for (std::size_t i = 0; i < n; ++i) {
+                    if (in_offsets_[i] > in_offsets_[i + 1]) return std::unexpected(GraphError::IncomingInconsistent);
+                }
+                for (const NodeId s : in_sources_) {
+                    if (s.value >= n) return std::unexpected(GraphError::IncomingInconsistent);
+                }
+                for (const std::size_t p : in_edge_pos_) {
+                    if (p >= targets_.size()) return std::unexpected(GraphError::IncomingInconsistent);
+                }
+            }
+            return {};
+        }
+
     private:
         std::vector<std::size_t> offsets_;
         std::vector<NodeId> targets_; // compact target node indices encoded as NodeId{compact_index}
         std::vector<EdgeId> edge_ids_;
-        std::vector<EdgeT> edge_data_;
+        std::vector<EdgeT> edge_data_; // materialised only for non-arithmetic EdgeT
         std::vector<double> edge_weights_;
         bool edge_weights_enabled_ = false;
         std::vector<std::optional<std::size_t>> original_to_compact_;
         std::vector<NodeId> compact_to_original_;
 
+        // Incoming CSR (opt-in). in_sources_/in_edge_pos_ are parallel to each other;
+        // in_edge_pos_[k] indexes the outgoing arrays for the mirrored arc.
+        bool incoming_enabled_ = false;
+        std::vector<std::size_t> in_offsets_;
+        std::vector<NodeId> in_sources_;
+        std::vector<std::size_t> in_edge_pos_;
+
         template <Hashable NodeT, Hashable E, DirectednessTag D>
-        friend CsrGraph<E, D> freeze_to_csr(const Graph<NodeT, E, D>& g);
+        friend CsrGraph<E, D> freeze_to_csr(const Graph<NodeT, E, D>& g, const CsrFreezeOptions&);
     };
 
     template <Hashable NodeT, Hashable EdgeT, DirectednessTag Directedness>
-    CsrGraph<EdgeT, Directedness> freeze_to_csr(const Graph<NodeT, EdgeT, Directedness>& g) {
+    CsrGraph<EdgeT, Directedness> freeze_to_csr(const Graph<NodeT, EdgeT, Directedness>& g,
+                                                const CsrFreezeOptions& options = {}) {
         CsrGraph<EdgeT, Directedness> csr;
 
+        // Step 1: collect active nodes in native order.
+        std::vector<NodeId> active;
+        for (NodeId nid : g.active_node_ids()) active.push_back(nid);
+        const std::size_t compact_nodes = active.size();
+
+        // Step 2: choose the compact ordering (permutation of `active`).
+        std::vector<NodeId> ordered = active;
+        if (options.reorder == Reorder::DegreeDesc && compact_nodes > 0) {
+            std::vector<std::size_t> deg(compact_nodes, 0);
+            for (std::size_t i = 0; i < compact_nodes; ++i) {
+                std::size_t d = 0;
+                g.for_each_out_edge(active[i], [&](EdgeId, NodeId, NodeId, const auto&) { ++d; });
+                deg[i] = d;
+            }
+            std::vector<std::size_t> idx(compact_nodes);
+            for (std::size_t i = 0; i < compact_nodes; ++i) idx[i] = i;
+            std::stable_sort(idx.begin(), idx.end(),
+                             [&](std::size_t a, std::size_t b) { return deg[a] > deg[b]; });
+            for (std::size_t i = 0; i < compact_nodes; ++i) ordered[i] = active[idx[i]];
+        } else if (options.reorder == Reorder::Bfs && compact_nodes > 0) {
+            // Discovery order from each unvisited seed (lowest native id first).
+            std::vector<std::uint8_t> seen(g.node_capacity(), 0);
+            ordered.clear();
+            std::queue<NodeId> q;
+            for (NodeId seed : active) {
+                if (seen[seed.value]) continue;
+                seen[seed.value] = 1;
+                q.push(seed);
+                while (!q.empty()) {
+                    const NodeId u = q.front();
+                    q.pop();
+                    ordered.push_back(u);
+                    g.for_each_out_edge(u, [&](EdgeId, NodeId, NodeId target, const auto&) {
+                        if (!seen[target.value]) {
+                            seen[target.value] = 1;
+                            q.push(target);
+                        }
+                    });
+                }
+            }
+        }
+
+        // Step 3: assign compact indices from the chosen order.
         csr.original_to_compact_.assign(g.node_capacity(), std::nullopt);
-        for (NodeId nid : g.active_node_ids()) {
+        csr.compact_to_original_.reserve(compact_nodes);
+        for (NodeId nid : ordered) {
             csr.original_to_compact_[nid.value] = csr.compact_to_original_.size();
             csr.compact_to_original_.push_back(nid);
         }
 
-        const std::size_t compact_nodes = csr.compact_to_original_.size();
         csr.offsets_.assign(compact_nodes + 1, 0);
 
         // First pass: count active outgoing adjacency entries per compact node.
         for (std::size_t c = 0; c < compact_nodes; ++c) {
             const NodeId original = csr.compact_to_original_[c];
             std::size_t count = 0;
-            for (EdgeId eid : g.out_edge_ids(original)) {
-                const auto& edge = g.get_edge(eid);
-                const NodeId target = edge.from.value == original.value ? edge.to : edge.from;
-                if (g.valid_node(target) && csr.original_to_compact_[target.value].has_value()) {
-                    ++count;
-                }
-            }
+            g.for_each_out_edge(original, [&](EdgeId, NodeId, NodeId target, const auto&) {
+                if (csr.original_to_compact_[target.value].has_value()) ++count;
+            });
             csr.offsets_[c + 1] = csr.offsets_[c] + count;
         }
 
         const std::size_t arc_count = csr.offsets_.back();
         csr.targets_.resize(arc_count);
         csr.edge_ids_.resize(arc_count);
-        csr.edge_data_.resize(arc_count);
-        if constexpr (std::is_arithmetic_v < EdgeT >) {
+        if constexpr (std::is_arithmetic_v<EdgeT>) {
             csr.edge_weights_enabled_ = true;
             csr.edge_weights_.resize(arc_count);
+        } else {
+            csr.edge_data_.resize(arc_count);
         }
 
         std::vector<std::size_t> cursor = csr.offsets_;
 
-        // Second pass: fill compact adjacency arrays.
+        // Second pass: fill compact adjacency arrays (zero heap alloc per node).
         for (std::size_t c = 0; c < compact_nodes; ++c) {
             const NodeId original = csr.compact_to_original_[c];
-            for (EdgeId eid : g.out_edge_ids(original)) {
-                const auto& edge = g.get_edge(eid);
-                const NodeId target = edge.from.value == original.value ? edge.to : edge.from;
-                if (!g.valid_node(target)) continue;
+            g.for_each_out_edge(original, [&](EdgeId eid, NodeId, NodeId target, const auto& data) {
                 const auto compact_target = csr.original_to_compact_[target.value];
-                if (!compact_target.has_value()) continue;
+                if (!compact_target.has_value()) return;
 
                 const std::size_t pos = cursor[c]++;
                 csr.targets_[pos] = NodeId{*compact_target};
                 csr.edge_ids_[pos] = eid;
-                csr.edge_data_[pos] = edge.data;
-                if constexpr (std::is_arithmetic_v < EdgeT >) {
-                    csr.edge_weights_[pos] = static_cast<double>(edge.data);
+                if constexpr (std::is_arithmetic_v<EdgeT>) {
+                    csr.edge_weights_[pos] = static_cast<double>(data);
+                } else {
+                    csr.edge_data_[pos] = data;
+                }
+            });
+        }
+
+        // Optional incoming CSR: reverse of the outgoing arcs (transpose), storing
+        // indices back into the outgoing arrays rather than duplicating weights.
+        if (options.build_incoming) {
+            csr.incoming_enabled_ = true;
+            csr.in_offsets_.assign(compact_nodes + 1, 0);
+            for (const NodeId t : csr.targets_) {
+                ++csr.in_offsets_[t.value + 1];
+            }
+            for (std::size_t c = 0; c < compact_nodes; ++c) {
+                csr.in_offsets_[c + 1] += csr.in_offsets_[c];
+            }
+            csr.in_sources_.resize(arc_count);
+            csr.in_edge_pos_.resize(arc_count);
+            std::vector<std::size_t> in_cursor = csr.in_offsets_;
+            for (std::size_t u = 0; u < compact_nodes; ++u) {
+                for (std::size_t i = csr.offsets_[u]; i < csr.offsets_[u + 1]; ++i) {
+                    const std::size_t v = csr.targets_[i].value;
+                    const std::size_t pos = in_cursor[v]++;
+                    csr.in_sources_[pos] = NodeId{u};
+                    csr.in_edge_pos_[pos] = i;
                 }
             }
         }
 
         return csr;
+    }
+
+    // Move-only builder wrapping freeze_to_csr — the graph compiler front-end.
+    // Chain option setters, then call build() (or freeze()) to produce the CsrGraph.
+    template <Hashable NodeT, Hashable EdgeT, DirectednessTag Directedness>
+    class CsrCompiler {
+    public:
+        explicit CsrCompiler(const Graph<NodeT, EdgeT, Directedness>& g) noexcept : graph_(&g) {}
+
+        CsrCompiler(const CsrCompiler&) = delete;
+        CsrCompiler& operator=(const CsrCompiler&) = delete;
+        CsrCompiler(CsrCompiler&&) noexcept = default;
+        CsrCompiler& operator=(CsrCompiler&&) noexcept = default;
+
+        CsrCompiler& with_incoming(const bool on = true) noexcept {
+            options_.build_incoming = on;
+            return *this;
+        }
+
+        CsrCompiler& with_reorder(const Reorder r) noexcept {
+            options_.reorder = r;
+            return *this;
+        }
+
+        CsrCompiler& with_options(const CsrFreezeOptions& opts) noexcept {
+            options_ = opts;
+            return *this;
+        }
+
+        [[nodiscard]] CsrGraph<EdgeT, Directedness> build() const {
+            return freeze_to_csr(*graph_, options_);
+        }
+
+        [[nodiscard]] CsrGraph<EdgeT, Directedness> freeze() const { return build(); }
+
+    private:
+        const Graph<NodeT, EdgeT, Directedness>* graph_;
+        CsrFreezeOptions options_{};
+    };
+
+    template <Hashable NodeT, Hashable EdgeT, DirectednessTag Directedness>
+    [[nodiscard]] CsrCompiler<NodeT, EdgeT, Directedness>
+    compile_graph(const Graph<NodeT, EdgeT, Directedness>& g) noexcept {
+        return CsrCompiler<NodeT, EdgeT, Directedness>(g);
     }
 
     struct CsrBfsResult {
@@ -258,6 +451,11 @@ namespace litegraph {
         CsrPageRankResult result;
         result.ranks = rank;
 
+        // Gather formulation (pull): when the reverse CSR is present, each node reads
+        // its in-neighbours' contributions. This is the read-only, embarrassingly
+        // parallel-friendly dual of the scatter (push) update below.
+        const bool gather = g.has_incoming();
+
         const double d = options.damping_factor;
         for (std::size_t iter = 0; iter < options.max_iterations; ++iter) {
             double dangling_mass = 0.0;
@@ -269,15 +467,30 @@ namespace litegraph {
 
             const double base = (1.0 - d) / static_cast<double>(n)
                 + d * dangling_mass / static_cast<double>(n);
-            std::fill(next_rank.begin(), next_rank.end(), base);
 
-            for (std::size_t u = 0; u < n; ++u) {
-                const std::size_t out_degree = offsets[u + 1] - offsets[u];
-                if (out_degree == 0) continue;
+            if (gather) {
+                const auto& in_offsets = g.in_offsets();
+                const auto& in_sources = g.in_sources();
+                for (std::size_t v = 0; v < n; ++v) {
+                    double acc = base;
+                    for (std::size_t k = in_offsets[v]; k < in_offsets[v + 1]; ++k) {
+                        const std::size_t u = in_sources[k].value;
+                        const std::size_t out_degree = offsets[u + 1] - offsets[u];
+                        acc += d * rank[u] / static_cast<double>(out_degree);
+                    }
+                    next_rank[v] = acc;
+                }
+            } else {
+                std::fill(next_rank.begin(), next_rank.end(), base);
 
-                const double contrib = d * rank[u] / static_cast<double>(out_degree);
-                for (std::size_t i = offsets[u]; i < offsets[u + 1]; ++i) {
-                    next_rank[targets[i].value] += contrib;
+                for (std::size_t u = 0; u < n; ++u) {
+                    const std::size_t out_degree = offsets[u + 1] - offsets[u];
+                    if (out_degree == 0) continue;
+
+                    const double contrib = d * rank[u] / static_cast<double>(out_degree);
+                    for (std::size_t i = offsets[u]; i < offsets[u + 1]; ++i) {
+                        next_rank[targets[i].value] += contrib;
+                    }
                 }
             }
 

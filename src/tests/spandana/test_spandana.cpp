@@ -127,8 +127,9 @@ TEST_CASE("Spandana: Particle Burst Emitter", "[spandana][particles]") {
     using namespace pebble::spandana::edsl;
 
     pebble::spandana::Timeline timeline;
+    containers::static_vector<Particle, 32> particle_buffer;
     timeline.add(
-        particle_burst().at({50.0f, 50.0f}).count(16).speed(100.0f, 200.0f).lifetime(0.4f)
+        particle_burst(particle_buffer).at({50.0f, 50.0f}).count(16).speed(100.0f, 200.0f).lifetime(0.4f)
     );
 
     timeline.update(0.2f);

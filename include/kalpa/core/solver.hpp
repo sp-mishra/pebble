@@ -64,6 +64,17 @@ namespace kalpa {
         T             grad_norm{};// ‖∇f‖ there
         std::size_t   iterations{0};
         Status        status{Status::MaxIterations};
+
+        // ---- convergence certificate (constrained / least-squares) --------
+        // All defaulted → the unconstrained path leaves them at T{} / an empty
+        // multiplier vector (no allocation), so they are zero runtime cost when
+        // unused. Populated append-only by the constrained and NLS solvers.
+        T kkt_stationarity{};     // ‖∇f − Jᵀλ − J_ineqᵀμ‖ (0 when unset)
+        T primal_infeasibility{}; // ‖c_eq‖ + ‖max(0, c_ineq)‖
+        T complementarity{};      // |μᵀ c_ineq|
+        T dual_infeasibility{};   // ‖min(0, μ)‖ (μ ≥ 0 required for cᵢ ≤ 0)
+        T residual_norm{};        // ‖r(x)‖ for nonlinear least-squares
+        ga::Vector<T> multipliers{}; // λ / μ when computed; empty otherwise
     };
 
     // =======================================================================
@@ -123,6 +134,22 @@ namespace kalpa {
         template<typename V>
         typename V::value_type nrm2(const V& a) {
             return std::sqrt(dot(a, a));
+        }
+
+        // Jacobian of a residual/constraint set: row i = ∇residuals[i](x).
+        // residuals is random-access + Dual-callable (like SQP's `cons`); J is
+        // (m × n), filled row-wise. Serial — the parallel variant lives in
+        // least_squares.hpp so the base solver header stays free of pravaha.
+        template<typename Deriv, typename ConSet, typename T>
+        void jacobian(const Deriv& deriv, const ConSet& residuals,
+                      const ga::Vector<T>& x, ga::Matrix<T>& J) {
+            const std::size_t m = residuals.size();
+            const std::size_t n = x.size();
+            ga::Vector<T> row(n);
+            for (std::size_t i = 0; i < m; ++i) {
+                deriv.grad(residuals[i], x, row);
+                for (std::size_t j = 0; j < n; ++j) J(i, j) = row[j];
+            }
         }
     } // namespace detail
 
@@ -219,9 +246,109 @@ namespace kalpa {
         }
     };
 
-    // =======================================================================
-    // Solver
-    // =======================================================================
+    // Moré–Thuente line search (1994). Same 6-arg signature as Wolfe so the
+    // Solver's do_line_search requires-detection picks it up as a drop-in
+    // replacement. Enforces the strong-Wolfe conditions but replaces Wolfe's
+    // midpoint-bisection zoom with safeguarded cubic/quadratic interpolation of
+    // the auxiliary function ψ(α) = φ(α) − φ(0) − c1·α·φ'(0) — fewer f/∇f evals
+    // and robust on ill-scaled problems.
+    template<typename T>
+    struct MoreThuente {
+        T c1{static_cast<T>(1e-4)};
+        T c2{static_cast<T>(0.9)};
+        T alpha0{T{1}};
+        T alpha_max{static_cast<T>(1e3)};
+        std::size_t max_iter{50};
+
+        template<typename F, typename Deriv, typename V>
+        [[nodiscard]] T search(const F& f, const Deriv& deriv,
+                               const V& x, const V& dir, T fx, const V& g) const {
+            const std::size_t n = x.size();
+            const T phi0  = fx;
+            const T dphi0 = detail::dot(g, dir);
+            if (dphi0 >= T{0}) return T{0};              // not a descent direction
+
+            auto eval = [&](T a, T& phi, T& dphi) {
+                V trial(n), gt(n);
+                for (std::size_t i = 0; i < n; ++i) trial[i] = x[i] + a * dir[i];
+                phi = f(trial);
+                deriv.grad(f, trial, gt);
+                dphi = detail::dot(gt, dir);
+            };
+
+            // Bracket endpoints, tracked with their φ/φ' values. `bracketed`
+            // flips once a minimizer is trapped between al and au.
+            T al = T{0}, phial = phi0, dphial = dphi0;
+            T au = T{0}, phiau = phi0, dphiau = dphi0;
+            T a  = alpha0;
+            bool bracketed = false;
+            const T c2abs = -c2 * dphi0;                 // strong-curvature RHS
+
+            for (std::size_t it = 0; it < max_iter; ++it) {
+                T phi, dphi; eval(a, phi, dphi);
+
+                // Strong-Wolfe acceptance.
+                if (phi <= phi0 + c1 * a * dphi0 && std::abs(dphi) <= c2abs)
+                    return a;
+
+                if (phi > phi0 + c1 * a * dphi0 || (bracketed && phi >= phial)) {
+                    // Higher than the sufficient-decrease line (or above the
+                    // low endpoint): the minimizer lies below a → au = a.
+                    au = a; phiau = phi; dphiau = dphi;
+                    bracketed = true;
+                } else if (dphi * (au - al) >= T{0} && bracketed) {
+                    // Derivative points the wrong way inside a live bracket:
+                    // reflect the upper endpoint to the current low one.
+                    au = al; phiau = phial; dphiau = dphial;
+                    al = a; phial = phi; dphial = dphi;
+                } else {
+                    // Sufficient decrease holds but curvature not yet met:
+                    // advance the low endpoint.
+                    al = a; phial = phi; dphial = dphi;
+                    if (!bracketed) {
+                        // Still expanding: grow the trial toward alpha_max.
+                        a = std::min(a * T{2}, alpha_max);
+                        if (a >= alpha_max) { T pe, de; eval(alpha_max, pe, de); return alpha_max; }
+                        continue;
+                    }
+                }
+
+                // ---- safeguarded interpolation of the next trial ------------
+                a = interpolate(al, phial, dphial, au, phiau, dphiau);
+                // Keep the trial strictly inside the bracket (Moré–Thuente
+                // safeguard: at least 1/9 of the way in from either endpoint).
+                const T lo = std::min(al, au), hi = std::max(al, au);
+                const T guard = (hi - lo) / T{9};
+                if (a <= lo + guard || a >= hi - guard) a = T{0.5} * (lo + hi);
+                if (std::abs(hi - lo) < static_cast<T>(1e-14)) return a;
+            }
+            return a;
+        }
+
+    private:
+        // Cubic (Hermite) minimizer of the segment [a1,a2] from endpoint values
+        // and slopes; falls back to the quadratic minimizer if the cubic is
+        // degenerate. Standard Moré–Thuente / Nocedal–Wright interpolation.
+        [[nodiscard]] T interpolate(T a1, T f1, T d1, T a2, T f2, T d2) const {
+            const T da = a2 - a1;
+            if (std::abs(da) < static_cast<T>(1e-30)) return a1;
+            const T d3 = d1 + d2 - T{3} * (f1 - f2) / da;
+            const T disc = d3 * d3 - d1 * d2;
+            if (disc >= T{0}) {
+                const T sq = std::sqrt(disc);
+                const T denom = (d2 - d1) + T{2} * sq;
+                if (std::abs(denom) > static_cast<T>(1e-30)) {
+                    const T q = (d2 + sq - d3) / denom;
+                    return a2 - q * da;
+                }
+            }
+            // Quadratic fallback: minimizer from f1, d1, f2.
+            const T qden = T{2} * (f2 - f1 - d1 * da);
+            if (std::abs(qden) > static_cast<T>(1e-30))
+                return a1 - d1 * da * da / qden;
+            return T{0.5} * (a1 + a2);
+        }
+    };
     template<typename Algorithm,
              typename Deriv    = Derivatives<Dual, double>,
              typename LineSrch = Wolfe<double>,

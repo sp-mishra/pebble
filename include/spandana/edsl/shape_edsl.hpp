@@ -23,18 +23,18 @@ inline akruti::Capsule capsule(pebble::math::vec2 a, pebble::math::vec2 b, float
 }
 
 // Expanding / Fading Shape Effect Action
-class ShapeEffectAction : public IAnimationAction {
+class ShapeEffectAction {
 public:
     ShapeEffectAction(akruti::CsgNode shape, pebble::math::vec2 pos, float max_scale, float duration, ResourceKey key)
         : shape_(std::move(shape)), pos_(pos), max_scale_(max_scale), duration_(duration), key_(key) {}
 
-    void update(float progress, float) override {
+    void update(float progress, float) noexcept {
         current_scale_ = 1.0f + (max_scale_ - 1.0f) * progress;
         alpha_ = 1.0f - progress;
     }
 
-    [[nodiscard]] float duration() const noexcept override { return duration_; }
-    [[nodiscard]] ResourceKey resource_key() const noexcept override { return key_; }
+    [[nodiscard]] float duration() const noexcept { return duration_; }
+    [[nodiscard]] ResourceKey resource_key() const noexcept { return key_; }
 
     [[nodiscard]] float current_scale() const noexcept { return current_scale_; }
     [[nodiscard]] float alpha() const noexcept { return alpha_; }

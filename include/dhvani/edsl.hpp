@@ -9,18 +9,18 @@
 
 namespace pebble::dhvani::edsl {
 
-class AudioCueAction : public spandana::IAnimationAction {
+class AudioCueAction {
 public:
     AudioCueAction(SoundBus& bus, std::string_view name, float volume, float pitch, spandana::ResourceKey key)
         : bus_(bus), name_(name), volume_(volume), pitch_(pitch), key_(key) {}
 
-    void on_start() override {
+    void on_start() {
         bus_.play(name_, volume_, pitch_);
     }
 
-    void update(float, float) override {}
-    [[nodiscard]] float duration() const noexcept override { return 0.0f; } // Instantaneous cue trigger
-    [[nodiscard]] spandana::ResourceKey resource_key() const noexcept override { return key_; }
+    void update(float, float) noexcept {}
+    [[nodiscard]] float duration() const noexcept { return 0.0f; } // Instantaneous cue trigger
+    [[nodiscard]] spandana::ResourceKey resource_key() const noexcept { return key_; }
 
 private:
     SoundBus&                bus_;

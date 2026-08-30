@@ -90,3 +90,83 @@ TEST_CASE("kalpa: EDSL supports mul/div/sq composition", "[kalpa][edsl]") {
     auto expr = wrap( (x[0] * x[1]) / constant(2.0) + sq(x[0]) );
     CHECK(expr(v2(3.0, 4.0)) == Catch::Approx(15.0));
 }
+
+// ===========================================================================
+// subject_to — comparison expressions become signed residual functors.
+//   Eq:  (x0+x1) == 1   → residual = x0+x1−1.
+//   Le:  x0 <= 2         → residual = x0−2  (feasible ⇔ ≤ 0).
+//   Ge:  x0 >= 0         → residual = 0−x0 = −x0 (feasible ⇔ ≤ 0).
+// ===========================================================================
+TEST_CASE("kalpa: subject_to builds an equality residual", "[kalpa][edsl][constraints]") {
+    auto x = vars();
+    auto cs = subject_to( (x[0] + x[1]) == constant(1.0) );
+    CHECK(cs.count() == 1);
+    // residual x0+x1−1: zero on the constraint surface, +1 off it.
+    CHECK(cs.residual(0, v2(0.3, 0.7)) == Catch::Approx(0.0).margin(1e-12));
+    CHECK(cs.residual(0, v2(1.0, 1.0)) == Catch::Approx(1.0).margin(1e-12));
+    CHECK(cs.feasible(v2(0.3, 0.7)));
+    CHECK_FALSE(cs.feasible(v2(1.0, 1.0)));
+}
+
+TEST_CASE("kalpa: subject_to encodes <= and >= sign conventions", "[kalpa][edsl][constraints]") {
+    auto x = vars();
+    auto le = subject_to( x[0] <= constant(2.0) );   // x0−2 ≤ 0
+    CHECK(le.residual(0, v2(3.0, 0.0)) == Catch::Approx(1.0).margin(1e-12));   // violated → +1
+    CHECK(le.residual(0, v2(1.0, 0.0)) == Catch::Approx(-1.0).margin(1e-12));  // slack   → −1
+    CHECK(le.feasible(v2(1.0, 0.0)));
+    CHECK_FALSE(le.feasible(v2(3.0, 0.0)));
+
+    auto ge = subject_to( x[0] >= constant(0.0) );   // −x0 ≤ 0
+    CHECK(ge.residual(0, v2(-1.0, 0.0)) == Catch::Approx(1.0).margin(1e-12));  // x0<0 → +1
+    CHECK(ge.residual(0, v2( 2.0, 0.0)) == Catch::Approx(-2.0).margin(1e-12)); // x0>0 → −2
+    CHECK(ge.feasible(v2(2.0, 0.0)));
+    CHECK_FALSE(ge.feasible(v2(-1.0, 0.0)));
+}
+
+TEST_CASE("kalpa: multiple subject_to constraints count and evaluate", "[kalpa][edsl][constraints]") {
+    auto x = vars();
+    auto cs = subject_to( (x[0] + x[1]) == constant(2.0),
+                          x[0] >= constant(0.0) );
+    CHECK(cs.count() == 2);
+    CHECK(cs.residual(0, v2(1.0, 1.0)) == Catch::Approx(0.0).margin(1e-12));
+    CHECK(cs.residual(1, v2(1.0, 1.0)) == Catch::Approx(-1.0).margin(1e-12));
+    CHECK(cs.feasible(v2(1.0, 1.0)));
+}
+
+// ===========================================================================
+// Auto — structural analysis selects a solver and drives the EDSL objective
+// to its optimum. (x−1)²+(y−2)² is smooth + convex + low-dim → Newton/LBFGS.
+// ===========================================================================
+TEST_CASE("kalpa: Auto selects a gradient method for a smooth convex objective", "[kalpa][edsl][auto]") {
+    auto x = vars();
+    auto expr = sq(x[0] - constant(1.0)) + sq(x[1] - constant(2.0));
+
+    vakya::property_store store;
+    auto ch = choose(expr, store);
+    CHECK(ch.analysis.smooth);
+    CHECK(ch.analysis.convex);
+    CHECK(ch.analysis.dim == 2);
+    CHECK((ch.algo == MethodChoice::Newton || ch.algo == MethodChoice::LBFGS));
+}
+
+TEST_CASE("kalpa: Auto solves the EDSL objective to the analytic optimum", "[kalpa][edsl][auto]") {
+    auto x = vars();
+    auto prob = minimize<double>( sq(x[0] - constant(1.0)) + sq(x[1] - constant(2.0)) );
+    Auto<double> automatic;
+    auto r = automatic.solve(prob, v2(-3.0, 5.0));
+    REQUIRE(r.has_value());
+    CHECK(r->x[0] == Catch::Approx(1.0).margin(1e-5));
+    CHECK(r->x[1] == Catch::Approx(2.0).margin(1e-5));
+    CHECK(r->f   == Catch::Approx(0.0).margin(1e-9));
+}
+
+// A division by a variable makes the objective non-convex; analysis flags it.
+TEST_CASE("kalpa: Auto flags a non-convex division objective", "[kalpa][edsl][auto]") {
+    auto x = vars();
+    auto expr = sq(x[0] - constant(1.0)) + constant(1.0) / (x[1] + constant(3.0));
+    vakya::property_store store;
+    auto ch = choose(expr, store);
+    CHECK_FALSE(ch.analysis.convex);   // div ⇒ non-convex
+    CHECK(ch.analysis.smooth);         // still smooth ⇒ a gradient method
+    CHECK((ch.algo == MethodChoice::LBFGS));
+}

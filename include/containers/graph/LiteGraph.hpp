@@ -25,7 +25,13 @@ namespace litegraph {
         InvalidEdge,
         NodeNotFound,
         EdgeNotFound,
-        InvalidOperation
+        InvalidOperation,
+        // Frozen-CSR structural validation (see CsrGraph::validate()).
+        OffsetsNotMonotonic,
+        OffsetSizeMismatch,
+        TargetOutOfRange,
+        ParallelArrayLengthMismatch,
+        IncomingInconsistent
     };
 
     // Marker types for directedness

@@ -18,6 +18,7 @@
 
 #include <kalpa/core/solver.hpp>
 #include <containers/matrix/dense.hpp>
+#include <containers/matrix/solve.hpp>
 #include <containers/matrix/eigen.hpp>
 #include <pravaha/pravaha.hpp>
 #include <algorithm>
@@ -357,6 +358,125 @@ namespace kalpa {
                 if (sigma < tol) { r.status = Status::Converged; r.iterations = gen; break; }
             }
             if (r.iterations == 0) r.iterations = max_gen;
+            return r;
+        }
+    };
+
+    // =======================================================================
+    // Bayesian optimization — Gaussian-process surrogate + acquisition search.
+    //   Fit a GP (RBF kernel, homoscedastic noise) to the observations, then
+    //   pick the next query by maximizing an acquisition function over a random
+    //   candidate pool inside the box [lo, hi]. Two acquisitions:
+    //     Expected Improvement  EI(x) = (f⁺−μ)Φ(z) + s·φ(z),  z=(f⁺−μ)/s
+    //     Lower Confidence Bound LCB(x) = μ − β·s     (minimize ⇒ minimize LCB)
+    //   The GP posterior is
+    //     μ(x*) = k*ᵀ α ,   α = (K + noise·I)⁻¹ y      (SPD Cholesky via ga::solve)
+    //     s²(x*) = k(x*,x*) − k*ᵀ (K+noise·I)⁻¹ k*
+    //   A seedable Rng makes the initial design and candidate pools reproducible.
+    //   Candidate scoring fans out through the Eval policy (serial default).
+    //   TPE is a documented follow-on; EI/LCB BO ships here.
+    // =======================================================================
+    enum class Acquisition { ExpectedImprovement, LowerConfidenceBound };
+
+    template<typename T = double, typename Eval = SerialEval>
+    struct BayesianOptimization {
+        std::size_t init_samples{8};
+        std::size_t max_iter{50};
+        std::size_t cand_pool{512};
+        T length_scale{T{1}};
+        T signal_var{T{1}};
+        T noise{static_cast<T>(1e-6)};
+        T beta{T{2}};
+        Acquisition acq{Acquisition::ExpectedImprovement};
+        [[no_unique_address]] Eval eval{};
+
+        template<typename F>
+        [[nodiscard]] std::expected<Result<T>, Diagnosis>
+        solve(const F& f, const ga::Vector<T>& lo, const ga::Vector<T>& hi,
+              Rng rng = Rng{}) const {
+            const std::size_t d = lo.size();
+            if (d == 0 || hi.size() != d)
+                return std::unexpected(Diagnosis{Cause::NumericalError, "bad bounds", 0});
+
+            auto sample = [&](ga::Vector<T>& out) {
+                for (std::size_t j = 0; j < d; ++j) out[j] = rng.template uniform<T>(lo[j], hi[j]);
+            };
+            auto kern = [&](const ga::Vector<T>& a, const ga::Vector<T>& b) {
+                T s2{}; for (std::size_t j = 0; j < d; ++j) { const T dj = a[j]-b[j]; s2 += dj*dj; }
+                return signal_var * std::exp(-s2 / (T{2}*length_scale*length_scale));
+            };
+
+            // initial design
+            std::vector<ga::Vector<T>> X;
+            std::vector<T> y;
+            X.reserve(init_samples + max_iter);
+            y.reserve(init_samples + max_iter);
+            for (std::size_t i = 0; i < init_samples; ++i) {
+                ga::Vector<T> xi(d); sample(xi);
+                X.push_back(xi); y.push_back(f(xi));
+            }
+            std::size_t best = 0;
+            for (std::size_t i = 1; i < y.size(); ++i) if (y[i] < y[best]) best = i;
+
+            const T SQRT2 = std::sqrt(T{2});
+            const T INV_SQRT_2PI = static_cast<T>(0.3989422804014327);
+            auto normcdf = [&](T z) { return T{0.5} * (T{1} + std::erf(z / SQRT2)); };
+            auto normpdf = [&](T z) { return INV_SQRT_2PI * std::exp(-T{0.5}*z*z); };
+
+            for (std::size_t it = 0; it < max_iter; ++it) {
+                const std::size_t nobs = X.size();
+                // Gram matrix K + noise·I  (SPD)
+                ga::Matrix<T> K(nobs, nobs, T{0});
+                for (std::size_t i = 0; i < nobs; ++i) {
+                    for (std::size_t j = 0; j < nobs; ++j) K(i,j) = kern(X[i], X[j]);
+                    K(i,i) += noise;
+                }
+                ga::Vector<T> yv(nobs);
+                for (std::size_t i = 0; i < nobs; ++i) yv[i] = y[i];
+                ga::Vector<T> alpha = ga::solve(K, yv, ga::MatrixKind::SPD);   // α = K⁻¹y
+                for (std::size_t i = 0; i < nobs; ++i)
+                    if (!std::isfinite(alpha[i]))
+                        return std::unexpected(Diagnosis{Cause::NumericalError, "GP solve failed", it});
+
+                const T f_best = y[best];
+
+                // candidate pool + acquisition
+                ga::Vector<T> x_next(d); bool have_next = false;
+                T best_acq = std::numeric_limits<T>::lowest();
+                ga::Vector<T> cand(d), kstar(nobs), Kinv_kstar(nobs);
+                for (std::size_t c = 0; c < cand_pool; ++c) {
+                    sample(cand);
+                    for (std::size_t i = 0; i < nobs; ++i) kstar[i] = kern(cand, X[i]);
+                    // μ = k*ᵀα
+                    T mu{}; for (std::size_t i = 0; i < nobs; ++i) mu += kstar[i]*alpha[i];
+                    // s² = k** − k*ᵀ K⁻¹ k*
+                    Kinv_kstar = ga::solve(K, kstar, ga::MatrixKind::SPD);
+                    T kss = kern(cand, cand), quad{};
+                    for (std::size_t i = 0; i < nobs; ++i) quad += kstar[i]*Kinv_kstar[i];
+                    T var = kss - quad; if (var < T{0}) var = T{0};
+                    const T s = std::sqrt(var);
+
+                    T a{};
+                    if (acq == Acquisition::LowerConfidenceBound) {
+                        a = -(mu - beta * s);           // maximize −LCB (we minimize f)
+                    } else {
+                        if (s > T{0}) {
+                            const T z = (f_best - mu) / s;
+                            a = (f_best - mu) * normcdf(z) + s * normpdf(z);
+                        } else a = T{0};
+                    }
+                    if (a > best_acq) { best_acq = a; x_next = cand; have_next = true; }
+                }
+                if (!have_next) break;
+
+                const T fx = f(x_next);
+                X.push_back(x_next); y.push_back(fx);
+                if (fx < y[best]) best = y.size() - 1;
+            }
+
+            Result<T> r;
+            r.x = X[best]; r.f = y[best]; r.grad_norm = T{0};
+            r.iterations = max_iter; r.status = Status::Converged;
             return r;
         }
     };

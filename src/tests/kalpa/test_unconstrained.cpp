@@ -142,3 +142,71 @@ TEST_CASE("kalpa: NaN start is reported as a Diagnosis", "[kalpa][diagnosis]") {
     REQUIRE_FALSE(r.has_value());
     CHECK(r.error().cause == Cause::NaNTrap);
 }
+
+// ---- Nesterov accelerated gradient on the convex quadratic ----------------
+TEST_CASE("kalpa: Nesterov accelerated gradient on quadratic", "[kalpa][unconstrained]") {
+    auto prob = make_problem<double>(Quadratic{});
+    Solver<Nesterov<double>, Derivatives<Dual,double>, Armijo<double>> s;
+    auto r = s.solve(prob, vec2(5.0, -3.0));
+    REQUIRE(r.has_value());
+    CHECK(r->x[0] == Catch::Approx(0.0).margin(1e-4));
+    CHECK(r->x[1] == Catch::Approx(1.0).margin(1e-4));
+    CHECK(r->grad_norm < 1e-5);
+}
+
+// ---- DFP quasi-Newton: quadratic optimum + Rosenbrock (with Wolfe) --------
+TEST_CASE("kalpa: DFP reaches the quadratic optimum", "[kalpa][unconstrained]") {
+    auto prob = make_problem<double>(Quadratic{});
+    Solver<DFP<double>, Derivatives<Dual,double>, Wolfe<double>> s;
+    auto r = s.solve(prob, vec2(2.0, 2.0));
+    REQUIRE(r.has_value());
+    CHECK(r->x[0] == Catch::Approx(0.0).margin(1e-5));
+    CHECK(r->x[1] == Catch::Approx(1.0).margin(1e-5));
+}
+
+TEST_CASE("kalpa: DFP solves Rosenbrock", "[kalpa][unconstrained][rosenbrock]") {
+    auto prob = make_problem<double>(Rosenbrock{});
+    Solver<DFP<double>, Derivatives<Dual,double>, Wolfe<double>> s;
+    auto r = s.solve(prob, vec2(-1.2, 1.0));
+    REQUIRE(r.has_value());
+    CHECK(r->x[0] == Catch::Approx(1.0).margin(1e-3));
+    CHECK(r->x[1] == Catch::Approx(1.0).margin(1e-3));
+    CHECK(r->f == Catch::Approx(0.0).margin(1e-6));
+}
+
+// ===========================================================================
+// Moré–Thuente line search — safeguarded interpolation, drop-in for Wolfe.
+// Same 6-arg signature, so the Solver's do_line_search picks it up. Must reach
+// the same optima as Wolfe on both the quadratic and Rosenbrock.
+// ===========================================================================
+TEST_CASE("kalpa: Moré–Thuente line search drives LBFGS to the quadratic optimum", "[kalpa][unconstrained][morethuente]") {
+    auto prob = make_problem<double>(Quadratic{});
+    Solver<LBFGS<double>, Derivatives<Dual,double>, MoreThuente<double>> s;
+    auto r = s.solve(prob, vec2(2.0, 2.0));
+    REQUIRE(r.has_value());
+    CHECK(r->x[0] == Catch::Approx(0.0).margin(1e-5));
+    CHECK(r->x[1] == Catch::Approx(1.0).margin(1e-5));
+    CHECK(r->grad_norm < 1e-5);
+}
+
+TEST_CASE("kalpa: Moré–Thuente line search solves Rosenbrock", "[kalpa][unconstrained][morethuente][rosenbrock]") {
+    auto prob = make_problem<double>(Rosenbrock{});
+    Solver<LBFGS<double>, Derivatives<Dual,double>, MoreThuente<double>> s;
+    auto r = s.solve(prob, vec2(-1.2, 1.0));
+    REQUIRE(r.has_value());
+    CHECK(r->x[0] == Catch::Approx(1.0).margin(1e-3));
+    CHECK(r->x[1] == Catch::Approx(1.0).margin(1e-3));
+    CHECK(r->f == Catch::Approx(0.0).margin(1e-6));
+}
+
+// Parity: on the convex quadratic, MoreThuente and Wolfe reach the same point.
+TEST_CASE("kalpa: Moré–Thuente and Wolfe agree on the quadratic", "[kalpa][unconstrained][morethuente]") {
+    auto prob = make_problem<double>(Quadratic{});
+    Solver<LBFGS<double>, Derivatives<Dual,double>, MoreThuente<double>> smt;
+    Solver<LBFGS<double>, Derivatives<Dual,double>, Wolfe<double>>       swo;
+    auto rmt = smt.solve(prob, vec2(3.0, -2.0));
+    auto rwo = swo.solve(prob, vec2(3.0, -2.0));
+    REQUIRE(rmt.has_value()); REQUIRE(rwo.has_value());
+    CHECK(rmt->x[0] == Catch::Approx(rwo->x[0]).margin(1e-5));
+    CHECK(rmt->x[1] == Catch::Approx(rwo->x[1]).margin(1e-5));
+}

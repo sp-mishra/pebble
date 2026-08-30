@@ -31,9 +31,9 @@
     - [Validation](#validation)
     - [Diagnostics (`vakya::diag`)](#diagnostics-vakyadiag)
 - [End-to-End Pipeline Example](#end-to-end-pipeline-example)
-- [V3 — Constraint *Reasoning* Architecture](#v3--constraint-reasoning-architecture)
+- [Constraint *Reasoning* Layer](#constraint-reasoning-layer)
     - [From Solving to Reasoning](#from-solving-to-reasoning)
-    - [V3 Layered Architecture](#v3-layered-architecture)
+    - [Reasoning Layered Architecture](#reasoning-layered-architecture)
     - [Registries & Descriptors](#registries--descriptors)
     - [Descriptor-Routed Constraint Engine](#descriptor-routed-constraint-engine)
     - [Capability & Effect Systems](#capability--effect-systems)
@@ -42,8 +42,12 @@
     - [Shape Algebra](#shape-algebra)
     - [Formal Verification (Tarka SMT)](#formal-verification-tarka-smt)
     - [Refinement Types & Semantic Query Engine](#refinement-types--semantic-query-engine)
-    - [V3 Header Plan](#v3-header-plan)
+    - [Reasoning Header Plan](#reasoning-header-plan)
     - [End-to-End Reasoning Flow](#end-to-end-reasoning-flow)
+- [Semantic *Optimization* Layer](#semantic-optimization-layer)
+    - [From Reasoning to Optimization](#from-reasoning-to-optimization)
+    - [Optimization Constraint-Kind Routing](#optimization-constraint-kind-routing)
+    - [Consumer-Boundary Discipline](#consumer-boundary-discipline)
 - [Relationship to the Generic IR](#relationship-to-the-generic-ir)
 - [Consumer Integration](#consumer-integration)
 
@@ -1030,11 +1034,11 @@ void pipeline_example() {
 
 ---
 
-## V3 — Constraint *Reasoning* Architecture
+## Constraint *Reasoning* Layer
 
-> **Status:** implemented. Additive on top of the V2 stack above — `vakya.hpp`, `pattern.hpp`, `property.hpp`,
-> and the existing type-system headers are unchanged; every V3 layer is an opt-in header that folds to zero size
-> when unused. Full design in `scratch/vakya_v3_design.md`.
+> **Status:** implemented. Additive on top of the core stack above — `vakya.hpp`, `pattern.hpp`, `property.hpp`,
+> and the existing type-system headers are unchanged; every reasoning layer is an opt-in header that folds to zero size
+> when unused.
 
 ### From Solving to Reasoning
 
@@ -1042,7 +1046,7 @@ With **Tarka** (the zero-overhead multi-solver SMT substrate, see [tarka.md](../
 *below* Vākya, the type-system evolution shifts from **constraint *solving*** to **constraint *reasoning***: Tarka
 becomes the formal reasoning engine underneath, joining the existing unification / rule / graph / egraph backends.
 The bridge already exists — `tarka_smt_backend<B>` / `tarka_smt_constraint_solver<B>` in `vakya/smt.hpp`, behind
-`__has_include(<tarka/tarka.hpp>)`. V3 does **not** write a new SMT solver; it wires that bridge into a
+`__has_include(<tarka/tarka.hpp>)`. This layer does **not** write a new SMT solver; it wires that bridge into a
 *registry-routed* engine and adds the surrounding registries, capability/effect systems, analysis store, and
 reasoning layers.
 
@@ -1051,7 +1055,7 @@ Reuse-first (as `union_find` was extracted to `containers/`): the only new *gene
 **LiteGraph** (shape/dependency SCC), **egraph** (equivalence), **Tarka** (proof), **Smriti/Kosha** (arena/cache),
 application-defined feature routing, **NADI** (telemetry).
 
-### V3 Layered Architecture
+### Reasoning Layered Architecture
 
 ```
  Structural Representation        vakya.hpp                       (unchanged)
@@ -1120,7 +1124,7 @@ discovery/index table (exactly the proven `rule_registry` pattern). Extract the 
 
 ### Descriptor-Routed Constraint Engine
 
-`composite_solver<Solvers...>` stays the zero-erasure executor; V3 adds a routing front-end that partitions a batch
+`composite_solver<Solvers...>` stays the zero-erasure executor; the reasoning layer adds a routing front-end that partitions a batch
 by `solver_class` (O(1) `SparseSet` lookup) and runs a cross-class fixpoint:
 
 ```
@@ -1146,7 +1150,7 @@ solve_batch(constraints, ctx, registry, solver):
 
 ### Capability & Effect Systems
 
-Capabilities and effects — metadata in V2 — become **first-class constraints** in V3.
+Capabilities and effects — once plain metadata — become **first-class constraints** in the reasoning layer.
 
 - **`types/capability.hpp`** — `capability_descriptor` (`Read | Write | Network | Execute | Allocate` + ext band).
   `requires_capability(T, Cap)` lowers to the existing `requires_cap` kind: routed to the **rule** solver for
@@ -1212,7 +1216,7 @@ Obligations lower to Tarka `Term`s and discharge via the existing `tarka_smt_con
   obligations from the analysis record, batches them into Tarka, returns `{ proven | refuted(model) | unknown }`
   per obligation (reuses `validation_report` merge; refuted attaches the Tarka counter-model as `SmtValue`).
 - **Zero-cost path:** with `no_smt_backend` every obligation resolves to `deferred` — verification degrades to
-  V2 best-effort, build stays SMT-free.
+  core best-effort, build stays SMT-free.
 
 ### Refinement Types & Semantic Query Engine
 
@@ -1233,7 +1237,7 @@ Obligations lower to Tarka `Term`s and discharge via the existing `tarka_smt_con
   adaptor (no allocation, no virtual) folding predicates via `[[no_unique_address]]`. `proven()` reads
   `proof_status`. Its fluent selector pattern is independent of any consumer project.
 
-### V3 Header Plan
+### Reasoning Header Plan
 
 Additive; the existing strict include DAG (`types → unification → constraints → constraint_solvers →
 type_checking → …`) is unchanged — new headers hang off leaves.
@@ -1253,9 +1257,9 @@ vakya/verify.hpp                     → smt.hpp, analysis_store.hpp
 vakya/query.hpp                      → analysis_store.hpp
 ```
 
-`vakya_types.hpp` pulls all V3 headers; each remains independently includable and zero-cost when unused.
+`vakya_types.hpp` pulls all reasoning headers; each remains independently includable and zero-cost when unused.
 
-#### V3 Header Reference
+#### Reasoning Header Reference
 
 | Header                               | Namespace              | Core Role                                                                                                                                             |
 |--------------------------------------|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -1291,13 +1295,111 @@ vakya/query.hpp                      → analysis_store.hpp
 ```
 
 Cheap solvers run first; Tarka runs last, only on residual obligations. Every stage after 1 is opt-in — dropping
-Tarka reduces stages 4/8 to `deferred` and the pipeline still type-checks and rewrites as in V2.
+Tarka reduces stages 4/8 to `deferred` and the pipeline still type-checks and rewrites as with the core stack.
 
 Domain/ecosystem concerns (domain registry, interactions, conversions, differentiation, algebras, packages, execution
 affinity) live in the **Sutra Domain Framework** (`sutra::domain`), a Sutra-owned layer *above* Vākya — see
 [docs/sutra/sutra.md](../sutra/sutra.md). Vākya remains pure: AST, patterns, types, constraints, capabilities, effects,
 analysis, verification. The layer touches Vākya with exactly one additive field (`analysis_record.domain`, a bare
 `uint32` that defaults to the scalar domain) and otherwise references Vākya engines only through non-owning handles.
+
+---
+
+## Semantic *Optimization* Layer
+
+> **Status:** implemented. Additive on top of the core + reasoning stacks — no existing header changes except a
+> bounded, trivially-copyable widening of `analysis_record` and additive constraint-registry seeding. Every
+> optimization header is opt-in and folds to zero size/cost when unused.
+
+### From Reasoning to Optimization
+
+The reasoning layer moved effects, capabilities, shapes, and refinements into the *reasoning* phase. This layer moves the remaining
+**optimization / verification / scheduling facts** into that same phase, so Crank / Pravaha / Medha inherit
+*proven* facts instead of re-deriving them. The invariant: **Vākya proves a fact once, at the type level; every
+consumer reads it.** Vākya gains **no** downstream dependency — the consumer-side adapters (scheduler pools, IR
+mutation) live in the consumer trees; Vākya emits only neutral facts.
+
+Every optimization obligation routes through an *existing* solver: an ext-band `constraint_kind` (`>= 1000`) already falls to
+the Tarka SMT bridge with **zero new solver code**, and the registry seeds the cheaper `graph` / `rule` / `unify` /
+`egraph` fast paths where a decision is possible without SMT. With `no_smt_backend`, every optimization proof degrades to
+`deferred` (never a spurious failure) and the build stays SMT-free.
+
+### Widened `analysis_record`
+
+The record stays a trivially-copyable POD (`static_assert(std::is_trivially_copyable_v<analysis_record>)`); every
+optimization field is a handle / enum / integer and defaults to null / unknown / 0 (zero-cost when unused). Payloads live in
+per-phase side-arenas keyed by these handles.
+
+| field | type | meaning |
+|---|---|---|
+| `region` | `region_ref` | aliasing region of this node's value |
+| `effect_row` | `effect_row_ref` | polymorphic effect row `{concrete \| ρ}` |
+| `rw` | `rw_summary_ref` | read/write region summary |
+| `state` | `typestate_id` | affine typestate protocol state |
+| `simd_width` | `uint16` | synthesized SIMD lane count (0 = none) |
+| `tile_hint` | `uint16` | synthesized loop-tile size (0 = none) |
+| `affinity` | `execution_affinity` | scheduling hint |
+| `cost` | `cost_class` | compile-time cost lattice band |
+| `cert_id` | `uint32` | rewrite_certificate index (0 = none) |
+
+The handle tags + enums are declared in a minimal `vakya/types/opt_handles.hpp` that `analysis_store.hpp` includes,
+keeping the record's dependency surface tiny; full logic lives in the per-phase headers.
+
+### Header Reference Table
+
+| header | provides |
+|---|---|
+| `vakya/types/opt_handles.hpp` | fwd handle tags (`region_ref`/`effect_row_ref`/`rw_summary_ref`) + enums (`execution_affinity`, `cost_class`, `typestate_id`) |
+| `vakya/types/region.hpp` | `region_arena` (root/field/index projection tree, alias-class `union_find`), `regions_syntactically_disjoint` |
+| `vakya/alias.hpp` | `kDisjointKind`, `make_disjoint_constraint`, `may_alias`, `disjoint_solver` |
+| `vakya/types/effect_row.hpp` | `effect_row_arena` (`{concrete \| tail}`), `subsumes` (Rémy/Leijen row rule), `kEffectSubKind`, `effect_row_solver` |
+| `vakya/types/value_param.hpp` | const-generic value params (`value_param_type_tag`), `unify_value`, `kValueEqKind`, `synthesize_simd_width` / `synthesize_tile` (`width_policy`) |
+| `vakya/types/typestate.hpp` | `protocol_descriptor` / `transition` / `check_transition`, `affine_scope` RAII, `kTransitionKind` |
+| `vakya/types/rw_summary.hpp` | `rw_summary_arena`, `predict_conflict`, `kNoConflictKind`, `no_conflict_solver` |
+| `vakya/exec_affinity.hpp` | `synthesize_affinity` (folds effect row / rw / cost → hint), `affinity_policy` |
+| `vakya/cost.hpp` | `cost_join` (⊔ max monoid), `synthesize_cost` / `synthesize_shape_cost`, `cost_policy` |
+| `vakya/types/refine.hpp` | `refinement_type_tag` / `intern_refinement`, `syntactic_subtype`, `refine_subtype_obligation` (`kRefineSubKind`), elision bits |
+| `vakya/proof_carrying.hpp` | `rewrite_certificate` / `certificate_arena`, `certify_rewrite`, `verified_rewrite_engine`, `kEquivCertKind` |
+
+### Optimization Constraint-Kind Routing
+
+The reasoning layer consumed the ext band offsets +0 (`equivalent`), +1/+2/+3 (`refine`/`prove`/`arith`), +10/+11/+12 (shape dim
+eq/pos/matmul). The optimization layer claims +20..+26 to avoid all collisions. Each kind is seeded in
+`make_builtin_constraint_registry` for a cheap fast-path class; anything the fast path can't decide falls to the SMT
+band (Tarka bridge, zero extra code). Kind constants are **defined in their owning headers** (single source of
+truth); the registry only routes them.
+
+| offset | kind | solver_class | fast path / residual |
+|---|---|---|---|
+| +20 | `disjoint` | `graph` | `union_find` root + syntactic disjointness; symbolic index → SMT |
+| +21 | `effect_subsume` | `rule` | bitmask subset + tail rule; distinct symbolic tails → SMT |
+| +22 | `value_eq` | `unify` | literal equality / MGU bind; symbolic value → SMT |
+| +23 | `transition` | `rule` | `check_transition` table lookup; dynamic state → SMT |
+| +24 | `no_conflict` | `graph` | pairwise region disjointness; symbolic pair → SMT |
+| +25 | `refine_sub` | `smt` | implication `P ⇒ Q` (Tarka); `no_smt_backend` → deferred |
+| +26 | `equiv_cert` | `egraph` | e-class congruence witness; else → SMT |
+
+Value-level *type* tags use a separate namespace (`type_descriptor::stable_id` ext band): `value_param_type_tag`
+= `kTypeKindExtensionBase + 50`, `refinement_type_tag` = `+51` — no `type_kind` enum edit (users don't pay for a
+wider enum they don't use).
+
+### Consumer-Boundary Discipline
+
+The optimization layer writes **neutral facts**; it ships **no** scheduler, no IR mutator, no hardware assumption:
+
+- `synthesize_affinity` emits `io_bound` / `cpu_bound` / `pure` / `sequential`; the adapter mapping `io_bound` to an
+  actual async pool is **consumer-side** (Pravaha / Lithe), documented, not shipped.
+- `width_policy` / `cost_policy` carry the SIMD width, tile budget, and cost thresholds as **`analyze_options`
+  inputs** — no ISA width or magnitude band is hardcoded in the logic; the defaults are portable, documented starting
+  points.
+- `verified_rewrite_engine` gates application on a `rewrite_policy`: an e-graph witness is proven-by-construction; an
+  SMT verdict is proven/refuted/deferred; a `deferred` rewrite is applied only under `allow_deferred` and always
+  flagged via `cert_id` so a consumer can re-verify. Refuted rewrites are never applied.
+- `refine.hpp` elision bits (`kElisionBoundsCheck` / `kElisionNullCheck` / `kElisionOverflow`) are a bit convention
+  over the free `analysis_record::features` vector — Vākya *sets* the bit once a guard is discharged; the consumer
+  *reads* it to drop the runtime check.
+
+Vākya stays pure: it keeps no downward dependency and touches no consumer type.
 
 ---
 

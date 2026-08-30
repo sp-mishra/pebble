@@ -1,7 +1,7 @@
 #pragma once
 
 // =============================================================================
-// vakya/query.hpp — lazy fluent semantic query over AST + analysis_store (V3)
+// vakya/query.hpp — lazy fluent semantic query over AST + analysis_store (opt-in)
 //
 // C++23, header-only, no virtual, no macros.
 // Namespace: vakya::query

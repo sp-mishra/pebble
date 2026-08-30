@@ -13,6 +13,7 @@
 #include <kalpa/kalpa.hpp>
 #include <kalpa/algo/unconstrained.hpp>
 #include <kalpa/algo/constrained.hpp>
+#include <kalpa/algo/least_squares.hpp>
 #include <kalpa/algo/global.hpp>
 #include <kalpa/introspect/telemetry.hpp>
 

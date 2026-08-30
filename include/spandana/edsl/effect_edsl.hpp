@@ -10,21 +10,21 @@
 namespace pebble::spandana::edsl {
 
 // Camera Shake Action
-class CameraShakeAction : public IAnimationAction {
+class CameraShakeAction {
 public:
     CameraShakeAction(ScreenShake2D& cam, float trauma, float duration, ResourceKey key)
         : cam_(cam), trauma_(trauma), duration_(duration), key_(key) {}
 
-    void on_start() override {
+    void on_start() {
         cam_.add_trauma(trauma_);
     }
 
-    void update(float, float dt) override {
+    void update(float, float dt) noexcept {
         cam_.update(dt);
     }
 
-    [[nodiscard]] float duration() const noexcept override { return duration_; }
-    [[nodiscard]] ResourceKey resource_key() const noexcept override { return key_; }
+    [[nodiscard]] float duration() const noexcept { return duration_; }
+    [[nodiscard]] ResourceKey resource_key() const noexcept { return key_; }
 
 private:
     ScreenShake2D& cam_;
@@ -58,24 +58,24 @@ inline CameraShakeBuilder shake_camera(ScreenShake2D& cam, ResourceKey key = kCa
 }
 
 // Flipbook Play Action
-class FlipbookPlayAction : public IAnimationAction {
+class FlipbookPlayAction {
 public:
     FlipbookPlayAction(SpriteAnimator& anim, const FlipbookClip* clip, ResourceKey key)
         : anim_(anim), clip_(clip), key_(key) {}
 
-    void on_start() override {
-        anim_.play(clip_);
+    void on_start() {
+        if (clip_) anim_.play(clip_);
     }
 
-    void update(float, float dt) override {
+    void update(float, float dt) noexcept {
         anim_.update(dt);
     }
 
-    [[nodiscard]] float duration() const noexcept override {
+    [[nodiscard]] float duration() const noexcept {
         return clip_ ? clip_->duration() : 0.0f;
     }
 
-    [[nodiscard]] ResourceKey resource_key() const noexcept override { return key_; }
+    [[nodiscard]] ResourceKey resource_key() const noexcept { return key_; }
 
 private:
     SpriteAnimator&     anim_;

@@ -11,14 +11,27 @@
 
 #include "concepts.hpp"
 #include <cmath>
+#include <numbers>
 #include <utility>
 
 namespace pebble::spandana {
 
+// Constexpr square root (Newton–Raphson) so spring constants can be cached at
+// construction in a constant-evaluated context. Falls back identically to
+// std::sqrt precision at runtime after a few iterations.
+[[nodiscard]] constexpr float sqrt_constexpr(float x) noexcept {
+    if (x <= 0.0f) return 0.0f;
+    float g = x;
+    for (int i = 0; i < 12; ++i) g = 0.5f * (g + x / g);
+    return g;
+}
+
 class AnalyticalSpringDamper {
 public:
     constexpr explicit AnalyticalSpringDamper(float stiffness = 180.0f, float damping = 12.0f) noexcept
-        : k_(stiffness), c_(damping) {}
+        : k_(stiffness), c_(damping),
+          omega0_(sqrt_constexpr(stiffness)),
+          zeta_(damping / (2.0f * sqrt_constexpr(stiffness))) {}
 
     // Step the spring: returns { new_position, new_velocity }
     [[nodiscard]] std::pair<float, float> step(float current, float velocity, float target, float dt) const noexcept {
@@ -27,8 +40,10 @@ public:
         const float x0 = current - target;
         const float v0 = velocity;
 
-        const float omega0 = std::sqrt(k_); // Natural angular frequency
-        const float zeta   = c_ / (2.0f * omega0); // Damping ratio
+        // omega0 (natural angular frequency) and zeta (damping ratio) are fixed
+        // by the spring constants — cached at construction, not recomputed here.
+        const float omega0 = omega0_;
+        const float zeta   = zeta_;
 
         float x_new = 0.0f;
         float v_new = 0.0f;
@@ -79,6 +94,8 @@ public:
 private:
     float k_ = 180.0f;
     float c_ = 12.0f;
+    float omega0_ = sqrt_constexpr(180.0f);
+    float zeta_   = 12.0f / (2.0f * sqrt_constexpr(180.0f));
 };
 
 // 2D Vector Spring Damper
@@ -96,6 +113,35 @@ public:
     }
 
 private:
+    AnalyticalSpringDamper spring_;
+};
+
+// Angular Spring Damper — springs toward a target angle along the shortest arc.
+// Wraps the error into (-pi, pi] before integrating so a spring from 350° to
+// 10° travels +20° instead of -340°. Output angle is not re-wrapped, matching
+// AnalyticalSpringDamper's positional semantics (callers wrap for display).
+class AngleSpringDamper {
+public:
+    constexpr explicit AngleSpringDamper(float stiffness = 180.0f, float damping = 12.0f) noexcept
+        : spring_(stiffness, damping) {}
+
+    [[nodiscard]] std::pair<float, float>
+    step(float current, float velocity, float target, float dt) const noexcept {
+        // Shortest-arc target relative to current: current + wrapped_error.
+        const float shortest_target = current + wrap_pi(target - current);
+        return spring_.step(current, velocity, shortest_target, dt);
+    }
+
+private:
+    static constexpr float kPi  = std::numbers::pi_v<float>;
+    static constexpr float kTau = 2.0f * kPi;
+
+    [[nodiscard]] static float wrap_pi(float a) noexcept {
+        a = std::fmod(a + kPi, kTau);
+        if (a < 0.0f) a += kTau;
+        return a - kPi;
+    }
+
     AnalyticalSpringDamper spring_;
 };
 

@@ -148,6 +148,13 @@ namespace litegraph::pravaha {
         const std::size_t chunk_sz = std::max<std::size_t>(1, (n + hw_threads - 1) / hw_threads);
         const auto chunks = ::pravaha::StaticChunkingPolicy::chunks(n, chunk_sz);
 
+        // Gather (pull) path: when the reverse CSR is present, each destination chunk
+        // owns its next_rank entries exclusively, so the distribution step needs no
+        // atomics. Falls back to the lock-free atomic scatter otherwise.
+        const bool gather = g.has_incoming();
+        std::vector<double> contrib;
+        if (gather) contrib.assign(n, 0.0);
+
         for (std::size_t iter = 0; iter < options.max_iterations; ++iter) {
             // 1. Parallel dangling mass reduction
             std::vector<double> partial_dangling(chunks.size(), 0.0);
@@ -173,50 +180,94 @@ namespace litegraph::pravaha {
             const double base_teleport = (1.0 - d) / static_cast<double>(n)
                 + (d * dangling_mass / static_cast<double>(n));
 
-            // 2. Parallel rank distribution & delta calculation
-            std::vector<std::atomic<double>> next_rank_atomic(n);
-            for (std::size_t i = 0; i < n; ++i) {
-                next_rank_atomic[i].store(base_teleport, std::memory_order_relaxed);
-            }
-
-            for (const auto& ch : chunks) {
-                auto task_fn = [&offsets, &targets, &rank, &next_rank_atomic, d, begin = ch.begin, end = ch.end]() {
-                    for (std::size_t u = begin; u < end; ++u) {
-                        const std::size_t out_degree = offsets[u + 1] - offsets[u];
-                        if (out_degree == 0) continue;
-
-                        const double contrib = d * rank[u] / static_cast<double>(out_degree);
-                        for (std::size_t i = offsets[u]; i < offsets[u + 1]; ++i) {
-                            const std::size_t target = targets[i].value;
-                            // Lock-free atomic addition on next_rank
-                            double cur = next_rank_atomic[target].load(std::memory_order_relaxed);
-                            while (!next_rank_atomic[target].compare_exchange_weak(cur, cur + contrib, std::memory_order_relaxed)) {}
-                        }
-                    }
-                };
-                (void)runner.submit(::pravaha::task("litegraph_pr_distribute", std::move(task_fn)));
-            }
-            runner.backend_ref().drain();
-
-            // 3. Parallel L1 delta computation
-            std::vector<double> partial_deltas(chunks.size(), 0.0);
-            for (std::size_t c_idx = 0; c_idx < chunks.size(); ++c_idx) {
-                const auto& ch = chunks[c_idx];
-                auto* part_delta = &partial_deltas[c_idx];
-                auto task_fn = [&rank, &next_rank, &next_rank_atomic, part_delta, begin = ch.begin, end = ch.end]() {
-                    double local_delta = 0.0;
-                    for (std::size_t i = begin; i < end; ++i) {
-                        next_rank[i] = next_rank_atomic[i].load(std::memory_order_relaxed);
-                        local_delta += std::abs(next_rank[i] - rank[i]);
-                    }
-                    *part_delta = local_delta;
-                };
-                (void)runner.submit(::pravaha::task("litegraph_pr_delta", std::move(task_fn)));
-            }
-            runner.backend_ref().drain();
-
             double total_delta = 0.0;
-            for (double dval : partial_deltas) total_delta += dval;
+
+            if (gather) {
+                const auto& in_offsets = g.in_offsets();
+                const auto& in_sources = g.in_sources();
+
+                // 2a. Precompute per-source contributions in parallel.
+                for (const auto& ch : chunks) {
+                    auto task_fn = [&offsets, &rank, &contrib, d, begin = ch.begin, end = ch.end]() {
+                        for (std::size_t u = begin; u < end; ++u) {
+                            const std::size_t out_degree = offsets[u + 1] - offsets[u];
+                            contrib[u] = out_degree == 0
+                                ? 0.0
+                                : d * rank[u] / static_cast<double>(out_degree);
+                        }
+                    };
+                    (void)runner.submit(::pravaha::task("litegraph_pr_contrib", std::move(task_fn)));
+                }
+                runner.backend_ref().drain();
+
+                // 2b. Parallel gather + per-chunk delta (destination-partitioned, no atomics).
+                std::vector<double> partial_deltas(chunks.size(), 0.0);
+                for (std::size_t c_idx = 0; c_idx < chunks.size(); ++c_idx) {
+                    const auto& ch = chunks[c_idx];
+                    auto* part_delta = &partial_deltas[c_idx];
+                    auto task_fn = [&in_offsets, &in_sources, &contrib, &rank, &next_rank,
+                                    base_teleport, part_delta, begin = ch.begin, end = ch.end]() {
+                        double local_delta = 0.0;
+                        for (std::size_t v = begin; v < end; ++v) {
+                            double acc = base_teleport;
+                            for (std::size_t k = in_offsets[v]; k < in_offsets[v + 1]; ++k) {
+                                acc += contrib[in_sources[k].value];
+                            }
+                            next_rank[v] = acc;
+                            local_delta += std::abs(acc - rank[v]);
+                        }
+                        *part_delta = local_delta;
+                    };
+                    (void)runner.submit(::pravaha::task("litegraph_pr_gather", std::move(task_fn)));
+                }
+                runner.backend_ref().drain();
+
+                for (double dval : partial_deltas) total_delta += dval;
+            } else {
+                // 2. Parallel rank distribution & delta calculation (atomic scatter).
+                std::vector<std::atomic<double>> next_rank_atomic(n);
+                for (std::size_t i = 0; i < n; ++i) {
+                    next_rank_atomic[i].store(base_teleport, std::memory_order_relaxed);
+                }
+
+                for (const auto& ch : chunks) {
+                    auto task_fn = [&offsets, &targets, &rank, &next_rank_atomic, d, begin = ch.begin, end = ch.end]() {
+                        for (std::size_t u = begin; u < end; ++u) {
+                            const std::size_t out_degree = offsets[u + 1] - offsets[u];
+                            if (out_degree == 0) continue;
+
+                            const double contrib = d * rank[u] / static_cast<double>(out_degree);
+                            for (std::size_t i = offsets[u]; i < offsets[u + 1]; ++i) {
+                                const std::size_t target = targets[i].value;
+                                // Lock-free atomic addition on next_rank
+                                double cur = next_rank_atomic[target].load(std::memory_order_relaxed);
+                                while (!next_rank_atomic[target].compare_exchange_weak(cur, cur + contrib, std::memory_order_relaxed)) {}
+                            }
+                        }
+                    };
+                    (void)runner.submit(::pravaha::task("litegraph_pr_distribute", std::move(task_fn)));
+                }
+                runner.backend_ref().drain();
+
+                // 3. Parallel L1 delta computation
+                std::vector<double> partial_deltas(chunks.size(), 0.0);
+                for (std::size_t c_idx = 0; c_idx < chunks.size(); ++c_idx) {
+                    const auto& ch = chunks[c_idx];
+                    auto* part_delta = &partial_deltas[c_idx];
+                    auto task_fn = [&rank, &next_rank, &next_rank_atomic, part_delta, begin = ch.begin, end = ch.end]() {
+                        double local_delta = 0.0;
+                        for (std::size_t i = begin; i < end; ++i) {
+                            next_rank[i] = next_rank_atomic[i].load(std::memory_order_relaxed);
+                            local_delta += std::abs(next_rank[i] - rank[i]);
+                        }
+                        *part_delta = local_delta;
+                    };
+                    (void)runner.submit(::pravaha::task("litegraph_pr_delta", std::move(task_fn)));
+                }
+                runner.backend_ref().drain();
+
+                for (double dval : partial_deltas) total_delta += dval;
+            }
 
             rank.swap(next_rank);
             result.iterations = iter + 1;

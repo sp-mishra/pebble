@@ -1,7 +1,7 @@
 #pragma once
 
 // =============================================================================
-// vakya/typed_pattern.hpp — type-aware pattern combinators (V3, opt-in)
+// vakya/typed_pattern.hpp — type-aware pattern combinators (opt-in)
 //
 // C++23, header-only, no virtual, no macros.
 // Namespace: vakya::typed_pattern
