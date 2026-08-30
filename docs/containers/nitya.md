@@ -47,20 +47,31 @@ Direct O(1) segment and offset translation:
   `published_lsn`.
 - **`append_sync(payload)`**: Reserves, publishes, and blocks until the record is durably flushed to disk.
 - **`sync()`**: Blocks until all currently published records up to `published_lsn` are durably flushed.
-- **`wait_durable(target_lsn)`**: Enqueues into the group commit coordinator and waits until
-  `flushed_lsn >= target_lsn`. Fails with `LogError::InvalidArg` if `target_lsn > published_lsn`, or with the
-  sticky durability error after a failed flush.
+- **`wait_durable(target_lsn)`**: Waits until `flushed_lsn >= target_lsn`. Under the default
+  `flush_gate_concurrency` the first waiter flushes the covering range; under the opt-in
+  `group_commit_concurrency` it routes through the ticket-queue leader/follower protocol (§3). Fails with
+  `LogError::InvalidArg` if `target_lsn > published_lsn`, or with the sticky durability error after a
+  failed flush.
 - **`flush_to(target_lsn)`**: Low-level durability primitive; validates `target_lsn <= published_lsn` and directly
   flushes segment ranges under `flush_mutex_`. Preferred public API is `wait_durable` or `sync`.
 
-### 3. Leader / Follower Group Commit
+### 3. Durability Path: First-Waiter Flush (default) + optional Batched Group Commit
 
-`wait_durable()` uses a short durability mutex rather than a spinning ticket protocol:
+The default `ConcurrencyPolicy` is `flush_gate_concurrency`: `wait_durable()` uses a short durability
+mutex rather than a spinning ticket protocol.
 
 - The first waiter flushes the current contiguous `published_lsn` watermark in one batched `msync`.
 - Concurrent waiters covered by that watermark return after acquiring the mutex and observing `flushed_lsn`.
 - This is intentionally I/O-serialized: it guarantees progress and avoids a lock-free hand-off becoming the liveness
   dependency of the durability path.
+
+**Opt-in batched group commit.** For high-fan-in workloads (many concurrent `append_sync` callers),
+select `group_commit_concurrency<Capacity>` instead. It advertises `uses_ticket_queue == true`, and
+`wait_durable()` dispatches (via `if constexpr`) into a genuine leader/follower protocol: a waiter
+enqueues a `commit_ticket`, then either wins the flush mutex to become the leader — draining every
+waiting ticket and flushing the single covering range once, marking each ticket's completion — or waits
+as a follower on its completion / the `flushed_lsn` watermark. The ticket-queue members are only
+instantiated when this policy is selected, so the default path pays nothing for them.
 
 ### 4. Background Flusher
 
@@ -122,6 +133,9 @@ Recovery provides fine-grained control over corruption handling:
 - **`recovery_mode::strict`**: Corrupt header or checksum immediately terminates scan with error.
 - **`recovery_mode::stop_at_first_error`**: Returns all valid records preceding the first corrupted entry.
 - **`recovery_mode::salvage`**: Attempts to scan past corrupted byte ranges to salvage downstream valid records.
+  Resynchronisation jumps directly to the next frame-magic sentinel using a vectorised sweep (Google Highway,
+  gated on `PEBBLE_HAS_HIGHWAY` exactly like the B+Tree module) with a scalar fallback — behaviour is identical
+  either way, only the resync is faster than a one-byte-at-a-time crawl.
 
 Each `recovery_stream` maintains an authoritative per-stream `status()`:
 
@@ -140,17 +154,73 @@ struct recovery_status {
 
 ## Policy Concepts
 
-All pluggable policies are constrained with C++20/23 concepts:
+All pluggable policies are constrained with C++20/23 concepts. The full `wal` template parameter list is:
 
-- **`StoragePolicyLike`**: Manages segment file mappings and flush ranges (`setu_storage`).
-- **`MemoryPolicyLike`**: Provides zero-allocation scratch buffers (`smriti_memory`).
-- **`ConcurrencyPolicyLike`**: MPMC-backed commit coordinator (`group_commit_concurrency`).
-- **`FramingPolicyLike`**: Checksums, encoding, header/trailer validation (`default_framing`).
+```cpp
+template <
+    StoragePolicyLike        StoragePolicy   = setu_storage,
+    MemoryPolicyLike         MemoryPolicy    = smriti_memory,
+    ConcurrencyPolicyLike    ConcurrencyPolicy = flush_gate_concurrency,
+    FramingPolicyLike        FramingPolicy   = default_framing,
+    DurabilityPolicyLike     DurabilityPolicy = sync_durability,
+    TelemetryPolicyLike      TelemetryPolicy = nadi_telemetry,
+    ClockPolicyLike          ClockPolicy     = system_clock_source,
+    std::size_t              PublishTrackerCapacity = 1024,
+    PublishTrackerPolicyLike PublishTrackerPolicy   = static_vector_publish_tracker<PublishTrackerCapacity>>
+class wal;
+```
+
+- **`StoragePolicyLike`**: Manages segment file mappings and flush ranges (`setu_storage`). Owns segment
+  naming via a member `format_segment_name` and a policy-provided filename format (default `"{:010d}.log"`),
+  so sharded/tiered storage can namespace segments.
+- **`MemoryPolicyLike`**: Zero-allocation scratch (`smriti_memory`). **Wired into recovery/replication**:
+  `recovery_stream`/`replication_stream` stage each record's payload through `allocate()` + per-record
+  `reset()`, giving an eviction-stable, zero-alloc scratch copy. The append fast path stays direct-to-mmap
+  and never touches it.
+- **`ConcurrencyPolicyLike`**: Advertises `uses_ticket_queue`. The default `flush_gate_concurrency` supplies
+  only the flush-gate surface (first-waiter path, §3); `group_commit_concurrency<Cap>` opts into the ticket
+  queue for batched leader/follower group commit. Ticket-queue members are only instantiated when selected.
+- **`FramingPolicyLike`**: Checksums, encoding, header/trailer validation, and **on-disk format ownership**
+  (`default_framing`). The policy owns `format_version`, the header/trailer/segment-header sizes (the
+  44/28/8-byte `static_assert`s live inside it), and `supports_version()`. **Both** the frame CRC and the
+  segment-header CRC route through `FramingPolicy::calculate_checksum32` — a custom framing (xxHash,
+  HW-CRC-off) applies uniformly.
 - **`DurabilityPolicyLike`**: Synchronous or asynchronous flush mode (`sync_durability`, `async_durability`).
 - **`TelemetryPolicyLike`**: Compile-time zero-overhead NADI trace scopes (`nadi_telemetry`).
+- **`ClockPolicyLike`**: Supplies `now_unix_ns()` (`system_clock_source`, wrapping `std::chrono::system_clock`).
+  Segment stamping (`created_at_unix_ns`) and retention age consult it, so tests can inject a deterministic
+  clock and simulation-time deployments can drive logical time.
+- **`PublishTrackerPolicyLike`**: Out-of-order publish interval tracker (`static_vector_publish_tracker`).
+  The common contiguous / extends-the-last-interval case is an O(1) append-tail fast path; a high-gap
+  workload can swap an interval-tree structure without touching the WAL.
 
-The publish tracker capacity is a `wal` template parameter (`PublishTrackerCapacity`, default 1024); group-drain
-capacity derives from the selected `ConcurrencyPolicy` instead of an unrelated fixed constant.
+The publish tracker capacity is a `wal` template parameter (`PublishTrackerCapacity`, default 1024);
+batched group-drain capacity derives from the selected `ConcurrencyPolicy` instead of an unrelated fixed
+constant.
+
+### Format evolution
+
+The physical format is owned by the `FramingPolicy`, not frozen by free-standing global asserts.
+`default_framing` is v1 and byte-identical to prior releases. Recovery reads the persisted
+`segment_header.version` and consults `FramingPolicy::supports_version(v)` rather than hard-comparing
+against a single constant — so a future v2 framing policy (its own version, sizes, encode/decode) can
+accept several versions and coexist for forward/backward compatibility on long-lived WAL files.
+
+### Clock policy
+
+`ClockPolicy::now_unix_ns()` is the single source of "now" for segment stamping and retention. Injecting a
+manual clock makes retention fully deterministic:
+
+```cpp
+struct ManualClock {
+    static inline std::atomic<std::uint64_t> now_ns{0};
+    static std::uint64_t now_unix_ns() noexcept { return now_ns.load(); }
+};
+using DeterministicWal = nitya::wal<
+    nitya::setu_storage_t<nitya::default_framing, ManualClock>, // stamp segments with the clock
+    nitya::smriti_memory, nitya::flush_gate_concurrency, nitya::default_framing,
+    nitya::sync_durability, nitya::nadi_telemetry, ManualClock>;                 // age segments with the clock
+```
 
 ---
 
@@ -210,7 +280,13 @@ if (auto ack = stream.acknowledge(stream.next_lsn()); !ack) {
 ### 4. Optional Pravaha maintenance adapter
 
 Pravaha is intentionally optional. The durability hot path does not depend on a scheduler; include the adapter only
-for recovery or retention maintenance:
+for recovery or retention maintenance. The `Runner` is constrained by a `pravaha_runner<R>` concept (`submit`,
+`backend_ref().drain()`) so misuse is a clear concept error rather than a deep template failure.
+
+Pravaha's `Runner::submit` executes the submitted task graph inline (there is no deferred completion handle yet),
+so these adapters are honestly *blocking*: `recover_blocking` / `apply_retention_rules_blocking` submit the work,
+drain the backend, and return the result. The `_blocking` names are canonical; the historical `recover_async` /
+`apply_retention_rules_async` names are retained as identical-behaviour aliases.
 
 ```cpp
 #include "pravaha/pravaha.hpp"
@@ -218,8 +294,8 @@ for recovery or retention maintenance:
 
 pravaha::Runner<pravaha::JThreadBackend> runner;
 
-// Evaluate segment retention & archival policies in parallel task graphs
-auto retention = nitya::pravaha_adapter::apply_retention_rules_async(
+// Evaluate segment retention & archival policies through Pravaha (blocking)
+auto retention = nitya::pravaha_adapter::apply_retention_rules_blocking(
     log, runner,
     std::chrono::seconds(86400),
     [](const nitya::segment_descriptor& seg) {

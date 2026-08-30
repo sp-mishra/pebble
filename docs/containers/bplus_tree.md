@@ -167,3 +167,132 @@ auto map = pebble::containers::make_smriti_bplus_map<int, int>(pool);
 `make_smriti_bplus_set` factories wire `smriti::SmritiAllocator` in. Combined with the
 `MaxRecycleNodes` freelist, node churn under insert/erase storms is bounded to warm arena blocks.
 
+## 6. Production-Scale Usage
+
+This section shows the container running at production scale — millions of live entries, a
+bounded-memory arena, bulk import/recovery in $O(N)$, and parallel read fan-out — followed by the
+seam for adopting it as a Petika storage tier.
+
+### 6.1 Capacity & Depth Budget
+
+Fanout auto-sizes from `TargetNodeBytes` (default `256`, clamped to `[4, 4096]` keys/node). For a
+`BPlusMap<std::uint64_t, std::uint64_t>` (16 B/entry) the leaf holds ~14 entries and inner nodes
+~15 routers at the default budget; raising `TargetNodeBytes` widens both. Tree height is
+$\lceil \log_{B} N \rceil$, so depth stays shallow even at scale:
+
+| Entries $N$ | Fanout $B$ (256 B budget) | Height | Fanout $B$ (4096 B budget) | Height |
+| --- | --- | --- | --- | --- |
+| $10^6$ | ~15 | 5 | ~250 | 3 |
+| $10^7$ | ~15 | 6 | ~250 | 3 |
+| $10^8$ | ~15 | 7 | ~250 | 4 |
+
+Widen `TargetNodeBytes` for read-heavy, mostly-static datasets (fewer levels, fewer cache misses
+per lookup); keep it narrow for write-churn workloads (cheaper splits/merges). Override via a custom
+`Traits` when the auto-tuned band is wrong for your access pattern:
+```cpp
+struct WideTraits : pebble::containers::DefaultBPlusTreeTraits<std::uint64_t, std::uint64_t, 4096> {};
+using WideMap = pebble::containers::BPlusTree<
+    std::uint64_t, std::uint64_t, std::less<>, WideTraits>;
+```
+
+### 6.2 Bulk Import & Recovery in $O(N)$
+
+For initial load or crash recovery from a sorted snapshot, **never** replay through
+`insert_or_assign` (that is $O(N \log N)$ with per-insert re-descent and split churn). Feed the
+sorted, unique stream to `from_sorted`, which packs leaves left-to-right and assembles inner levels
+bottom-up — one linear pass, perfectly balanced, cache-dense:
+```cpp
+#include "containers/tree/bplus_tree.hpp"
+#include <vector>
+
+// Sorted, unique snapshot restored from WAL / cold storage (millions of rows).
+std::vector<std::pair<const std::uint64_t, Record>> snapshot = load_sorted_snapshot();
+
+auto index = pebble::containers::BPlusMap<std::uint64_t, Record>::from_sorted(
+    snapshot.begin(), snapshot.end());   // O(N), single balanced build
+```
+**Precondition**: the range is sorted by key and unique. For unsorted input, sort first
+(`std::sort`) — a sort-then-bulk-load is still cheaper than $N$ ordered inserts at scale.
+
+### 6.3 Bounded Memory Under Sustained Churn
+
+At production scale the OS allocator becomes the bottleneck under insert/erase storms. Source nodes
+from a Smriti arena and let the `MaxRecycleNodes` freelist absorb the churn so steady-state
+allocation approaches zero:
+```cpp
+using PoolType = smriti::pools::BumpPool<smriti::domains::SystemRAMDomain>;
+PoolType pool{1u << 26};   // 64 MiB arena, sized to peak live-node count
+
+// Custom Traits: deeper freelist for high-churn tiers.
+struct ChurnTraits : pebble::containers::DefaultBPlusTreeTraits<std::uint64_t, Record> {
+    static constexpr std::size_t MaxRecycleNodes = 1024;
+};
+
+auto hot_index = pebble::containers::make_smriti_bplus_map<std::uint64_t, Record>(pool);
+```
+Size the arena to the *peak* live-node count ($\approx N / (\text{leaf fill} \times 0.7)$ leaves plus
+inner nodes); the freelist then recycles warm blocks across delete/insert waves rather than
+returning them to the arena.
+
+### 6.4 Parallel Read Fan-Out
+
+For analytics-style aggregation or large batch point-lookups over a *quiescent* (read-only) tree,
+the pravaha helpers partition the leaf chain / query batch across a shared runner:
+```cpp
+#include "containers/tree/bplus_tree_pravaha.hpp"
+
+namespace pv = pebble::containers::pravaha;
+pv::DefaultRunner runner;   // reuse one runner across calls to amortise thread setup
+
+// Aggregate a key range in parallel (reduce_op must be associative).
+long long total = pv::parallel_reduce(
+    hot_index, lo, hi, 0LL,
+    [](long long a, long long b) { return a + b; },
+    [](std::uint64_t, const Record& r) { return r.weight; },
+    /*leaf_grain_size=*/64, &runner);
+
+// Batch point-lookups (results align with queries by index).
+auto hits = pv::parallel_find(hot_index, std::span<const std::uint64_t>(query_keys), &runner);
+```
+**Thread-safety**: the helpers only *read* the tree — do not mutate it concurrently. User callables
+run on multiple threads and must be thread-safe; `reduce_op` must be associative. Tune
+`leaf_grain_size` up (fewer, larger tasks) for cheap callables and down for expensive ones.
+
+### 6.5 Adopting the B+ Tree as a Petika Storage Tier
+
+The B+ tree is a *container*, not a Petika `StorageEngine` — its surface is
+`insert_or_assign` / `at` / `contains` / `erase` / `scan`, whereas `petika::StorageEngine` requires
+`put` / `get` / `erase` / `contains` / `size` / `empty` / `clear` / `apply_log_record`, each
+returning `petika::Result<T>` and taking a `nitya::lsn_t`. To wire it in as a storage tier, add a
+thin adapter that owns a `BPlusMap` and satisfies the concept:
+```cpp
+// Sketch — a Petika engine backed by BPlusTree (adapter, not part of the container).
+template <typename Key, typename Value>
+class BTreeEngine {
+    pebble::containers::BPlusMap<Key, Value> index_;
+public:
+    petika::Result<void> put(const Key& k, const Value& v, nitya::lsn_t) {
+        index_.insert_or_assign(k, v);
+        return {};
+    }
+    petika::Result<Value> get(const Key& k) const {
+        auto it = index_.find(k);
+        if (it == index_.end()) return std::unexpected(petika::StorageError::NotFound);
+        return it->second;
+    }
+    petika::Result<void> erase(const Key& k, nitya::lsn_t) {
+        return index_.erase(k) ? petika::Result<void>{}
+                               : std::unexpected(petika::StorageError::NotFound);
+    }
+    bool contains(const Key& k) const { return index_.contains(k); }
+    std::size_t size() const noexcept { return index_.size(); }
+    bool empty() const noexcept { return index_.empty(); }
+    // ... clear(lsn), apply_log_record(op, k, v, lsn) → replay by EntryOp ...
+    // Recovery fast-path: rebuild from a sorted checkpoint via BPlusMap::from_sorted (§6.2).
+};
+```
+The recovery replay path should prefer `from_sorted` over per-record `put` (§6.2), and the engine
+can pass a Smriti arena into the `BPlusMap` (§6.3) so a `BTreeStore = Petika<BTreeEngine<...>, ...>`
+tier inherits bounded-memory node recycling. See `scratch/petika_next.md` item 8 for the full
+integration plan — the adapter itself is a code addition, not yet present in `include/petika/`.
+

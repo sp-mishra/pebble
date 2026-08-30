@@ -37,6 +37,13 @@
 #include "crc32c/crc32c.h"
 #endif
 
+// Optional SIMD acceleration for salvage resynchronisation. Gated exactly like
+// containers/tree/bplus_tree.hpp: present only when Highway headers are available.
+#if __has_include(<hwy/highway.h>)
+#include <hwy/highway.h>
+#define PEBBLE_HAS_HIGHWAY 1
+#endif
+
 #include <algorithm>
 #include <atomic>
 #include <cassert>
@@ -257,6 +264,28 @@ namespace nitya {
     } // namespace detail
 
     struct default_framing {
+        // ---- Physical-format ownership (Item 5: version evolution seam) --------
+        // The framing policy owns the on-disk format version and structural sizes.
+        // The 44/28/8-byte layout is asserted *here*, where the policy that emits
+        // it lives, rather than as free-standing global asserts. A future v2 ships
+        // as a distinct policy with its own version/sizes/encode/decode; recovery
+        // negotiates via supports_version() instead of hard-rejecting.
+        static constexpr std::uint16_t format_version = k_nitya_format_version;
+        static constexpr std::size_t header_size = sizeof(frame_header);
+        static constexpr std::size_t trailer_size = sizeof(frame_trailer);
+        static constexpr std::size_t segment_header_size = sizeof(segment_header);
+        static constexpr std::size_t frame_overhead = header_size + trailer_size;
+
+        static_assert(sizeof(segment_header) == 44, "segment_header must be packed to 44 bytes");
+        static_assert(sizeof(frame_header) == 28, "frame_header must be packed to 28 bytes");
+        static_assert(sizeof(frame_trailer) == 8, "frame_trailer must be packed to 8 bytes");
+
+        // Version negotiation hook: recovery consults this rather than comparing
+        // against a single constant, so a multi-version policy can accept several.
+        [[nodiscard]] static constexpr bool supports_version(const std::uint16_t v) noexcept {
+            return v == format_version;
+        }
+
         static std::uint32_t calculate_checksum32(const std::byte* data, const std::size_t len) noexcept {
 #if !defined(NITYA_NO_GOOGLE_CRC32C)
             return crc32c::Crc32c(reinterpret_cast<const std::uint8_t*>(data), len);
@@ -298,7 +327,7 @@ namespace nitya {
             if (hdr.magic != k_nitya_magic) {
                 return std::unexpected(LogError::CorruptedHeader);
             }
-            if (hdr.version != k_nitya_format_version) {
+            if (!supports_version(hdr.version)) {
                 return std::unexpected(LogError::UnsupportedVersion);
             }
             if (hdr.lsn != expected_lsn) {
@@ -333,21 +362,51 @@ namespace nitya {
         }
     };
 
-    // Dedicated helper for segment header CRC calculation (always CRC32-C)
+    // Segment-header CRC calculation, routed through a FramingPolicy so a custom
+    // framing (xxHash, hardware-CRC-off build, ...) applies uniformly to segment
+    // headers and frames. Defaulted to default_framing so existing free-function
+    // call sites (`calculate_segment_header_crc(hdr)`) remain byte-identical.
+    template <typename Framing = default_framing>
     inline std::uint32_t calculate_segment_header_crc(segment_header hdr) noexcept {
         hdr.header_crc = 0;
-        return default_framing::calculate_checksum32(
+        return Framing::calculate_checksum32(
             reinterpret_cast<const std::byte*>(&hdr),
             sizeof(hdr)
         );
     }
 
     // ============================================================================
+    // § 4b Clock Policy (segment stamping & retention time source)
+    // ============================================================================
+
+    // Wall-clock source. Segment stamping and retention consult it so tests can
+    // inject a deterministic clock and simulation-time deployments can drive
+    // logical time. Default wraps std::chrono::system_clock (byte-identical).
+    struct system_clock_source {
+        [[nodiscard]] static std::uint64_t now_unix_ns() noexcept {
+            return static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::system_clock::now().time_since_epoch())
+                .count());
+        }
+    };
+
+    // ============================================================================
     // § 5  Storage Policy (Setu-backed mapped segments)
     // ============================================================================
 
-    class setu_storage {
+    // Setu-backed mapped-segment storage. Templated on the FramingPolicy so segment
+    // header checksums use the same policy as frames (Item 3 uniformity). The public
+    // `setu_storage` alias below binds it to default_framing, byte-identical to before.
+    // (Constrained via the FramingPolicyLike concept at the `wal` boundary; the concept
+    // itself is defined further below, so this param is unconstrained here by ordering.)
+    template <typename Framing = default_framing, typename Clock = system_clock_source>
+    class setu_storage_t {
     public:
+        // Policy-owned segment filename format (Item 4). A stateful/tiered storage
+        // policy can override this to namespace segments; default is "{:010d}.log".
+        static constexpr std::string_view segment_name_format = "{:010d}.log";
+
         struct segment_file {
             std::uint64_t segment_id{0};
             lsn_t begin_lsn{0};
@@ -356,19 +415,21 @@ namespace nitya {
             setu::mapping<setu::read_write> map;
         };
 
-        explicit setu_storage(wal_options opts) : opts_{std::move(opts)} {
+        explicit setu_storage_t(wal_options opts) : opts_{std::move(opts)} {
             std::error_code ec;
             std::filesystem::create_directories(opts_.wal_dir, ec);
         }
 
-        ~setu_storage() = default;
-        setu_storage(const setu_storage&) = delete;
-        setu_storage& operator=(const setu_storage&) = delete;
-        setu_storage(setu_storage&&) = delete;
-        setu_storage& operator=(setu_storage&&) = delete;
+        ~setu_storage_t() = default;
+        setu_storage_t(const setu_storage_t&) = delete;
+        setu_storage_t& operator=(const setu_storage_t&) = delete;
+        setu_storage_t(setu_storage_t&&) = delete;
+        setu_storage_t& operator=(setu_storage_t&&) = delete;
 
+        // Static so existing call sites (`nitya::setu_storage::format_segment_name(id)`)
+        // keep compiling; a static method still satisfies the member-style concept call.
         static std::string format_segment_name(std::uint64_t segment_id) {
-            return std::format("{:010d}.log", segment_id);
+            return std::vformat(segment_name_format, std::make_format_args(segment_id));
         }
 
         static Result<void> validate_segment_header(
@@ -387,7 +448,7 @@ namespace nitya {
                 return std::unexpected(LogError::CorruptedHeader);
             }
 
-            if (hdr.version != k_nitya_format_version) {
+            if (!Framing::supports_version(hdr.version)) {
                 return std::unexpected(LogError::UnsupportedVersion);
             }
 
@@ -395,7 +456,7 @@ namespace nitya {
                 return std::unexpected(LogError::LsnMismatch);
             }
 
-            if (const auto computed = calculate_segment_header_crc(hdr); computed != hdr.header_crc) {
+            if (const auto computed = calculate_segment_header_crc<Framing>(hdr); computed != hdr.header_crc) {
                 return std::unexpected(LogError::ChecksumMismatch);
             }
 
@@ -434,10 +495,8 @@ namespace nitya {
                     shdr.segment_id = seg_id;
                     shdr.begin_lsn = begin_lsn;
                     shdr.sealed_lsn = 0;
-                    shdr.created_at_unix_ns = static_cast<std::uint64_t>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            std::chrono::system_clock::now().time_since_epoch()).count());
-                    shdr.header_crc = calculate_segment_header_crc(shdr);
+                    shdr.created_at_unix_ns = Clock::now_unix_ns();
+                    shdr.header_crc = calculate_segment_header_crc<Framing>(shdr);
 
                     std::memcpy(bytes.data(), &shdr, sizeof(segment_header));
                     if (const auto hdr_flush = seg->map.flush_range(0, sizeof(segment_header), setu::flush_mode::sync);
@@ -472,7 +531,7 @@ namespace nitya {
                 std::memcpy(&hdr, bytes.data(), sizeof(hdr));
                 hdr.sealed_lsn = sealed_lsn;
                 hdr.flags |= k_segment_sealed;
-                hdr.header_crc = calculate_segment_header_crc(hdr);
+                hdr.header_crc = calculate_segment_header_crc<Framing>(hdr);
                 std::memcpy(bytes.data(), &hdr, sizeof(hdr));
 
                 auto flush_res = mapping.flush_range(0, sizeof(segment_header), setu::flush_mode::sync);
@@ -513,7 +572,7 @@ namespace nitya {
                         segment_header hdr;
                         std::memcpy(&hdr, bytes.data(), sizeof(hdr));
                         hdr.flags |= k_segment_archived;
-                        hdr.header_crc = calculate_segment_header_crc(hdr);
+                        hdr.header_crc = calculate_segment_header_crc<Framing>(hdr);
                         std::memcpy(bytes.data(), &hdr, sizeof(hdr));
                         if (const auto flush_res = s->map.flush_range(0, sizeof(segment_header), setu::flush_mode::sync)
                             ; !flush_res) return std::unexpected(LogError::FlushFailed);
@@ -529,7 +588,7 @@ namespace nitya {
                 segment_header hdr;
                 std::memcpy(&hdr, bytes.data(), sizeof(hdr));
                 hdr.flags |= k_segment_archived;
-                hdr.header_crc = calculate_segment_header_crc(hdr);
+                hdr.header_crc = calculate_segment_header_crc<Framing>(hdr);
                 std::memcpy(bytes.data(), &hdr, sizeof(hdr));
                 if (const auto flush_res = map_res->flush_range(0, sizeof(segment_header), setu::flush_mode::sync); !
                     flush_res) return std::unexpected(LogError::FlushFailed);
@@ -571,6 +630,11 @@ namespace nitya {
         std::mutex mutex_;
         std::vector<std::shared_ptr<segment_file>> active_segments_;
     };
+
+    // Public storage alias bound to the default framing policy. Byte-identical to the
+    // pre-templatized `setu_storage`; keeps `nitya::setu_storage` usable as a type and
+    // for the static `format_segment_name` call.
+    using setu_storage = setu_storage_t<default_framing>;
 
     // ============================================================================
     // § 6  Memory Policy (Smriti-backed Arena)
@@ -628,12 +692,39 @@ namespace nitya {
     };
 
     // ============================================================================
-    // § 9  Concurrency Policy (Bounded ticket queue for Group Commit)
+    // § 9  Concurrency Policy (durability coordination)
     // ============================================================================
+    //
+    // The durability path needs a coordinator. Two are shipped:
+    //
+    //  * flush_gate_concurrency (DEFAULT) — the honest, first-waiter-flushes-all
+    //    surface. `wait_durable` serializes on the wal's own `flush_mutex_`, the
+    //    first waiter flushes the current published watermark in one batched
+    //    msync, and every concurrent waiter it covers returns after observing
+    //    `flushed_lsn`. No ticket queue exists, so callers pay for nothing beyond
+    //    a mutex. `uses_ticket_queue == false` selects this path via `if constexpr`.
+    //
+    //  * group_commit_concurrency<Cap> (OPT-IN) — a genuine leader/follower
+    //    batched group commit for high-fan-in `append_sync` workloads. Waiters
+    //    enqueue a ticket; the leader drains all waiting tickets, flushes the
+    //    covering range once, and marks each completion. `uses_ticket_queue == true`
+    //    routes `wait_durable` through `execute_leader_flush`.
+    //
+    // Both keep the append fast path lock-free with respect to the flush mutex.
+
+    // Default coordinator: honest flush gate. Stateless — the wal owns the mutex
+    // and watermark; this policy only advertises which durability path to run.
+    class flush_gate_concurrency {
+    public:
+        static constexpr bool uses_ticket_queue = false;
+        flush_gate_concurrency() = default;
+    };
 
     template <std::size_t QueueCapacity = 1024>
     class group_commit_concurrency {
     public:
+        static constexpr bool uses_ticket_queue = true;
+
         // A ticket can outlive the caller that queued it: the durability
         // watermark may satisfy that caller before a later leader drains the
         // queue.  Keep its completion state owned by both the caller and the
@@ -674,6 +765,100 @@ namespace nitya {
     };
 
     // ============================================================================
+    // § 9c Publish-Tracker Policy (out-of-order publish interval bookkeeping)
+    // ============================================================================
+    //
+    // Writers reserve contiguous byte ranges but may publish them out of order.
+    // The tracker records not-yet-contiguous published intervals and advances the
+    // contiguous `published_lsn` watermark as gaps fill. The default keeps the
+    // fixed-capacity `static_vector` (zero heap, common case is near-contiguous
+    // with a handful of gaps) and adds an O(1) append-tail fast path for the
+    // dominant "extends the last interval" case. A high-gap workload can supply
+    // an interval-tree policy without touching the WAL.
+    //
+    // Contract (all methods called under the wal's publish-tracker mutex):
+    //   bool insert(from, to)  — record an interval; false if capacity exhausted.
+    //   void drain(lsn_t& cur) — advance cur over intervals it now covers.
+    template <std::size_t Capacity>
+    class static_vector_publish_tracker {
+    public:
+        static constexpr std::size_t capacity() noexcept { return Capacity; }
+
+        // Advance `cur` over every interval whose start is already covered,
+        // compacting the survivors to the front. O(k) in drained intervals.
+        void drain(lsn_t& cur) noexcept {
+            std::size_t drained = 0;
+            while (drained < intervals_.size() && intervals_[drained].first <= cur) {
+                cur = std::max(cur, intervals_[drained].second);
+                ++drained;
+            }
+            if (drained > 0) {
+                const std::size_t remaining = intervals_.size() - drained;
+                for (std::size_t i = 0; i < remaining; ++i) {
+                    intervals_[i] = std::move(intervals_[drained + i]);
+                }
+                while (intervals_.size() > remaining) {
+                    intervals_.pop_back();
+                }
+            }
+        }
+
+        // Record an out-of-contiguous interval [from, to). Returns false only when
+        // the fixed capacity is exhausted and the interval cannot be merged.
+        [[nodiscard]] bool insert(lsn_t from, lsn_t to) noexcept {
+            // O(1) append-tail fast path: the common case is an interval that
+            // extends (or abuts) the current last interval — no shift, no scan.
+            if (!intervals_.empty()) {
+                if (auto& last = intervals_.back(); from <= last.second && to >= last.first) {
+                    last.first = std::min(last.first, from);
+                    last.second = std::max(last.second, to);
+                    return true;
+                }
+                if (from > intervals_.back().second) {
+                    // Strictly after the tail: append without shifting.
+                    return intervals_.push_back({from, to});
+                }
+            } else {
+                return intervals_.push_back({from, to});
+            }
+
+            // General path: merge into an overlapping interval or sorted-insert.
+            for (std::size_t i = 0; i < intervals_.size(); ++i) {
+                if (auto& [fst, snd] = intervals_[i]; from <= snd && to >= fst) {
+                    fst = std::min(fst, from);
+                    snd = std::max(snd, to);
+                    while (i + 1 < intervals_.size() && snd >= intervals_[i + 1].first) {
+                        snd = std::max(snd, intervals_[i + 1].second);
+                        for (std::size_t j = i + 1; j + 1 < intervals_.size(); ++j) {
+                            intervals_[j] = std::move(intervals_[j + 1]);
+                        }
+                        intervals_.pop_back();
+                    }
+                    return true;
+                }
+            }
+
+            if (intervals_.size() >= intervals_.capacity()) {
+                return false;
+            }
+
+            std::size_t idx = 0;
+            while (idx < intervals_.size() && intervals_[idx].first < from) {
+                ++idx;
+            }
+            (void)intervals_.push_back({from, to});
+            for (std::size_t i = intervals_.size() - 1; i > idx; --i) {
+                intervals_[i] = std::move(intervals_[i - 1]);
+            }
+            intervals_[idx] = {from, to};
+            return true;
+        }
+
+    private:
+        containers::static_vector<std::pair<lsn_t, lsn_t>, Capacity> intervals_;
+    };
+
+    // ============================================================================
     // § 10 Concepts
     // ============================================================================
 
@@ -692,6 +877,9 @@ namespace nitya {
             { F::encode(res, checksum) } noexcept;
             { F::validate_header(hdr, lsn) } -> std::same_as<Result<std::uint32_t>>;
             { F::validate_payload_and_trailer(payload, trl, checksum) } -> std::same_as<Result<void>>;
+            // Physical-format ownership (Item 5): version + structural sizes.
+            { F::format_version } -> std::convertible_to<std::uint16_t>;
+            { F::supports_version(std::uint16_t{}) } -> std::same_as<bool>;
         };
 
     template <typename S>
@@ -709,12 +897,26 @@ namespace nitya {
         { m.reset() } noexcept;
     };
 
+    // A concurrency policy advertises which durability path it drives. A ticket
+    // queue is required only when it opts into batched group commit; the honest
+    // default (flush_gate_concurrency) supplies only the tag.
     template <typename C>
-    concept ConcurrencyPolicyLike = requires(C& c, typename C::commit_ticket ticket) {
+    concept TicketQueueConcurrency = requires(C& c, typename C::commit_ticket ticket) {
         typename C::commit_completion;
         { c.enqueue_commit(ticket) } -> std::same_as<bool>;
         { c.dequeue_commit() } -> std::same_as<std::optional<typename C::commit_ticket>>;
         { C::capacity() } -> std::convertible_to<std::size_t>;
+    };
+
+    template <typename C>
+    concept ConcurrencyPolicyLike = requires {
+        { C::uses_ticket_queue } -> std::convertible_to<bool>;
+    } && (!C::uses_ticket_queue || TicketQueueConcurrency<C>);
+
+    template <typename P>
+    concept PublishTrackerPolicyLike = requires(P& p, lsn_t v, lsn_t from, lsn_t to) {
+        { p.insert(from, to) } -> std::same_as<bool>;
+        { p.drain(v) } noexcept;
     };
 
     template <typename D>
@@ -732,6 +934,11 @@ namespace nitya {
         { T::trace_replication() };
     };
 
+    template <typename C>
+    concept ClockPolicyLike = requires {
+        { C::now_unix_ns() } -> std::same_as<std::uint64_t>;
+    };
+
     // ============================================================================
     // § 11 Wal Engine: nitya::wal
     // ============================================================================
@@ -739,11 +946,14 @@ namespace nitya {
     template <
         StoragePolicyLike StoragePolicy = setu_storage,
         MemoryPolicyLike MemoryPolicy = smriti_memory,
-        ConcurrencyPolicyLike ConcurrencyPolicy = group_commit_concurrency<1024>,
+        ConcurrencyPolicyLike ConcurrencyPolicy = flush_gate_concurrency,
         FramingPolicyLike FramingPolicy = default_framing,
         DurabilityPolicyLike DurabilityPolicy = sync_durability,
         TelemetryPolicyLike TelemetryPolicy = nadi_telemetry,
-        std::size_t PublishTrackerCapacity = 1024>
+        ClockPolicyLike ClockPolicy = system_clock_source,
+        std::size_t PublishTrackerCapacity = 1024,
+        PublishTrackerPolicyLike PublishTrackerPolicy =
+            static_vector_publish_tracker<PublishTrackerCapacity>>
         requires (PublishTrackerCapacity > 0)
     class wal {
     public:
@@ -953,26 +1163,33 @@ namespace nitya {
             (void)telemetry;
             group_commit_waiters_.fetch_add(1, std::memory_order_relaxed);
 
-            // Durability is inherently serialized by the storage device.  The
-            // first waiter owns one bounded critical section and flushes the
-            // current published watermark, completing every concurrent waiter
-            // already covered by it without lock-free ticket hand-off/liveness
-            // hazards. The append path remains lock-free with respect to this
-            // mutex.
-            std::unique_lock lock{flush_mutex_};
-            if (flushed_lsn_.load(std::memory_order_relaxed) >= target_lsn) return {};
+            if constexpr (ConcurrencyPolicy::uses_ticket_queue) {
+                // Opt-in batched group commit: enqueue a ticket, then either become
+                // the leader (drain all waiting tickets, flush the covering range
+                // once) or wait for a leader to satisfy this ticket's watermark.
+                return wait_durable_via_ticket_queue(target_lsn);
+            } else {
+                // Default honest path: durability is inherently serialized by the
+                // storage device.  The first waiter owns one bounded critical
+                // section and flushes the current published watermark, completing
+                // every concurrent waiter already covered by it without lock-free
+                // ticket hand-off/liveness hazards. The append path remains
+                // lock-free with respect to this mutex.
+                std::unique_lock lock{flush_mutex_};
+                if (flushed_lsn_.load(std::memory_order_relaxed) >= target_lsn) return {};
 
-            const lsn_t batch_end = published_lsn_.load(std::memory_order_acquire);
-            if (batch_end < target_lsn) return std::unexpected(LogError::InvalidArg);
-            const lsn_t current = flushed_lsn_.load(std::memory_order_relaxed);
-            if (auto flushed = flush_range_to_locked(current, batch_end); !flushed) {
-                record_durability_error(flushed.error(), batch_end);
-                return flushed;
+                const lsn_t batch_end = published_lsn_.load(std::memory_order_acquire);
+                if (batch_end < target_lsn) return std::unexpected(LogError::InvalidArg);
+                const lsn_t current = flushed_lsn_.load(std::memory_order_relaxed);
+                if (auto flushed = flush_range_to_locked(current, batch_end); !flushed) {
+                    record_durability_error(flushed.error(), batch_end);
+                    return flushed;
+                }
+                flushed_lsn_.store(batch_end, std::memory_order_release);
+                flushed_lsn_.notify_all();
+                flush_operations_.fetch_add(1, std::memory_order_relaxed);
+                return {};
             }
-            flushed_lsn_.store(batch_end, std::memory_order_release);
-            flushed_lsn_.notify_all();
-            flush_operations_.fetch_add(1, std::memory_order_relaxed);
-            return {};
         }
 
         Result<void> sync() {
@@ -1062,7 +1279,7 @@ namespace nitya {
             [[nodiscard]] recovery_iterator end() { return recovery_iterator{}; }
 
             std::optional<wal_record> next_record() {
-                auto rec = parent_.read_record_at(cursor_lsn_, &status_, mode_);
+                auto rec = parent_.read_record_at(cursor_lsn_, &status_, mode_, /*stage_scratch=*/true);
                 return rec;
             }
 
@@ -1094,7 +1311,8 @@ namespace nitya {
 
             std::optional<wal_record> next() {
                 recovery_status st;
-                auto rec = parent_.read_record_at(cursor_lsn_, &st, recovery_mode::stop_at_first_error);
+                auto rec = parent_.read_record_at(cursor_lsn_, &st, recovery_mode::stop_at_first_error,
+                                                  /*stage_scratch=*/true);
                 if (rec) {
                     cursor_lsn_ = rec->lsn + k_frame_overhead + rec->payload.size();
                     parent_.replication_records_.fetch_add(1, std::memory_order_relaxed);
@@ -1174,11 +1392,17 @@ namespace nitya {
                   })
                   .with_description("Archive segments that are replicated");
 
-            // Evaluate segments
+            // Evaluate segments. "Now" comes from the injected ClockPolicy so
+            // retention can be driven by a deterministic/simulated clock in tests.
+            const auto now_ns = ClockPolicy::now_unix_ns();
             for (auto segments = list_segments(); const auto& seg : segments) {
                 easy_rules::ExecutionContext ctx;
-                auto age = std::chrono::duration_cast<std::chrono::seconds>(
-                    std::chrono::system_clock::now() - seg.created_at).count();
+                const auto created_ns = static_cast<std::uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        seg.created_at.time_since_epoch()).count());
+                const auto age = (now_ns > created_ns)
+                    ? static_cast<std::int64_t>((now_ns - created_ns) / 1'000'000'000ULL)
+                    : std::int64_t{0};
                 ctx.facts.set("segment_id", static_cast<int>(seg.segment_id));
                 ctx.facts.set("age_seconds", static_cast<int>(age));
                 ctx.facts.set("max_age_seconds", static_cast<int>(max_segment_age.count()));
@@ -1256,10 +1480,10 @@ namespace nitya {
                                 segment_header hdr;
                                 std::memcpy(&hdr, bytes.data(), sizeof(hdr));
                                 if (hdr.magic == k_nitya_seg_magic &&
-                                    hdr.version == k_nitya_format_version &&
+                                    FramingPolicy::supports_version(hdr.version) &&
                                     hdr.segment_id == seg_id &&
                                     hdr.begin_lsn == seg_begin_lsn &&
-                                    calculate_segment_header_crc(hdr) == hdr.header_crc) {
+                                    calculate_segment_header_crc<FramingPolicy>(hdr) == hdr.header_crc) {
                                     desc.segment_id = hdr.segment_id;
                                     desc.begin_lsn = hdr.begin_lsn;
                                     desc.end_lsn = (hdr.sealed_lsn != 0)
@@ -1309,6 +1533,7 @@ namespace nitya {
         std::mutex reservation_mutex_;
         std::mutex flush_mutex_;
         std::mutex publish_tracker_mutex_;
+        std::mutex memory_mutex_;   // guards MemoryPolicy scratch during recovery/replication
 
         std::atomic<lsn_t> tail_lsn_{k_segment_header_size};
         std::atomic<lsn_t> published_lsn_{k_segment_header_size};
@@ -1325,7 +1550,7 @@ namespace nitya {
         std::atomic<std::uint64_t> replication_records_{0};
         std::atomic<std::uint64_t> replication_bytes_{0};
 
-        containers::static_vector<std::pair<lsn_t, lsn_t>, PublishTrackerCapacity> pending_publishes_;
+        PublishTrackerPolicy publish_tracker_;
 
         std::condition_variable flusher_cv_;
         std::mutex flusher_mutex_;
@@ -1361,15 +1586,65 @@ namespace nitya {
         }
 
         // Internal helper: assumes flush_mutex_ is held
+        // Opt-in batched group-commit durability. A waiter enqueues its ticket,
+        // then contends for the flush mutex: the winner becomes the leader and
+        // drains every waiting ticket in one covering flush (execute_leader_flush),
+        // while losers wait on their ticket completion (satisfied by the leader)
+        // or the flushed watermark. Only compiled when the selected
+        // ConcurrencyPolicy opts into the ticket queue.
+        // Only instantiated when the selected ConcurrencyPolicy opts into the
+        // ticket queue: templating on C defers the signature's dependence on
+        // C::commit_completion / commit_ticket to the point of call, so a
+        // flush-gate policy (no ticket types) never triggers it.
+        template <typename C = ConcurrencyPolicy>
+        Result<void> wait_durable_via_ticket_queue(lsn_t target_lsn) {
+            auto completion = std::make_shared<typename C::commit_completion>();
+            typename C::commit_ticket ticket{
+                .lsn = target_lsn,
+                .total_bytes = 0,
+                .completion = completion
+            };
+            if (!concurrency_.enqueue_commit(ticket)) {
+                return std::unexpected(LogError::QueueFull);
+            }
+
+            for (;;) {
+                if (flushed_lsn_.load(std::memory_order_acquire) >= target_lsn) return {};
+                if (completion->done.load(std::memory_order_acquire)) {
+                    if (const auto err = completion->result.load(std::memory_order_relaxed);
+                        err != LogError::Success) {
+                        return std::unexpected(err);
+                    }
+                    return {};
+                }
+
+                // Try to become leader for this batch.
+                if (std::unique_lock lock{flush_mutex_, std::try_to_lock}) {
+                    if (completion->done.load(std::memory_order_acquire) ||
+                        flushed_lsn_.load(std::memory_order_relaxed) >= target_lsn) {
+                        continue;
+                    }
+                    return execute_leader_flush(target_lsn, completion);
+                }
+
+                // Follower: wait until covered by the watermark or resolved by a leader.
+                const lsn_t observed = flushed_lsn_.load(std::memory_order_acquire);
+                if (observed >= target_lsn) return {};
+                if (completion->done.load(std::memory_order_acquire)) continue;
+                flushed_lsn_.wait(observed, std::memory_order_acquire);
+            }
+        }
+
+        template <typename C = ConcurrencyPolicy>
         Result<void> execute_leader_flush(
             const lsn_t target_lsn,
-            const std::shared_ptr<typename ConcurrencyPolicy::commit_completion>& own_completion) {
+            const std::shared_ptr<typename C::commit_completion>& own_completion) {
             auto own_err = LogError::Success;
             bool own_resolved = false;
 
             for (;;) {
                 lsn_t max_ticket_lsn = target_lsn;
-                containers::static_vector<typename ConcurrencyPolicy::commit_ticket, ConcurrencyPolicy::capacity()> follower_tickets;
+                containers::static_vector<typename C::commit_ticket, C::capacity()> follower_tickets;
 
                 while (follower_tickets.size() < follower_tickets.capacity()) {
                     auto t = concurrency_.dequeue_commit();
@@ -1465,23 +1740,9 @@ namespace nitya {
             flush_failures_.fetch_add(1, std::memory_order_relaxed);
         }
 
-        void drain_pending_locked(lsn_t& cur) noexcept {
-            std::size_t drained = 0;
-            while (drained < pending_publishes_.size() && pending_publishes_[drained].first <= cur) {
-                cur = std::max(cur, pending_publishes_[drained].second);
-                ++drained;
-            }
-            if (drained > 0) {
-                const std::size_t remaining = pending_publishes_.size() - drained;
-                for (std::size_t i = 0; i < remaining; ++i) {
-                    pending_publishes_[i] = std::move(pending_publishes_[drained + i]);
-                }
-                while (pending_publishes_.size() > remaining) {
-                    pending_publishes_.pop_back();
-                }
-            }
-        }
-
+        // Advance the contiguous published watermark, recording out-of-order
+        // ranges in the PublishTrackerPolicy. The contiguous-append fast path
+        // (from <= cur) never touches the tracker; only genuine gaps do.
         Result<void> mark_published_range(lsn_t from, lsn_t to) {
             if (from >= to) return {};
             std::unique_lock lk{publish_tracker_mutex_};
@@ -1489,69 +1750,36 @@ namespace nitya {
             lsn_t cur = published_lsn_.load(std::memory_order_relaxed);
             const lsn_t original_cur = cur;
 
+            auto publish = [&] {
+                if (cur != original_cur) {
+                    published_lsn_.store(cur, std::memory_order_release);
+                    published_lsn_.notify_all();
+                }
+            };
+
             if (from <= cur) {
                 cur = std::max(cur, to);
-                drain_pending_locked(cur);
-                published_lsn_.store(cur, std::memory_order_release);
-                if (cur != original_cur) published_lsn_.notify_all();
+                publish_tracker_.drain(cur);
+                publish();
                 return {};
             }
 
-            // Drain any contiguous intervals first
-            drain_pending_locked(cur);
+            // Drain any already-contiguous intervals, then retry the fast path.
+            publish_tracker_.drain(cur);
             if (from <= cur) {
                 cur = std::max(cur, to);
-                drain_pending_locked(cur);
-                published_lsn_.store(cur, std::memory_order_release);
-                if (cur != original_cur) published_lsn_.notify_all();
+                publish_tracker_.drain(cur);
+                publish();
                 return {};
             }
 
-            // Check if it can merge with an existing interval in pending_publishes_
-            bool merged = false;
-            for (std::size_t i = 0; i < pending_publishes_.size(); ++i) {
-                if (auto& [fst, snd] = pending_publishes_[i]; from <= snd && to >= fst) {
-                    fst = std::min(fst, from);
-                    snd = std::max(snd, to);
-                    merged = true;
-                    // Merge any subsequent overlapping intervals
-                    while (i + 1 < pending_publishes_.size() && snd >= pending_publishes_[i + 1].first) {
-                        snd = std::max(snd, pending_publishes_[i + 1].second);
-                        for (std::size_t j = i + 1; j + 1 < pending_publishes_.size(); ++j) {
-                            pending_publishes_[j] = std::move(pending_publishes_[j + 1]);
-                        }
-                        pending_publishes_.pop_back();
-                    }
-                    break;
-                }
+            // Genuine gap: hand the interval to the tracker policy.
+            if (!publish_tracker_.insert(from, to)) {
+                return std::unexpected(LogError::QueueFull);
             }
 
-            if (!merged) {
-                if (pending_publishes_.size() >= pending_publishes_.capacity()) {
-                    return std::unexpected(LogError::QueueFull);
-                }
-
-                // Sorted insertion by start LSN
-                std::size_t idx = 0;
-                while (idx < pending_publishes_.size() && pending_publishes_[idx].first < from) {
-                    ++idx;
-                }
-
-                (void)pending_publishes_.push_back({from, to});
-
-                for (std::size_t i = pending_publishes_.size() - 1; i > idx; --i) {
-                    pending_publishes_[i] = std::move(pending_publishes_[i - 1]);
-                }
-                pending_publishes_[idx] = {from, to};
-            }
-
-            drain_pending_locked(cur);
-            if (from <= cur) {
-                cur = std::max(cur, to);
-                drain_pending_locked(cur);
-            }
-            published_lsn_.store(cur, std::memory_order_release);
-            if (cur != original_cur) published_lsn_.notify_all();
+            publish_tracker_.drain(cur);
+            publish();
             return {};
         }
 
@@ -1594,10 +1822,59 @@ namespace nitya {
             return res;
         }
 
+        // Salvage resynchronisation (Item 7): find the next byte offset in `bytes`
+        // at or after `from_offset` whose 4-byte little-endian word equals the frame
+        // magic. Replaces the O(n) one-byte-at-a-time crawl with a vectorised sweep
+        // (Highway) that jumps whole corrupt runs; scalar fallback is identical in
+        // behaviour. Returns the offset, or bytes.size() when no magic remains.
+        static std::size_t find_next_frame_magic(
+            std::span<const std::byte> bytes, std::size_t from_offset) noexcept {
+            if (bytes.size() < sizeof(std::uint32_t)) return bytes.size();
+            const std::size_t last = bytes.size() - sizeof(std::uint32_t);
+            const auto* data = reinterpret_cast<const std::uint8_t*>(bytes.data());
+
+            auto matches_at = [&](std::size_t off) noexcept {
+                std::uint32_t word;
+                std::memcpy(&word, data + off, sizeof(word));
+                return word == k_nitya_magic;
+            };
+
+            std::size_t i = from_offset;
+#if defined(PEBBLE_HAS_HIGHWAY)
+            // Vectorised first-byte pre-filter: the frame magic's lowest byte is a
+            // rare sentinel, so most windows are rejected without a 4-byte compare.
+            namespace hn = hwy::HWY_NAMESPACE;
+            const hn::ScalableTag<std::uint8_t> d;
+            const std::size_t N = hn::Lanes(d);
+            constexpr auto first_byte = static_cast<std::uint8_t>(k_nitya_magic & 0xFF);
+            const auto needle = hn::Set(d, first_byte);
+            for (; i + N <= last + 1; i += N) {
+                const auto chunk = hn::LoadU(d, data + i);
+                const auto mask = hn::Eq(chunk, needle);
+                if (!hn::AllFalse(d, mask)) {
+                    for (std::size_t j = i; j < i + N && j <= last; ++j) {
+                        if (data[j] == first_byte && matches_at(j)) return j;
+                    }
+                }
+            }
+#endif
+            for (; i <= last; ++i) {
+                if (matches_at(i)) return i;
+            }
+            return bytes.size();
+        }
+
+        // read_record_at optionally stages the validated payload into the
+        // MemoryPolicy arena (Item 2). Recovery and replication set stage_scratch
+        // so the returned span survives eviction of the source segment from the
+        // storage cache (max_cached_segments) and is served from zero-alloc
+        // arena scratch rather than the volatile mmap. Falls back to the direct
+        // mmap span if the arena cannot satisfy the request.
         std::optional<wal_record> read_record_at(
             lsn_t& cursor_lsn,
             recovery_status* status,
-            const recovery_mode mode) {
+            const recovery_mode mode,
+            const bool stage_scratch = false) {
             auto record_err = [&](const LogError err, const lsn_t bad_lsn = k_invalid_lsn) {
                 if (status) {
                     status->error = err;
@@ -1642,6 +1919,18 @@ namespace nitya {
                     return std::nullopt;
                 }
 
+                // Salvage resync: jump cursor_lsn to the next frame-magic boundary
+                // within this segment (vectorised), or to the next segment when the
+                // rest is corrupt. Equivalent to the old +1 crawl, far fewer probes.
+                auto salvage_resync = [&] {
+                    const std::size_t next = find_next_frame_magic(bytes, seg_offset + 1);
+                    if (next < bytes.size()) {
+                        cursor_lsn = seg_base + next;
+                    } else {
+                        cursor_lsn = (seg_id + 1) * opts_.segment_size + k_segment_header_size;
+                    }
+                };
+
                 frame_header hdr;
                 std::memcpy(&hdr, bytes.data() + seg_offset, sizeof(frame_header));
 
@@ -1671,8 +1960,8 @@ namespace nitya {
                     record_err(LogError::CorruptedHeader, cursor_lsn);
 
                     if (mode == recovery_mode::salvage) {
-                        // Scan forward by 1 byte to find next valid frame
-                        cursor_lsn += 1;
+                        // Resync to the next frame-magic boundary.
+                        salvage_resync();
                         continue;
                     }
                     return std::nullopt;
@@ -1682,7 +1971,7 @@ namespace nitya {
                 if (!val_res) {
                     record_err(val_res.error(), cursor_lsn);
                     if (mode == recovery_mode::salvage) {
-                        cursor_lsn += 1;
+                        salvage_resync();
                         continue;
                     }
                     return std::nullopt;
@@ -1693,7 +1982,7 @@ namespace nitya {
                 if (seg_offset + total_size > bytes.size()) {
                     record_err(LogError::CorruptedTrailer, cursor_lsn);
                     if (mode == recovery_mode::salvage) {
-                        cursor_lsn += 1;
+                        salvage_resync();
                         continue;
                     }
                     return std::nullopt;
@@ -1704,6 +1993,20 @@ namespace nitya {
                     payload_size
                 };
 
+                // Stage payload into MemoryPolicy scratch when requested: gives the
+                // caller an eviction-stable, zero-alloc copy. Arena is reset per
+                // record (input-iterator: only one record is live at a time).
+                if (stage_scratch && payload_size > 0) {
+                    std::lock_guard scratch_lk{memory_mutex_};
+                    memory_.reset();
+                    if (void* buf = memory_.allocate(payload_size, alignof(std::max_align_t))) {
+                        std::memcpy(buf, payload.data(), payload_size);
+                        payload = std::span<const std::byte>{
+                            static_cast<const std::byte*>(buf), payload_size};
+                    }
+                    // else: arena exhausted — fall back to the direct mmap span.
+                }
+
                 frame_trailer trl;
                 std::memcpy(&trl, bytes.data() + seg_offset + sizeof(frame_header) + payload_size,
                             sizeof(frame_trailer));
@@ -1712,7 +2015,7 @@ namespace nitya {
                 if (!trl_res) {
                     record_err(trl_res.error(), cursor_lsn);
                     if (mode == recovery_mode::salvage) {
-                        cursor_lsn += 1;
+                        salvage_resync();
                         continue;
                     }
                     return std::nullopt;
