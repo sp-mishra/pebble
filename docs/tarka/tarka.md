@@ -173,6 +173,26 @@ route(term):
   `(theory_family, backend_id, hardware_signature)`. The base router is stateless (static weights); feedback compiles in
   only when its header is included.
 
+### 5.1 Native CDCL core
+
+The native backend's SAT engine (`native/cdcl_solver.hpp`) is a modern CDCL solver built on reused Pebble containers
+(no virtual, no macros):
+
+- **Branching — order-heap VSIDS.** Variable selection uses the generic
+  `containers::associative::order_heap<Compare>` (max-heap keyed by an external mutable activity array) instead of the
+  previous linear `O(V)` scan. `pick_branch_var` pops until it finds an unassigned variable; `bump_var` calls
+  `increase`; backjumping re-inserts freed variables. A linear fallback is kept for very small variable counts so tiny
+  formulas keep their exact prior behavior.
+- **BCP — 2-watched literals + blocking literals.** Each watch stores a `{ClauseRef, Lit blocker}` pair; propagation
+  first tests the cached blocker's truth value and skips visiting the clause body when the blocker is already satisfied,
+  cutting cache misses on the hot path.
+- **Learning — LBD via `SparseSet`.** `compute_lbd` counts distinct decision levels in a learned clause using a
+  `sparseset::SparseSet` scratch instead of a 64-bit mask, so the glue value is exact for clauses spanning more than 64
+  levels (the old mask silently saturated).
+- **Clause DB — LBD tiers + reduce.** Learned clauses are tiered by LBD (core / mid / local); `reduce_db` keeps
+  low-LBD glue clauses and gives recently-used clauses a one-round reprieve, and `compact_db` reclaims arena space.
+- **Restarts.** Adaptive LBD-EMA (fast/slow exponential moving averages) with a Luby sequence fallback.
+
 ---
 
 ## 6. Equality saturation (opt-in)
@@ -193,6 +213,10 @@ route(term):
 - **`egraph_optimize(Term, saturation_config)`** — intern (with sort tracking) → saturate (commutativity +
   associativity + identity_zero) → `extract_best<node_count_cost>` → reconstruct. Falls back to the original term if no
   node-count improvement or reconstruction fails.
+- **`egraph_node_count_dag(Term)`** — counts *distinct hash-consed* nodes by walking children through the inline
+  `reinterpret_cast<const Term*>(impl+1)` layout and deduplicating `const TermImpl*` in an `unordered_set`. The former
+  tree count double-counted every shared subterm, so `after_count ≥ before_count` always held and `egraph_optimize`
+  never accepted a rewrite; the DAG count makes the improvement test fire on genuinely smaller terms.
 
 ---
 
@@ -234,6 +258,7 @@ route(term):
 | `tarka/native/theory_quant.hpp` | no             | no        | quantifier instantiation (E-matching & Skolemization)            |
 | `tarka/features.hpp`            | no             | no        | theory extractor + capability-mask router                        |
 | `tarka/egraph_opt.hpp`          | no             | no        | intern + reconstruct + `egraph_optimize` (sort-typed round-trip) |
+| `containers/associative/order_heap.hpp` | no     | no        | generic mutable-key max-heap; backs native CDCL VSIDS branching  |
 | `tarka/async.hpp`               | yes            | no        | `SmtTask` + worker pool                                          |
 | `tarka/portfolio.hpp`           | yes            | no        | competitive solving (no-hang)                                    |
 

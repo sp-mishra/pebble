@@ -169,3 +169,53 @@ TEST_CASE("DualScalar alias works", "[dual][autodiff]") {
     CHECK(x.dim == 1);
     CHECK(x.d[0] == 1.0);
 }
+
+// ===========================================================================
+// hessian_vec / hessian — appended HVP tests (kalpa enhancement)
+// ===========================================================================
+
+TEST_CASE("hessian_vec: quadratic exactness ∇²f·v = A v", "[dual][autodiff][hvp]") {
+    // f(x) = ½ xᵀA x with A = [[3,1],[1,2]] → Hessian ≡ A (constant).
+    // ∇²f(x)·v must equal A·v regardless of x.
+    auto f = [](const std::array<Dual<double,1>,2>& x) {
+        auto q = x[0]*x[0]*1.5 + x[1]*x[1]*1.0 + x[0]*x[1]*1.0;  // ½(3x²+2y²)+xy
+        return q;
+    };
+    std::array<double,2> x{0.7, -1.3};
+    std::array<double,2> v{1.0, 2.0};                 // A v = [3*1+1*2, 1*1+2*2] = [5,5]
+    auto hv = hessian_vec<double,2>(f, x, v);
+    CHECK(hv[0] == Catch::Approx(5.0).epsilon(1e-4));
+    CHECK(hv[1] == Catch::Approx(5.0).epsilon(1e-4));
+
+    std::array<double,2> x2{10.0, 4.0};               // location-independent
+    auto hv2 = hessian_vec<double,2>(f, x2, v);
+    CHECK(hv2[0] == Catch::Approx(5.0).epsilon(1e-4));
+    CHECK(hv2[1] == Catch::Approx(5.0).epsilon(1e-4));
+}
+
+TEST_CASE("hessian: dense matches analytic + symmetric", "[dual][autodiff][hvp]") {
+    // Same quadratic → dense Hessian == A = [[3,1],[1,2]].
+    auto f = [](const std::array<Dual<double,1>,2>& x) {
+        return x[0]*x[0]*1.5 + x[1]*x[1]*1.0 + x[0]*x[1]*1.0;
+    };
+    std::array<double,2> x{0.3, 0.9};
+    auto H = hessian<double,2>(f, x);
+    CHECK(H[0][0] == Catch::Approx(3.0).epsilon(1e-4));
+    CHECK(H[0][1] == Catch::Approx(1.0).epsilon(1e-4));
+    CHECK(H[1][0] == Catch::Approx(1.0).epsilon(1e-4));
+    CHECK(H[1][1] == Catch::Approx(2.0).epsilon(1e-4));
+    CHECK(H[0][1] == Catch::Approx(H[1][0]));          // symmetry
+}
+
+TEST_CASE("hessian_vec: nonlinear column parity with hessian", "[dual][autodiff][hvp]") {
+    // f(x,y) = x²y + sin(y). Hessian·e₀ must equal column 0 of dense hessian.
+    auto f = [](const std::array<Dual<double,1>,2>& x) {
+        return x[0]*x[0]*x[1] + ga::sin(x[1]);
+    };
+    std::array<double,2> x{1.1, 0.4};
+    auto H = hessian<double,2>(f, x);
+    std::array<double,2> e0{1.0, 0.0};
+    auto col0 = hessian_vec<double,2>(f, x, e0);
+    CHECK(col0[0] == Catch::Approx(H[0][0]).epsilon(1e-3));
+    CHECK(col0[1] == Catch::Approx(H[1][0]).epsilon(1e-3));
+}

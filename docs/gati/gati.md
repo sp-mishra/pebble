@@ -36,6 +36,13 @@ Include: `#include <gati/gati.hpp>`
 
 Akruti answers *where* and *how far*; Prakriti simulates *what happens to matter*; **Gati decides *when* and *to whom***. It provides the central game loop, entity orchestration, system schedule, contact caching, and presentation interpolation.
 
+> **Playback boundary.** Motion *content* is authored in Spandana (timelines, curves, blend spaces);
+> Gati *executes* it as the player — one-directional **Spandana → Gati**. Gati does not author
+> choreography, and Spandana does not run the clock. Interpolation primitives Gati shares with the
+> rest of Pebble (e.g. `catmull_rom`, `lerp`) come from `pebble::math`, not a Gati-local copy.
+> `ElementalReactionMatrix` (elemental/game reaction rules) is Gati-owned and surfaced to Spandana
+> as data.
+
 ```
 Game Code / Client Rendering (consumes interpolated Transforms at variable refresh rates)
       │

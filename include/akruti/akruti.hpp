@@ -36,6 +36,7 @@
 #include "csg.hpp"
 #include "ccd.hpp"
 #include "fracture.hpp"
+#include "poly_ops.hpp"
 #include "khanda.hpp"
 #include "joint.hpp"
 #include "spline.hpp"

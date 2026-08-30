@@ -1,7 +1,7 @@
-# Kalpana (कल्पना) — 2D Graphics Language, Spectral Color Science & Procedural Fills
+# Kalpana (कल्पना) — 2D Graphics Language, Spectral Color Science & Natural-Media Painting Engine
 
-Header-only C++23/C++26. Zero virtual dispatch, no macros. Concept-monomorphized, policy-configurable storage.
-Kalpana is Pebble's unified **2D graphics language**, featuring **Kubelka-Munk subtractive spectral pigment mixing**, Rebelle-inspired physics brushes, composable `EffectChain` EDSL, layer compositing with extensible combiners, procedural fills (paper textures, marble, grain, wood), geometry modifiers (`offset`, `roughen`, `smooth`, `simplify`), and a declarative scene authoring API.
+Header-only C++23. Zero virtual dispatch, no macros. Concept-monomorphized, policy-configurable storage.
+Kalpana is Pebble's unified **2D graphics language and natural-media painting engine**, featuring **Kubelka-Munk subtractive spectral pigment mixing**, natural-media physics brushes (wet-on-wet diffusion, watercolor, oil impasto), multi-channel Eulerian paint field substrate (`PaintField`), Cook-Torrance GGX/IBL PBR shading (`RealShaderPass`), composable `EffectChain` EDSL, layer compositing with extensible combiners, procedural fills (paper textures, marble, grain, wood), geometry modifiers (`offset`, `roughen`, `smooth`, `simplify`), and a declarative scene authoring API.
 
 Include: `#include <kalpana/kalpana.hpp>`
 
@@ -56,7 +56,13 @@ Scene EDSL (kalpana::edsl)       shape(), text(), NodeBuilder, TextBuilder, oper
 Layer Stack & Compositing        LayerStack, Blend Modes, LayerCombiner (Spectral / Wet Diffusion)
        │
        ▼
+Natural-Media Physics Layer      PaintField (20-ch Eulerian substrate), MediumSolver, DropEngine,
+│  (Kalpana Next)                WetTool / DryTool / BlowTool, LiquifyBrush
+       │
+       ▼
 Vector Paths & Brushes           BasicPath, PathModifiers (roughen, smooth), SpectralBrush
+│                                BrushProfile (Brush Creator), StrokeStabilizer,
+│                                PigmentReservoir<N>, curvature_adaptive_step
        │
        ▼
 Procedural Fills & Effects       ProceduralFill (watercolor, marble, wood), EffectChain (shadow | blur)
@@ -65,7 +71,11 @@ Procedural Fills & Effects       ProceduralFill (watercolor, marble, wood), Effe
 Spectral Color Science           16-band Kubelka-Munk, Pigment Catalog, OkLab, SpectralGradient
        │
        ▼
-Monomorphized Backends           capture_backend (headless), sokol_backend (GPU), notcurses (terminal)
+PBR Shading (Kalpana Next)       RealShaderPass (GGX NDF, Smith G, Schlick F, Karis split-sum IBL),
+│                                PaintMaterial (metallic, roughness, gloss, anisotropy), SoftShadows
+       │
+       ▼
+Monomorphized Backends           capture_backend (headless), sokol_backend (GPU w/ GGX), notcurses (terminal)
 ```
 
 ---
@@ -99,9 +109,21 @@ A brush stroke discretizes trajectory $(p_0, p_1)$ into spaced circular/elliptic
 $$\text{spacing} = \text{diameter} \times \text{step\_ratio}$$
 Dynamic property scaling from input signals ($s \in \{\text{Pressure}, \text{Tilt}, \text{Velocity}\}$):
 $$v_{\text{eff}} = v_{\text{lo}} + (v_{\text{hi}} - v_{\text{lo}}) \cdot s^{\gamma}$$
-- **Water Diffusion**: Pigment spreads into adjacent paper fibers proportionally to water content:
+- **Water Diffusion** (Eulerian, `MediumSolver`): Pigment diffuses via Jacobi sweeps on `ga::Field<20>`:
   $$\Delta \text{pigment} = D_w \cdot \nabla^2 \text{pigment} \cdot \Delta t$$
+- **Semi-Lagrangian Advection** (Stam 1999, `ga::stencil::advect_semilagrangian`): Unconditionally stable advect for wet pigment under tilt and velocity impulse.
 - **Evaporation / Drying**: Water content decays exponentially: $W(t) = W_0 e^{-k_{\text{dry}} t}$.
+- **Sediment Settlement**: Granulation particles fix in paper valleys when $W < 0.3$.
+- **Edge Darkening**: Drying fringe at waterline where $\nabla W \in [0.05, 0.25]$.
+- **Curvature-Adaptive Spacing** (`curvature_adaptive_step`): Menger curvature $\kappa = 2|a \times b| / (|a||b||c|)$ maps to step in $[0.4\times, 2\times]$ base_spacing.
+
+### 3.7 Cook-Torrance GGX PBR Shading (`RealShaderPass`)
+Height-field normals computed from $3\times3$ Sobel on `PaintField::HEIGHT` channel. Shading uses:
+- **GGX NDF**: $D(h) = \alpha^2 / (\pi (\mathbf{n}\cdot\mathbf{h})^2 (\alpha^2 - 1) + 1)^2$
+- **Smith Geometry**: $G(\mathbf{n}, \mathbf{v}, \mathbf{l}) = G_1(\mathbf{n}, \mathbf{v}) \cdot G_1(\mathbf{n}, \mathbf{l})$, $k = \alpha/2$
+- **Schlick Fresnel**: $F(\mathbf{h}, \mathbf{v}) = F_0 + (1-F_0)(1-\mathbf{h}\cdot\mathbf{v})^5$, $F_0 = \text{lerp}(0.04, \text{albedo}, \text{metallic})$
+- **Karis Split-Sum IBL** (2013 approximation): $\int L_i \cdot f_r \approx L_\text{prefiltered}(r, \alpha) \cdot (F_0 \cdot \text{scale} + \text{bias})$
+- **PCSS Soft Shadows**: `ShadowRayConfig::max_steps` samples along shadow ray with `shadow_softness` penumbra.
 
 ### 3.5 Procedural Noise Generators & Material Fills
 All procedural fills satisfy `noise::noise_generator`:
@@ -119,7 +141,13 @@ All procedural fills satisfy `noise::noise_generator`:
   $$Q = \frac{3}{4} P_i + \frac{1}{4} P_{i+1}, \qquad R = \frac{1}{4} P_i + \frac{3}{4} P_{i+1}$$
 - **Contour Roughening**: Displaces vertices along outward normal $n_i$:
   $$p'_i = p_i + n_i \cdot \text{FBM}(p_i) \cdot \text{amplitude}$$
-- **Polygon Inset / Offset**: Parallel shifts edges by distance $d$ and intersects adjacent offset lines.
+
+RDP simplify, Chaikin smooth, roughen, warp, and dash are **stylistic** modifiers — Kalpana-owned.
+Geometric operations are **not** duplicated here: `offset()` / `outline()` / `expand()` and the
+boolean CSG builders (`unite`, `subtract`, `intersect`) delegate to Akruti's polygon algorithms
+(`akruti::poly_ops` — `offset_polygon` with miter/round/bevel `JoinStyle`, `union_polygon`,
+`subtract_polygon`, and `clip_polygon`). Kalpana owns only the join-style intent; Akruti owns the
+shape math (single owner: Shape/Space).
 
 ---
 
@@ -128,11 +156,24 @@ All procedural fills satisfy `noise::noise_generator`:
 | Module | Types & APIs | Description |
 |:---|:---|:---|
 | **Color Science** | `SpectralColor`, `SpectralGradient`, `pigments::*`, `colors::*` | 16-band absorption/scattering spectrums, subtractive mixing `.mix(other, ratio)`, RGB/OkLab conversions. `SpectralGradient` holds up to 8 stops via `SmallVector<GradientStop, 8>` — zero heap for ≤8 stops. |
-| **Brush Engine** | `SpectralBrush`, `BrushPreset`, `DynamicsBinding` | Rebelle watercolor physics (`water_flow`, `drying_rate`, `impasto_height`), pressure/tilt response. |
-| **Effects** | `EffectChain`, `shadow()`, `blur()`, `glow()`, `bloom()`, `dof()` | Small-Buffer Optimized pipeline combiners via `operator\|` and `operator>>`. `dof(focus_point, focal_range, max_blur_radius)` adds depth-of-field bokeh blur keyed by distance from focus point. |
-| **Procedural Fills**| `ProceduralFill::watercolor_paper()`, `marble()`, `wood()` | Noise-driven parametric vector fill shaders. |
-| **Path Modifiers** | `roughen()`, `smooth()`, `simplify()`, `offset()`, `warp()`, `BasicPath::from_svg()` | Non-destructive operator pipe modifiers. `from_svg(d)` parses SVG `d` attribute strings (M/L/C/Q/A/Z commands) into a `BasicPath`. |
+| **Paint Substrate** | `PaintField<SP,CP>`, `PaintChannels`, `VelocityChannels` | 20-channel Eulerian raster grid backed by `ga::Field<20>`. Channels: [0..15] KM reflectance, [16] water, [17] height, [18] sediment, [19] binder. `splat<Preset>(SplatParams, SpectralColor)` rasterizes a dab; `resolve_color()` converts accumulated KM to RGB. |
+| **Natural Media Physics** | `MediumSolver<SP,CP>`, `PigmentReservoir<N>` | Six-phase watercolor/oil solver: Jacobi diffusion, semi-Lagrangian advection, pooling, drying, sediment settlement, edge darkening. `PigmentReservoir<N>` bidirectional pickup/deposit with N-slot multicolor and dirty-brush mode. |
+| **Wet Tools** | `WetTool`, `DryTool`, `BlowTool` | Stateless canvas tools: add water (re-mobilize pigment), blot/dry, inject velocity impulse for next `MediumSolver::step`. |
+| **Watercolor Drops** | `DropEngine<SP,CP>`, `DropEngineParams`, `Droplet` | Particle-based drip simulation. Spawn, advect (gravity + tilt), deposit pigment, merge overlapping droplets. Cap: `max_drops = 512`. |
+| **Liquify** | `LiquifyBrush<SP,CP>`, `LiquifyMode`, `LiquifyParams` | Displacement-field warp (Push/Twirl/Pinch/Bloat/Smear). Backward bilinear warp is mass-conserving; Smear delegates to `ga::advect_semilagrangian`. |
+| **PBR Material** | `PaintMaterial` | `{metallic, roughness, gloss, anisotropy}` + presets: `preset_matte()`, `preset_glossy_oil()`, `preset_metallic()`, `preset_pencil()`, `preset_watercolor()`, `preset_gouache()`, `preset_feather()`. Disney α = roughness². |
+| **PBR Shading** | `RealShaderPass<Env,SP,CP>`, `ConstantEnvMap`, `RealShaderParams` | Cook-Torrance GGX NDF + Smith G + Schlick F + Karis split-sum IBL. Height→normal via 3×3 Sobel. PCSS soft shadows. `shade_cell()` returns `ShadingResult{shaded, specular_intensity}`. |
+| **Brush Engine** | `SpectralBrush`, `BrushProfile`, `DynamicsBinding`, `StampPreset` | Pressure/tilt response, curvature-adaptive spacing, `stroke_to(PaintField)` field emission path. |
+| **Brush Creator** | `BrushProfile`, `to_toml()`, `from_toml()`, `curvature_adaptive_step()` | Serializable aggregate descriptor. TOML round-trip via `std::from_chars`. Menger curvature for spacing. |
+| **Input Stabilizer** | `StrokeStabilizer<Mode>`, `OneEuroFilter`, `PullLagFilter`, `CatmullRomFilter<N>` | `OneEuro` (Casiez CHI 2012): adaptive cutoff per signal derivative. `PullLag`: rope physics. `CatmullRom`: Catmull-Rom midpoint. |
+| **Brush Presets** | `BrushPreset::watercolor_wash/oil_impasto/ink_pen/dry_pastel/soft_airbrush` (original 5) | Physics physics & mechanics presets: wetness, diffusion, absorption, drying, impasto, tilt drip. |
+| **New Presets** | `BrushPreset::graphite_pencil/metallic_paint/rough_feather/express_oils/gouache` | Kalpana Next presets. Each carries `PaintMaterial` and `WatercolorBody` opacity axis. |
+| **Deposition** | `DepositionParams`, `WatercolorBody`, `deposit::Mode` | `WatercolorBody::{Transparent,Semi,Opaque}` drives opacity floor in `compute_opacity()`. `deposit_to_field<FieldT>()` writes KM + height in a single cell without circular header dependency. |
+| **Effects** | `EffectChain`, `shadow()`, `blur()`, `glow()`, `bloom()`, `dof()` | Small-Buffer Optimized pipeline combiners via `operator\|` and `operator>>`. |
+| **Procedural Fills** | `ProceduralFill::watercolor_paper()`, `marble()`, `wood()` | Noise-driven parametric vector fill shaders. |
+| **Path Modifiers** | `roughen()`, `smooth()`, `simplify()`, `offset()`, `warp()`, `BasicPath::from_svg()` | Non-destructive operator pipe modifiers. |
 | **Scene EDSL** | `Scene`, `shape()`, `text()`, `NodeBuilder`, `operator<<` | Fluent declarative canvas scene builder. |
+| **GPU Pipeline** | `InstancedParticlePipeline`, `GPUInstanceData` | Single-call instanced draw (Metal/Sokol). `GPUInstanceData` now carries `height, normal[3], metallic, roughness` for GGX fragment shader. Fast path (metallic=0, roughness=1) identical to prior shader. |
 
 ---
 
@@ -166,8 +207,19 @@ All procedural fills satisfy `noise::noise_generator`:
 | Configuration Profile | Key Settings | Frame Render Time | Memory Overhead | Visual Quality |
 |:---|:---|:---:|:---:|:---:|
 | **Realtime Vector UI / HUD** | `step=0.25, SBO=16, FBM=2 octaves` | **$< 0.1\text{ms}$** | Minimal (Stack) | Crisp vectors, fast procedural fills |
-| **Interactive Painting Tool** | `step=0.10, WetDiffusion=ON, FBM=4` | **$\sim 1.2\text{ms}$** | Medium | Physical watercolor bleed, realistic impasto |
-| **High-Fidelity Offline Art** | `step=0.04, 16-band spectral, FBM=6` | **$\sim 8.0\text{ms}$** | Higher | Museum-grade Kubelka-Munk pigment physics |
+| **Interactive Painting Tool** | `step=0.10, MediumSolver=ON, FBM=4` | **$\sim 1.2\text{ms}$** | Medium | Physical watercolor diffusion, realistic impasto |
+| **High-Fidelity Offline Art** | `step=0.04, 16-band spectral, FBM=6, RealShader=ON` | **$\sim 8.0\text{ms}$** | Higher | Museum-grade KM pigment physics + GGX PBR shading |
+
+### 5.5 Natural-Media Performance Budgets
+
+| Operation | Grid | Budget | Notes |
+|:---|:---|:---|:---|
+| `MediumSolver::step()` | 256×256 | ≤ 16 ms | 60fps real-time target |
+| `PaintField::splat<Round>()` | any | ≤ 0.05 ms/dab | AABB-bounded; O(radius²) |
+| `RealShaderPass::shade_cell()` | per-cell | ≤ 0.002 ms | ~65k cells/frame budget |
+| `DropEngine::step()` | 512 drops | ≤ 2 ms | Includes spawn + advect + merge |
+| `LiquifyBrush::apply()` | 256×256 | ≤ 8 ms | Backward bilinear warp |
+| `StrokeStabilizer::apply()` | per-point | < 1 µs | OneEuro adaptive filter |
 
 ---
 
@@ -316,3 +368,20 @@ int main() {
     std::cout << "Blended RGB: (" << srgb_blended.r << ", " << srgb_blended.g << ", " << srgb_blended.b << ")\n";
 }
 ```
+
+---
+
+## 11. Non-Negotiable Contracts
+
+These invariants are enforced by design and must be preserved across all future contributions.
+
+| # | Contract | Rationale |
+|:---|:---|:---|
+| 1 | **Zero virtual dispatch** — no `virtual` keyword anywhere in Kalpana | Enables full inlining, devirtualization, and LTO; critical for <1µs per-stamp latency |
+| 2 | **Header-only** — all types live in `include/kalpana/`; no compiled `.cpp` translation units | Consumers include once, link nothing; policy monomorphization requires source visibility |
+| 3 | **No macros** — no `#define` for logic, constants, or code generation | Macros break namespacing, tooling, and C++23 module compatibility |
+| 4 | **C++23 minimum** — `std::expected`, CTAD, deducing-this, `[[nodiscard]]`, structured bindings | Older standards cannot express the zero-cost policy template patterns used throughout |
+| 5 | **Pay-for-what-you-use** — every heavy subsystem (`MediumSolver`, `RealShaderPass`, `DropEngine`) is opt-in via separate include | Default `kalpana.hpp` compiles in <0.3s; full stack <1.2s |
+| 6 | **No heap in hot paths** — `PaintField`, `StrokeStabilizer`, `DropEngine` must not allocate inside `step()` / `apply()` / `splat()` | Prevents GC pauses and fragmentation under 60fps interactive painting |
+| 7 | **Existing tests unmodified** — new tests appended only; no changes to pre-existing test bodies | Prevents silent behavior regressions from refactors |
+| 8 | **No external downloads** — zero new third-party libraries; all physics, PBR, and noise built from Pebble primitives | Supply-chain integrity and hermetic builds |

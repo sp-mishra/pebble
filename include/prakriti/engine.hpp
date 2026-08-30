@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 #include <algorithm>
+#include <cmath>
 
 namespace prakriti {
 
@@ -76,6 +77,31 @@ public:
         const Scalar dt_sub = cfg_.dt / static_cast<Scalar>(cfg_.substeps);
         grid_.set_cell_size(cfg_.cell_size);
         for (int s = 0; s < cfg_.substeps; ++s) substep(dt_sub);
+    }
+
+    // ── external forces ───────────────────────────────────────────────────────
+    // Apply an outward radial impulse to every dynamic particle within `radius` of `center`.
+    // Impulse magnitude scales by inv_mass (heavier = less velocity gain) and a distance
+    // falloff (1 - d/radius)^falloff_pow. Statics (inv_mass==0) are skipped. Allocation-free.
+    void apply_radial_impulse(pebble::math::vec2 center, Scalar radius, Scalar magnitude,
+                              Scalar falloff_pow = Scalar(1)) noexcept {
+        if (radius <= Scalar(0)) return;
+        const Index n = particles_.size();
+        const Scalar inv_radius = Scalar(1) / radius;
+        for (Index i = 0; i < n; ++i) {
+            if (particles_.is_static(i)) continue;
+            const Scalar dx = particles_.pos_x[i] - center[0];
+            const Scalar dy = particles_.pos_y[i] - center[1];
+            const Scalar d = std::sqrt(dx * dx + dy * dy);
+            if (d > radius) continue;
+            const Scalar falloff = std::pow(std::max(Scalar(0), Scalar(1) - d * inv_radius), falloff_pow);
+            const Scalar scale = magnitude * particles_.inv_mass[i] * falloff;
+            if (d > Scalar(1e-6)) {
+                const Scalar inv_d = Scalar(1) / d;
+                particles_.vel_x[i] += dx * inv_d * scale;
+                particles_.vel_y[i] += dy * inv_d * scale;
+            }
+        }
     }
 
     // ── diagnostics ─────────────────────────────────────────────────────────

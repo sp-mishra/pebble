@@ -5,6 +5,11 @@
 // Zero-virtual, policy-configurable brush pipeline combining stamp shape,
 // dynamic signal binding, spectral pigment science, physical deposition, and
 // configurable small-buffer inline emission.
+//
+// New in Kalpana Next:
+//   stroke_to(PaintField&, p0, p1) — field emission path (splat + medium)
+//   stroke_segment unchanged (vector / coverage-only mode, zero overhead)
+//   Curvature-adaptive stamp spacing is available via brush_creator.hpp
 // ============================================================================
 
 #include "../color/color.hpp"
@@ -16,11 +21,16 @@
 #include "deposition.hpp"
 #include "brush_preset.hpp"
 
+#include <span>
 #include <vector>
 #include <cmath>
 #include <algorithm>
 
 namespace kalpana {
+
+// Forward declaration — stroke_to() uses PaintField<SP,CP>; include paint_field.hpp
+// at the call site (or via kalpana.hpp).
+template<typename SP, typename CP> class PaintField;
 
 struct BrushPoint {
     pebble::math::vec2 pos{0.0f, 0.0f};
@@ -200,6 +210,40 @@ public:
         float pickup_rate) const noexcept {
         const float rate = std::clamp(pickup_rate * impasto_.smudge_rate, 0.0f, 1.0f);
         return brush_pigment.mix_km(surface, rate);
+    }
+
+    // -----------------------------------------------------------------------
+    // stroke_to — emit a stroke segment directly into a PaintField
+    // (natural-media field emission path; vector path via stroke_segment
+    //  is untouched and zero-overhead when no field is attached).
+    // Requires paint_field.hpp to be included by the consumer.
+    // -----------------------------------------------------------------------
+    template<typename SP, typename CP>
+    void stroke_to(
+        PaintField<SP, CP>&  field,
+        const BrushPoint&    p0,
+        const BrushPoint&    p1,
+        float cumulative_distance = 0.0f) const
+    {
+        const auto stamps = stroke_segment(p0, p1, cumulative_distance);
+        for (const auto& st : stamps) {
+            typename PaintField<SP, CP>::SplatParams sp{
+                .cx          = st.pos[0],
+                .cy          = st.pos[1],
+                .radius      = st.radius,
+                .opacity     = st.opacity,
+                .loading     = impasto_.loading,
+                .water_add   = water_.wetness,
+                .height_add  = impasto_.impasto_thickness,
+                .granulation = impasto_.granulation,
+                .angle       = st.angle,
+                .roundness   = st.roundness,
+                .hardness    = st.hardness
+            };
+            // Note: StampShape<Round> is driven by roundness/hardness/angle
+            // from BrushStamp, which already encodes this pipeline's stamp policy.
+            field.template splat<StampPreset::Round>(sp, pigment_);
+        }
     }
 
 private:

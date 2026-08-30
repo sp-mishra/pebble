@@ -192,6 +192,40 @@ namespace pebble::math {
         return res;
     }
 
+    // Uniform Catmull-Rom cubic interpolation through p1..p2 with tangents from p0,p3.
+    // Single source of the Catmull-Rom basis shared across engines (gati animation curves,
+    // akruti splines). Generic over the tensor dimension; u in [0,1] over the p1→p2 segment.
+    template<typename T, size_t N, typename F>
+    constexpr auto catmull_rom(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &p0,
+                               const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &p1,
+                               const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &p2,
+                               const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &p3,
+                               F u) noexcept {
+        const F u2 = u * u;
+        const F u3 = u2 * u;
+        ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> res;
+        for (size_t i = 0; i < N; ++i) {
+            res[i] = static_cast<T>(F(0.5) * (
+                F(2) * p1[i]
+                + (p2[i] - p0[i]) * u
+                + (F(2) * p0[i] - F(5) * p1[i] + F(4) * p2[i] - p3[i]) * u2
+                + (F(3) * p1[i] - p0[i] - F(3) * p2[i] + p3[i]) * u3));
+        }
+        return res;
+    }
+
+    // Scalar overload: same basis for a single-channel value (e.g. gati scalar tracks).
+    template<typename F>
+    [[nodiscard]] constexpr F catmull_rom(F p0, F p1, F p2, F p3, F u) noexcept {
+        const F u2 = u * u;
+        const F u3 = u2 * u;
+        return F(0.5) * (
+            F(2) * p1
+            + (p2 - p0) * u
+            + (F(2) * p0 - F(5) * p1 + F(4) * p2 - p3) * u2
+            + (F(3) * p1 - p0 - F(3) * p2 + p3) * u3);
+    }
+
     // Projection of vector a onto vector b
     template<typename T, size_t N>
     constexpr auto project(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> &a,

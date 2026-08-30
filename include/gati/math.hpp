@@ -27,6 +27,15 @@ using AABB   = pebble::math::aabb2;
     return pebble::math::lerp(a, b, t);
 }
 
+// Catmull-Rom cubic (single source: pebble::math). Scalar + Vec2 forwarders mirror lerp.
+[[nodiscard]] constexpr Scalar catmull_rom(Scalar p0, Scalar p1, Scalar p2, Scalar p3, Scalar u) noexcept {
+    return pebble::math::catmull_rom(p0, p1, p2, p3, u);
+}
+
+[[nodiscard]] constexpr Vec2 catmull_rom(const Vec2& p0, const Vec2& p1, const Vec2& p2, const Vec2& p3, Scalar u) noexcept {
+    return pebble::math::catmull_rom(p0, p1, p2, p3, u);
+}
+
 // Shortest-arc angle interpolation (radians). Wraps delta to (-pi, pi] before blending.
 [[nodiscard]] inline Scalar angle_lerp(Scalar a, Scalar b, Scalar t) noexcept {
     constexpr Scalar pi = Scalar(3.14159265358979323846);

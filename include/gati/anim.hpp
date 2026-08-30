@@ -63,21 +63,11 @@ struct Curve {
             case Interp::Cubic: {
                 const T p0 = lo > 0 ? keys[lo - 1].value : k0.value;
                 const T p3 = (lo + 2) < n ? keys[lo + 2].value : k1.value;
-                const Scalar u2 = u * u, u3 = u2 * u;
-                return catmull(p0, k0.value, k1.value, p3, u, u2, u3);
+                // Single Catmull-Rom source: pebble::math (shared with akruti splines).
+                return catmull_rom(p0, k0.value, k1.value, p3, u);
             }
         }
         return k0.value;
-    }
-
-private:
-    [[nodiscard]] static T catmull(T p0, T p1, T p2, T p3,
-                                   Scalar u, Scalar u2, Scalar u3) noexcept {
-        const T c0 = p1 * Scalar(2);
-        const T c1 = (p2 - p0) * u;
-        const T c2 = (p0 * Scalar(2) - p1 * Scalar(5) + p2 * Scalar(4) - p3) * u2;
-        const T c3 = (p1 * Scalar(3) - p0 - p2 * Scalar(3) + p3) * u3;
-        return (c0 + c1 + c2 + c3) * Scalar(0.5);
     }
 };
 

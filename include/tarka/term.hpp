@@ -313,14 +313,19 @@ namespace tarka {
         static constexpr theory_mask theory_bits = theory_bit(theory_family::lra) | theory_bit(theory_family::lia);
     };
 
+    // Mul/Div carry only the *linear* arithmetic bits in their opcode metadata.
+    // The router over-approximates with a whole-formula OR of op theory_bits, so
+    // tagging every product nonlinear would force even `2*x` down the NRA/NIA
+    // path (which the native backend's guard rejects). True nonlinearity — both
+    // operands non-constant — is a structural property of the *term*, not the
+    // opcode, and is detected in features.hpp::extract by inspecting the children.
     template <>
     struct op_descriptor<Op::Mul> {
         static constexpr std::uint16_t stable_id = static_cast<std::uint16_t>(Op::Mul);
         static constexpr std::string_view symbol = "*";
         static constexpr int arity = -1;
         static constexpr bool is_commutative = true;
-        static constexpr theory_mask theory_bits = theory_bit(theory_family::lra) | theory_bit(theory_family::lia) |
-            theory_bit(theory_family::nra) | theory_bit(theory_family::nia);
+        static constexpr theory_mask theory_bits = theory_bit(theory_family::lra) | theory_bit(theory_family::lia);
     };
 
     template <>
@@ -329,8 +334,7 @@ namespace tarka {
         static constexpr std::string_view symbol = "/";
         static constexpr int arity = 2;
         static constexpr bool is_commutative = false;
-        static constexpr theory_mask theory_bits = theory_bit(theory_family::lra) | theory_bit(theory_family::lia) |
-            theory_bit(theory_family::nra) | theory_bit(theory_family::nia);
+        static constexpr theory_mask theory_bits = theory_bit(theory_family::lra) | theory_bit(theory_family::lia);
     };
 
     template <>

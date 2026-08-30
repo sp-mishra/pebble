@@ -5,18 +5,24 @@
 
 #include "../timeline.hpp"
 #include "containers/numeric/math_vector.hpp"
-#include <functional>
+#include "prakriti/prakriti.hpp"
 
 namespace pebble::spandana::edsl {
 
-// Radial Impulse Action
+// Radial Impulse Action — pure intent; delegates the physics to Prakriti (matter/physics owner).
+// Spandana selects where/how-much; Prakriti applies the impulse to particles in range.
+// The target world is optional: bind one via `into(world)` and on_start() delegates to
+// prakriti::World::apply_radial_impulse; left unbound it is an inert descriptor (no simulation
+// in Spandana). This keeps the fluent verb usable without a world in scope.
 class RadialImpulseAction : public IAnimationAction {
 public:
-    RadialImpulseAction(pebble::math::vec2 center, float radius, float magnitude, ResourceKey key)
-        : center_(center), radius_(radius), magnitude_(magnitude), key_(key) {}
+    RadialImpulseAction(pebble::math::vec2 center, float radius, float magnitude,
+                        prakriti::World<>* world, ResourceKey key)
+        : center_(center), radius_(radius), magnitude_(magnitude), world_(world), key_(key) {}
 
     void on_start() override {
-        // Pushes radial velocity / force into nearby dynamic bodies
+        // Delegate to Prakriti: outward impulse to every dynamic particle within radius.
+        if (world_) world_->apply_radial_impulse(center_, radius_, magnitude_);
     }
 
     void update(float, float) override {}
@@ -31,6 +37,7 @@ private:
     pebble::math::vec2 center_;
     float              radius_;
     float              magnitude_;
+    prakriti::World<>* world_;
     ResourceKey        key_;
 };
 
@@ -49,13 +56,20 @@ public:
         return *this;
     }
 
+    // Bind the Prakriti world the impulse delegates to (matter/physics owner).
+    RadialImpulseBuilder& into(prakriti::World<>& world) {
+        world_ = &world;
+        return *this;
+    }
+
     RadialImpulseAction magnitude(float mag) {
-        return RadialImpulseAction(center_, radius_, mag, key_);
+        return RadialImpulseAction(center_, radius_, mag, world_, key_);
     }
 
 private:
     pebble::math::vec2 center_{};
     float              radius_ = 50.0f;
+    prakriti::World<>* world_ = nullptr;
     ResourceKey        key_;
 };
 

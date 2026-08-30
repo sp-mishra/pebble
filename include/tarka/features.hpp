@@ -93,7 +93,15 @@ namespace tarka::features {
             std::size_t bv_ops = 0, lra_ops = 0, lia_ops = 0, nra_ops = 0, nia_ops = 0;
             std::size_t quant_depth = 0, array_ops = 0, uf_ops = 0;
 
-            // Post-order walk — count ops and theory bits
+            // Single DAG walk, deduping on interned identity (TermImpl*). One
+            // visited set feeds both the theory-op tallies and the DAG-compression
+            // ratio, so a shared sub-term is counted once — the old code walked the
+            // tree twice and double-counted shared nodes in the op tallies.
+            std::unordered_set<const TermImpl*> seen;
+            seen.reserve(256);
+            std::size_t unique_nodes = 0;
+            std::size_t revisit_count = 0;
+
             containers::dynamic::SmallVector<const Term*, 512 * sizeof(const Term*)> stack;
             stack.push_back(&root);
 
@@ -101,7 +109,29 @@ namespace tarka::features {
                 const Term* cur = stack.back();
                 stack.pop_back();
                 ++total_nodes;
-                const theory_mask bits = get_op_info(cur->op()).theory_bits;
+                if (!seen.insert(cur->ptr()).second) {
+                    ++revisit_count;
+                    continue; // already tallied this interned node
+                }
+                ++unique_nodes;
+
+                const Op op = cur->op();
+                theory_mask bits = get_op_info(op).theory_bits;
+
+                // Structural nonlinearity: a product/quotient whose operands are
+                // *both* non-constant is genuinely (N)NRA/NIA. Opcode metadata only
+                // carries the linear bits (see term.hpp), so we add the nonlinear
+                // bit here where the operands are visible.
+                if (op == Op::Mul || op == Op::Div) {
+                    std::size_t non_const = 0;
+                    for (const Term& c : cur->children())
+                        if (c.op() != Op::Lit) ++non_const;
+                    if (non_const >= 2) {
+                        const bool real_sort = cur->sort().kind() == SortKind::Real;
+                        bits |= real_sort ? theory_bit(theory_family::nra)
+                                          : theory_bit(theory_family::nia);
+                    }
+                }
 
                 if (bits & theory_bit(theory_family::bv)) ++bv_ops;
                 if (bits & theory_bit(theory_family::lra)) ++lra_ops;
@@ -111,13 +141,12 @@ namespace tarka::features {
                 if (bits & theory_bit(theory_family::array)) ++array_ops;
                 if (bits & theory_bit(theory_family::uf)) ++uf_ops;
 
-                const Op op = cur->op();
                 if (op == Op::Forall || op == Op::Exists) ++quant_depth;
 
                 for (const Term& c : cur->children()) stack.push_back(&c);
             }
 
-            const float n = total_nodes > 0 ? static_cast<float>(total_nodes) : 1.0f;
+            const float n = unique_nodes > 0 ? static_cast<float>(unique_nodes) : 1.0f;
             fv.append(static_cast<float>(bv_ops) / n); // bv_ratio
             fv.append(static_cast<float>(lra_ops) / n); // lra_ratio
             fv.append(static_cast<float>(lia_ops) / n); // lia_ratio
@@ -127,34 +156,12 @@ namespace tarka::features {
             fv.append(array_ops > 0 ? 1.0f : 0.0f); // array_flag
             fv.append(uf_ops > 0 ? 1.0f : 0.0f); // uf_flag
 
-            // dag_compression_ratio: unique ptr count / total walk visits.
-            {
-                containers::dynamic::SmallVector<const TermImpl*, 512 * sizeof(const TermImpl*)> visit;
-                std::unordered_set<const TermImpl*> seen;
-                seen.reserve(256);
-                std::size_t unique_nodes = 0;
-                std::size_t revisit_count = 0;
-
-                visit.push_back(root.ptr());
-                while (!visit.empty()) {
-                    const TermImpl* cur = visit.back();
-                    visit.pop_back();
-                    if (!seen.insert(cur).second) {
-                        ++revisit_count;
-                        continue;
-                    }
-                    ++unique_nodes;
-                    const Term* ch_ptr = reinterpret_cast<const Term*>(cur + 1);
-                    for (std::uint16_t ci = 0; ci < cur->child_count; ++ci)
-                        visit.push_back(ch_ptr[ci].ptr());
-                }
-
-                const std::size_t walk_total = unique_nodes + revisit_count;
-                const float ratio = walk_total > 0
-                                        ? static_cast<float>(unique_nodes) / static_cast<float>(walk_total)
-                                        : 1.0f;
-                fv.append(ratio); // dag_compression_ratio
-            }
+            // dag_compression_ratio: unique interned nodes / total walk visits.
+            const std::size_t walk_total = unique_nodes + revisit_count;
+            const float ratio = walk_total > 0
+                                    ? static_cast<float>(unique_nodes) / static_cast<float>(walk_total)
+                                    : 1.0f;
+            fv.append(ratio); // dag_compression_ratio
             return fv;
         }
     };
@@ -199,12 +206,16 @@ namespace tarka {
 
             // Reuse a cached feature vector when the same formula was routed
             // before (incremental pushes, portfolio); extract only on a miss.
+            // Key on the interned identity (TermImpl*), not the 64-bit structural
+            // hash: interning is permanent, so the pointer is a collision-free key
+            // — keying on the hash could alias two distinct formulas and mis-route.
+            const auto key = reinterpret_cast<std::uint64_t>(t.ptr());
             lithe::features::feature_vector fv;
-            if (auto cached = store.get(t.hash())) {
+            if (auto cached = store.get(key)) {
                 fv = *cached;
             } else {
                 fv = features::theory_extractor{}.extract(t);
-                store.put(t.hash(), fv, lithe::features::feature_source::custom);
+                store.put(key, fv, lithe::features::feature_source::custom);
             }
             const theory_mask sig = features::mask_from_features(fv);
 

@@ -8,7 +8,7 @@
 
 #include "path.hpp"
 #include "transform.hpp"
-#include "akruti/fracture.hpp"
+#include "akruti/poly_ops.hpp"
 #include <cmath>
 #include <numbers>
 #include <span>
@@ -106,26 +106,20 @@ namespace kalpana {
 }
 
 [[nodiscard]] inline Path unite(const Path& a, const Path& b) {
-    // Union of contours as multi-contour path
-    Path out = a;
-    const auto& b_verbs = b.verbs();
-    const auto& b_pts = b.points();
-    std::size_t pt_idx = 0;
-    for (auto v : b_verbs) {
-        switch (v) {
-            case PathVerb::Move:  if (pt_idx < b_pts.size()) out.move_to(b_pts[pt_idx][0], b_pts[pt_idx][1]), pt_idx++; break;
-            case PathVerb::Line:  if (pt_idx < b_pts.size()) out.line_to(b_pts[pt_idx][0], b_pts[pt_idx][1]), pt_idx++; break;
-            case PathVerb::Quad:  if (pt_idx + 1 < b_pts.size()) out.quad_to(b_pts[pt_idx][0], b_pts[pt_idx][1], b_pts[pt_idx+1][0], b_pts[pt_idx+1][1]), pt_idx += 2; break;
-            case PathVerb::Cubic: if (pt_idx + 2 < b_pts.size()) out.cubic_to(b_pts[pt_idx][0], b_pts[pt_idx][1], b_pts[pt_idx+1][0], b_pts[pt_idx+1][1], b_pts[pt_idx+2][0], b_pts[pt_idx+2][1]), pt_idx += 3; break;
-            case PathVerb::Close: out.close(); break;
-        }
-    }
-    return out;
+    const auto poly_a = a.to_poly();
+    const auto poly_b = b.to_poly();
+    if (poly_a.empty()) return b;
+    if (poly_b.empty()) return a;
+    const auto united = akruti::union_polygon(poly_a, poly_b);
+    return Path::from_poly(united);
 }
 
-[[nodiscard]] inline Path subtract(const Path& a, const Path& /*b*/) {
-    // For general subtract, keep subject contour A (CSG subtract helper)
-    return a;
+[[nodiscard]] inline Path subtract(const Path& a, const Path& b) {
+    const auto poly_a = a.to_poly();
+    const auto poly_b = b.to_poly();
+    if (poly_a.empty() || poly_b.empty()) return a;
+    const auto diff = akruti::subtract_polygon(poly_a, poly_b);
+    return Path::from_poly(diff);
 }
 
 // ── Geometric Repetition ────────────────────────────────────────────────────

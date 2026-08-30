@@ -1291,6 +1291,110 @@ TEST_CASE("tarka: CDCL solves adversarial boolean corner cases", "[tarka][cdcl][
     }
 }
 
+// =============================================================================
+// Phase 0 — interning permanence + collision-safe identity.
+//
+// The intern tables became permanent, non-evicting FlatHashStorage with an
+// intrusive per-hash collision chain; every hit does a full structural verify.
+// symbol interning walks a rehash chain with name compare; each interned node
+// carries a dense monotonic node_id. These fixtures exercise the public-API
+// consequences: stable CSE under churn, faithful symbol names, and no router
+// mis-route now that the feature store keys on interned identity.
+// =============================================================================
+
+TEST_CASE("tarka: interning is permanent — CSE stable under heavy churn", "[tarka][term][intern]") {
+    Context ctx;
+    auto i_sort = ctx.int_sort();
+
+    // Intern a landmark term, then churn thousands of unrelated terms. With an
+    // evicting cache the landmark could be dropped and re-interned at a fresh
+    // address; a permanent table keeps one immutable identity forever.
+    Term x = ctx.make_symbol("landmark_x", i_sort);
+    Term y = ctx.make_symbol("landmark_y", i_sort);
+    Term landmark = ctx.make_term(Op::Add, i_sort, std::vector<Term>{x, y});
+    const TermImpl* landmark_id = landmark.ptr();
+
+    for (int i = 0; i < 8192; ++i) {
+        Term ci = ctx.make_int(i, i_sort);
+        Term v = ctx.make_symbol("churn_" + std::to_string(i), i_sort);
+        (void)ctx.make_term(Op::Add, i_sort, std::vector<Term>{v, ci});
+    }
+
+    // Re-deriving the identical structure must hash-cons back to the same node.
+    Term x2 = ctx.make_symbol("landmark_x", i_sort);
+    Term y2 = ctx.make_symbol("landmark_y", i_sort);
+    Term again = ctx.make_term(Op::Add, i_sort, std::vector<Term>{x2, y2});
+    CHECK(again.ptr() == landmark_id);
+    CHECK(x2.ptr() == x.ptr());
+}
+
+TEST_CASE("tarka: distinct interned nodes get distinct dense node_ids", "[tarka][term][intern]") {
+    Context ctx;
+    auto i_sort = ctx.int_sort();
+    Term a = ctx.make_symbol("nid_a", i_sort);
+    Term b = ctx.make_symbol("nid_b", i_sort);
+    Term sum = ctx.make_term(Op::Add, i_sort, std::vector<Term>{a, b});
+
+    CHECK(a.ptr()->node_id != 0u);
+    CHECK(a.ptr()->node_id != b.ptr()->node_id);
+    CHECK(sum.ptr()->node_id != a.ptr()->node_id);
+    CHECK(sum.ptr()->node_id != b.ptr()->node_id);
+
+    // Re-interning the same structure reuses the node — and thus its id.
+    Term a_again = ctx.make_symbol("nid_a", i_sort);
+    CHECK(a_again.ptr()->node_id == a.ptr()->node_id);
+}
+
+TEST_CASE("tarka: symbol names stay faithful across many variables", "[tarka][term][intern]") {
+    // The symbol interner walks a rehash chain with a name compare, so distinct
+    // names never alias even when their base hash collides. We can't force an
+    // FNV collision by hand, but we can assert the round-trip contract holds at
+    // scale: every distinct name interns to a node whose recovered name matches.
+    Context ctx;
+    auto i_sort = ctx.int_sort();
+    std::vector<Term> syms;
+    for (int i = 0; i < 4096; ++i)
+        syms.push_back(ctx.make_symbol("var_" + std::to_string(i), i_sort));
+
+    for (int i = 0; i < 4096; ++i) {
+        const std::uint64_t ph = syms[static_cast<std::size_t>(i)].ptr()->payload_hash;
+        CHECK(ctx.symbol_name(ph) == ("var_" + std::to_string(i)));
+    }
+    // Same name re-interns to the same payload key (same node).
+    Term dup = ctx.make_symbol("var_100", i_sort);
+    CHECK(dup.ptr() == syms[100].ptr());
+}
+
+TEST_CASE("tarka: router keys on interned identity — no cross-formula mis-route",
+          "[tarka][native][router]") {
+    // Two structurally different formulas must route independently. A hash-only
+    // feature cache could alias them on a collision; the ptr-keyed store cannot.
+    // Both are solvable by the native backend; the point is that routing each
+    // yields a correct, independent decision.
+    Context ctx;
+    auto i_sort = ctx.int_sort();
+    Term x = ctx.make_symbol("rx", i_sort);
+    Term y = ctx.make_symbol("ry", i_sort);
+
+    // Linear arithmetic: x + 0 <= y  (satisfiable).
+    Term zero = ctx.make_int(0, i_sort);
+    Term lin = (ctx.make_term(Op::Add, i_sort, std::vector<Term>{x, zero}) <= y);
+
+    // A different linear formula over the same vars: x >= y + 1 (satisfiable).
+    Term one = ctx.make_int(1, i_sort);
+    Term other = (x >= ctx.make_term(Op::Add, i_sort, std::vector<Term>{y, one}));
+
+    RouterEngine<backend::native> s1;
+    auto r1 = s1.solve(lin);
+    REQUIRE(r1.has_value());
+    CHECK(*r1 == SatResult::Sat);
+
+    RouterEngine<backend::native> s2;
+    auto r2 = s2.solve(other);
+    REQUIRE(r2.has_value());
+    CHECK(*r2 == SatResult::Sat);
+}
+
 
 
 

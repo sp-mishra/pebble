@@ -16,6 +16,7 @@
 #include <cmath>
 #include <concepts>
 #include <cstddef>
+#include <limits>
 #include <type_traits>
 
 namespace ga {
@@ -204,6 +205,69 @@ namespace ga {
             g[i] = result.d[0];
         }
         return g;
+    }
+
+    // -----------------------------------------------------------------------
+    // hessian_vec — Hessian-vector product ∇²f(x)·v  (matrix-free)
+    // -----------------------------------------------------------------------
+    // Second-order curvature information WITHOUT forming the full Hessian and
+    // WITHOUT nested Dual<Dual<...>> (which does not compile — see the T-is-
+    // floating-point static_assert above). Uses the standard forward-over-
+    // central-difference identity on the (exact, forward-mode) gradient:
+    //
+    //     ∇²f(x)·v ≈ ( ∇f(x + ε·v) − ∇f(x − ε·v) ) / (2ε)
+    //
+    // The gradients ∇f are computed exactly by grad_vec (forward Dual), so the
+    // only error is the O(ε²) difference in the outer directional step. Default
+    // ε = ∛(machine-eps) balances truncation vs round-off for the central rule.
+    //
+    // f: callable (const std::array<Dual<T,1>,N>&) -> Dual<T,1>   (same as grad_vec)
+    // Returns std::array<T,N> = ∇²f(x)·v.
+    template<typename T, std::size_t N, typename F>
+    [[nodiscard]] std::array<T,N> hessian_vec(F&& f,
+                                              const std::array<T,N>& x,
+                                              const std::array<T,N>& v,
+                                              T eps = T{0}) {
+        if (eps <= T{0})
+            eps = std::cbrt(std::numeric_limits<T>::epsilon());
+        std::array<T,N> xp{}, xm{};
+        for (std::size_t i = 0; i < N; ++i) {
+            xp[i] = x[i] + eps * v[i];
+            xm[i] = x[i] - eps * v[i];
+        }
+        auto gp = grad_vec<T,N>(f, xp);
+        auto gm = grad_vec<T,N>(f, xm);
+        std::array<T,N> hv{};
+        const T inv2e = T{1} / (T{2} * eps);
+        for (std::size_t i = 0; i < N; ++i)
+            hv[i] = (gp[i] - gm[i]) * inv2e;
+        return hv;
+    }
+
+    // -----------------------------------------------------------------------
+    // hessian — dense Hessian ∇²f(x) as N columns of hessian_vec against the
+    // canonical basis. O(N) gradient evaluations (each O(N)); use only for
+    // small N. Returned as std::array<std::array<T,N>,N>, row-major (H[i][j] =
+    // ∂²f/∂x_i∂x_j). Symmetrized to counter difference noise.
+    // -----------------------------------------------------------------------
+    template<typename T, std::size_t N, typename F>
+    [[nodiscard]] std::array<std::array<T,N>, N> hessian(F&& f,
+                                                         const std::array<T,N>& x,
+                                                         T eps = T{0}) {
+        std::array<std::array<T,N>, N> H{};
+        for (std::size_t j = 0; j < N; ++j) {
+            std::array<T,N> e{};
+            e[j] = T{1};
+            auto col = hessian_vec<T,N>(f, x, e, eps);
+            for (std::size_t i = 0; i < N; ++i) H[i][j] = col[i];
+        }
+        // symmetrize
+        for (std::size_t i = 0; i < N; ++i)
+            for (std::size_t j = i+1; j < N; ++j) {
+                T avg = (H[i][j] + H[j][i]) * T{0.5};
+                H[i][j] = H[j][i] = avg;
+            }
+        return H;
     }
 
     // -----------------------------------------------------------------------

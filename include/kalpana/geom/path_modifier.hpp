@@ -9,6 +9,7 @@
 
 #include "path.hpp"
 #include "../fill/noise.hpp"
+#include "akruti/poly_ops.hpp"
 #include "containers/dynamic/SmallVector.hpp"
 #include <cmath>
 #include <vector>
@@ -19,63 +20,15 @@ namespace kalpana {
 
 namespace path_ops {
 
-// 1. Path Offset (normal extrusion)
-[[nodiscard]] inline Path offset(const Path& p, float distance) {
+// 1. Path Offset (delegates geometric offset to Akruti; Kalpana owns only join-style intent)
+[[nodiscard]] inline Path offset(const Path& p, float distance,
+                                 akruti::JoinStyle join = akruti::JoinStyle::Miter) {
     if (p.empty() || std::fabs(distance) < 1e-4f) return p;
-    Path out;
-    const auto& pts = p.points();
-    const auto& verbs = p.verbs();
-    if (pts.size() < 2) return p;
-
-    std::size_t pt_idx = 0;
-    for (auto v : verbs) {
-        switch (v) {
-            case PathVerb::Move: {
-                if (pt_idx < pts.size()) {
-                    out.move_to(pts[pt_idx][0], pts[pt_idx][1]);
-                    pt_idx++;
-                }
-                break;
-            }
-            case PathVerb::Line: {
-                if (pt_idx < pts.size() && pt_idx > 0) {
-                    const auto& p0 = pts[pt_idx - 1];
-                    const auto& p1 = pts[pt_idx];
-                    const float dx = p1[0] - p0[0];
-                    const float dy = p1[1] - p0[1];
-                    const float len = std::sqrt(dx * dx + dy * dy);
-                    if (len > 1e-4f) {
-                        const float nx = -dy / len * distance;
-                        const float ny = dx / len * distance;
-                        out.line_to(p1[0] + nx, p1[1] + ny);
-                    } else {
-                        out.line_to(p1[0], p1[1]);
-                    }
-                    pt_idx++;
-                }
-                break;
-            }
-            case PathVerb::Quad: {
-                if (pt_idx + 1 < pts.size()) {
-                    out.quad_to(pts[pt_idx][0], pts[pt_idx][1], pts[pt_idx + 1][0], pts[pt_idx + 1][1]);
-                    pt_idx += 2;
-                }
-                break;
-            }
-            case PathVerb::Cubic: {
-                if (pt_idx + 2 < pts.size()) {
-                    out.cubic_to(pts[pt_idx][0], pts[pt_idx][1], pts[pt_idx + 1][0], pts[pt_idx + 1][1], pts[pt_idx + 2][0], pts[pt_idx + 2][1]);
-                    pt_idx += 3;
-                }
-                break;
-            }
-            case PathVerb::Close: {
-                out.close();
-                break;
-            }
-        }
-    }
-    return out;
+    const auto poly = p.to_poly();
+    if (poly.size() < 2) return p;
+    const auto offset_result = akruti::offset_polygon(poly, distance, join);
+    if (offset_result.size() < 3) return p;
+    return Path::from_poly(offset_result);
 }
 
 // 2. Roughen (organic contour jitter using Simplex noise)

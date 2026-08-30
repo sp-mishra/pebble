@@ -131,6 +131,8 @@ CSG operations build expression trees without heap allocations:
 | `ConvexPoly<N>` | `containers::static_vector<vec2, N>` | Fixed-capacity inlined convex polygon (zero heap). |
 | `raycast(shape, start, dir, max_t)` | $\to$ `RayHit{bool hit, float t, vec2 normal}` | Analytic / sphere-traced ray intersection. |
 | `collide_obb_obb(a, b)` | $\to$ `Manifold{bool hit, vec2 normal, float depth, points}` | 2-point contact manifold generation. |
+| `closest_point(shape, p, h)` | $\to$ `vec2` | Nearest **surface** point to `p` (SDF-gradient descent, step `h`). |
+| `project(shape, p, h=1e-3)` | $\to$ `vec2` | **Feasible** projection onto the solid interior ($\text{sdf}\le 0$): returns `p` unchanged when already inside, else `closest_point(shape,p,h)` on the boundary. Idempotent on feasible inputs — the clamp an optimizer wants for a 2D convex domain (see `kalpa`). `<akruti/query.hpp>`. |
 
 ---
 

@@ -2,6 +2,7 @@
 #include <containers/matrix/static.hpp>
 #include <akruti/math.hpp>
 #include <cmath>
+#include <numbers>
 
 // ============================================================================
 // test_akruti_matrix.cpp — ga::StaticMatrix<float,2,2> correctness as akruti::Mat2

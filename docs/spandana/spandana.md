@@ -79,6 +79,17 @@ flowchart TD
     Kalpana -.->|Vector contours, visual effects| Spandana
 ```
 
+> **Engine boundary (single ownership).** Spandana authors *intent* — motion content, choreography,
+> and directive DAGs — and **never simulates**. Physics verbs delegate downward: radial/impulse
+> forces and thermodynamics to **Prakriti** (`prakriti::World::apply_radial_impulse` on the particle
+> store), and shatter geometry + exact mass properties (centroid / area / polar inertia) to **Akruti**
+> (`akruti::khanda::fracture_voronoi`). Playback is one-directional **Spandana → Gati**: Spandana
+> produces timelines/curves; Gati *executes* them (the player/scheduler owns *when*). Shared math
+> primitives (e.g. `catmull_rom`) live in `pebble::math`, consumed by both Akruti splines and Gati
+> curves — not re-derived per engine. `ElementalReactionMatrix` is Gati-owned game rules, surfaced to
+> Spandana as data. The lumped-scalar conduction model used in gati/spandana choreography is distinct
+> from Prakriti's SPH thermal solver (different discretization, not a duplicate) and stays inline.
+
 ---
 
 ## 2. Core Architecture & Automatic Dependency Inference

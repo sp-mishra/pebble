@@ -159,14 +159,10 @@ struct CatmullRomSpline {
         const Vec2<Scalar> p2 = get_point(static_cast<int>(seg_idx) + 1);
         const Vec2<Scalar> p3 = get_point(static_cast<int>(seg_idx) + 2);
 
-        const Scalar tt = local_t * local_t;
-        const Scalar ttt = tt * local_t;
-
-        const Vec2<Scalar> res = (p1 * Scalar(2.0) +
-                                  (p2 - p0) * local_t +
-                                  (p0 * Scalar(2.0) - p1 * Scalar(5.0) + p2 * Scalar(4.0) - p3) * tt +
-                                  (p1 * Scalar(3.0) - p0 - p2 * Scalar(3.0) + p3) * ttt) * Scalar(0.5);
-        return res;
+        // Single Catmull-Rom source: pebble::math (shared with gati animation curves).
+        return Vec2<Scalar>(pebble::math::catmull_rom(
+            static_cast<pebble::math::vec2>(p0), static_cast<pebble::math::vec2>(p1),
+            static_cast<pebble::math::vec2>(p2), static_cast<pebble::math::vec2>(p3), local_t));
     }
 
     [[nodiscard]] Vec2<Scalar> tangent(Scalar t) const noexcept {

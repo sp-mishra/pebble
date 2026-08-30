@@ -14,6 +14,7 @@
 #include "gati/collision.hpp"
 #include "containers/numeric/math_vector.hpp"
 #include <vector>
+#include <span>
 #include <cmath>
 
 namespace pebble::spandana {
@@ -57,34 +58,22 @@ public:
             });
         }
 
-        // 2. Perform Voronoi Clipping using Akruti Fracture
-        auto raw_shards = akruti::voronoi_shatter(source_poly, sites);
+        // 2. Fracture into shards with EXACT mass properties (Akruti Khanda owns the geometry
+        //    + centroid/area/polar-inertia; Spandana keeps only the choreography below).
+        akruti::khanda::FractureConfig cfg{};
+        cfg.compute_mass_props = true;
+        const auto shards = akruti::khanda::fracture_voronoi(
+            source_poly, std::span<const akruti::Vec>(sites.data(), sites.size()), cfg);
 
-        // 3. Compute mass properties & radial velocities
+        // 3. Author launch velocities/spin per shard (motion intent, not geometry).
         std::vector<ShardSpawnDesc> result;
-        result.reserve(raw_shards.size());
+        result.reserve(shards.size());
 
-        for (const auto& poly : raw_shards) {
-            const std::size_t n = poly.size();
-            if (n < 3) continue;
-
-            float signed_area = 0.0f;
-            float cx = 0.0f, cy = 0.0f;
-            for (std::size_t i = 0; i < n; ++i) {
-                const auto& p0 = poly[i];
-                const auto& p1 = poly[(i + 1) % n];
-                const float cross_term = p0.x * p1.y - p1.x * p0.y;
-                signed_area += cross_term;
-                cx += (p0.x + p1.x) * cross_term;
-                cy += (p0.y + p1.y) * cross_term;
-            }
-            const float area = std::abs(signed_area * 0.5f);
+        for (const auto& shard : shards) {
+            const float area = shard.area;
             if (area < 1e-4f) continue;
-
-            const float inv_area6 = 1.0f / (3.0f * signed_area);
-            cx *= inv_area6;
-            cy *= inv_area6;
-            const float iz = area * 10.0f; // Approximate polar inertia
+            const float cx = shard.centroid.x;
+            const float cy = shard.centroid.y;
 
             // Radial velocity directed away from impact point
             const float dx = cx - impact_point[0];
@@ -100,10 +89,10 @@ public:
             const float spin = ((dx * dy > 0.0f) ? 1.0f : -1.0f) * max_spin * (1.0f / (1.0f + area * 0.01f));
 
             result.push_back(ShardSpawnDesc{
-                .polygon = poly,
+                .polygon = shard.outline,
                 .centroid = pebble::math::vec2(cx, cy),
                 .area = area,
-                .inertia_z = iz,
+                .inertia_z = shard.inertia, // exact polar moment from Akruti
                 .initial_velocity = vel,
                 .initial_angular_velocity = spin
             });

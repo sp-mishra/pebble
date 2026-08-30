@@ -28,6 +28,18 @@ template <Shape S>
     return p - g * d; // step back to the zero level set
 }
 
+// ── Feasible projection onto a convex shape's solid interior (SDF ≤ 0). ────────────
+//    Returns p unchanged when already feasible (inside/on boundary); otherwise the
+//    nearest boundary point via closest_point. Unlike closest_point (which always
+//    lands on the surface), project is idempotent on feasible inputs — the operation
+//    an optimizer wants when clamping an iterate back into a 2D convex domain.
+template <Shape S>
+[[nodiscard]] inline Vec2<Scalar> project(const S& s, Vec2<Scalar> p,
+                                          Scalar h = Scalar(1e-3)) noexcept {
+    if (s.sdf(p) <= Scalar(0)) return p;      // already feasible
+    return closest_point(s, p, h);
+}
+
 struct RayHit {
     bool         hit{false};
     Scalar       t{0};       // distance along dir to the surface

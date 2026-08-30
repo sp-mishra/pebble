@@ -78,9 +78,41 @@ These are transitional — removed once all `pebble::math::mat2` call sites migr
 
 `det()` and `inv()` are specialized for 2×2, 3×3, and 4×4 for optimal inline expansion.
 
+## Forward-Mode Autodiff & Curvature (`<containers/matrix/dual.hpp>`)
+
+`ga::Dual<T,N>` carries a value `.v` and `N` derivative slots `.d[k]` through the usual
+arithmetic and free functions (`sqrt/exp/log/sin/cos/…`). It is **forward-mode only** —
+`Dual<Dual<…>>` does *not* compile (a `static_assert` requires a floating-point base). Gradients
+come from a single sweep:
+
+```cpp
+// f: (const std::array<Dual<T,1>,N>&) -> Dual<T,1>
+std::array<T,N> g = ga::grad_vec<T,N>(f, x);          // ∇f(x), exact (no truncation error)
+```
+
+Second-order curvature is available **without** forming a nested dual, via forward-over-central-
+difference on that exact gradient:
+
+```cpp
+ga::hessian_vec(f, x, v, eps = 0)   // ∇²f(x)·v  — matrix-free HVP, std::array<T,N>
+ga::hessian(f, x, eps = 0)          // dense ∇²f(x) — std::array<std::array<T,N>,N>, symmetrized
+```
+
+- **`hessian_vec`** — `(∇f(x+εv) − ∇f(x−εv)) / 2ε`. The inner gradients are exact (`grad_vec`), so
+  the only error is the `O(ε²)` outer directional step. Default `ε = ∛(machine-eps)` balances
+  truncation against round-off for the central rule. Cost: two `grad_vec` calls, no `N×N` storage —
+  this is the operator consumed by matrix-free Newton-CG / trust-region solvers (see `kalpa`).
+- **`hessian`** — assembles the dense Hessian as `N` `hessian_vec` columns against the canonical
+  basis, then symmetrizes (`H[i][j]=H[j][i]`) to cancel difference noise. `O(N)` gradient
+  evaluations; **small `N` only**. Row-major: `H[i][j] = ∂²f/∂xᵢ∂xⱼ`.
+
+Both are `ga::`-namespace, header-only, templated on floating `T` and static extent `N`; unused
+paths are never instantiated, so a value-only call pays nothing for the curvature machinery.
+
 ## Tests
 
 `src/tests/matrix/test_mat.cpp` — core matrix tests  
 `src/tests/akruti/test_akruti_matrix.cpp` — akruti::Mat2 alias, rotation, bridge operators  
 `src/tests/gati/test_gati_matrix.cpp` — gati::Mat2, quad_form_2d, axpy physics correctness  
-`src/tests/containers/test_prakriti_matrix.cpp` — prakriti nrm2_sq, axpy XPBD pattern, backend static_assert
+`src/tests/containers/test_prakriti_matrix.cpp` — prakriti nrm2_sq, axpy XPBD pattern, backend static_assert  
+`src/tests/matrix/test_dual.cpp` — forward-mode dual gradients; `hessian_vec` vs analytic Hessian·v, symmetry, and parity with dense `hessian`

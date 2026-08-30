@@ -63,6 +63,7 @@ namespace tarka {
         std::uint8_t _pad[1] = {};
         std::uint64_t hash;
         Context* ctx_; // back-pointer (for Sort::ctx())
+        const SortImpl* coll_next = nullptr; // intern collision chain (same hash bucket)
         // sort_params follow in memory: Sort params_[param_count]
         // Accessed via: reinterpret_cast<const Sort*>(this + 1)
     };
@@ -74,11 +75,12 @@ namespace tarka {
     struct TermImpl {
         Op op;
         std::uint16_t child_count;
-        std::uint32_t _pad = 0;
+        std::uint32_t node_id = 0; // dense monotonic id (assigned at intern; enables SparseSet-keyed theory state)
         Sort sort_;
         std::uint64_t hash;
         std::uint64_t payload_hash; // for Lit/Sym nodes; 0 otherwise
         Context* ctx_; // back-pointer for operator overloads
+        const TermImpl* coll_next = nullptr; // intern collision chain (same hash bucket)
         // children follow in memory: Term children_[child_count]
         // Accessed via: reinterpret_cast<const Term*>(this + 1)
     };
@@ -136,8 +138,8 @@ namespace tarka {
 
         explicit Context(std::size_t arena_bytes = kDefaultArena)
             : arena_(arena_bytes)
-              , sort_cache_(512)
-              , term_cache_(4096) {}
+              , sort_table_(512)
+              , term_table_(4096) {}
 
         Context(const Context&) = delete;
         Context& operator=(const Context&) = delete;
@@ -153,12 +155,14 @@ namespace tarka {
                                      std::uint32_t scalar_param = 0) {
             const std::uint64_t h = sort_hash(kind, sort_params, scalar_param);
 
-            // Probe cache with structural verify
-            if (auto r = sort_cache_.get(h); r.has_value()) {
-                const SortImpl* existing = r.value();
-                if (sort_equal(existing, kind, sort_params, scalar_param))
-                    return Sort{existing, h};
-                // Hash collision — fall through to allocate
+            // Probe the intern table with a full structural verify over the whole
+            // collision chain (hash equal ≠ structurally equal).
+            if (const SortImpl** head = sort_table_.find(h)) {
+                for (const SortImpl* e = *head; e; e = e->coll_next)
+                    if (sort_equal(e, kind, sort_params, scalar_param))
+                        return Sort{e, h};
+                // Hash present but no structural match — a genuine collision;
+                // fall through and prepend the newcomer to this chain.
             }
 
             // Allocate new SortImpl + trailing Sort params in arena
@@ -180,7 +184,13 @@ namespace tarka {
                 std::memcpy(dest, sort_params.data(), param_bytes);
             }
 
-            [[maybe_unused]] auto _ = sort_cache_.put(h, impl);
+            // Prepend to the collision chain for this hash bucket.
+            if (const SortImpl** head = sort_table_.find(h)) {
+                impl->coll_next = *head;
+                sort_table_.insert_or_assign(h, impl);
+            } else {
+                sort_table_.insert(h, impl);
+            }
             journal_sort(h);
             return Sort{impl, h};
         }
@@ -221,10 +231,10 @@ namespace tarka {
                                      std::uint64_t payload_hash = 0) {
             const std::uint64_t h = term_hash(op, sort, children, payload_hash);
 
-            if (auto r = term_cache_.get(h); r.has_value()) {
-                const TermImpl* existing = r.value();
-                if (term_equal(existing, op, sort, children, payload_hash))
-                    return Term{existing, h};
+            if (const TermImpl** head = term_table_.find(h)) {
+                for (const TermImpl* e = *head; e; e = e->coll_next)
+                    if (term_equal(e, op, sort, children, payload_hash))
+                        return Term{e, h};
             }
 
             const std::size_t child_bytes = children.size() * sizeof(Term);
@@ -235,6 +245,7 @@ namespace tarka {
             auto* impl = new(raw) TermImpl{};
             impl->op = op;
             impl->child_count = static_cast<std::uint16_t>(children.size());
+            impl->node_id = next_node_id_++;
             impl->sort_ = sort;
             impl->hash = h;
             impl->payload_hash = payload_hash;
@@ -245,7 +256,12 @@ namespace tarka {
                 std::memcpy(dest, children.data(), child_bytes);
             }
 
-            [[maybe_unused]] auto _ = term_cache_.put(h, impl);
+            if (const TermImpl** head = term_table_.find(h)) {
+                impl->coll_next = *head;
+                term_table_.insert_or_assign(h, impl);
+            } else {
+                term_table_.insert(h, impl);
+            }
             journal_term(h);
             return Term{impl, h};
         }
@@ -258,23 +274,28 @@ namespace tarka {
         }
 
         // Symbolic variable
+        //
+        // Two distinct names can share an FNV-1a payload hash. We probe a chain of
+        // rehashed keys (ph, ph2, ph3, …) until we find either the name already
+        // stored under that key (reuse it) or a free key (claim it). This makes
+        // symbol interning collision-safe for any number of aliasing names, not
+        // just two — symbol_name() stays faithful and equal names still intern to
+        // the same payload key.
         [[nodiscard]] Term make_symbol(std::string_view name, Sort sort) {
-            const std::uint64_t ph = symbol_payload_hash(name);
-            if (const std::string* existing = symbols_.find(ph)) {
-                // FNV-1a collision: two distinct names hashing equal. Re-key the
-                // newcomer under a secondary mix so symbol_name() stays faithful.
-                if (*existing != name) {
-                    const std::uint64_t ph2 =
-                        detail::hash_combine(ph, detail::mix64(ph ^ 0xDEADC0DEULL));
-                    symbols_.insert(ph2, std::string{name});
-                    journal_symbol(ph2);
-                    return make_term(Op::Sym, sort, {}, ph2);
+            std::uint64_t key = symbol_payload_hash(name);
+            for (;;) {
+                const std::string* existing = symbols_.find(key);
+                if (!existing) {
+                    symbols_.insert(key, std::string{name});
+                    journal_symbol(key);
+                    return make_term(Op::Sym, sort, {}, key);
                 }
-            } else {
-                symbols_.insert(ph, std::string{name});
-                journal_symbol(ph);
+                if (*existing == name)
+                    return make_term(Op::Sym, sort, {}, key);
+                // Occupied by a different name — rehash to the next chain slot.
+                key = detail::hash_combine(key, detail::mix64(key ^ 0xDEADC0DEULL));
+                if (key == 0) key = 1;
             }
-            return make_term(Op::Sym, sort, {}, ph);
         }
 
         // Literal: bool
@@ -376,28 +397,53 @@ namespace tarka {
         };
 
         [[nodiscard]] checkpoint_t checkpoint() noexcept {
+            ++checkpoint_depth_;
             return {arena_.used_bytes(), journal_.size()};
         }
 
         void rollback(checkpoint_t cp) noexcept {
-            // Evict cache entries created after the checkpoint (LIFO) before the
-            // arena memory they name is reclaimed.
+            // Evict intern-table entries created after the checkpoint (LIFO) before
+            // the arena memory they name is reclaimed. Within one hash bucket the
+            // chain head is the newest node, and the journal replays newest-first,
+            // so popping the head each time removes exactly the right node.
             for (std::size_t i = journal_.size(); i > cp.journal_mark; --i) {
                 const journal_entry& e = journal_[i - 1];
                 switch (e.kind) {
-                    case journal_kind::term: term_cache_.erase(e.hash); break;
-                    case journal_kind::sort: sort_cache_.erase(e.hash); break;
+                    case journal_kind::term: {
+                        if (const TermImpl** head = term_table_.find(e.hash)) {
+                            const TermImpl* next = (*head)->coll_next;
+                            if (next) term_table_.insert_or_assign(e.hash, next);
+                            else term_table_.erase(e.hash);
+                        }
+                        break;
+                    }
+                    case journal_kind::sort: {
+                        if (const SortImpl** head = sort_table_.find(e.hash)) {
+                            const SortImpl* next = (*head)->coll_next;
+                            if (next) sort_table_.insert_or_assign(e.hash, next);
+                            else sort_table_.erase(e.hash);
+                        }
+                        break;
+                    }
                     case journal_kind::symbol: symbols_.erase(e.hash); break;
                 }
             }
             journal_.resize(cp.journal_mark);
+            if (checkpoint_depth_ > 0) --checkpoint_depth_;
             arena_.rollback(smriti::pools::LinearArena::Checkpoint{cp.arena_offset});
         }
 
     private:
         using ArenaPool = smriti::pools::LinearArena;
-        using SortCache = kosha::ShardedLRUCache<std::uint64_t, const SortImpl*>;
-        using TermCache = kosha::ShardedLRUCache<std::uint64_t, const TermImpl*>;
+        // Interning is a *correctness* structure, not a cache: an interned node
+        // must never be evicted (its address is a stable identity used as a map
+        // key throughout the solver). So the tables are permanent, non-evicting
+        // FlatHashStorage keyed on the structural hash, with each slot holding the
+        // head of an intrusive collision chain (coll_next) walked with a full
+        // structural compare on hit — a hash collision can never alias two
+        // distinct formulas.
+        using SortTable = kosha::core::FlatHashStorage<std::uint64_t, const SortImpl*>;
+        using TermTable = kosha::core::FlatHashStorage<std::uint64_t, const TermImpl*>;
 
         template <typename V>
         using FlatMap = kosha::FlatHashStorage<std::uint64_t, V>;
@@ -412,8 +458,9 @@ namespace tarka {
         };
 
         ArenaPool arena_;
-        SortCache sort_cache_;
-        TermCache term_cache_;
+        SortTable sort_table_;
+        TermTable term_table_;
+        std::uint32_t next_node_id_ = 1; // 0 reserved as "unassigned"
 
         FlatMap<std::string> symbols_;
         FlatMap<bv_value> bv_literals_;
@@ -421,10 +468,20 @@ namespace tarka {
         FlatMap<rational> real_literals_;
 
         std::vector<journal_entry> journal_;
+        std::size_t checkpoint_depth_ = 0; // journal only records while a checkpoint is live
 
-        void journal_term(std::uint64_t h) { journal_.push_back({h, journal_kind::term}); }
-        void journal_sort(std::uint64_t h) { journal_.push_back({h, journal_kind::sort}); }
-        void journal_symbol(std::uint64_t h) { journal_.push_back({h, journal_kind::symbol}); }
+        // Journal an interning only while a checkpoint is live. On the common
+        // non-incremental path (no checkpoint) interned nodes are permanent, so
+        // recording them would be a pure leak.
+        void journal_term(std::uint64_t h) {
+            if (checkpoint_depth_ > 0) journal_.push_back({h, journal_kind::term});
+        }
+        void journal_sort(std::uint64_t h) {
+            if (checkpoint_depth_ > 0) journal_.push_back({h, journal_kind::sort});
+        }
+        void journal_symbol(std::uint64_t h) {
+            if (checkpoint_depth_ > 0) journal_.push_back({h, journal_kind::symbol});
+        }
 
         [[nodiscard]] Term make_quantifier(Op q, std::span<const Term> bound_vars, Term body) {
             // Children layout: [bound_vars..., body]. Body determines nothing about
