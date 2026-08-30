@@ -75,6 +75,8 @@ namespace lithe::features {
 #endif
 
 #include <cstddef>
+#include <unordered_set>
+#include "containers/dynamic/SmallVector.hpp"
 
 namespace tarka::features {
     // =========================================================================
@@ -92,13 +94,12 @@ namespace tarka::features {
             std::size_t quant_depth = 0, array_ops = 0, uf_ops = 0;
 
             // Post-order walk — count ops and theory bits
-            constexpr std::size_t kStackCap = 512;
-            const Term* stack_buf[kStackCap];
-            std::size_t depth = 0;
-            stack_buf[depth++] = &root;
+            containers::dynamic::SmallVector<const Term*, 512 * sizeof(const Term*)> stack;
+            stack.push_back(&root);
 
-            while (depth > 0) {
-                const Term* cur = stack_buf[--depth];
+            while (!stack.empty()) {
+                const Term* cur = stack.back();
+                stack.pop_back();
                 ++total_nodes;
                 const theory_mask bits = get_op_info(cur->op()).theory_bits;
 
@@ -113,10 +114,7 @@ namespace tarka::features {
                 const Op op = cur->op();
                 if (op == Op::Forall || op == Op::Exists) ++quant_depth;
 
-                for (const Term& c : cur->children()) {
-                    if (depth < kStackCap)
-                        stack_buf[depth++] = &c;
-                }
+                for (const Term& c : cur->children()) stack.push_back(&c);
             }
 
             const float n = total_nodes > 0 ? static_cast<float>(total_nodes) : 1.0f;
@@ -131,49 +129,24 @@ namespace tarka::features {
 
             // dag_compression_ratio: unique ptr count / total walk visits.
             {
-                constexpr std::size_t kVisitCap = 512;
-                const TermImpl* visit_buf[kVisitCap];
-                std::size_t vdepth = 0;
+                containers::dynamic::SmallVector<const TermImpl*, 512 * sizeof(const TermImpl*)> visit;
+                std::unordered_set<const TermImpl*> seen;
+                seen.reserve(256);
                 std::size_t unique_nodes = 0;
                 std::size_t revisit_count = 0;
 
-                constexpr std::size_t kSetSize = 512;
-                const TermImpl* seen[kSetSize] = {};
-
-                auto seen_contains = [&](const TermImpl* p) -> bool {
-                    std::size_t idx = (reinterpret_cast<std::size_t>(p) >> 3u) & (kSetSize - 1u);
-                    for (std::size_t probe = 0; probe < kSetSize; ++probe) {
-                        std::size_t slot = (idx + probe) & (kSetSize - 1u);
-                        if (seen[slot] == nullptr) return false;
-                        if (seen[slot] == p) return true;
-                    }
-                    return false;
-                };
-                auto seen_insert = [&](const TermImpl* p) {
-                    std::size_t idx = (reinterpret_cast<std::size_t>(p) >> 3u) & (kSetSize - 1u);
-                    for (std::size_t probe = 0; probe < kSetSize; ++probe) {
-                        std::size_t slot = (idx + probe) & (kSetSize - 1u);
-                        if (seen[slot] == nullptr || seen[slot] == p) {
-                            seen[slot] = p;
-                            return;
-                        }
-                    }
-                };
-
-                visit_buf[vdepth++] = root.ptr();
-                while (vdepth > 0) {
-                    const TermImpl* cur = visit_buf[--vdepth];
-                    if (seen_contains(cur)) {
+                visit.push_back(root.ptr());
+                while (!visit.empty()) {
+                    const TermImpl* cur = visit.back();
+                    visit.pop_back();
+                    if (!seen.insert(cur).second) {
                         ++revisit_count;
                         continue;
                     }
-                    seen_insert(cur);
                     ++unique_nodes;
                     const Term* ch_ptr = reinterpret_cast<const Term*>(cur + 1);
-                    for (std::uint16_t ci = 0; ci < cur->child_count; ++ci) {
-                        if (vdepth < kVisitCap)
-                            visit_buf[vdepth++] = ch_ptr[ci].ptr();
-                    }
+                    for (std::uint16_t ci = 0; ci < cur->child_count; ++ci)
+                        visit.push_back(ch_ptr[ci].ptr());
                 }
 
                 const std::size_t walk_total = unique_nodes + revisit_count;
@@ -222,13 +195,18 @@ namespace tarka {
 
         // Returns index of selected backend (0-based)
         [[nodiscard]] std::size_t route(Term t) const {
-            features::theory_extractor extractor;
-            const auto fv = extractor.extract(t);
-            const theory_mask sig = features::mask_from_features(fv);
+            auto& store = lithe::features::feature_store::global();
 
-            // Cache in feature_store by term hash
-            [[maybe_unused]] auto& store = lithe::features::feature_store::global();
-            store.put(t.hash(), fv, lithe::features::feature_source::custom);
+            // Reuse a cached feature vector when the same formula was routed
+            // before (incremental pushes, portfolio); extract only on a miss.
+            lithe::features::feature_vector fv;
+            if (auto cached = store.get(t.hash())) {
+                fv = *cached;
+            } else {
+                fv = features::theory_extractor{}.extract(t);
+                store.put(t.hash(), fv, lithe::features::feature_source::custom);
+            }
+            const theory_mask sig = features::mask_from_features(fv);
 
             // Capability filter: keep backends whose caps ⊇ sig
             constexpr theory_mask caps[kNumBackends] = {Backends::capabilities()...};

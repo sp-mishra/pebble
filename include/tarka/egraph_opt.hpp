@@ -25,9 +25,12 @@
 #include "tarka/context.hpp"
 #include "containers/graph/egraph.hpp"
 
+#include "containers/dynamic/SmallVector.hpp"
+
 #include <cstddef>
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace tarka {
@@ -188,22 +191,28 @@ namespace tarka {
     };
 
     // =========================================================================
-    // egraph_node_count — DAG-aware node count helper
+    // egraph_node_count_dag — DAG-aware unique-node count
+    //
+    // Counts *distinct* TermImpl nodes reachable from t. Hash-consing means a
+    // shared sub-term has one address, so this is the true DAG size. The old
+    // tree-count inflated shared formulae (1000 refs to 5 nodes → 1000), which
+    // made after_count >= before_count almost always true, so egraph_optimize
+    // never fired. Deduping fixes the comparison.
     // =========================================================================
 
-    [[nodiscard]] inline std::size_t egraph_node_count(Term t) noexcept {
-        std::size_t count = 0;
-        constexpr std::size_t kCap = 512;
-        const Term* buf[kCap];
-        std::size_t depth = 0;
-        buf[depth++] = &t;
-        while (depth > 0) {
-            ++count;
-            const Term* cur = buf[--depth];
-            for (const Term& c : cur->children())
-                if (depth < kCap) buf[depth++] = &c;
+    [[nodiscard]] inline std::size_t egraph_node_count_dag(Term t) {
+        std::unordered_set<const TermImpl*> seen;
+        seen.reserve(64);
+        containers::dynamic::SmallVector<const TermImpl*, 512 * sizeof(const TermImpl*)> stack;
+        if (t.valid()) stack.push_back(t.ptr());
+        while (!stack.empty()) {
+            const TermImpl* cur = stack.back();
+            stack.pop_back();
+            if (!seen.insert(cur).second) continue;
+            const Term* ch = reinterpret_cast<const Term*>(cur + 1);
+            for (std::uint16_t i = 0; i < cur->child_count; ++i) stack.push_back(ch[i].ptr());
         }
-        return count;
+        return seen.size();
     }
 
     // =========================================================================
@@ -251,7 +260,7 @@ namespace tarka {
         auto extraction = egraph::extract_best(g, root);
 
         // Compare node counts
-        const std::size_t before_count = egraph_node_count(t);
+        const std::size_t before_count = egraph_node_count_dag(t);
         const std::size_t after_count = [&] {
             std::size_t c = 0;
             for (const auto& n : extraction.best_nodes)

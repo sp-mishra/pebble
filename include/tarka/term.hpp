@@ -156,6 +156,55 @@ namespace tarka {
     };
 
     // Specializations for builtin ops
+    //
+    // Leaf ops (Lit/Sym) carry no theory in their opcode — their theory is
+    // decided by the operand's *sort*. Since the router over-approximates with a
+    // whole-formula mask, tagging a leaf with the broad set of value/variable
+    // theories is sound: it can only widen the mask, never route to a backend
+    // lacking a theory the formula actually needs. Without these the default
+    // descriptor tags every symbol/literal `core`, so a BV/LRA leaf is invisible
+    // to the capability router (see tarka.hpp compute_theory_mask).
+    template <>
+    struct op_descriptor<Op::Lit> {
+        static constexpr std::uint16_t stable_id = static_cast<std::uint16_t>(Op::Lit);
+        static constexpr std::string_view symbol = "lit";
+        static constexpr int arity = 0;
+        static constexpr bool is_commutative = false;
+        static constexpr theory_mask theory_bits =
+            theory_bit(theory_family::core) | theory_bit(theory_family::bv) |
+            theory_bit(theory_family::lra) | theory_bit(theory_family::lia);
+    };
+
+    template <>
+    struct op_descriptor<Op::Sym> {
+        static constexpr std::uint16_t stable_id = static_cast<std::uint16_t>(Op::Sym);
+        static constexpr std::string_view symbol = "sym";
+        static constexpr int arity = 0;
+        static constexpr bool is_commutative = false;
+        static constexpr theory_mask theory_bits =
+            theory_bit(theory_family::core) | theory_bit(theory_family::bv) |
+            theory_bit(theory_family::lra) | theory_bit(theory_family::lia) |
+            theory_bit(theory_family::uf) | theory_bit(theory_family::array);
+    };
+
+    template <>
+    struct op_descriptor<Op::Forall> {
+        static constexpr std::uint16_t stable_id = static_cast<std::uint16_t>(Op::Forall);
+        static constexpr std::string_view symbol = "forall";
+        static constexpr int arity = -1;
+        static constexpr bool is_commutative = false;
+        static constexpr theory_mask theory_bits = theory_bit(theory_family::quantifier);
+    };
+
+    template <>
+    struct op_descriptor<Op::Exists> {
+        static constexpr std::uint16_t stable_id = static_cast<std::uint16_t>(Op::Exists);
+        static constexpr std::string_view symbol = "exists";
+        static constexpr int arity = -1;
+        static constexpr bool is_commutative = false;
+        static constexpr theory_mask theory_bits = theory_bit(theory_family::quantifier);
+    };
+
     template <>
     struct op_descriptor<Op::True> {
         static constexpr std::uint16_t stable_id = static_cast<std::uint16_t>(Op::True);
@@ -651,6 +700,13 @@ namespace tarka {
 
     enum class SatResult : std::uint8_t { Sat, Unsat, Unknown, Deferred };
 
+    // A result is conclusive only when the solver actually decided the query.
+    // Unknown (solver ran, gave up) and Deferred (never attempted / queued) are
+    // both inconclusive — callers must not extract a model unless conclusive.
+    [[nodiscard]] constexpr bool is_conclusive(SatResult r) noexcept {
+        return r == SatResult::Sat || r == SatResult::Unsat;
+    }
+
     struct SmtError {
         enum class Kind : std::uint8_t { Internal, Unsupported, Timeout, ResourceLimit };
 
@@ -684,6 +740,9 @@ namespace tarka {
         [[nodiscard]] Term operator+(Term rhs) const;
         [[nodiscard]] Term operator-(Term rhs) const;
         [[nodiscard]] Term operator*(Term rhs) const;
+        [[nodiscard]] Term operator/(Term rhs) const;
+        [[nodiscard]] Term operator%(Term rhs) const;
+        [[nodiscard]] Term implies(Term rhs) const;
         [[nodiscard]] Term operator<(Term rhs) const;
         [[nodiscard]] Term operator<=(Term rhs) const;
         [[nodiscard]] Term operator>(Term rhs) const;

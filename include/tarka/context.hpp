@@ -21,7 +21,9 @@
 #include "tarka/term.hpp"
 
 #include "mem/smriti.hpp"
+#include "mem/arena.hpp"
 #include "containers/cache/kosha.hpp"
+#include "containers/dynamic/SmallVector.hpp"
 
 #include <cassert>
 #include <cstring>
@@ -29,7 +31,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 
 namespace tarka {
     // =========================================================================
@@ -180,6 +181,7 @@ namespace tarka {
             }
 
             [[maybe_unused]] auto _ = sort_cache_.put(h, impl);
+            journal_sort(h);
             return Sort{impl, h};
         }
 
@@ -199,11 +201,14 @@ namespace tarka {
         }
 
         [[nodiscard]] Sort function_sort(std::span<const Sort> domain_sorts, Sort range_sort) {
-            std::vector<Sort> params;
+            // ≤7-arg function sorts (domain + range) stay stack-resident; wider
+            // spills to heap. Sort is 16B, so 8·16 = 128 bytes of inline budget.
+            containers::dynamic::SmallVector<Sort, 8 * sizeof(Sort)> params;
             params.reserve(domain_sorts.size() + 1);
             for (const Sort& s : domain_sorts) params.push_back(s);
             params.push_back(range_sort);
-            return make_sort(SortKind::Function, params, 0);
+            return make_sort(SortKind::Function,
+                             std::span<const Sort>{params.data(), params.size()}, 0);
         }
 
         // ---------------------------------------------------------------------
@@ -241,6 +246,7 @@ namespace tarka {
             }
 
             [[maybe_unused]] auto _ = term_cache_.put(h, impl);
+            journal_term(h);
             return Term{impl, h};
         }
 
@@ -254,7 +260,20 @@ namespace tarka {
         // Symbolic variable
         [[nodiscard]] Term make_symbol(std::string_view name, Sort sort) {
             const std::uint64_t ph = symbol_payload_hash(name);
-            symbols_.emplace(ph, std::string{name});
+            if (const std::string* existing = symbols_.find(ph)) {
+                // FNV-1a collision: two distinct names hashing equal. Re-key the
+                // newcomer under a secondary mix so symbol_name() stays faithful.
+                if (*existing != name) {
+                    const std::uint64_t ph2 =
+                        detail::hash_combine(ph, detail::mix64(ph ^ 0xDEADC0DEULL));
+                    symbols_.insert(ph2, std::string{name});
+                    journal_symbol(ph2);
+                    return make_term(Op::Sym, sort, {}, ph2);
+                }
+            } else {
+                symbols_.insert(ph, std::string{name});
+                journal_symbol(ph);
+            }
             return make_term(Op::Sym, sort, {}, ph);
         }
 
@@ -267,7 +286,7 @@ namespace tarka {
         [[nodiscard]] Term make_value(std::uint64_t bits, Sort bv_sort_) {
             assert(bv_sort_.valid() && bv_sort_.kind() == SortKind::BitVec);
             const std::uint64_t ph = detail::hash_combine(bits, bv_sort_.hash());
-            bv_literals_.emplace(ph, bv_value{bits, bv_sort_.scalar_param()});
+            bv_literals_.insert(ph, bv_value{bits, bv_sort_.scalar_param()});
             return make_term(Op::Lit, bv_sort_, {}, ph);
         }
 
@@ -275,7 +294,7 @@ namespace tarka {
         [[nodiscard]] Term make_int(std::int64_t v, Sort int_sort_) {
             assert(int_sort_.valid() && int_sort_.kind() == SortKind::Int);
             const std::uint64_t ph = detail::hash_combine(static_cast<std::uint64_t>(v), 0x494e5400ULL);
-            int_literals_.emplace(ph, v);
+            int_literals_.insert(ph, v);
             return make_term(Op::Lit, int_sort_, {}, ph);
         }
 
@@ -285,7 +304,7 @@ namespace tarka {
             const std::uint64_t ph = detail::hash_combine(
                 static_cast<std::uint64_t>(v.num),
                 detail::hash_combine(static_cast<std::uint64_t>(v.den), 0x5245414cULL));
-            real_literals_.emplace(ph, v);
+            real_literals_.insert(ph, v);
             return make_term(Op::Lit, real_sort_, {}, ph);
         }
 
@@ -296,63 +315,128 @@ namespace tarka {
 
         // Retrieve symbol name by payload_hash
         [[nodiscard]] std::string_view symbol_name(std::uint64_t ph) const noexcept {
-            auto it = symbols_.find(ph);
-            if (it != symbols_.end()) return it->second;
+            if (const std::string* s = symbols_.find(ph)) return *s;
             return {};
         }
 
         // Retrieve bv_value by payload_hash
         [[nodiscard]] std::optional<bv_value> bv_literal(std::uint64_t ph) const noexcept {
-            auto it = bv_literals_.find(ph);
-            if (it != bv_literals_.end()) return it->second;
+            if (const bv_value* v = bv_literals_.find(ph)) return *v;
             return std::nullopt;
         }
 
         // Retrieve int64 literal by payload_hash
         [[nodiscard]] std::optional<std::int64_t> int_literal(std::uint64_t ph) const noexcept {
-            auto it = int_literals_.find(ph);
-            if (it != int_literals_.end()) return it->second;
+            if (const std::int64_t* v = int_literals_.find(ph)) return *v;
             return std::nullopt;
         }
 
         // Retrieve real/rational literal by payload_hash
         [[nodiscard]] std::optional<rational> real_literal(std::uint64_t ph) const noexcept {
-            auto it = real_literals_.find(ph);
-            if (it != real_literals_.end()) return it->second;
+            if (const rational* v = real_literals_.find(ph)) return *v;
             return std::nullopt;
         }
 
         // ---------------------------------------------------------------------
+        // Structured-term convenience constructors
+        // ---------------------------------------------------------------------
+
+        // if-then-else: cond must be Bool; then/else must share a sort.
+        [[nodiscard]] Term make_ite(Term cond, Term then_t, Term else_t) {
+            assert(cond.sort().kind() == SortKind::Bool);
+            assert(then_t.sort() == else_t.sort());
+            const Term children[3] = {cond, then_t, else_t};
+            return make_term(Op::Ite, then_t.sort(), children);
+        }
+
+        // Quantifiers: bound_vars are Sym terms scoped over a Bool body. The
+        // quantified term itself is Bool-sorted.
+        [[nodiscard]] Term make_forall(std::span<const Term> bound_vars, Term body) {
+            return make_quantifier(Op::Forall, bound_vars, body);
+        }
+
+        [[nodiscard]] Term make_exists(std::span<const Term> bound_vars, Term body) {
+            return make_quantifier(Op::Exists, bound_vars, body);
+        }
+
+        // ---------------------------------------------------------------------
         // Checkpoint / rollback (for scoped scratch terms)
-        // The cache entries for scratch terms remain but point to freed memory
-        // after rollback; only use rollback when those terms have gone out of scope.
+        //
+        // rollback() rewinds the arena to the checkpoint offset AND erases every
+        // term/sort/symbol/literal interned after the checkpoint from the caches,
+        // so no cache entry ever points into freed arena memory. Pre-checkpoint
+        // entries are untouched. Checkpoints are a stack: each rollback pops back
+        // to the matching depth. Handles obtained after the checkpoint must not
+        // be used after rollback.
         // ---------------------------------------------------------------------
 
         struct checkpoint_t {
-            std::size_t offset;
+            std::size_t arena_offset;
+            std::size_t journal_mark;
         };
 
-        [[nodiscard]] checkpoint_t checkpoint() const noexcept {
-            return {arena_.used_bytes()};
+        [[nodiscard]] checkpoint_t checkpoint() noexcept {
+            return {arena_.used_bytes(), journal_.size()};
         }
 
         void rollback(checkpoint_t cp) noexcept {
-            (void)cp;
+            // Evict cache entries created after the checkpoint (LIFO) before the
+            // arena memory they name is reclaimed.
+            for (std::size_t i = journal_.size(); i > cp.journal_mark; --i) {
+                const journal_entry& e = journal_[i - 1];
+                switch (e.kind) {
+                    case journal_kind::term: term_cache_.erase(e.hash); break;
+                    case journal_kind::sort: sort_cache_.erase(e.hash); break;
+                    case journal_kind::symbol: symbols_.erase(e.hash); break;
+                }
+            }
+            journal_.resize(cp.journal_mark);
+            arena_.rollback(smriti::pools::LinearArena::Checkpoint{cp.arena_offset});
         }
 
     private:
-        using ArenaPool = smriti::pools::BumpPool<smriti::domains::SystemRAMDomain>;
+        using ArenaPool = smriti::pools::LinearArena;
         using SortCache = kosha::ShardedLRUCache<std::uint64_t, const SortImpl*>;
         using TermCache = kosha::ShardedLRUCache<std::uint64_t, const TermImpl*>;
+
+        template <typename V>
+        using FlatMap = kosha::FlatHashStorage<std::uint64_t, V>;
+
+        // Rollback journal: records what each interning added, so rollback can
+        // undo cache insertions in reverse. Only populated while a checkpoint is
+        // live has no bearing — recording is unconditional and cheap (one push).
+        enum class journal_kind : std::uint8_t { term, sort, symbol };
+        struct journal_entry {
+            std::uint64_t hash;
+            journal_kind kind;
+        };
 
         ArenaPool arena_;
         SortCache sort_cache_;
         TermCache term_cache_;
 
-        std::unordered_map<std::uint64_t, std::string> symbols_;
-        std::unordered_map<std::uint64_t, bv_value> bv_literals_;
-        std::unordered_map<std::uint64_t, std::int64_t> int_literals_;
-        std::unordered_map<std::uint64_t, rational> real_literals_;
+        FlatMap<std::string> symbols_;
+        FlatMap<bv_value> bv_literals_;
+        FlatMap<std::int64_t> int_literals_;
+        FlatMap<rational> real_literals_;
+
+        std::vector<journal_entry> journal_;
+
+        void journal_term(std::uint64_t h) { journal_.push_back({h, journal_kind::term}); }
+        void journal_sort(std::uint64_t h) { journal_.push_back({h, journal_kind::sort}); }
+        void journal_symbol(std::uint64_t h) { journal_.push_back({h, journal_kind::symbol}); }
+
+        [[nodiscard]] Term make_quantifier(Op q, std::span<const Term> bound_vars, Term body) {
+            // Children layout: [bound_vars..., body]. Body determines nothing about
+            // sort — a quantified formula is Bool.
+            containers::dynamic::SmallVector<Term, 8 * sizeof(Term)> ch;
+            ch.reserve(bound_vars.size() + 1);
+            for (const Term& v : bound_vars) ch.push_back(v);
+            ch.push_back(body);
+            Context& c = *this;
+            return make_term(q, c.bool_sort(),
+                             std::span<const Term>{ch.data(), ch.size()});
+        }
 
         // ------------------------------------------------------------------
         // Hash functions
@@ -472,6 +556,27 @@ namespace tarka {
         return c.make_term(Op::Mul, ptr_->sort_, children);
     }
 
+    inline Term Term::operator/(Term rhs) const {
+        assert(ptr_ && rhs.ptr_);
+        Context& c = *ptr_->ctx_;
+        const Term children[2] = {*this, rhs};
+        return c.make_term(Op::Div, ptr_->sort_, children);
+    }
+
+    inline Term Term::operator%(Term rhs) const {
+        assert(ptr_ && rhs.ptr_);
+        Context& c = *ptr_->ctx_;
+        const Term children[2] = {*this, rhs};
+        return c.make_term(Op::Mod, ptr_->sort_, children);
+    }
+
+    inline Term Term::implies(Term rhs) const {
+        assert(ptr_ && rhs.ptr_);
+        Context& c = *ptr_->ctx_;
+        const Term children[2] = {*this, rhs};
+        return c.make_term(Op::Implies, c.bool_sort(), children);
+    }
+
     inline Term Term::operator<(Term rhs) const {
         assert(ptr_ && rhs.ptr_);
         Context& c = *ptr_->ctx_;
@@ -517,6 +622,10 @@ namespace tarka {
 
     [[nodiscard]] inline op_info get_op_info(Op o) noexcept {
         switch (o) {
+            case Op::Lit: return make_op_info<Op::Lit>();
+            case Op::Sym: return make_op_info<Op::Sym>();
+            case Op::Forall: return make_op_info<Op::Forall>();
+            case Op::Exists: return make_op_info<Op::Exists>();
             case Op::True: return make_op_info<Op::True>();
             case Op::False: return make_op_info<Op::False>();
             case Op::Not: return make_op_info<Op::Not>();
