@@ -273,6 +273,58 @@ namespace ga {
         return static_cast<T>(std::sqrt(static_cast<double>(dot(v, v))));
     }
 
+    // nrm2_sq — squared L2 norm; replaces pebble::math::length_sq call sites
+    template<typename T, std::size_t N>
+    [[nodiscard]] constexpr T nrm2_sq(const StaticMatrix<T,N,1>& v) noexcept {
+        return dot(v, v);
+    }
+
+    // axpy: y ← y + alpha * x  (y and x are column vectors, in-place on y)
+    template<typename T, std::size_t N>
+    constexpr void axpy(T alpha, const StaticMatrix<T,N,1>& x, StaticMatrix<T,N,1>& y) noexcept {
+        for (std::size_t i = 0; i < N; ++i) y(i,0) += alpha * x(i,0);
+    }
+
+    // cross2d — scalar 2D cross product: ax*by − ay*bx
+    template<typename T>
+    [[nodiscard]] constexpr T cross2d(const StaticMatrix<T,2,1>& a, const StaticMatrix<T,2,1>& b) noexcept {
+        return a(0,0) * b(1,0) - a(1,0) * b(0,0);
+    }
+
+    // quad_form_2d — computes J·diag(M⁻¹)·Jᵀ for 2D rigid body contact:
+    //   result = inv_mass + (cross2d(r, n))² * inv_inertia
+    // r, n are Vec2<T> (column vectors).
+    template<typename T>
+    [[nodiscard]] constexpr T quad_form_2d(T inv_mass, T inv_inertia,
+                                           const StaticMatrix<T,2,1>& r,
+                                           const StaticMatrix<T,2,1>& n) noexcept {
+        const T rc = cross2d(r, n);
+        return inv_mass + rc * rc * inv_inertia;
+    }
+
 } // namespace ga
+
+// -----------------------------------------------------------------------
+// Interop helpers: convert between pebble::math::mat2/vec2 and ga::StaticMatrix
+// Included only when math_vector.hpp is available on the include path.
+// Transitional — removed once all direct pebble::math::mat2 call sites migrate.
+// -----------------------------------------------------------------------
+#if __has_include(<containers/numeric/math_vector.hpp>)
+#include <containers/numeric/math_vector.hpp>
+namespace ga {
+    [[nodiscard]] inline Mat2<float> to_static_matrix(const pebble::math::mat2& m) noexcept {
+        return Mat2<float>{m[0,0], m[0,1], m[1,0], m[1,1]};
+    }
+    [[nodiscard]] inline pebble::math::mat2 from_static_matrix(const Mat2<float>& m) noexcept {
+        return pebble::math::mat2(m(0,0), m(0,1), m(1,0), m(1,1));
+    }
+    [[nodiscard]] inline Vec2<float> to_static_vec(const pebble::math::vec2& v) noexcept {
+        return Vec2<float>{v[0], v[1]};
+    }
+    [[nodiscard]] inline pebble::math::vec2 from_static_vec(const Vec2<float>& v) noexcept {
+        return pebble::math::vec2(v(0,0), v(1,0));
+    }
+} // namespace ga
+#endif
 
 #endif // PEBBLE_CONTAINERS_MATRIX_STATIC_HPP

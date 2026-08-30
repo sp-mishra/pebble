@@ -31,8 +31,8 @@ TEST_CASE("akruti: analytic circle-box collision", "[akruti][narrowphase]") {
 
 TEST_CASE("akruti: SAT OBB-OBB 2-point contact manifold", "[akruti][narrowphase][sat]") {
     // Two stacked boxes
-    OrientedBox b1{{0, 0}, {1.0f, 1.0f}, Mat2<Scalar>::rotation(0.0f)};
-    OrientedBox b2{{0, 1.8f}, {1.0f, 1.0f}, Mat2<Scalar>::rotation(0.0f)};
+    OrientedBox b1{{0, 0}, {1.0f, 1.0f}, akruti::make_rotation2d(0.0f)};
+    OrientedBox b2{{0, 1.8f}, {1.0f, 1.0f}, akruti::make_rotation2d(0.0f)};
 
     Manifold m = collide_obb_obb(b1, b2);
     REQUIRE(m.hit);
@@ -43,8 +43,8 @@ TEST_CASE("akruti: SAT OBB-OBB 2-point contact manifold", "[akruti][narrowphase]
 }
 
 TEST_CASE("akruti: SAT rotated OBB collision", "[akruti][narrowphase][sat]") {
-    OrientedBox b1{{0, 0}, {1.0f, 1.0f}, Mat2<Scalar>::rotation(0.785398f)}; // 45 deg
-    OrientedBox b2{{1.2f, 0}, {0.5f, 0.5f}, Mat2<Scalar>::rotation(0.0f)};
+    OrientedBox b1{{0, 0}, {1.0f, 1.0f}, akruti::make_rotation2d(0.785398f)}; // 45 deg
+    OrientedBox b2{{1.2f, 0}, {0.5f, 0.5f}, akruti::make_rotation2d(0.0f)};
 
     Manifold m = collide_obb_obb(b1, b2);
     REQUIRE(m.hit);

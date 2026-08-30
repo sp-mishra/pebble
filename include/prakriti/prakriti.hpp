@@ -23,6 +23,7 @@
 #include "compute/scalar_backend.hpp"
 #include "compute/highway_backend.hpp"
 #include "compute/pravaha_backend.hpp"
+#include "compute/backends.hpp"
 #include "solvers/kernels.hpp"
 #include "solvers/solver_base.hpp"
 #include "solvers/thermal.hpp"

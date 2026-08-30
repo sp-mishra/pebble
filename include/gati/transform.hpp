@@ -2,12 +2,13 @@
 // ============================================================================
 // gati/transform.hpp — Spatial Component, Scene Hierarchy & Presentation Pose
 // ============================================================================
-// Uses pebble::math::vec2 and pebble::math::mat2 directly.
+// Uses pebble::math::vec2 for positions and ga::StaticMatrix<float,2,2> for rotation/basis.
 // Double-buffers pose (prev_position/prev_angle) for render interpolation.
 // ============================================================================
 
 #include "math.hpp"
 #include "ecs.hpp"
+#include <cmath>
 
 namespace gati {
 
@@ -26,11 +27,10 @@ struct Transform {
 
     // Local 2x2 basis (rotation * scale)
     [[nodiscard]] Mat2 basis() const noexcept {
-        Mat2 r = pebble::math::rotation2d(angle);
-        return Mat2(
-            r[0, 0] * scale[0], r[0, 1] * scale[1],
-            r[1, 0] * scale[0], r[1, 1] * scale[1]
-        );
+        const Scalar c = std::cos(angle);
+        const Scalar s = std::sin(angle);
+        return Mat2{c * scale[0], -s * scale[1],
+                    s * scale[0],  c * scale[1]};
     }
 };
 
@@ -39,12 +39,14 @@ inline constexpr int kMaxHierarchyDepth = 32;
 // World-space position by composing local transforms up parent hierarchy
 [[nodiscard]] inline Vec2 world_position(World& w, Entity e) {
     Vec2 p{};
-    Mat2 acc = Mat2(1.0f, 0.0f, 0.0f, 1.0f);
+    Mat2 acc = Mat2::identity();
     for (int depth = 0; depth < kMaxHierarchyDepth; ++depth) {
         Transform* t = w.get<Transform>(e);
         if (!t) break;
-        p = pebble::math::mul(acc, t->position) + p;
-        acc = pebble::math::mul(acc, t->basis());
+        const ga::Vec2<float> pv{t->position[0], t->position[1]};
+        const ga::Vec2<float> rp = acc * pv;
+        p = Vec2(p[0] + rp(0,0), p[1] + rp(1,0));
+        acc = acc * t->basis();
         if (t->parent.is_null()) break;
         e = t->parent;
     }

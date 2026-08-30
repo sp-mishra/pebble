@@ -5,6 +5,7 @@
 // ============================================================================
 #include "../core/config.hpp"
 #include <containers/numeric/math_vector.hpp>
+#include <containers/matrix/static.hpp>
 #include <cmath>
 #include <numbers>
 
@@ -23,7 +24,7 @@ namespace prakriti::kernels {
 
 // 2D spiky gradient: ∇W = −30/(π h^5) (h−r)² r̂.
 [[nodiscard]] inline pebble::math::vec2 spiky_grad(const pebble::math::vec2& rij, Scalar h) noexcept {
-    const Scalar r2 = pebble::math::length_sq(rij);
+    const Scalar r2 = ga::nrm2_sq(ga::Vec2<Scalar>{rij[0], rij[1]});
     const Scalar h2 = h * h;
     if (r2 <= Scalar(1e-12) || r2 >= h2) return pebble::math::vec2{0.0f, 0.0f};
     const Scalar r = std::sqrt(r2);

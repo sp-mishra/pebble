@@ -145,7 +145,7 @@ template <Shape S>
 [[nodiscard]] inline CsgPtr csg_transform(CsgPtr a, Mat2<Scalar> rot, Vec t) {
     auto n = std::make_unique<CsgNode>();
     n->is_leaf = false; n->op = CsgOp::Transform; n->a = std::move(a);
-    n->inv = rot.inverse(); n->translate = t;
+    n->inv = rot.inv(); n->translate = t;
     return n;
 }
 

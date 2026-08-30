@@ -3,6 +3,7 @@
 // Directly reuses Pebble's core tensor math (pebble::math / math_vector.hpp).
 // Eliminates duplicate vector/matrix math implementations across Pebble.
 #include <containers/numeric/math_vector.hpp>
+#include <containers/matrix/static.hpp>
 #include <cmath>
 #include <algorithm>
 
@@ -100,56 +101,35 @@ template <class T>
 template <class T>
 [[nodiscard]] constexpr T distance2(const Vec2<T>& a, const Vec2<T>& b) noexcept { return (a - b).len2(); }
 
-// ── 2x2 Matrix using Pebble Math ──────────────────────────────────────────────
+// ── 2x2 Matrix: alias to ga::StaticMatrix<T,2,2> ─────────────────────────────
+// ga::StaticMatrix<T,2,2> provides constexpr .det()/.inv()/.transpose()/operator*/operator*(vec),
+// zero-heap std::array storage, and optional SIMD specialization — identical interface to the
+// former hand-written Mat2<T> body, but canonical and shared with the matrix library.
 template <class T = Scalar>
-struct Mat2 {
-    T m00{1}, m01{};
-    T m10{}, m11{1};
+using Mat2 = ga::StaticMatrix<T, 2, 2>;
 
-    constexpr Mat2() noexcept = default;
-    constexpr Mat2(T m00_, T m01_, T m10_, T m11_) noexcept
-        : m00(m00_), m01(m01_), m10(m10_), m11(m11_) {}
+// Rotation matrix factory (not provided by ga::StaticMatrix directly)
+template <class T = Scalar>
+[[nodiscard]] inline Mat2<T> make_rotation2d(T radians) noexcept {
+    const T c = std::cos(radians);
+    const T s = std::sin(radians);
+    return Mat2<T>{c, -s, s, c};
+}
 
-    template <class Storage, class Comp>
-    constexpr Mat2(const ts::static_tensor<T, Storage, Comp, 2, 2>& tensor_m) noexcept
-        : m00(tensor_m[0, 0]), m01(tensor_m[0, 1]), m10(tensor_m[1, 0]), m11(tensor_m[1, 1]) {}
+// mul(Mat2, Vec2) — matrix-vector multiply returning akruti::Vec2<T>
+// Bridges ga::StaticMatrix<T,2,2> * akruti::Vec2<T> for primitives/narrowphase call sites.
+template <class T = Scalar>
+[[nodiscard]] constexpr Vec2<T> mul(const Mat2<T>& m, const Vec2<T>& v) noexcept {
+    return Vec2<T>{m(0,0) * v.x + m(0,1) * v.y,
+                   m(1,0) * v.x + m(1,1) * v.y};
+}
 
-    [[nodiscard]] constexpr operator pebble::math::mat2() const noexcept {
-        return pebble::math::mat2(
-            static_cast<float>(m00), static_cast<float>(m01),
-            static_cast<float>(m10), static_cast<float>(m11)
-        );
-    }
-
-    [[nodiscard]] constexpr Vec2<T> operator*(const Vec2<T>& v) const noexcept {
-        return Vec2<T>(pebble::math::mul(static_cast<pebble::math::mat2>(*this),
-                                         static_cast<pebble::math::vec2>(v)));
-    }
-    [[nodiscard]] constexpr Mat2 operator*(const Mat2& o) const noexcept {
-        return Mat2(pebble::math::mul(static_cast<pebble::math::mat2>(*this),
-                                      static_cast<pebble::math::mat2>(o)));
-    }
-    [[nodiscard]] constexpr T det() const noexcept {
-        return pebble::math::determinant(static_cast<pebble::math::mat2>(*this));
-    }
-    [[nodiscard]] constexpr Mat2 transpose() const noexcept {
-        return Mat2(pebble::math::transpose(static_cast<pebble::math::mat2>(*this)));
-    }
-    [[nodiscard]] constexpr Mat2 inverse() const noexcept {
-        return Mat2(pebble::math::inverse(static_cast<pebble::math::mat2>(*this)));
-    }
-
-    [[nodiscard]] static Mat2 rotation(T radians) noexcept {
-        return Mat2(pebble::math::rotation2d(radians));
-    }
-    [[nodiscard]] static constexpr Mat2 scale(T sx, T sy) noexcept {
-        return Mat2(pebble::math::scaling2d(sx, sy));
-    }
-    [[nodiscard]] static constexpr Mat2 shear_x(T k) noexcept { return {1, k, 0, 1}; }
-    [[nodiscard]] static constexpr Mat2 shear_y(T k) noexcept { return {1, 0, k, 1}; }
-
-    friend constexpr bool operator==(const Mat2&, const Mat2&) = default;
-};
+// operator* overload so existing `rot * vec` syntax compiles
+// (ga::StaticMatrix * ga::StaticMatrix<T,2,1> works natively; this handles akruti::Vec2)
+template <class T = Scalar>
+[[nodiscard]] constexpr Vec2<T> operator*(const Mat2<T>& m, const Vec2<T>& v) noexcept {
+    return mul(m, v);
+}
 
 // ── Axis-Aligned Bounding Box (AABB) using Pebble Math aabb2 ──────────────────
 template <class T = Scalar>

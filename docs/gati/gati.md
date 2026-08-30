@@ -295,7 +295,8 @@ game.events().publish(HeatPulseEvent{.center = {2.0f, 1.0f}, .radius = 3.0f, .te
 | Subsystem | Usage in Gati |
 |:---|:---|
 | `pebble::ecs` | Generational entity management and cache-friendly component storage. |
-| `pebble::math` | `vec2`, `mat2`, `aabb2`, `dot`, `cross`, `slerp` geometric vector mathematics. |
+| `pebble::math` | `vec2`, `aabb2`, `dot`, `cross`, `slerp` geometric vector mathematics. |
+| `containers::matrix` | `ga::StaticMatrix<T,2,2>` (`gati::Mat2`) for rigid-body rotation and basis composition; `ga::quad_form_2d` for contact effective mass; `ga::axpy` for position-correction accumulation. |
 | `pebble::mem` | `LinearArena` scratch allocator rolled back cleanly each fixed tick. |
 | `containers::union_find` | Disjoint contact graph island clustering and sleeping. |
 | `akruti` | SAT 2-point manifold contact generation, continuous collision detection (CCD), and Voronoi fracture. |

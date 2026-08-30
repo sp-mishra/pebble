@@ -44,8 +44,8 @@ namespace akruti {
 [[nodiscard]] inline Vec sdf_gradient(const OrientedBox& obb, Vec p) noexcept {
     const Vec diff = p - obb.center;
     // Local coords
-    const Vec local{obb.rot.m00 * diff.x + obb.rot.m10 * diff.y,
-                    obb.rot.m01 * diff.x + obb.rot.m11 * diff.y};
+    const Vec local{obb.rot(0,0) * diff.x + obb.rot(1,0) * diff.y,
+                    obb.rot(0,1) * diff.x + obb.rot(1,1) * diff.y};
     const Box local_box{{0, 0}, obb.half};
     const Vec local_grad = sdf_gradient(local_box, local);
     // Rotate back to world: R * local_grad

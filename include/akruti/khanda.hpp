@@ -329,7 +329,8 @@ static_assert(TriangulatorBackend<EarClipTriangulator>);
         cx += (double(a.x) + double(b.x) + double(c.x)) * (tri_area / 3.0);
         cy += (double(a.y) + double(b.y) + double(c.y)) * (tri_area / 3.0);
 
-        auto dot2 = [](Vec u, Vec v) { return double(u.x) * double(v.x) + double(u.y) * double(v.y); };
+        // dot2: scalar inner product for akruti::Vec (double precision for inertia accumulation)
+        auto dot2 = [](Vec u, Vec v) noexcept { return double(akruti::dot(u, v)); };
         const double sum_dots = dot2(a, a) + dot2(b, b) + dot2(c, c) +
                                 dot2(a, b) + dot2(b, c) + dot2(c, a);
         I_origin += (tri_area / 6.0) * sum_dots;

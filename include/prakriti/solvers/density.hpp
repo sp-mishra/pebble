@@ -9,6 +9,7 @@
 #include "kernels.hpp"
 #include "../material/eos.hpp"
 #include <containers/numeric/math_vector.hpp>
+#include <containers/matrix/static.hpp>
 #include <vector>
 #include <cmath>
 
@@ -40,15 +41,19 @@ struct DensitySolver {
 
             ctx.grid.for_each_neighbor(P.pred_x[i], P.pred_y[i], h, [&](Index j, Scalar) {
                 const pebble::math::vec2 pj_v = P.pred_v(j);
-                const Scalar r2 = pebble::math::length_sq(pi_v - pj_v);
+                const pebble::math::vec2 diff = pi_v - pj_v;
+                const Scalar r2 = ga::nrm2_sq(ga::Vec2<Scalar>{diff[0], diff[1]});
                 rho += cfg.particle_mass * kernels::poly6(r2, h);
-                const pebble::math::vec2 g = kernels::spiky_grad(pi_v - pj_v, h);
+                const pebble::math::vec2 g = kernels::spiky_grad(diff, h);
                 grad_i = grad_i + g;
-                if (j != i) sum_grad2 += pebble::math::length_sq(g);
+                if (j != i) {
+                    const Scalar g2 = ga::nrm2_sq(ga::Vec2<Scalar>{g[0], g[1]});
+                    sum_grad2 += g2;
+                }
             });
             P.density[i] = rho;
             const Scalar C = std::max(Scalar(0), rho / cfg.rest_density - Scalar(1));
-            sum_grad2 += pebble::math::length_sq(grad_i);
+            sum_grad2 += ga::nrm2_sq(ga::Vec2<Scalar>{grad_i[0], grad_i[1]});
             lambda_[i] = C > Scalar(0) ? -C / (sum_grad2 + cfg.relaxation_eps) : Scalar(0);
 
             const MaterialParams& p = ctx.params_of(i);
@@ -66,7 +71,7 @@ struct DensitySolver {
                 if (P.f_liquid[i] < Scalar(0.5)) continue;
                 if (ctx.grid.particle_color(i) != color) continue;
 
-                pebble::math::vec2 dpi{0.0f, 0.0f};
+                ga::Vec2<Scalar> dpi{Scalar(0), Scalar(0)};
                 pebble::math::vec2 color_grad{0.0f, 0.0f};
                 const pebble::math::vec2 pi_v = P.pred_v(i);
                 const MaterialId mi = P.material[i];
@@ -74,7 +79,8 @@ struct DensitySolver {
                 ctx.grid.for_each_neighbor(P.pred_x[i], P.pred_y[i], h, [&](Index j, Scalar) {
                     if (j == i) return;
                     const pebble::math::vec2 pj_v = P.pred_v(j);
-                    const Scalar r2 = pebble::math::length_sq(pi_v - pj_v);
+                    const pebble::math::vec2 diff = pi_v - pj_v;
+                    const Scalar r2 = ga::nrm2_sq(ga::Vec2<Scalar>{diff[0], diff[1]});
                     Scalar scorr = Scalar(0);
                     if (inv_wdq > Scalar(0)) {
                         const Scalar ratio = kernels::poly6(r2, h) * inv_wdq;
@@ -90,11 +96,13 @@ struct DensitySolver {
                             scorr = -cfg.scorr_k * p;
                         }
                     }
-                    const pebble::math::vec2 g = kernels::spiky_grad(pi_v - pj_v, h);
+                    const pebble::math::vec2 g = kernels::spiky_grad(diff, h);
                     const Scalar sum_lambda = lambda_[i] + lambda_[j];
                     if (sum_lambda < Scalar(0)) {
                         const Scalar scale = (sum_lambda + scorr) / cfg.rest_density;
-                        dpi = dpi + g * scale;
+                        // dpi += scale * g  (ga::axpy: y += alpha * x)
+                        const ga::Vec2<Scalar> gv{g[0], g[1]};
+                        ga::axpy(scale, gv, dpi);
                     }
 
                     // Multiphase Interfacial Tension: Repel different fluid materials across boundary
@@ -104,30 +112,35 @@ struct DensitySolver {
                 });
 
                 // Apply interfacial surface tension along color field normal
-                const Scalar cg_len_sq = pebble::math::length_sq(color_grad);
+                const Scalar cg_len_sq = ga::nrm2_sq(ga::Vec2<Scalar>{color_grad[0], color_grad[1]});
                 if (cg_len_sq > Scalar(1e-6)) {
                     const Scalar cg_len = std::sqrt(cg_len_sq);
                     const pebble::math::vec2 n_inter = color_grad * (Scalar(1) / cg_len);
                     const Scalar tension = std::min(cg_len * Scalar(0.01) * h, Scalar(0.02) * h);
-                    dpi = dpi - n_inter * tension;
+                    const ga::Vec2<Scalar> n_inter_v{n_inter[0], n_inter[1]};
+                    ga::axpy(-tension, n_inter_v, dpi);
                 }
 
                 // Numerical stability: Clamp maximum position delta per solver iteration to prevent geyser pops
-                const Scalar dp_len_sq = pebble::math::length_sq(dpi);
-                const Scalar max_dp = Scalar(0.12) * h; // Gentle physical separation limit (~1.9px at h=16)
+                const Scalar dp_len_sq = ga::nrm2_sq(dpi);
+                const Scalar max_dp = Scalar(0.12) * h;
                 if (dp_len_sq > max_dp * max_dp) {
-                    dpi = dpi * (max_dp / std::sqrt(dp_len_sq));
+                    const Scalar inv_len = Scalar(1) / std::sqrt(dp_len_sq);
+                    dpi = dpi * (max_dp * inv_len);
                 }
 
-                dp_[i] = dpi;
+                dp_[i] = pebble::math::vec2{dpi(0,0), dpi(1,0)};
             }
         }
 
-        // 3. Apply position corrections (skip static particles).
+        // 3. Apply position corrections via ga::axpy: pred_pos += dp  (skip static particles).
         for (Index i = 0; i < n; ++i) {
             if (P.f_liquid[i] < Scalar(0.5) || P.is_static(i)) continue;
-            P.pred_x[i] += dp_[i][0];
-            P.pred_y[i] += dp_[i][1];
+            ga::Vec2<Scalar> pos{P.pred_x[i], P.pred_y[i]};
+            const ga::Vec2<Scalar> dp{dp_[i][0], dp_[i][1]};
+            ga::axpy(Scalar(1), dp, pos);
+            P.pred_x[i] = pos(0,0);
+            P.pred_y[i] = pos(1,0);
         }
 
         // 4. XSPH Artificial Viscosity & 2D Vorticity Confinement (Macklin & Müller 2013)
@@ -144,11 +157,12 @@ struct DensitySolver {
             ctx.grid.for_each_neighbor(P.pred_x[i], P.pred_y[i], h, [&](Index j, Scalar) {
                 if (j == i) return;
                 const pebble::math::vec2 pj_v = P.pred_v(j);
-                const Scalar r2 = pebble::math::length_sq(pi_v - pj_v);
+                const pebble::math::vec2 diff = pi_v - pj_v;
+                const Scalar r2 = ga::nrm2_sq(ga::Vec2<Scalar>{diff[0], diff[1]});
                 const Scalar w = kernels::poly6(r2, h);
                 const pebble::math::vec2 dv = P.vel_v(j) - vi;
                 v_smooth = v_smooth + dv * w;
-                const pebble::math::vec2 g = kernels::spiky_grad(pi_v - pj_v, h);
+                const pebble::math::vec2 g = kernels::spiky_grad(diff, h);
                 omega_i += (dv[1] * g[0] - dv[0] * g[1]);
                 w_sum += w;
             });

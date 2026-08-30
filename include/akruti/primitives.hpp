@@ -85,14 +85,14 @@ struct OrientedBox {
     Mat2<Scalar> rot{1, 0, 0, 1}; // forward rotation matrix (local to world)
 
     [[nodiscard]] static OrientedBox from_angle(Vec center, Vec half, Scalar radians) noexcept {
-        return {center, half, Mat2<Scalar>::rotation(radians)};
+        return {center, half, akruti::make_rotation2d<Scalar>(radians)};
     }
 
     [[nodiscard]] Scalar sdf(Vec p) const noexcept {
         // Map p to local unrotated space: p_local = rot^T * (p - center)
         const Vec diff = p - center;
-        const Vec local{rot.m00 * diff.x + rot.m10 * diff.y,
-                        rot.m01 * diff.x + diff.y * rot.m11};
+        const Vec local{rot(0,0) * diff.x + rot(1,0) * diff.y,
+                        rot(0,1) * diff.x + diff.y * rot(1,1)};
         const Vec q{std::fabs(local.x) - half.x, std::fabs(local.y) - half.y};
         const Vec qp{std::max(q.x, Scalar(0)), std::max(q.y, Scalar(0))};
         return qp.len() + std::min(std::max(q.x, q.y), Scalar(0));
@@ -100,15 +100,15 @@ struct OrientedBox {
 
     [[nodiscard]] Box2 aabb() const noexcept {
         // Extents along world axes: e_x = |rot00|*hx + |rot01|*hy
-        const Scalar ex = std::fabs(rot.m00) * half.x + std::fabs(rot.m01) * half.y;
-        const Scalar ey = std::fabs(rot.m10) * half.x + std::fabs(rot.m11) * half.y;
+        const Scalar ex = std::fabs(rot(0,0)) * half.x + std::fabs(rot(0,1)) * half.y;
+        const Scalar ey = std::fabs(rot(1,0)) * half.x + std::fabs(rot(1,1)) * half.y;
         return {{center.x - ex, center.y - ey}, {center.x + ex, center.y + ey}};
     }
 
     [[nodiscard]] Vec support(Vec d) const noexcept {
         // Transform direction to local, find support on unrotated box, rotate back
-        const Vec d_local{rot.m00 * d.x + rot.m10 * d.y,
-                          rot.m01 * d.x + d.y * rot.m11};
+        const Vec d_local{rot(0,0) * d.x + rot(1,0) * d.y,
+                          rot(0,1) * d.x + d.y * rot(1,1)};
         const Vec sup_local{d_local.x >= 0 ? half.x : -half.x,
                             d_local.y >= 0 ? half.y : -half.y};
         return center + rot * sup_local;
@@ -194,8 +194,8 @@ struct Sector {
     [[nodiscard]] Scalar sdf(Vec p) const noexcept {
         const Vec diff = p - center;
         // Map to local unrotated space where cone axis is +X
-        const Vec q{rot.m00 * diff.x + rot.m10 * diff.y,
-                    rot.m01 * diff.x + diff.y * rot.m11};
+        const Vec q{rot(0,0) * diff.x + rot(1,0) * diff.y,
+                    rot(0,1) * diff.x + diff.y * rot(1,1)};
         const Scalar len = q.len();
         const Scalar sin_a = std::sin(half_angle), cos_a = std::cos(half_angle);
         const Vec cs{cos_a, sin_a};
@@ -216,8 +216,8 @@ struct Sector {
 
     [[nodiscard]] Vec support(Vec d) const noexcept {
         // Transform direction d into local coordinate system of the sector
-        const Vec local_d{rot.m00 * d.x + rot.m10 * d.y,
-                          rot.m01 * d.x + d.y * rot.m11};
+        const Vec local_d{rot(0,0) * d.x + rot(1,0) * d.y,
+                          rot(0,1) * d.x + d.y * rot(1,1)};
 
         // Candidate 1: Apex (center)
         Vec best_p{0, 0};
@@ -245,8 +245,8 @@ struct Sector {
         }
 
         // Transform best point back to world coordinates
-        return center + Vec{rot.m00 * best_p.x + rot.m01 * best_p.y,
-                            rot.m10 * best_p.x + rot.m11 * best_p.y};
+        return center + Vec{rot(0,0) * best_p.x + rot(0,1) * best_p.y,
+                            rot(1,0) * best_p.x + rot(1,1) * best_p.y};
     }
     [[nodiscard]] constexpr Vec centroid() const noexcept { return center; }
 };

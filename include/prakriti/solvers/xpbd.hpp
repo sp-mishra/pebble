@@ -6,6 +6,7 @@
 // ============================================================================
 #include "solver_base.hpp"
 #include <containers/numeric/math_vector.hpp>
+#include <containers/matrix/static.hpp>
 #include <containers/cache/kosha.hpp>
 #include <vector>
 #include <cstdint>
@@ -70,9 +71,16 @@ struct XpbdSolver {
             lambda_[e] = final_lambda;
             (void)warm_start_cache_.put(edge_key, final_lambda);
 
-            const pebble::math::vec2 corr = grad * dlambda;
-            P.pred_x[ia] += corr[0] * wa; P.pred_y[ia] += corr[1] * wa;
-            P.pred_x[ib] -= corr[0] * wb; P.pred_y[ib] -= corr[1] * wb;
+            // Apply position corrections: pred_pos_a += wa * corr; pred_pos_b -= wb * corr
+            // ga::axpy(alpha, x, y): y += alpha * x — two BLAS axpy calls replace four scalar lines
+            const ga::Vec2<Scalar> corr{grad[0] * dlambda, grad[1] * dlambda};
+            ga::Vec2<Scalar> pa_pos{P.pred_x[ia], P.pred_y[ia]};
+            ga::Vec2<Scalar> pb_pos{P.pred_x[ib], P.pred_y[ib]};
+            ga::axpy( wa, corr, pa_pos);
+            ga::axpy(-wb, corr, pb_pos);
+            P.pred_x[ia] = pa_pos(0,0); P.pred_y[ia] = pa_pos(1,0);
+            P.pred_x[ib] = pb_pos(0,0); P.pred_y[ib] = pb_pos(1,0);
+
             E.strain[e] = C / (E.rest_len[e] > Scalar(0) ? E.rest_len[e] : Scalar(1));
         }
     }

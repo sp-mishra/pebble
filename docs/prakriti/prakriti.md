@@ -279,7 +279,8 @@ for (int frame = 0; frame < 60; ++frame) {
 
 | Subsystem | Component Used | Purpose in Prakriti |
 |:---|:---|:---|
-| `pebble::math` | `math_vector.hpp` | `vec2`, `mat2`, `aabb2`, `dot`, `cross`, `length_sq`, `normalize`. |
+| `pebble::math` | `math_vector.hpp` | `vec2`, `aabb2`, `dot`, `cross`, `normalize`; `length_sq` replaced by `ga::nrm2_sq` on hot paths. |
+| `containers::matrix` | `static.hpp` | `ga::StaticMatrix<T,2,2>` for rotation/basis; `ga::nrm2_sq` replaces `length_sq` in SPH kernels and thermal solver; `ga::axpy` drives XPBD and density position-correction loops. Backends: `ScalarBackend`, `HighwayBackend`, `PravahaBackend` — all aliases defined in `prakriti/compute/backends.hpp`. |
 | `kosha` | `LRUCache.hpp` | XPBD constraint Lagrange multiplier warm-starting across substeps. |
 | `containers` | `union_find.hpp` | Connected-component graph partitioning during structural fracture. |
 | `mem` | `LinearArena.hpp` | Per-frame spatial hash neighbor pair scratch arena. |

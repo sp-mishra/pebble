@@ -114,8 +114,8 @@ struct Manifold {
 [[nodiscard]] inline Manifold collide_circle_obb(const Circle& a, const OrientedBox& b) noexcept {
     const Vec diff = a.center - b.center;
     // Map circle center to local unrotated OBB frame
-    const Vec local_c{b.rot.m00 * diff.x + b.rot.m10 * diff.y,
-                      b.rot.m01 * diff.x + diff.y * b.rot.m11};
+    const Vec local_c{b.rot(0,0) * diff.x + b.rot(1,0) * diff.y,
+                      b.rot(0,1) * diff.x + diff.y * b.rot(1,1)};
     const Circle local_circle{local_c, a.radius};
     const Box local_box{{0, 0}, b.half};
 
@@ -313,12 +313,12 @@ struct Manifold {
 // 8. Capsule ↔ OBB
 [[nodiscard]] inline Manifold collide_capsule_obb(const Capsule& a, const OrientedBox& b) noexcept {
     const Vec diff_a = a.a - b.center;
-    const Vec local_a{b.rot.m00 * diff_a.x + b.rot.m10 * diff_a.y,
-                      b.rot.m01 * diff_a.x + diff_a.y * b.rot.m11};
+    const Vec local_a{b.rot(0,0) * diff_a.x + b.rot(1,0) * diff_a.y,
+                      b.rot(0,1) * diff_a.x + diff_a.y * b.rot(1,1)};
 
     const Vec diff_b = a.b - b.center;
-    const Vec local_b{b.rot.m00 * diff_b.x + b.rot.m10 * diff_b.y,
-                      b.rot.m01 * diff_b.x + diff_b.y * b.rot.m11};
+    const Vec local_b{b.rot(0,0) * diff_b.x + b.rot(1,0) * diff_b.y,
+                      b.rot(0,1) * diff_b.x + diff_b.y * b.rot(1,1)};
 
     const Box local_box{{0, 0}, b.half};
     const Circle local_ca{local_a, a.radius};
@@ -460,8 +460,8 @@ inline void clip_segment_to_line(std::array<Vec, 2>& out_pts, int& out_count,
 
 // 11. OBB ↔ Triangle (5-axis SAT with clipping)
 [[nodiscard]] inline Manifold collide_obb_triangle(const OrientedBox& a, const Triangle& b) noexcept {
-    const Vec ax = Vec{a.rot.m00, a.rot.m10};
-    const Vec ay = Vec{a.rot.m01, a.rot.m11};
+    const Vec ax = Vec{a.rot(0,0), a.rot(1,0)};
+    const Vec ay = Vec{a.rot(0,1), a.rot(1,1)};
     const std::array<Vec, 5> axes = {
         ax, ay,
         Vec{-(b.b.y - b.a.y), b.b.x - b.a.x}.normalized(),
@@ -514,10 +514,10 @@ inline void clip_segment_to_line(std::array<Vec, 2>& out_pts, int& out_count,
 
 // 12. OBB ↔ OBB (4-axis SAT with 2-Point Edge Clipping)
 [[nodiscard]] inline Manifold collide_obb_obb(const OrientedBox& a, const OrientedBox& b) noexcept {
-    const Vec ax = Vec{a.rot.m00, a.rot.m10};
-    const Vec ay = Vec{a.rot.m01, a.rot.m11};
-    const Vec bx = Vec{b.rot.m00, b.rot.m10};
-    const Vec by = Vec{b.rot.m01, b.rot.m11};
+    const Vec ax = Vec{a.rot(0,0), a.rot(1,0)};
+    const Vec ay = Vec{a.rot(0,1), a.rot(1,1)};
+    const Vec bx = Vec{b.rot(0,0), b.rot(1,0)};
+    const Vec by = Vec{b.rot(0,1), b.rot(1,1)};
 
     const std::array<Vec, 4> axes = {ax, ay, bx, by};
     const Vec diff = b.center - a.center;

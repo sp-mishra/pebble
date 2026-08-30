@@ -3,16 +3,18 @@
 // gati/math.hpp — Direct Pebble Math Integrations & Interpolation Utilities
 // ============================================================================
 // Zero wrapper types: uses pebble::math directly from containers/numeric/math_vector.hpp.
+// Mat2 is ga::StaticMatrix<float,2,2> — canonical 2×2 shared with akruti and the matrix library.
 // ============================================================================
 
 #include "containers/numeric/math_vector.hpp"
+#include "containers/matrix/static.hpp"
 #include <cmath>
 
 namespace gati {
 
 using Scalar = float;
 using Vec2   = pebble::math::vec2;
-using Mat2   = pebble::math::mat2;
+using Mat2   = ga::StaticMatrix<float, 2, 2>;
 using AABB   = pebble::math::aabb2;
 
 // Scalar lerp

@@ -4,6 +4,7 @@
 #include "contact_constraint.hpp"
 #include "solver_concepts.hpp"
 #include "island.hpp"
+#include <containers/matrix/static.hpp>
 #include <cmath>
 #include <algorithm>
 
@@ -37,20 +38,19 @@ struct SequentialImpulseSolver {
             c.restitution = std::max(bA.restitution, bB.restitution);
             c.friction = std::sqrt(bA.friction * bB.friction);
 
-            // Effective normal mass: 1 / (inv_mA + inv_mB + (rA x n)^2 * inv_IA + (rB x n)^2 * inv_IB)
-            const float rnA = akruti::cross(c.r_a, c.normal);
-            const float rnB = akruti::cross(c.r_b, c.normal);
-            const float kNormal = bA.inv_mass + bB.inv_mass +
-                                  (rnA * rnA) * bA.inv_inertia +
-                                  (rnB * rnB) * bB.inv_inertia;
+            // Effective normal mass: J·diag(M⁻¹)·Jᵀ = quad_form_2d(body, r, n)
+            // where quad_form_2d(inv_mass, inv_inertia, r, n) = inv_mass + (r×n)²·inv_inertia
+            const ga::Vec2<float> r_a{c.r_a.x, c.r_a.y};
+            const ga::Vec2<float> r_b{c.r_b.x, c.r_b.y};
+            const ga::Vec2<float> n{c.normal.x, c.normal.y};
+            const ga::Vec2<float> t{c.tangent.x, c.tangent.y};
+
+            const float kNormal = ga::quad_form_2d(bA.inv_mass, bA.inv_inertia, r_a, n)
+                                + ga::quad_form_2d(bB.inv_mass, bB.inv_inertia, r_b, n);
             c.effective_mass_normal = kNormal > 1e-6f ? 1.0f / kNormal : 0.0f;
 
-            // Effective tangent mass
-            const float rtA = akruti::cross(c.r_a, c.tangent);
-            const float rtB = akruti::cross(c.r_b, c.tangent);
-            const float kTangent = bA.inv_mass + bB.inv_mass +
-                                   (rtA * rtA) * bA.inv_inertia +
-                                   (rtB * rtB) * bB.inv_inertia;
+            const float kTangent = ga::quad_form_2d(bA.inv_mass, bA.inv_inertia, r_a, t)
+                                 + ga::quad_form_2d(bB.inv_mass, bB.inv_inertia, r_b, t);
             c.effective_mass_tangent = kTangent > 1e-6f ? 1.0f / kTangent : 0.0f;
 
             // Baumgarte stabilization bias for penetration resolution
@@ -136,15 +136,20 @@ struct SequentialImpulseSolver {
                 auto& bB = ctx.bodies[c.body_b];
 
                 const float correction_mag = std::max(0.0f, c.penetration - slop) / (bA.inv_mass + bB.inv_mass + 1e-6f) * percent;
-                const akruti::Vec corr = c.normal * correction_mag;
+                const ga::Vec2<float> corr{c.normal.x * correction_mag, c.normal.y * correction_mag};
 
+                // position ← position − inv_mass * corr  (ga::axpy: y += alpha * x)
                 if (!bA.is_static()) {
-                    bA.position[0] -= corr.x * bA.inv_mass;
-                    bA.position[1] -= corr.y * bA.inv_mass;
+                    ga::Vec2<float> pos_a{bA.position[0], bA.position[1]};
+                    ga::axpy(-bA.inv_mass, corr, pos_a);
+                    bA.position[0] = pos_a(0,0);
+                    bA.position[1] = pos_a(1,0);
                 }
                 if (!bB.is_static()) {
-                    bB.position[0] += corr.x * bB.inv_mass;
-                    bB.position[1] += corr.y * bB.inv_mass;
+                    ga::Vec2<float> pos_b{bB.position[0], bB.position[1]};
+                    ga::axpy(bB.inv_mass, corr, pos_b);
+                    bB.position[0] = pos_b(0,0);
+                    bB.position[1] = pos_b(1,0);
                 }
             }
         }

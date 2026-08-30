@@ -7,6 +7,7 @@
 #include "solver_base.hpp"
 #include "kernels.hpp"
 #include <containers/numeric/math_vector.hpp>
+#include <containers/matrix/static.hpp>
 #include <vector>
 
 namespace prakriti {
@@ -31,7 +32,8 @@ struct ThermalSolver {
             const pebble::math::vec2 pi_v = P.pred_v(i);
             ctx.grid.for_each_neighbor(P.pred_x[i], P.pred_y[i], h, [&](Index j, Scalar) {
                 if (j == i) return;
-                const Scalar r2 = pebble::math::length_sq(pi_v - P.pred_v(j));
+                const pebble::math::vec2 diff = pi_v - P.pred_v(j);
+                const Scalar r2 = ga::nrm2_sq(ga::Vec2<Scalar>{diff[0], diff[1]});
                 const Scalar w = kernels::poly6(r2, h);
                 if (w <= Scalar(0)) return;
                 delta_[i] += ki * cfg.diffusivity * w * (P.temperature[j] - P.temperature[i]);
