@@ -17,7 +17,7 @@
   ┌──────────────────────────────────────────┴─────────────────────────────────────────────┐
   │        petika::Petika<Engine, Serializer, Comparator, DurabilityPolicy,                │
   │                        TelemetryPolicy, ConcurrencyPolicy,                             │
-  │                        WriteBuffer, BloomFilter>                                       │
+  │                        WriteBuffer, BloomFilter, SnapshotGCPolicy>                     │
   │                                                                                        │
   │  Storage Engines (Zero-Virtual Concepts):    Common Infrastructure Substrate:          │
   │  - JournaledSkipEngine (O(log N) SkipList)   - petika::AsyncPersistenceWorker          │
@@ -124,23 +124,22 @@ struct SectorPayload {
 };
 
 int main() {
-    petika::AsyncPersistenceWorker worker(
-        "./cold_storage",
-        [](const std::string& path, const std::string& json_data) {
-            // Background write execution
-            std::ofstream out(path, std::ios::binary);
-            out << json_data;
-        },
-        512 // Ring buffer capacity
-    );
+    // RecordType = SectorPayload; ring capacity 512; default GlazeJsonPolicy.
+    petika::AsyncPersistenceWorker<SectorPayload, 512> worker;
+
+    // Surface silent data loss (overflow drops, serialize/write failures).
+    worker.set_error_callback([](petika::WorkerError err, std::string_view path) {
+        std::cerr << "persist error on " << path << "\n";
+    });
 
     SectorPayload sec{.sector_x = 10, .sector_y = -5, .masses = {10.0f, 25.0f, 40.0f}};
-    std::string serialized = glz::write_json(sec).value_or("{}");
 
-    // Zero-latency enqueue from main simulation thread
-    worker.enqueue("./cold_storage/sec_10_-5.json", std::move(serialized));
+    // Zero-latency enqueue from main simulation thread — worker serializes on
+    // its own thread. Move large payloads. Returns false only under Reject when
+    // the ring is full.
+    worker.enqueue(std::move(sec), "./cold_storage/sec_10_-5.json");
 
-    // Clean drain and shutdown
+    // Clean drain and shutdown (destructor also drains).
     worker.stop();
 }
 ```
@@ -233,18 +232,19 @@ auto token = cache.get("session_id");
 
 ## 6. Policy Reference
 
-`Petika<Engine, Serializer, Comparator, DurabilityPolicy, TelemetryPolicy, ConcurrencyPolicy, WriteBuffer, BloomFilter>`
+`Petika<Engine, Serializer, Comparator, DurabilityPolicy, TelemetryPolicy, ConcurrencyPolicy, WriteBuffer, BloomFilter, SnapshotGCPolicy>`
 
 | Parameter | Default | Alternatives | Purpose |
 |---|---|---|---|
-| `Engine` | — (required) | `JournaledSkipEngine`, `MvccJournaledSkipEngine` | Storage engine |
-| `Serializer` | `StringSerializer` | `BinarySerializer`, `ViewSerializer` | Key/value encode/decode |
+| `Engine` | — (required) | `JournaledSkipEngine`, `MvccJournaledSkipEngine`, `BTreeEngine` | Storage engine (Engine↔Substrate: each satisfies the `StorageEngine`/`BatchEngine` concepts; MVCC keeps version chains, `BTreeEngine` keeps one live version over `BPlusMap`) |
+| `Serializer` | `StringSerializer` | `BinarySerializer`, `ViewSerializer` | Key/value encode/decode. `BinarySerializer` is **endianness-canonical** (little-endian on the wire, no-op byteswap on LE hosts) so a store written on one arch replays byte-identically on another |
 | `Comparator` | `LexicalComparator` | Custom (supply `operator()` + `three_way()`) | Key ordering & scan termination |
 | `DurabilityPolicy` | `nitya::wal<>` | Custom WAL with matching `append`/`sync`/`recover` API | Write-ahead log backend |
 | `TelemetryPolicy` | `nitya::nadi_telemetry` | `nitya::null_telemetry` | Tracing/profiling spans |
 | `ConcurrencyPolicy` | `std::shared_mutex` | `NullMutex` (single-threaded) | Reader/writer lock |
-| `WriteBuffer` | `ImmediateCommitPolicy` | `GroupCommitPolicy<N>` | WAL write coalescing |
+| `WriteBuffer` | `ImmediateCommitPolicy` | `GroupCommitPolicy<N>` | WAL write coalescing. `ImmediateCommitPolicy` is a pass-through (every mutation appended at once); `GroupCommitPolicy<N>` stages up to `N` mutations then flushes them as a single `commit_batch` → one `wal_->append` envelope, amortising fsync/append cost |
 | `BloomFilter` | `NoBloomFilter` | `BloomFilterPolicy<Bits>` | Probabilistic miss-skip |
+| `SnapshotGCPolicy` | `NoGC` | `EpochBasedGC` | When to reclaim MVCC versions below the minimum live snapshot. `NoGC` never prunes; `EpochBasedGC` tracks a live-snapshot horizon and periodically drives the engine's `prune()`. No-op on single-version engines (`BTreeEngine`) which expose no `prune()` |
 
 ### Pre-built Aliases
 
@@ -257,6 +257,7 @@ auto token = cache.get("session_id");
 | `SingleVersionStringSkipStore` | `JournaledSkipEngine<string,string>` | `std::shared_mutex` | Single-version string store |
 | `SingleThreadSkipStore<K,V>` | `MvccJournaledSkipEngine<K,V>` | `NullMutex` | Zero-overhead single-threaded store |
 | `BloomSkipStore<K,V,Bits>` | `MvccJournaledSkipEngine<K,V>` | `std::shared_mutex` | Bloom-filtered for miss-heavy reads |
+| `BTreeStore<K,V>` | `BTreeEngine<K,V>` | `std::shared_mutex` | B+Tree-backed store (`ImmediateCommitPolicy`); single live version per key, lock-free leaf-chain scans |
 
 ### `scan_view()` — C++23 Range-Compatible Scan
 
@@ -270,6 +271,14 @@ for (const auto& entry : store.scan_view("user:100", "user:200")) {
 auto keys = store.scan_view("a", "z")
     | std::views::transform([](const auto& e) { return e.key; });
 ```
+
+**Laziness.** Over `BTreeEngine`, `scan_view` is a genuine lazy `std::ranges::view`:
+the leaf chain is a lock-free forward cursor, so the underlying `std::generator`
+pulls one entry per iteration and stops at the consumed prefix — breaking early
+walks no further. MVCC engines hold a read-lock for the duration of a scan, so
+they fall back to an eager materialisation (selected via `if constexpr` on
+whether the engine exposes `scan_lazy`); the range interface is identical either
+way.
 
 ### `SingleThreadSkipStore` — Zero-Cost Single-Threaded Use
 
@@ -291,8 +300,22 @@ versions is gone. The `SerializationPolicy` template parameter (default:
 `GlazeJsonPolicy`) allows swapping JSON for binary/CBOR formats without
 changing call sites.
 
+**Overflow handling.** A fourth template parameter `OverflowPolicy` (default
+`Reject`) decides what `enqueue()` does when the SPSC ring is full:
+
+| `OverflowPolicy` | Behaviour when full | Consumer path |
+|---|---|---|
+| `Reject` (default) | Drop the incoming item, return `false`. Zero overhead — matches legacy behaviour | Lock-free |
+| `Block` | Producer-side back-pressure: yield-spin until a slot frees, then push. Never drops | Lock-free |
+| `DropOldest` | Evict the oldest queued item to make room, return `true` | Eviction + worker-pop serialised under a mutex (the only policy where the producer pops, so it must not race the single consumer) |
+
+**Loss observability.** `set_error_callback(cb)` surfaces otherwise-silent data
+loss: `cb(WorkerError, std::string_view path)` fires on `OverflowDropped` (producer
+thread), and on `SerializeFailed` / `WriteFailed` (worker thread). Unset = legacy
+silent behaviour. Keep the callback cheap and thread-safe.
+
 ```cpp
-// Custom binary policy example:
+// Custom binary policy + non-dropping back-pressure.
 struct MsgpackPolicy {
     template <typename T>
     static bool serialize(const T& data, std::string& out) {
@@ -300,6 +323,7 @@ struct MsgpackPolicy {
         return true;
     }
 };
-petika::AsyncPersistenceWorker<MyRecord, 256, MsgpackPolicy> worker;
+petika::AsyncPersistenceWorker<MyRecord, 256, MsgpackPolicy,
+                               petika::OverflowPolicy::Block> worker;
 worker.enqueue(MyRecord{...}, "/path/to/output.bin");
 ```

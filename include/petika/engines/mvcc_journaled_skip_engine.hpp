@@ -18,6 +18,7 @@ namespace petika {
         using key_type = Key;
         using value_type = Value;
         using comparator_type = Comparator;
+        static constexpr std::size_t max_level = MaxLevel; // forwarded (was previously discarded)
         using store_type = anukrama::store<Key, Value, Comparator>;
 
         struct EntryView {
@@ -42,6 +43,10 @@ namespace petika {
         [[nodiscard]] bool contains(const Key& key) const { return values_.contains(key); }
         [[nodiscard]] std::size_t size() const noexcept { return values_.size(); }
         [[nodiscard]] bool empty() const noexcept { return size() == 0; }
+
+        // Reclaim MVCC history unreachable by any live snapshot. Petika's
+        // SnapshotGCPolicy drives when this is safe to call (periodic prune).
+        void prune() { values_.prune(); }
 
         // O(N) clear — Anukrama has no single-epoch truncation API.
         // TODO: add anukrama::store::clear_epoch() to reduce this to O(1) publish.

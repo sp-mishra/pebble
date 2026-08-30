@@ -31,6 +31,8 @@ Pebble is a modern, header-only, policy-based C++23 systems library engineered f
 * **Petika** (`include/petika/`) — Unified, engine-agnostic storage framework and platform. Decouples application storage APIs from physical engine architectures.
   * **`petika::Petika`**: Storage hub supporting CRUD, transactions, snapshots, and recovery.
   * **`petika::MvccJournaledSkipEngine`**: Default Anukrama-backed MVCC SkipList engine with stable LSN snapshots and Nitya log replay. `JournaledSkipEngine` remains available through explicit `SingleVersion*` aliases.
+  * **`petika::BTreeEngine`**: B+Tree-backed single-version engine (`BTreeStore<K,V>` alias) with O(N) `from_sorted` recovery and genuinely lazy, lock-free leaf-chain `scan_view`.
+  * Nine composable policies (engine, serializer, comparator, durability, telemetry, concurrency, write-buffer, bloom, snapshot-GC): `GroupCommitPolicy<N>` WAL coalescing, `EpochBasedGC` version reclamation, endianness-canonical `BinarySerializer`, and an `OverflowPolicy`-driven async persistence worker.
   * **`kosha::adapter::PetikaAdapter`**: High-performance Kosha cache storage adapter.
   * Documentation: [`docs/petika/petika.md`](docs/petika/petika.md)
 * **Nitya** (`include/nitya/`) — Generic Durable Log Engine (DLE). Byte-offset LSN, Reserve $\to$ Publish $\to$ Sync pipeline, Setu memory mapping, streaming recovery, replication streams, and EasyRules retention/archival.

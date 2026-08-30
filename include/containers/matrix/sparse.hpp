@@ -16,6 +16,7 @@
 #include <containers/matrix/dense.hpp>
 #include <algorithm>
 #include <cstddef>
+#include <limits>
 #include <numeric>
 #include <stdexcept>
 #include <vector>
@@ -62,9 +63,15 @@ namespace ga {
                 const std::vector<std::size_t>& cols,
                 const std::vector<T>& vals) {
             const std::size_t nnz = vals.size();
+            if (rows.size() != nnz || cols.size() != nnz)
+                throw std::invalid_argument("from_triplets: rows/cols/vals size mismatch");
             CsrMatrix mat(r, c);
             // count nnz per row
-            for (std::size_t k = 0; k < nnz; ++k) ++mat.row_ptr[rows[k] + 1];
+            for (std::size_t k = 0; k < nnz; ++k) {
+                if (rows[k] >= r || cols[k] >= c)
+                    throw std::out_of_range("from_triplets: triplet index out of bounds");
+                ++mat.row_ptr[rows[k] + 1];
+            }
             for (std::size_t i = 1; i <= r; ++i) mat.row_ptr[i] += mat.row_ptr[i-1];
             mat.values.resize(nnz);
             mat.col_idx.resize(nnz);
@@ -74,21 +81,53 @@ namespace ga {
                 mat.values[dest]  = vals[k];
                 mat.col_idx[dest] = cols[k];
             }
-            // sort columns within each row
+            // sort columns within each row and coalesce duplicates by summation
+            std::vector<T> coalesced_values;
+            std::vector<std::size_t> coalesced_cols;
+            std::vector<std::size_t> coalesced_row_ptr(r + 1, 0);
+            coalesced_values.reserve(nnz);
+            coalesced_cols.reserve(nnz);
             for (std::size_t i = 0; i < r; ++i) {
                 std::size_t beg = mat.row_ptr[i], end = mat.row_ptr[i+1];
-                // insertion sort (typically short)
-                for (std::size_t j = beg+1; j < end; ++j) {
-                    std::size_t kc = mat.col_idx[j]; T kv = mat.values[j];
-                    std::size_t k = j;
-                    while (k > beg && mat.col_idx[k-1] > kc) {
-                        mat.col_idx[k] = mat.col_idx[k-1];
-                        mat.values[k]  = mat.values[k-1];
-                        --k;
+                std::vector<std::size_t> ord(end - beg);
+                std::iota(ord.begin(), ord.end(), std::size_t{0});
+                std::sort(ord.begin(), ord.end(), [&](std::size_t a, std::size_t b) {
+                    return mat.col_idx[beg + a] < mat.col_idx[beg + b];
+                });
+
+                bool first = true;
+                std::size_t last_col = 0;
+                T acc{};
+                for (std::size_t local : ord) {
+                    const std::size_t col = mat.col_idx[beg + local];
+                    const T val = mat.values[beg + local];
+                    if (first) {
+                        first = false;
+                        last_col = col;
+                        acc = val;
+                        continue;
                     }
-                    mat.col_idx[k] = kc; mat.values[k] = kv;
+                    if (col == last_col) {
+                        acc += val;
+                    } else {
+                        if (acc != T{0}) {
+                            coalesced_cols.push_back(last_col);
+                            coalesced_values.push_back(acc);
+                        }
+                        last_col = col;
+                        acc = val;
+                    }
                 }
+                if (!first && acc != T{0}) {
+                    coalesced_cols.push_back(last_col);
+                    coalesced_values.push_back(acc);
+                }
+                coalesced_row_ptr[i + 1] = coalesced_values.size();
             }
+
+            mat.values = std::move(coalesced_values);
+            mat.col_idx = std::move(coalesced_cols);
+            mat.row_ptr = std::move(coalesced_row_ptr);
             return mat;
         }
     };
@@ -278,6 +317,7 @@ namespace ga {
         std::vector<std::size_t> perm;
         perm.reserve(N);
         std::vector<bool> eliminated(N, false);
+        std::vector<std::size_t> mark(N, std::numeric_limits<std::size_t>::max());
 
         for (std::size_t step = 0; step < N; ++step) {
             // find node with minimum external degree
@@ -294,11 +334,13 @@ namespace ga {
             // connect neighbours of best to each other (fill-in approximation)
             std::vector<std::size_t> nbrs;
             for (std::size_t j : adj[best]) if (!eliminated[j]) nbrs.push_back(j);
+            const std::size_t stamp = step;
+            for (std::size_t b : nbrs) mark[b] = stamp;
             for (std::size_t a : nbrs) {
+                auto& va = adj[a];
+                for (std::size_t u : va) mark[u] = stamp + 1;
                 for (std::size_t b : nbrs) {
-                    if (a == b) continue;
-                    auto& va = adj[a];
-                    if (std::find(va.begin(), va.end(), b) == va.end())
+                    if (a != b && mark[b] == stamp)
                         va.push_back(b);
                 }
             }

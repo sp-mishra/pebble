@@ -14,7 +14,7 @@
 //     - Operational Policies & Automation: EasyRules
 //
 // Policy Parameters (Petika template):
-//   Engine             — storage engine (JournaledSkipEngine, MvccJournaledSkipEngine, …)
+//   Engine             — storage engine (JournaledSkipEngine, MvccJournaledSkipEngine, BTreeEngine, …)
 //   Serializer         — key/value encode/decode (StringSerializer, BinarySerializer, ViewSerializer)
 //   Comparator         — key ordering (LexicalComparator, custom)
 //   DurabilityPolicy   — WAL backend (nitya::wal<>)
@@ -22,44 +22,44 @@
 //   ConcurrencyPolicy  — mutex (std::shared_mutex, NullMutex for single-thread)
 //   WriteBufferPolicy  — commit coalescing (ImmediateCommitPolicy, GroupCommitPolicy<N>)
 //   BloomFilterPolicy  — probabilistic key existence (NoBloomFilter, BloomFilterPolicy<Bits>)
+//   SnapshotGCPolicy   — MVCC version reclamation (NoGC, EpochBasedGC)
 //
 // Zero virtual functions, zero RTTI, zero macros, modern C++23.
+// WAL wire format is little-endian-canonical (see serializer.hpp) — portable across hosts.
 // ============================================================================
 
 #include "petika/engine.hpp"
 #include "petika/serializer.hpp"
 #include "petika/engines/journaled_skip_engine.hpp"
 #include "petika/engines/mvcc_journaled_skip_engine.hpp"
+#include "petika/engines/btree_engine.hpp"
 #include "nitya/nitya.hpp"
-#include "utils/setu.hpp"
 #include "mem/smriti.hpp"
-#include "containers/lockfree/MPMCQueue.hpp"
-#include "observability/nadi.hpp"
-#include "rules/easy_rules.hpp"
 
 #include <algorithm>
 #include <array>
-#include <bit>
-#include <chrono>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <filesystem>
 #include <functional>
-#include <iterator>
+#if __has_include(<generator>)
+#  include <generator>
+#endif
+#include <limits>
 #include <memory>
-#include <optional>
-#include <ranges>
 #include <shared_mutex>
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace petika {
@@ -78,15 +78,100 @@ namespace petika {
     // ============================================================================
     // WriteBuffer Policies
     // ============================================================================
+    //
+    // A WriteBufferPolicy decides whether each mutation commits immediately or is
+    // coalesced with others into a single batched WAL append + fsync. The policy
+    // owns no durability logic itself — it only answers "flush now?" and holds the
+    // staged mutations until Petika drains them.
+    //
+    //   is_immediate          — compile-time tag; true => Petika keeps the original
+    //                           single-record fast path (zero buffering overhead).
+    //   stage(mutation)       — buffer a mutation; returns true when the buffer
+    //                           should be flushed (threshold reached).
+    //   drain()               — hand back the staged mutations and clear the buffer.
+    //   pending()             — count currently buffered (for flush-on-close / size()).
+    //
+    // The staging *object* (a GroupCommitPolicy<N>::staging<Mutation>, or nothing
+    // for the immediate path) is what Petika drives, so the contract is expressed
+    // against that staging type S: stage(m)->bool, pending()->size_t, drain()->
+    // vector<Mutation>. A policy is a valid WriteBuffer if it is immediate, or it
+    // exposes such a staging type for the mutation shape.
+    template <typename S, typename Mutation>
+    concept WriteBufferStaging = requires(S& s, Mutation m) {
+        { s.stage(std::move(m)) } -> std::same_as<bool>;
+        { s.pending() } -> std::same_as<std::size_t>;
+        { s.drain() } -> std::same_as<std::vector<Mutation>>;
+    };
 
-    // Default: each put/erase immediately writes a WAL record (original behaviour).
-    struct ImmediateCommitPolicy {};
+    // True when W exposes a nested staging<Mutation> modelling WriteBufferStaging.
+    // Written as a requires-expression so a missing staging<> is a clean false
+    // (SFINAE) rather than a hard error during concept normalisation.
+    template <typename W, typename Mutation>
+    concept HasWriteBufferStaging = requires {
+        typename W::template staging<Mutation>;
+    } && WriteBufferStaging<typename W::template staging<Mutation>, Mutation>;
 
-    // GroupCommitPolicy: accumulates up to BufferSize puts per-thread, then
-    // flushes as a single WAL batch. Reduces lock acquisitions and WAL appends.
+    template <typename W, typename Mutation>
+    concept WriteBufferPolicy = requires {
+        { W::is_immediate } -> std::convertible_to<bool>;
+    } && (W::is_immediate || HasWriteBufferStaging<W, Mutation>);
+
+    // Default: each put/erase immediately writes a WAL record (original behaviour,
+    // zero buffering — Petika never touches the staging vector on this path).
+    struct ImmediateCommitPolicy {
+        static constexpr bool is_immediate = true;
+        // These members satisfy the concept but are never exercised on the fast path.
+        template <typename M> bool stage(M&&) noexcept { return true; }
+        [[nodiscard]] std::size_t pending() const noexcept { return 0; }
+    };
+
+    // GroupCommitPolicy: accumulates up to BufferSize mutations, then signals a
+    // flush. Petika drains them into one batched WAL append + single sync,
+    // amortising fsync cost across writes. Composes with Nitya's own durability-
+    // layer group commit — this batches at the application layer.
     template <std::size_t BufferSize = 256>
     struct GroupCommitPolicy {
+        static_assert(BufferSize > 0, "GroupCommitPolicy buffer size must be positive");
+        static constexpr bool is_immediate = false;
         static constexpr std::size_t buffer_size = BufferSize;
+
+        template <typename Mutation>
+        struct staging {
+            std::vector<Mutation> buffer;
+            bool stage(Mutation m) {
+                buffer.push_back(std::move(m));
+                return buffer.size() >= BufferSize;
+            }
+            [[nodiscard]] std::size_t pending() const noexcept { return buffer.size(); }
+            std::vector<Mutation> drain() { return std::exchange(buffer, {}); }
+        };
+    };
+
+    // ============================================================================
+    // Encode-staging scratch — thread-local Smriti arena
+    // ============================================================================
+    //
+    // WAL records are encoded into a thread-local Smriti bump arena instead of a
+    // fixed-size stack buffer, removing the old 4096/512-byte magic caps: any
+    // value size now stays on the fast (arena) path, and the arena's memory is
+    // reused across calls. Oversized records (larger than the arena block) fall
+    // back to a heap buffer transparently. The arena is reset per encode, so it
+    // never accumulates across calls.
+    struct EncodeScratch {
+        static constexpr std::size_t kArenaBytes = 64 * 1024; // per-thread staging arena
+
+        // Returns a writable span of at least `n` bytes. Memory is valid until the
+        // next call to acquire() on the same thread. `heap` is a fallback owner used
+        // only when the request exceeds the arena block.
+        [[nodiscard]] static std::span<std::byte> acquire(std::size_t n, std::vector<std::byte>& heap) {
+            static thread_local smriti::pools::BumpPool<smriti::domains::SystemRAMDomain> arena{kArenaBytes};
+            arena.reset();
+            if (void* p = arena.allocate(n, alignof(std::max_align_t))) {
+                return {static_cast<std::byte*>(p), n};
+            }
+            heap.resize(n);
+            return {heap.data(), n};
+        }
     };
 
     // ============================================================================
@@ -211,7 +296,16 @@ namespace petika {
         };
 
         Transaction(StoreType& store, const nitya::lsn_t snapshot_lsn)
-            : store_{store}, snapshot_lsn_{snapshot_lsn} {}
+            : store_{&store}, snapshot_lsn_{snapshot_lsn}, active_{true} {}
+
+        Transaction(const Transaction&) = delete;
+        Transaction& operator=(const Transaction&) = delete;
+        Transaction(Transaction&& o) noexcept
+            : store_{o.store_}, snapshot_lsn_{o.snapshot_lsn_}, active_{std::exchange(o.active_, false)},
+              mutations_{std::move(o.mutations_)}, observations_{std::move(o.observations_)},
+              mutation_index_{std::move(o.mutation_index_)}, observed_keys_{std::move(o.observed_keys_)} {}
+        Transaction& operator=(Transaction&&) = delete;
+        ~Transaction() { release_snapshot(); }
 
         Result<void> put(key_type key, value_type val) {
             observe_write(key);
@@ -237,25 +331,21 @@ namespace petika {
             }
             if constexpr (requires(const StoreType& store, const key_type& k, nitya::lsn_t at) {
                 { store.get_at(k, at) } -> std::same_as<Result<value_type>>;
-            }) return store_.get_at(key, snapshot_lsn_);
-            else return store_.get(key);
+            }) return store_->get_at(key, snapshot_lsn_);
+            else return store_->get(key);
         }
 
         Result<void> commit() {
-            auto result = store_.commit_batch(mutations_, observations_);
+            auto result = store_->commit_batch(mutations_, observations_);
             if (!result) return result;
-            mutations_.clear();
-            observations_.clear();
-            mutation_index_.clear();
-            observed_keys_.clear();
+            clear_state();
+            release_snapshot();
             return {};
         }
 
         void abort() noexcept {
-            mutations_.clear();
-            observations_.clear();
-            mutation_index_.clear();
-            observed_keys_.clear();
+            clear_state();
+            release_snapshot();
         }
 
     private:
@@ -264,11 +354,23 @@ namespace petika {
             if (!observed_keys_.insert(key).second) return;
             if constexpr (requires(const StoreType& store, const key_type& k, nitya::lsn_t at) {
                 { store.version_at(k, at) } -> std::same_as<nitya::lsn_t>;
-            }) observations_.push_back({key, store_.version_at(key, snapshot_lsn_)});
+            }) observations_.push_back({key, store_->version_at(key, snapshot_lsn_)});
         }
 
-        StoreType& store_;
+        void clear_state() noexcept {
+            mutations_.clear();
+            observations_.clear();
+            mutation_index_.clear();
+            observed_keys_.clear();
+        }
+
+        void release_snapshot() noexcept {
+            if (active_) { store_->gc().release_snapshot(snapshot_lsn_); active_ = false; }
+        }
+
+        StoreType* store_;
         nitya::lsn_t snapshot_lsn_{};
+        bool active_{false};
         std::vector<Mutation> mutations_;
         std::vector<Observation> observations_;
         std::unordered_map<key_type, std::size_t> mutation_index_;   // key -> latest mutation idx
@@ -280,9 +382,25 @@ namespace petika {
     public:
         using key_type = typename StoreType::key_type;
         using value_type = typename StoreType::value_type;
+        using gc_type = typename StoreType::snapshot_gc_type;
 
-        Snapshot(std::uint64_t snap_id, nitya::lsn_t snap_lsn, const StoreType& store)
-            : id_{snap_id}, snapshot_lsn_{snap_lsn}, store_{store} {}
+        Snapshot(std::uint64_t snap_id, nitya::lsn_t snap_lsn, const StoreType& store, gc_type& gc)
+            : id_{snap_id}, snapshot_lsn_{snap_lsn}, store_{&store}, gc_{&gc} {}
+
+        Snapshot(const Snapshot&) = delete;
+        Snapshot& operator=(const Snapshot&) = delete;
+        Snapshot(Snapshot&& o) noexcept
+            : id_{o.id_}, snapshot_lsn_{o.snapshot_lsn_}, store_{o.store_},
+              gc_{std::exchange(o.gc_, nullptr)} {}
+        Snapshot& operator=(Snapshot&& o) noexcept {
+            if (this != &o) {
+                release();
+                id_ = o.id_; snapshot_lsn_ = o.snapshot_lsn_; store_ = o.store_;
+                gc_ = std::exchange(o.gc_, nullptr);
+            }
+            return *this;
+        }
+        ~Snapshot() { release(); }
 
         [[nodiscard]] std::uint64_t id() const noexcept { return id_; }
         [[nodiscard]] nitya::lsn_t lsn() const noexcept { return snapshot_lsn_; }
@@ -290,19 +408,29 @@ namespace petika {
         Result<value_type> get(const key_type& key) const {
             if constexpr (requires(const StoreType& store, const key_type& k, nitya::lsn_t at) {
                 { store.engine().get_at(k, at) } -> std::same_as<Result<value_type>>;
-            }) return store_.engine().get_at(key, snapshot_lsn_);
-            else return store_.get(key);
+            }) return store_->engine().get_at(key, snapshot_lsn_);
+            else return store_->get(key);
         }
 
     private:
+        void release() noexcept {
+            if (gc_) { gc_->release_snapshot(snapshot_lsn_); gc_ = nullptr; }
+        }
         std::uint64_t id_;
         nitya::lsn_t snapshot_lsn_;
-        const StoreType& store_;
+        const StoreType* store_;
+        gc_type* gc_;
     };
 
     // ============================================================================
-    // ScanView — C++23 ranges-compatible lazy scan over engine results
+    // ScanView — C++23 ranges-compatible scan over engine results
     // ============================================================================
+    //
+    // When the engine exposes a lazy cursor (`scan_lazy` -> std::generator), the
+    // view pulls entries on demand: iterating and breaking early stops the engine
+    // walk at the consumed prefix — no whole-range materialisation. Engines without
+    // a cursor (or toolchains lacking <generator>) fall back to eager buffering via
+    // if constexpr, preserving range compatibility.
     template <typename Engine>
     class ScanView {
     public:
@@ -310,26 +438,64 @@ namespace petika {
         using value_type = typename Engine::value_type;
         using entry_type = typename Engine::EntryView;
 
-        // Eagerly materialises the range from the engine into a vector for range
-        // compatibility. For truly lazy iteration, callers use the scan() callback.
-        ScanView(const Engine& engine, const key_type& first, const key_type& last) {
-            engine.scan(first, last, [&](const auto& entry) {
-                entries_.push_back({entry.key, entry.value, entry.lsn});
-            });
-        }
-
         struct OwnedEntry {
             key_type key;
             value_type value;
             nitya::lsn_t lsn{};
         };
 
-        auto begin() const noexcept { return entries_.begin(); }
-        auto end()   const noexcept { return entries_.end(); }
-        [[nodiscard]] std::size_t size() const noexcept { return entries_.size(); }
-        [[nodiscard]] bool empty() const noexcept { return entries_.empty(); }
+#if defined(__cpp_lib_generator) && __cpp_lib_generator >= 202207L
+        // The engine exposes a lazy cursor if it can yield OUR element type as a
+        // std::generator. Templating on OwnedEntry keeps the element type shared
+        // across the view/engine boundary (a std::generator<A> is not
+        // convertible to std::generator<B> even for layout-identical A/B).
+        static constexpr bool kEngineHasCursor = requires(const Engine& e, const key_type& a, const key_type& b) {
+            { e.template scan_lazy<OwnedEntry>(a, b) } -> std::same_as<std::generator<OwnedEntry>>;
+        };
+#else
+        static constexpr bool kEngineHasCursor = false;
+#endif
+
+        ScanView(const Engine& engine, const key_type& first, const key_type& last) {
+            if constexpr (kEngineHasCursor) {
+#if defined(__cpp_lib_generator) && __cpp_lib_generator >= 202207L
+                gen_ = engine.template scan_lazy<OwnedEntry>(first, last); // lazy: nothing walked until iterated
+#endif
+            } else {
+                // Eager fallback: materialise via the callback scan.
+                engine.scan(first, last, [&](const auto& entry) {
+                    entries_.push_back({entry.key, entry.value, entry.lsn});
+                });
+            }
+        }
+
+        auto begin() const noexcept {
+            if constexpr (kEngineHasCursor) {
+#if defined(__cpp_lib_generator) && __cpp_lib_generator >= 202207L
+                return gen_.begin();
+#endif
+            } else {
+                return entries_.begin();
+            }
+        }
+        auto end() const noexcept {
+            if constexpr (kEngineHasCursor) {
+#if defined(__cpp_lib_generator) && __cpp_lib_generator >= 202207L
+                return gen_.end();
+#endif
+            } else {
+                return entries_.end();
+            }
+        }
+        [[nodiscard]] std::size_t size() const noexcept
+            requires (!kEngineHasCursor) { return entries_.size(); }
+        [[nodiscard]] bool empty() const noexcept
+            requires (!kEngineHasCursor) { return entries_.empty(); }
 
     private:
+#if defined(__cpp_lib_generator) && __cpp_lib_generator >= 202207L
+        mutable std::generator<OwnedEntry> gen_{};
+#endif
         std::vector<OwnedEntry> entries_;
     };
 
@@ -344,7 +510,8 @@ namespace petika {
         typename TelemetryPolicy = nitya::nadi_telemetry,
         typename ConcurrencyPolicy = std::shared_mutex,
         typename WriteBuffer = ImmediateCommitPolicy,
-        typename BloomFilter = NoBloomFilter
+        typename BloomFilter = NoBloomFilter,
+        typename SnapshotGCPolicy = NoGC
     >
     class Petika {
     public:
@@ -353,12 +520,35 @@ namespace petika {
         using engine_type = Engine;
         using serializer_type = Serializer;
         using comparator_type = Comparator;
+        using snapshot_gc_type = SnapshotGCPolicy;
 
         struct entry_type {
             key_type key;
             value_type value;
             nitya::lsn_t lsn{};
         };
+
+        // ------------------------------------------------------------------------
+        // Contract enforcement — crisp diagnostics instead of deep template errors.
+        // Only the *required* engine surface and the serializer/mutex shapes are
+        // asserted; optional MVCC capabilities (get_at/version_at/validate_observations)
+        // stay if-constexpr-detected because not every engine provides them.
+        // ------------------------------------------------------------------------
+        static_assert(StorageEngine<Engine, key_type, value_type>,
+            "Petika Engine must satisfy the StorageEngine concept "
+            "(put/get/erase/contains/size/empty/clear/apply_log_record returning Result<T>).");
+        static_assert(SerializerFor<Serializer, key_type, value_type>,
+            "Petika Serializer must satisfy SerializerFor<Serializer, Key, Value> "
+            "(serialize_key/value + deserialize_key/value).");
+        static_assert(MutexPolicy<ConcurrencyPolicy> ||
+                      requires(ConcurrencyPolicy& m) { m.lock(); m.unlock(); m.lock_shared(); m.unlock_shared(); },
+            "Petika ConcurrencyPolicy must provide lock/unlock/lock_shared/unlock_shared "
+            "(std::shared_mutex or NullMutex satisfy this).");
+        static_assert(SnapshotGCPolicyConcept<SnapshotGCPolicy>,
+            "Petika SnapshotGCPolicy must satisfy SnapshotGCPolicyConcept "
+            "(min_snapshot_lsn/register_snapshot/release_snapshot). Use NoGC or EpochBasedGC.");
+        static_assert(WriteBufferPolicy<WriteBuffer, typename Transaction<Petika>::Mutation> || WriteBuffer::is_immediate,
+            "Petika WriteBuffer must be ImmediateCommitPolicy or GroupCommitPolicy<N>.");
 
         explicit Petika(PetikaOptions opts = PetikaOptions{})
             : opts_{std::move(opts)}, engine_{}, manifest_{} {
@@ -376,11 +566,23 @@ namespace petika {
             wal_ = std::make_unique<DurabilityPolicy>(wal_opts);
 
             if (opts_.auto_recovery) {
-                (void)recover();
+                // Best-effort at construction: a recovery error leaves the store
+                // empty rather than aborting. Callers wanting hard-fail semantics
+                // should disable auto_recovery and call recover() explicitly.
+                std::ignore = recover();
             }
         }
 
-        ~Petika() = default;
+        ~Petika() {
+            // Flush any records still buffered by a GroupCommitPolicy before teardown.
+            if constexpr (!WriteBuffer::is_immediate) {
+                // Nothing actionable remains at teardown; the buffered records are
+                // lost if the final append fails (documented durability boundary
+                // of GroupCommitPolicy — flush() explicitly before destruction to
+                // observe the result).
+                std::ignore = flush_write_buffer();
+            }
+        }
         Petika(const Petika&) = delete;
         Petika& operator=(const Petika&) = delete;
         Petika(Petika&&) noexcept = default;
@@ -390,6 +592,9 @@ namespace petika {
         // CRUD Operations
         // ------------------------------------------------------------------------
         Result<void> put(const key_type& key, const value_type& value) {
+            if constexpr (!WriteBuffer::is_immediate) {
+                return stage_mutation({EntryOp::Put, key, value});
+            }
             // Serialise outside the lock — only WAL append + engine update need it.
             auto telemetry = TelemetryPolicy::trace_publish();
             (void)telemetry;
@@ -397,15 +602,11 @@ namespace petika {
             const std::string k_str = Serializer::serialize_key(key);
             const std::string v_str = Serializer::serialize_value(value);
 
-            // Zero-alloc WAL encode into thread-local stack buffer.
-            thread_local std::array<std::byte, 4096> tl_buf{};
+            // Zero-alloc WAL encode into a thread-local Smriti staging arena.
             const std::size_t needed = WalPayloadCodec::encode_size(k_str, v_str);
             std::vector<std::byte> heap_buf;
-            std::byte* buf = tl_buf.data();
-            if (needed > tl_buf.size()) {
-                heap_buf.resize(needed);
-                buf = heap_buf.data();
-            }
+            const auto scratch = EncodeScratch::acquire(needed, heap_buf);
+            std::byte* buf = scratch.data();
             const std::size_t encoded_sz = WalPayloadCodec::encode_to(buf, EntryOp::Put, k_str, v_str);
 
             std::unique_lock lock{commit_mutex_};
@@ -425,6 +626,7 @@ namespace petika {
             manifest_.last_lsn = lsn;
             manifest_.record_count = engine_.size();
             manifest_.wal_bytes_written += encoded_sz;
+            maybe_prune();
             return {};
         }
 
@@ -449,15 +651,14 @@ namespace petika {
         }
 
         Result<void> erase(const key_type& key) {
+            if constexpr (!WriteBuffer::is_immediate) {
+                return stage_mutation({EntryOp::Delete, key, value_type{}});
+            }
             const std::string k_str = Serializer::serialize_key(key);
             const std::size_t needed = WalPayloadCodec::encode_size(k_str, "");
-            thread_local std::array<std::byte, 512> tl_buf{};
             std::vector<std::byte> heap_buf;
-            std::byte* buf = tl_buf.data();
-            if (needed > tl_buf.size()) {
-                heap_buf.resize(needed);
-                buf = heap_buf.data();
-            }
+            const auto scratch = EncodeScratch::acquire(needed, heap_buf);
+            std::byte* buf = scratch.data();
             const std::size_t encoded_sz = WalPayloadCodec::encode_to(buf, EntryOp::Delete, k_str, "");
 
             std::unique_lock lock{commit_mutex_};
@@ -475,6 +676,7 @@ namespace petika {
             manifest_.last_lsn = lsn;
             manifest_.record_count = engine_.size();
             manifest_.wal_bytes_written += encoded_sz;
+            maybe_prune();
             return {};
         }
 
@@ -543,6 +745,7 @@ namespace petika {
             manifest_.last_lsn = *lsn;
             manifest_.record_count = engine_.size();
             manifest_.wal_bytes_written += envelope.size();
+            maybe_prune();
             return {};
         }
 
@@ -569,14 +772,30 @@ namespace petika {
         // ------------------------------------------------------------------------
         Transaction<Petika> transaction() {
             std::shared_lock lock{commit_mutex_}; // shared — read of last_lsn only
-            return Transaction<Petika>{*this, manifest_.last_lsn};
+            const nitya::lsn_t snap = manifest_.last_lsn;
+            gc_.register_snapshot(snap);
+            return Transaction<Petika>{*this, snap};
         }
 
         Snapshot<Petika> snapshot() const {
             std::shared_lock lock{commit_mutex_}; // shared — read of last_lsn only
             const std::uint64_t next_id = ++next_snapshot_id_;
-            return Snapshot<Petika>{next_id, manifest_.last_lsn, *this};
+            const nitya::lsn_t snap = manifest_.last_lsn;
+            gc_.register_snapshot(snap);
+            return Snapshot<Petika>{next_id, snap, *this, gc_};
         }
+
+        // Explicit flush of any GroupCommit-buffered mutations. No-op for
+        // ImmediateCommitPolicy. Call before a hard stop or when latency of the
+        // last few buffered writes matters.
+        Result<void> flush() {
+            if constexpr (!WriteBuffer::is_immediate) return flush_write_buffer();
+            else return {};
+        }
+
+        // GC accessor for cooperative reclamation control.
+        SnapshotGCPolicy& gc() noexcept { return gc_; }
+        const SnapshotGCPolicy& gc() const noexcept { return gc_; }
 
         // ------------------------------------------------------------------------
         // Recovery Engine
@@ -664,6 +883,57 @@ namespace petika {
         // Custom policies must satisfy MutexPolicy concept.
         using MutexT = ConcurrencyPolicy;
 
+        // Staging type for GroupCommit; empty for the immediate fast path.
+        template <typename W>
+        struct buffer_of { using type = std::monostate; };
+        template <std::size_t N>
+        struct buffer_of<GroupCommitPolicy<N>> {
+            using type = typename GroupCommitPolicy<N>::template staging<mutation_type>;
+        };
+
+        // Stage a mutation into the group-commit buffer; flush when the policy signals.
+        Result<void> stage_mutation(mutation_type m) {
+            std::vector<mutation_type> to_flush;
+            {
+                std::unique_lock lock{commit_mutex_};
+                const bool flush_now = stage_buffer_.stage(std::move(m));
+                if (!flush_now) return {};
+                to_flush = stage_buffer_.drain();
+            }
+            return commit_batch(to_flush);
+        }
+
+        // Drain and commit whatever remains in the group-commit buffer.
+        Result<void> flush_write_buffer() {
+            std::vector<mutation_type> to_flush;
+            {
+                std::unique_lock lock{commit_mutex_};
+                if (stage_buffer_.pending() == 0) return {};
+                to_flush = stage_buffer_.drain();
+            }
+            return commit_batch(to_flush);
+        }
+
+        // Cooperative MVCC reclamation: when the GC policy tracks snapshots and the
+        // engine exposes prune(), reclaim dead versions bounded by live snapshots.
+        // No-op for NoGC or engines without prune(). Called on a write threshold.
+        void maybe_prune() {
+            if constexpr (!std::is_same_v<SnapshotGCPolicy, NoGC>) {
+                if constexpr (requires(Engine& e) { e.prune(); }) {
+                    if (++writes_since_prune_ >= kPruneInterval) {
+                        writes_since_prune_ = 0;
+                        // Only prune when no snapshot pins an older version horizon.
+                        if (gc_.min_snapshot_lsn() > manifest_.compaction_lsn) {
+                            engine_.prune();
+                            manifest_.compaction_lsn = manifest_.last_lsn;
+                        }
+                    }
+                }
+            }
+        }
+
+        static constexpr std::size_t kPruneInterval = 4096;
+
         PetikaOptions opts_;
         Engine engine_;
         std::unique_ptr<DurabilityPolicy> wal_;
@@ -671,6 +941,9 @@ namespace petika {
         mutable std::atomic<std::uint64_t> next_snapshot_id_{0};
         mutable MutexT commit_mutex_;
         [[no_unique_address]] BloomFilter bloom_;
+        mutable SnapshotGCPolicy gc_;
+        [[no_unique_address]] typename buffer_of<WriteBuffer>::type stage_buffer_;
+        std::size_t writes_since_prune_{0};
     };
 
     // ============================================================================
@@ -718,5 +991,44 @@ namespace petika {
                                   std::shared_mutex,
                                   ImmediateCommitPolicy,
                                   BloomFilterPolicy<BloomBits>>;
+
+    // High-throughput variant: application-layer group commit coalesces up to N
+    // writes into one WAL append + fsync.
+    template <typename Key, typename Value, std::size_t Coalesce = 256,
+              typename Comparator = LexicalComparator>
+    using GroupCommitSkipStore = Petika<MvccJournaledSkipEngine<Key, Value, Comparator>,
+                                        BinarySerializer,
+                                        Comparator,
+                                        nitya::wal<>,
+                                        nitya::nadi_telemetry,
+                                        std::shared_mutex,
+                                        GroupCommitPolicy<Coalesce>>;
+
+    // Long-running MVCC variant: epoch-based snapshot GC drives version reclamation
+    // so version chains stay bounded across the process lifetime.
+    template <typename Key, typename Value, typename Comparator = LexicalComparator>
+    using GcSkipStore = Petika<MvccJournaledSkipEngine<Key, Value, Comparator>,
+                               BinarySerializer,
+                               Comparator,
+                               nitya::wal<>,
+                               nitya::nadi_telemetry,
+                               std::shared_mutex,
+                               ImmediateCommitPolicy,
+                               NoBloomFilter,
+                               EpochBasedGC>;
+
+    // B+Tree-backed store. Single live version per key (no MVCC history), a
+    // lock-free leaf-chain cursor (genuine lazy scan_view), and O(N) recovery via
+    // BPlusMap::from_sorted. std::less<Key> unlocks the SIMD membership probe for
+    // numeric keys; swap the engine's Allocator for a Smriti arena tier (§6.3 of
+    // docs/containers/bplus_tree.md) to bound node churn.
+    template <typename Key, typename Value, typename Comparator = LexicalComparator>
+    using BTreeStore = Petika<BTreeEngine<Key, Value, std::less<Key>>,
+                              BinarySerializer,
+                              Comparator,
+                              nitya::wal<>,
+                              nitya::nadi_telemetry,
+                              std::shared_mutex,
+                              ImmediateCommitPolicy>;
 
 } // namespace petika

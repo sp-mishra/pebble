@@ -5,6 +5,7 @@
 
 #include "petika/engine.hpp"
 
+#include <bit>
 #include <compare>
 #include <concepts>
 #include <cstdint>
@@ -17,6 +18,30 @@
 #include <vector>
 
 namespace petika {
+    // ============================================================================
+    // § 0  Endianness Normalisation — LE-canonical wire format
+    // ============================================================================
+    //
+    // The WAL wire format is a durability contract: a log written on one host must
+    // be readable on any other. Multi-byte integer fields are therefore stored
+    // little-endian-canonical. On little-endian hosts (the common case) every
+    // conversion is a compile-time no-op, so the hot path stays zero-cost; on
+    // big-endian hosts the bytes are swapped on encode and decode.
+    namespace detail {
+        template <typename T>
+            requires std::is_integral_v<T>
+        [[nodiscard]] constexpr T to_le(T value) noexcept {
+            if constexpr (std::endian::native == std::endian::big) return std::byteswap(value);
+            else return value;
+        }
+
+        template <typename T>
+            requires std::is_integral_v<T>
+        [[nodiscard]] constexpr T from_le(T value) noexcept {
+            return to_le(value); // byteswap is its own inverse
+        }
+    } // namespace detail
+
     // ============================================================================
     // § 1  Serializer Concepts & Implementations
     // ============================================================================
@@ -41,47 +66,55 @@ namespace petika {
     };
 
     struct BinarySerializer {
+        // Integral keys/values are stored little-endian-canonical for cross-host
+        // WAL portability (no-op on LE hosts). Non-integral trivially-copyable
+        // types keep native byte order — the caller owns their portability.
         template <typename T>
             requires std::is_trivially_copyable_v<T>
-        static std::string serialize_key(const T& k) {
-            std::string s(sizeof(T), '\0');
-            std::memcpy(s.data(), &k, sizeof(T));
-            return s;
-        }
+        static std::string serialize_key(const T& k) { return encode_scalar(k); }
 
         template <typename T>
             requires std::is_trivially_copyable_v<T>
-        static std::string serialize_value(const T& v) {
-            std::string s(sizeof(T), '\0');
-            std::memcpy(s.data(), &v, sizeof(T));
-            return s;
-        }
+        static std::string serialize_value(const T& v) { return encode_scalar(v); }
 
         template <typename T>
             requires std::is_trivially_copyable_v<T>
-        static T deserialize_key(std::string_view sv) {
-            T val{};
-            if (sv.size() >= sizeof(T)) {
-                std::memcpy(&val, sv.data(), sizeof(T));
-            }
-            return val;
-        }
+        static T deserialize_key(std::string_view sv) { return decode_scalar<T>(sv); }
 
         template <typename T>
             requires std::is_trivially_copyable_v<T>
-        static T deserialize_value(std::string_view sv) {
-            T val{};
-            if (sv.size() >= sizeof(T)) {
-                std::memcpy(&val, sv.data(), sizeof(T));
-            }
-            return val;
-        }
+        static T deserialize_value(std::string_view sv) { return decode_scalar<T>(sv); }
 
         // Specializations for std::string
         static std::string serialize_key(const std::string& k) { return k; }
         static std::string serialize_value(const std::string& v) { return v; }
         static std::string deserialize_key(std::string_view sv) { return std::string(sv); }
         static std::string deserialize_value(std::string_view sv) { return std::string(sv); }
+
+    private:
+        template <typename T>
+            requires std::is_trivially_copyable_v<T>
+        static std::string encode_scalar(const T& v) {
+            std::string s(sizeof(T), '\0');
+            if constexpr (std::is_integral_v<T>) {
+                const T le = detail::to_le(v);
+                std::memcpy(s.data(), &le, sizeof(T));
+            } else {
+                std::memcpy(s.data(), &v, sizeof(T));
+            }
+            return s;
+        }
+
+        template <typename T>
+            requires std::is_trivially_copyable_v<T>
+        static T decode_scalar(std::string_view sv) {
+            T val{};
+            if (sv.size() >= sizeof(T)) {
+                std::memcpy(&val, sv.data(), sizeof(T));
+                if constexpr (std::is_integral_v<T>) val = detail::from_le(val);
+            }
+            return val;
+        }
     };
 
     // ViewSerializer: zero-copy views into WAL buffer memory.
@@ -97,7 +130,8 @@ namespace petika {
     // § 2  WAL Payload Codec
     // ============================================================================
 
-    // Wire format: [uint8_t op][uint32_t key_len][key_bytes][uint32_t val_len][val_bytes]
+    // Wire format (LE-canonical): [uint8_t op][uint32_t key_len][key_bytes][uint32_t val_len][val_bytes]
+    // Length prefixes are stored little-endian for cross-host recovery portability.
     struct WalPayloadCodec {
         // Returns byte count written. `buf` must be at least encode_size(k, v) bytes.
         static std::size_t encode_size(std::string_view k, std::string_view v) noexcept {
@@ -107,14 +141,14 @@ namespace petika {
         // Zero-allocation variant: writes into caller-supplied buffer, returns bytes written.
         static std::size_t encode_to(std::byte* buf, EntryOp op,
                                       std::string_view k, std::string_view v) noexcept {
-            const auto k_len = static_cast<std::uint32_t>(k.size());
-            const auto v_len = static_cast<std::uint32_t>(v.size());
+            const auto k_len = detail::to_le(static_cast<std::uint32_t>(k.size()));
+            const auto v_len = detail::to_le(static_cast<std::uint32_t>(v.size()));
             std::byte* p = buf;
             *reinterpret_cast<std::uint8_t*>(p) = static_cast<std::uint8_t>(op); p += 1;
             std::memcpy(p, &k_len, 4); p += 4;
-            if (k_len) { std::memcpy(p, k.data(), k_len); p += k_len; }
+            if (!k.empty()) { std::memcpy(p, k.data(), k.size()); p += k.size(); }
             std::memcpy(p, &v_len, 4); p += 4;
-            if (v_len) { std::memcpy(p, v.data(), v_len); p += v_len; }
+            if (!v.empty()) { std::memcpy(p, v.data(), v.size()); p += v.size(); }
             return static_cast<std::size_t>(p - buf);
         }
 
@@ -135,6 +169,7 @@ namespace petika {
 
             std::uint32_t k_len = 0;
             std::memcpy(&k_len, ptr, sizeof(std::uint32_t));
+            k_len = detail::from_le(k_len);
             ptr += sizeof(std::uint32_t);
 
             if (payload.size() < sizeof(std::uint8_t) + 2 * sizeof(std::uint32_t) + k_len) return std::nullopt;
@@ -143,6 +178,7 @@ namespace petika {
 
             std::uint32_t v_len = 0;
             std::memcpy(&v_len, ptr, sizeof(std::uint32_t));
+            v_len = detail::from_le(v_len);
             ptr += sizeof(std::uint32_t);
 
             if (payload.size() < sizeof(std::uint8_t) + 2 * sizeof(std::uint32_t) + k_len + v_len) return std::nullopt;
@@ -157,12 +193,12 @@ namespace petika {
             std::vector<std::byte> out(bytes);
             auto* p = out.data();
             *reinterpret_cast<std::uint8_t*>(p) = static_cast<std::uint8_t>(EntryOp::Batch); ++p;
-            const auto count = static_cast<std::uint32_t>(records.size());
+            const auto count = detail::to_le(static_cast<std::uint32_t>(records.size()));
             std::memcpy(p, &count, sizeof(count)); p += sizeof(count);
             for (const auto& r : records) {
-                const auto n = static_cast<std::uint32_t>(r.size());
+                const auto n = detail::to_le(static_cast<std::uint32_t>(r.size()));
                 std::memcpy(p, &n, sizeof(n)); p += sizeof(n);
-                std::memcpy(p, r.data(), n); p += n;
+                std::memcpy(p, r.data(), r.size()); p += r.size();
             }
             return out;
         }
@@ -175,12 +211,14 @@ namespace petika {
             auto remaining = payload.size() - 1;
             std::uint32_t count{};
             std::memcpy(&count, p, sizeof(count)); p += sizeof(count); remaining -= sizeof(count);
+            count = detail::from_le(count);
             std::vector<std::vector<std::byte>> out;
             out.reserve(count);
             for (std::uint32_t i = 0; i < count; ++i) {
                 if (remaining < sizeof(std::uint32_t)) return std::nullopt;
                 std::uint32_t n{};
                 std::memcpy(&n, p, sizeof(n)); p += sizeof(n); remaining -= sizeof(n);
+                n = detail::from_le(n);
                 if (n > remaining) return std::nullopt;
                 out.emplace_back(p, p + n); p += n; remaining -= n;
             }

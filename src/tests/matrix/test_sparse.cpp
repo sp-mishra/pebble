@@ -148,3 +148,31 @@ TEST_CASE("apply_permutation: reorders rows and cols", "[sparse][permutation]") 
     CHECK(B.get(1, 1) == 1.f);
     CHECK(B.get(2, 2) == 2.f);
 }
+
+TEST_CASE("CsrMatrix: from_triplets coalesces duplicate entries", "[sparse][csr]") {
+    std::vector<std::size_t> rows = {0, 0, 0, 1};
+    std::vector<std::size_t> cols = {1, 1, 2, 1};
+    std::vector<float> vals = {2.f, -0.5f, 3.f, 4.f};
+    auto A = CsrMatrix<float>::from_triplets(2, 3, rows, cols, vals);
+
+    REQUIRE(A.nnz() == 3);
+    CHECK(A.get(0, 1) == Catch::Approx(1.5f));
+    CHECK(A.get(0, 2) == Catch::Approx(3.f));
+    CHECK(A.get(1, 1) == Catch::Approx(4.f));
+}
+
+TEST_CASE("CsrMatrix: from_triplets validates dimensions and indices", "[sparse][csr]") {
+    {
+        std::vector<std::size_t> rows = {0, 1};
+        std::vector<std::size_t> cols = {0};
+        std::vector<float> vals = {1.f, 2.f};
+        CHECK_THROWS_AS(CsrMatrix<float>::from_triplets(2, 2, rows, cols, vals), std::invalid_argument);
+    }
+    {
+        std::vector<std::size_t> rows = {0, 2};
+        std::vector<std::size_t> cols = {0, 1};
+        std::vector<float> vals = {1.f, 2.f};
+        CHECK_THROWS_AS(CsrMatrix<float>::from_triplets(2, 2, rows, cols, vals), std::out_of_range);
+    }
+}
+
