@@ -35,7 +35,7 @@ Pebble is a modern, header-only, policy-based C++23 systems library engineered f
   * Documentation: [`docs/petika/petika.md`](docs/petika/petika.md)
 * **Nitya** (`include/nitya/`) — Generic Durable Log Engine (DLE). Byte-offset LSN, Reserve $\to$ Publish $\to$ Sync pipeline, Setu memory mapping, streaming recovery, replication streams, and EasyRules retention/archival.
   * Documentation: [`docs/containers/nitya.md`](docs/containers/nitya.md)
-* **Anukrama** (`include/containers/anukrama/`) — Generic static-composition versioned state: immutable MVCC chains, stable snapshots, optimistic validation, and explicit reclamation. Petika can bind durable Nitya LSNs as its commit clock without making Nitya mandatory.
+* **Anukrama** (`include/containers/anukrama/`) — Generic static-composition versioned state: immutable MVCC chains, stable snapshots, optimistic validation, and explicit reclamation. Pluggable node-allocator (heap or Smriti arena), synchronization (global / striped / null), and snapshot-registry policies, all defaulting to zero added cost. Petika can bind durable Nitya LSNs as its commit clock without making Nitya mandatory.
   * Documentation: [`docs/containers/anukrama.md`](docs/containers/anukrama.md)
 
 ---
@@ -67,7 +67,7 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 * **AABBTree** (`include/containers/tree/AABBTree.hpp`) — Bounding-volume hierarchy with SAH-lite sibling-merge insertion and refit rebalancing.
 * **QuadTree & Barnes-Hut N-Body Solver** (`include/containers/spatial/quadtree.hpp`, `include/containers/spatial/barnes_hut.hpp`) — Flat-array cache-coherent 2D QuadTree with Morton Z-order space-filling curve sorting and generic $O(N \log N)$ Barnes-Hut hierarchical multipole gravitational field solver with Pravaha parallelization and Highway SIMD sweeps.
   * Documentation: [`docs/spatial/barnes_hut.md`](docs/spatial/barnes_hut.md)
-* **BPlusTree** (`include/containers/tree/bplus_tree.hpp`) — High-performance, policy-based cache-aligned B+ tree (`BPlusMap`, `BPlusSet`) with Highway SIMD search, Smriti arena compatibility, and $O(\log_B N + K)$ range scanning.
+* **BPlusTree** (`include/containers/tree/bplus_tree.hpp`) — High-performance, policy-based cache-aligned B+ tree (`BPlusMap`, `BPlusSet`) with Highway SIMD membership search, auto-tuned fanout, $O(N)$ bottom-up bulk loading, Smriti arena compatibility, and $O(\log_B N + K)$ range scanning.
   * Documentation: [`docs/containers/bplus_tree.md`](docs/containers/bplus_tree.md)
 * **DisjointSet** & **union_find** (`include/containers/graph/DisjointSet.hpp`, `include/containers/union_find.hpp`) — Disjoint-set forests with union-by-rank, path compression, and path-splitting.
 

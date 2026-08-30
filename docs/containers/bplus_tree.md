@@ -32,14 +32,21 @@
 ## 2. Key Algorithmic Mechanics
 
 ### 2.1 Highway SIMD Key Search
-For numeric keys (integers, floats), inner and leaf nodes leverage SIMD vector instructions to evaluate 8 to 16 key comparisons in a single CPU cycle:
+When `Traits::EnableSIMD` is set (default), Highway is available (`PEBBLE_HAS_HIGHWAY`), the key type
+is vectorisable (`u32/i32/float/u64/i64`), and the comparator is the default `std::less<Key>`, the
+**exact-key membership probe** (`find` / `contains` / erase-hit test) uses a branchless SIMD linear
+scan over the 64-byte-packed leaf — optimal for the small nodes a B+ tree uses:
 ```cpp
-// Evaluates branch index using vector comparisons
-const auto keys_vec = hn::Load(d, &keys_[0]);
-const auto target_vec = hn::Set(d, search_key);
-const auto mask = hn::Lt(keys_vec, target_vec);
-const size_t branch_idx = hn::CountTrue(d, mask);
+// simd::linear_search_simd — vectorised equality scan over a leaf's contiguous keys
+const auto data       = hn::LoadU(d, keys + i);
+const auto target_vec = hn::Set(d, target);
+const auto mask       = hn::Eq(data, target_vec);
+if (!hn::AllFalse(d, mask)) { /* resolve exact index */ }
 ```
+**Ordered navigation stays scalar binary search.** Inner-node routing, `lower_bound`, `upper_bound`,
+splits, and any heterogeneous/transparent or custom-`Compare` lookup remain `Compare`-based — SIMD
+compares with `==`, which only matches `std::less<Key>` semantics. String keys and custom comparators
+transparently use the scalar path.
 
 ### 2.2 Intrusive Freelist Node Recycling
 To eliminate OS memory allocator thrashing during rapid insertion and deletion churn, `BPlusTree` retains an intrusive singly-linked freelist of up to `Traits::MaxRecycleNodes` deallocated nodes. Reallocated nodes reuse warm L1/L2 cache blocks immediately.
@@ -78,6 +85,11 @@ int main() {
 ```
 
 ### 3.2 $O(N)$ Bottom-Up Bulk Loading
+`from_sorted` builds the tree bottom-up in genuine $O(N)$: sorted entries are packed into leaves
+left-to-right (to a fill factor that leaves split headroom), the leaf chain is linked, and inner
+levels are assembled from the layer below until a single root remains — perfectly balanced and
+cache-dense, with no per-insert re-descent. **Precondition**: the input range is sorted by key and
+unique (implied by the name).
 ```cpp
 #include "containers/tree/bplus_tree.hpp"
 #include <vector>
@@ -86,13 +98,20 @@ std::vector<std::pair<const int, std::string>> sorted_entries = {
     {1, "first"}, {2, "second"}, {3, "third"}, {4, "fourth"}
 };
 
-// Directly constructs a perfectly balanced B+ Tree in O(N) time
+// Constructs a perfectly balanced B+ Tree in O(N) time
 auto tree = pebble::containers::BPlusTree<int, std::string>::from_sorted(
     sorted_entries.begin(), sorted_entries.end()
 );
 ```
 
 ### 3.3 Pravaha Parallel Map-Reduce over B+ Tree
+The `pravaha` helpers (`parallel_scan` / `parallel_reduce` / `parallel_find`) run on
+`::pravaha::Runner<::pravaha::JThreadBackend>` — the same task-runner seam the Petika adapter uses.
+Work is partitioned over the leaf chain (or query batch), each partition submitted as a Pravaha task,
+and the runner backend drained before results are read (no reliance on thread-destructor timing). An
+optional trailing `Runner*` lets callers share a runner; omit it to use a per-call local runner.
+**Thread-safety**: user callables run concurrently across partitions and must be thread-safe;
+`reduce_op` must be associative (it also runs in a final serial fold).
 ```cpp
 #include "containers/tree/bplus_tree.hpp"
 #include "containers/tree/bplus_tree_pravaha.hpp"
@@ -107,3 +126,44 @@ long long total_sum = pebble::containers::pravaha::parallel_reduce(
     [](int k, int v) { return static_cast<long long>(v); }
 );
 ```
+
+---
+
+## 4. Traits & Policy Reference
+
+| Template parameter | Default | Purpose |
+| --- | --- | --- |
+| `Key` | — | Key type. Numeric keys unlock the SIMD membership probe. |
+| `Value` | — | Mapped type (`std::monostate` for `BPlusSet`). |
+| `Compare` | `std::less<Key>` | Ordering. Use `std::less<>` for transparent/heterogeneous lookups. |
+| `Traits` | `DefaultBPlusTreeTraits<Key, Value>` | Policy bundle (below). |
+| `Allocator` | `std::allocator<std::pair<const Key, Value>>` | Node allocator; rebind-based. Swap for the Smriti seam. |
+
+`DefaultBPlusTreeTraits<Key, Value, TargetNodeBytes = 256>` fields (must satisfy the
+`BPlusTreeTraits` concept):
+
+| Trait field | Default | Purpose |
+| --- | --- | --- |
+| `TargetNodeBytes` | `256` | Byte budget the fanout auto-sizes toward. |
+| `LeafCapacity` | auto from `sizeof(Key)+sizeof(Value)` | Keys per leaf. Auto-derived and clamped to `[4, 4096]`. |
+| `InnerCapacity` | auto from `sizeof(Key)+sizeof(void*)` | Router keys per inner node, clamped to `[4, 4096]`. |
+| `EnableSIMD` | `true` | Engage the Highway membership probe for vectorisable keys. |
+| `MaxRecycleNodes` | `64` | Freelist cap: recycled nodes retained before returning memory to the allocator. |
+
+Fanout auto-tunes to key/value size via the `TargetNodeBytes` budget; provide a custom `Traits` to
+override any field (e.g. fixed capacities, disable SIMD, resize the recycle pool). A malformed
+`Traits` is rejected at class scope by `static_assert(BPlusTreeTraits<Traits>)` with a readable
+message.
+
+## 5. Smriti Arena Allocator Seam
+
+Node memory can be sourced from a Smriti resource via the allocator parameter:
+```cpp
+using PoolType = smriti::pools::BumpPool<smriti::domains::SystemRAMDomain>;
+PoolType pool{65536};
+auto map = pebble::containers::make_smriti_bplus_map<int, int>(pool);
+```
+`SmritiBPlusMap` / `SmritiBPlusSet` type aliases and the `make_smriti_bplus_map` /
+`make_smriti_bplus_set` factories wire `smriti::SmritiAllocator` in. Combined with the
+`MaxRecycleNodes` freelist, node churn under insert/erase storms is bounded to warm arena blocks.
+
