@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-// solve.hpp — Ganita unified linear solve with auto-dispatch
+// solve.hppunified linear solve with auto-dispatch
 // ============================================================================
 // solve(A, b): auto-picks best factorization based on matrix properties.
 //   SPD (pos-def hint) → Cholesky

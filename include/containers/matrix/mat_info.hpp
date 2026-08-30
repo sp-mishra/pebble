@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-// mat_info.hpp — Ganita MatInfo / inspect() / MatRegistry (opt-in)
+// mat_info.hpp: () / MatRegistry (opt-in)
 // ============================================================================
 // ga::inspect(m) → ga::MatInfo (O(1), constexpr where possible)
 // Works on Matrix, StaticMatrix, CsrMatrix, DiaMatrix, CooMatrix.

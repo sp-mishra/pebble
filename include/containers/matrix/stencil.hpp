@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-// stencil.hpp — Ganita finite-difference grid operators + WENO advection
+// stencil.hppfinite-difference grid operators + WENO advection
 // ============================================================================
 // All operators act on rank-2 DynamicTensor (height×width grid).
 // BC policy: compile-time Dirichlet / Neumann / Wrap / Clamp.

@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-// mat.hpp — Ganita ga::Mat<T,CP,SP,AP> unified adaptive matrix front-end
+// mat.hppga::Mat<T,CP,SP,AP> unified adaptive matrix front-end
 // ============================================================================
 // ga::Mat<T, CP, SP, AP> — std::variant<StaticStorage, DenseStorage,
 //                           SparseStorage, DiaStorage> with stable public API.

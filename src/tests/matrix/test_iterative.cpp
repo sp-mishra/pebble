@@ -1,5 +1,5 @@
 #include <catch_amalgamated.hpp>
-#include <containers/matrix/ganita.hpp>
+#include <containers/matrix/matrix.hpp>
 #include <cmath>
 #include <vector>
 

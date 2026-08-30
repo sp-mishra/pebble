@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-// factorize.hpp — Ganita matrix factorizations (LU / Cholesky / QR / LDLT / banded)
+// factorize.hpp: (LU / Cholesky / QR / LDLT / banded)
 // ============================================================================
 // All heavy trailing-submatrix updates call ts::gemm / ts::syrk on DynamicTensor
 // views — single high-performance BLAS kernel, SIMD/threads/GPU inherited.

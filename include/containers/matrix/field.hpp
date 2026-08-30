@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-// field.hpp — Ganita multi-channel Eulerian grid Field<Channels,T,Backend>
+// field.hppmulti-channel Eulerian grid Field<Channels,T,Backend>
 // ============================================================================
 // Channels co-located grids of type T backed by tensor's CompPolicy (Backend).
 // Methods delegate to stencil.hpp: laplacian, gradient, advect, diffuse, project.

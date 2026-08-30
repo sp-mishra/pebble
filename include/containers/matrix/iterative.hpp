@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-// iterative.hpp — Ganita iterative solvers + multigrid
+// iterative.hppiterative solvers + multigrid
 // ============================================================================
 // CG / BiCGSTAB / GMRES / MINRES / FGMRES / Jacobi / GS / SOR
 // Preconditioners: JacobiPrecond, Ic0Precond, Ilu0Precond

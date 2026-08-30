@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-// expr.hpp — Ganita expression EDSL (lazy, fuse-to-BLAS)
+// expr.hpp: (lazy, fuse-to-BLAS)
 // ============================================================================
 // Expression nodes: ScaleExpr, TransposeExpr, MatMulExpr, AddExpr
 // Recognises α·A·B + β·C at compile time → single ts::gemm(α,A,B,β,C) call.

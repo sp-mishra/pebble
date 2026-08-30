@@ -1,10 +1,10 @@
 #pragma once
 // ============================================================================
-// dual.hpp — Ganita Dual<T,N> forward-mode automatic differentiation
+// dual.hppDual<T,N> forward-mode automatic differentiation
 // ============================================================================
 // Dual<T, N> = value T + derivative std::array<T,N>.
 // All arithmetic operators + math functions overloaded.
-// Any Ganita algorithm templated on T works for T = Dual<float,K>.
+// Any algorithm templated on T works for T = Dual<float,K>.
 // grad(f, x) computes ∇f(x) in one forward pass (N=1 for scalar gradient).
 // CPU-only (static_assert prevents GPU instantiation).
 // ============================================================================

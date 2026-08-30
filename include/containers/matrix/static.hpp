@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-// static.hpp — Ganita compile-time fixed-size matrices
+// static.hppcompile-time fixed-size matrices
 // ============================================================================
 // C++23/26, header-only, zero-virtual, zero-heap, zero macros.
 // StaticMatrix<T,R,C> — backed by std::array<T,R*C>.

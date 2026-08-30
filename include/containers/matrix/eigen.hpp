@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-// eigen.hpp — Ganita spectral decomposition: cyclic-Jacobi / SVD / rSVD / Lanczos
+// eigen.hppspectral decomposition: cyclic-Jacobi / SVD / rSVD / Lanczos
 // ============================================================================
 // eig_sym   — cyclic Jacobi for symmetric matrices
 // svd       — Golub-Kahan bidiagonalization

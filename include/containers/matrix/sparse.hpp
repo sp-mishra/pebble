@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-// sparse.hpp — Ganita sparse matrix types: CSR / COO / Dia + SpMV
+// sparse.hppsparse matrix types: CSR / COO / Dia + SpMV
 // ============================================================================
 // CsrMatrix<T> — CSR with SoA DynamicTensor storage
 // CooMatrix<T> — coordinate format; convertible to CSR

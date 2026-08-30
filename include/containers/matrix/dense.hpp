@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-// dense.hpp — Ganita dynamic dense Matrix / Vector / MatrixView
+// dense.hppdynamic dense Matrix / Vector / MatrixView
 // ============================================================================
 // Matrix<T,SP,CP> IS a rank-2 DynamicTensor<T,SP,CP>.
 // All compute delegates to tensor BLAS primitives — no duplicate kernels.
