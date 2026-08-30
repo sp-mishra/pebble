@@ -23,6 +23,9 @@
 #include "tarka/frontend/lower_to_tarka.hpp"
 #include "tarka/frontend/smt2_printer.hpp"
 #include "tarka/native/model_validator.hpp"
+#include "containers/associative/order_heap.hpp"
+#include "tarka/egraph_opt.hpp"
+#include "tarka/native/simplifier.hpp"
 
 using namespace tarka;
 using namespace tarka::backend;
@@ -939,6 +942,355 @@ TEST_CASE("tarka differential: Native Backend vs Z3 Backend", "[tarka][different
     }
 }
 #endif
+
+// =============================================================================
+// Appended coverage for the design upgrades (items 1,2,9,14,18,24,28).
+// These tests only exercise the always-on native path — no Z3, no opt-in flags.
+// =============================================================================
+
+TEST_CASE("tarka: leaf ops carry a non-core theory mask", "[tarka][mask]") {
+    // items 1,2 — Lit/Sym no longer fall to the op_descriptor default (core-only).
+    Context ctx;
+    auto i_sort = ctx.int_sort();
+    Term x = ctx.make_symbol("x", i_sort);
+    Term k = ctx.make_int(7, i_sort);
+
+    const theory_mask sym_bits = get_op_info(x.op()).theory_bits;
+    const theory_mask lit_bits = get_op_info(k.op()).theory_bits;
+
+    // Both must at least include the arithmetic families they can appear in.
+    CHECK((sym_bits & theory_bit(theory_family::lia)) != 0);
+    CHECK((lit_bits & theory_bit(theory_family::lia)) != 0);
+
+    // A whole arithmetic atom's mask must fold in the LIA family.
+    Term atom = (x < k);
+    const theory_mask m = compute_theory_mask(atom);
+    CHECK((m & theory_bit(theory_family::lia)) != 0);
+}
+
+TEST_CASE("tarka: RouterEngine reports the active backend", "[tarka][router]") {
+    // item 9 — active_index() reflects capability selection, not a hardcoded 0.
+    Context ctx;
+    auto b = ctx.bool_sort();
+    Term p = ctx.make_symbol("p", b);
+    Term q = ctx.make_symbol("q", b);
+
+    RouterEngine<backend::native> solver; // single backend → always index 0
+    auto r = solver.solve(p || q);
+    REQUIRE(r.has_value());
+    CHECK(*r == SatResult::Sat);
+    CHECK(solver.active_index() == 0);
+}
+
+TEST_CASE("tarka: is_conclusive classifies results", "[tarka][result]") {
+    // item 3
+    CHECK(is_conclusive(SatResult::Sat));
+    CHECK(is_conclusive(SatResult::Unsat));
+    CHECK_FALSE(is_conclusive(SatResult::Unknown));
+}
+
+TEST_CASE("tarka: order_heap pops in activity order", "[tarka][order_heap]") {
+    // item 28 — generic decision heap used by CDCL decide().
+    using namespace containers::associative;
+    std::vector<double> act{0.1, 0.9, 0.5, 0.3, 0.7};
+    struct cmp_t {
+        const std::vector<double>* a;
+        bool operator()(std::uint32_t x, std::uint32_t y) const { return (*a)[x] > (*a)[y]; }
+    };
+    order_heap<cmp_t> h{cmp_t{&act}};
+    h.reserve_universe(act.size());
+    for (std::uint32_t i = 0; i < act.size(); ++i) h.insert(i);
+
+    REQUIRE(h.size() == act.size());
+    CHECK(h.remove_max() == 1); // 0.9
+    CHECK(h.remove_max() == 4); // 0.7
+    // raise element 3's activity above the rest, then it must come out next
+    act[3] = 2.0;
+    h.increase(3);
+    CHECK(h.remove_max() == 3); // 2.0
+    CHECK(h.remove_max() == 2); // 0.5
+    CHECK(h.remove_max() == 0); // 0.1
+    CHECK(h.empty());
+}
+
+TEST_CASE("tarka: solver handles trees deeper than 64 levels (LBD)", "[tarka][cdcl][lbd]") {
+    // item 18 — LBD no longer capped at 64 decision levels. A long implication
+    // chain forces a deep trail; the solver must still terminate correctly.
+    Context ctx;
+    auto b = ctx.bool_sort();
+    constexpr int N = 200;
+    std::vector<Term> v;
+    v.reserve(N);
+    for (int i = 0; i < N; ++i) v.push_back(ctx.make_symbol("v" + std::to_string(i), b));
+
+    // v0 && (v0 -> v1) && (v1 -> v2) && ... forces v_i all true across many levels.
+    Term f = v[0];
+    for (int i = 0; i + 1 < N; ++i) f = f && (v[i].implies(v[i + 1]));
+
+    RouterEngine<backend::native> solver;
+    auto r = solver.solve(f);
+    REQUIRE(r.has_value());
+    CHECK(*r == SatResult::Sat);
+}
+
+TEST_CASE("tarka: simplifier folds integer literals", "[tarka][simplify]") {
+    // item 24 — arithmetic / relational const folding.
+    Context ctx;
+    auto i_sort = ctx.int_sort();
+    Term a = ctx.make_int(3, i_sort);
+    Term b = ctx.make_int(4, i_sort);
+
+    Term sum = ctx.make_term(Op::Add, i_sort, std::vector<Term>{a, b});
+    Term folded = tarka::native::simplifier::simplify(sum);
+    auto fv = ctx.int_literal(folded.ptr()->payload_hash);
+    REQUIRE(fv.has_value());
+    CHECK(*fv == 7);
+
+    Term lt = (a < b);
+    Term lt_folded = tarka::native::simplifier::simplify(lt);
+    CHECK(lt_folded.op() == Op::True);
+
+    Term ge = (a >= b);
+    Term ge_folded = tarka::native::simplifier::simplify(ge);
+    CHECK(ge_folded.op() == Op::False);
+}
+
+TEST_CASE("tarka: egraph DAG node count dedups shared subterms", "[tarka][egraph]") {
+    // item 14 — egraph_node_count_dag counts distinct hash-consed nodes, so a
+    // shared subterm is counted once (the old tree count inflated it).
+    Context ctx;
+    auto i_sort = ctx.int_sort();
+    Term x = ctx.make_symbol("x", i_sort);
+    Term shared = ctx.make_term(Op::Add, i_sort, std::vector<Term>{x, x});
+    // (shared + shared): both operands are the *same* interned node.
+    Term t = ctx.make_term(Op::Add, i_sort, std::vector<Term>{shared, shared});
+
+    // Distinct nodes: t, shared, x  → 3 (not the 5 a tree walk would report).
+    CHECK(egraph_node_count_dag(t) == 3);
+    // Result stays valid after optimize (may or may not shrink; must not crash).
+    Term opt = egraph_optimize(t);
+    CHECK(opt.valid());
+}
+
+// =============================================================================
+// Corner-case coverage for the same always-on native upgrades. Still no Z3 and
+// no opt-in flags — only paths that ship by default.
+// =============================================================================
+
+TEST_CASE("tarka: order_heap corner cases", "[tarka][order_heap][corner]") {
+    using namespace containers::associative;
+    std::vector<double> act{0.1, 0.9, 0.5, 0.3, 0.7};
+    struct cmp_t {
+        const std::vector<double>* a;
+        bool operator()(std::uint32_t x, std::uint32_t y) const { return (*a)[x] > (*a)[y]; }
+    };
+
+    SECTION("duplicate insert is a no-op; contains tracks membership") {
+        order_heap<cmp_t> h{cmp_t{&act}};
+        h.reserve_universe(act.size());
+        h.insert(2);
+        h.insert(2); // duplicate — must not double-add
+        CHECK(h.size() == 1);
+        CHECK(h.contains(2));
+        CHECK_FALSE(h.contains(0));
+        CHECK(h.remove_max() == 2);
+        CHECK_FALSE(h.contains(2)); // popped → no longer a member
+        CHECK(h.empty());
+    }
+
+    SECTION("single element pops itself and empties") {
+        order_heap<cmp_t> h{cmp_t{&act}};
+        h.insert(3);
+        REQUIRE(h.size() == 1);
+        CHECK(h.remove_max() == 3);
+        CHECK(h.empty());
+    }
+
+    SECTION("decrease-key demotes an element toward the leaves") {
+        order_heap<cmp_t> h{cmp_t{&act}};
+        for (std::uint32_t i = 0; i < act.size(); ++i) h.insert(i);
+        // Element 1 is the current max (0.9). Drop it below everyone.
+        act[1] = 0.0;
+        h.decrease(1);
+        CHECK(h.remove_max() == 4); // 0.7 now the largest
+        CHECK(h.remove_max() == 2); // 0.5
+    }
+
+    SECTION("clear empties, then the heap is reusable") {
+        order_heap<cmp_t> h{cmp_t{&act}};
+        for (std::uint32_t i = 0; i < act.size(); ++i) h.insert(i);
+        h.clear();
+        CHECK(h.empty());
+        CHECK_FALSE(h.contains(1));
+        h.insert(0);
+        h.insert(4);
+        CHECK(h.remove_max() == 4); // 0.7 > 0.1
+        CHECK(h.remove_max() == 0);
+    }
+
+    SECTION("increase/decrease on an absent element is a no-op, not a crash") {
+        order_heap<cmp_t> h{cmp_t{&act}};
+        h.reserve_universe(act.size());
+        h.increase(2); // 2 not inserted
+        h.decrease(2);
+        CHECK(h.empty());
+    }
+}
+
+TEST_CASE("tarka: simplifier fold corner cases", "[tarka][simplify][corner]") {
+    Context ctx;
+    auto i_sort = ctx.int_sort();
+    auto two = ctx.make_int(2, i_sort);
+    auto three = ctx.make_int(3, i_sort);
+    auto five = ctx.make_int(5, i_sort);
+
+    SECTION("multiplication and subtraction fold") {
+        Term prod = ctx.make_term(Op::Mul, i_sort, std::vector<Term>{two, three});
+        auto pv = ctx.int_literal(tarka::native::simplifier::simplify(prod).ptr()->payload_hash);
+        REQUIRE(pv.has_value());
+        CHECK(*pv == 6);
+
+        Term diff = ctx.make_term(Op::Sub, i_sort, std::vector<Term>{five, three});
+        auto dv = ctx.int_literal(tarka::native::simplifier::simplify(diff).ptr()->payload_hash);
+        REQUIRE(dv.has_value());
+        CHECK(*dv == 2);
+    }
+
+    SECTION("unary negate folds") {
+        Term neg = ctx.make_term(Op::Neg, i_sort, std::vector<Term>{five});
+        auto nv = ctx.int_literal(tarka::native::simplifier::simplify(neg).ptr()->payload_hash);
+        REQUIRE(nv.has_value());
+        CHECK(*nv == -5);
+    }
+
+    SECTION("nested arithmetic folds bottom-up") {
+        // (2 + 3) * 5 == 25
+        Term inner = ctx.make_term(Op::Add, i_sort, std::vector<Term>{two, three});
+        Term outer = ctx.make_term(Op::Mul, i_sort, std::vector<Term>{inner, five});
+        auto ov = ctx.int_literal(tarka::native::simplifier::simplify(outer).ptr()->payload_hash);
+        REQUIRE(ov.has_value());
+        CHECK(*ov == 25);
+    }
+
+    SECTION("a symbolic operand blocks the fold") {
+        Term x = ctx.make_symbol("x", i_sort);
+        Term mixed = ctx.make_term(Op::Add, i_sort, std::vector<Term>{x, three});
+        Term s = tarka::native::simplifier::simplify(mixed);
+        CHECK(s.op() == Op::Add);                  // stays an Add
+        CHECK_FALSE(ctx.int_literal(s.ptr()->payload_hash).has_value());
+    }
+
+    SECTION("boolean identities simplify") {
+        auto b = ctx.bool_sort();
+        Term p = ctx.make_symbol("p", b);
+        Term t = ctx.make_bool(true);
+        Term f = ctx.make_bool(false);
+
+        // p && true -> p ; p || false -> p
+        Term and_true = ctx.make_term(Op::And, b, std::vector<Term>{p, t});
+        Term or_false = ctx.make_term(Op::Or, b, std::vector<Term>{p, f});
+        CHECK(tarka::native::simplifier::simplify(and_true).ptr() == p.ptr());
+        CHECK(tarka::native::simplifier::simplify(or_false).ptr() == p.ptr());
+
+        // p && false -> false ; p || true -> true
+        Term and_false = ctx.make_term(Op::And, b, std::vector<Term>{p, f});
+        Term or_true = ctx.make_term(Op::Or, b, std::vector<Term>{p, t});
+        CHECK(tarka::native::simplifier::simplify(and_false).op() == Op::False);
+        CHECK(tarka::native::simplifier::simplify(or_true).op() == Op::True);
+
+        // double negation: !!p -> p
+        Term nnp = ctx.make_term(Op::Not, b,
+                                 std::vector<Term>{ctx.make_term(Op::Not, b, std::vector<Term>{p})});
+        CHECK(tarka::native::simplifier::simplify(nnp).ptr() == p.ptr());
+    }
+
+    SECTION("structural equalities fold on identical operands") {
+        Term x = ctx.make_symbol("y", i_sort);
+        Term eq_same = ctx.make_term(Op::Eq, ctx.bool_sort(), std::vector<Term>{x, x});
+        Term dist_same = ctx.make_term(Op::Distinct, ctx.bool_sort(), std::vector<Term>{x, x});
+        CHECK(tarka::native::simplifier::simplify(eq_same).op() == Op::True);
+        CHECK(tarka::native::simplifier::simplify(dist_same).op() == Op::False);
+    }
+}
+
+TEST_CASE("tarka: egraph DAG node count corner cases", "[tarka][egraph][corner]") {
+    Context ctx;
+    auto i_sort = ctx.int_sort();
+
+    SECTION("a bare leaf counts as one node") {
+        Term x = ctx.make_symbol("leaf", i_sort);
+        CHECK(egraph_node_count_dag(x) == 1);
+    }
+
+    SECTION("a diamond shares its apex once") {
+        // g = x + x (node: g, x)         -> 2
+        // top = (g + x)                  -> adds top; g and x already counted -> 3
+        Term x = ctx.make_symbol("d", i_sort);
+        Term g = ctx.make_term(Op::Add, i_sort, std::vector<Term>{x, x});
+        Term top = ctx.make_term(Op::Add, i_sort, std::vector<Term>{g, x});
+        CHECK(egraph_node_count_dag(top) == 3);
+    }
+
+    SECTION("distinct leaves are all counted") {
+        Term a = ctx.make_symbol("a1", i_sort);
+        Term b = ctx.make_symbol("b1", i_sort);
+        Term sum = ctx.make_term(Op::Add, i_sort, std::vector<Term>{a, b});
+        CHECK(egraph_node_count_dag(sum) == 3); // sum, a, b
+    }
+}
+
+TEST_CASE("tarka: CDCL solves adversarial boolean corner cases", "[tarka][cdcl][corner]") {
+    Context ctx;
+    auto b = ctx.bool_sort();
+
+    SECTION("direct contradiction p && !p is UNSAT") {
+        Term p = ctx.make_symbol("p", b);
+        Term f = p && ctx.make_term(Op::Not, b, std::vector<Term>{p});
+        RouterEngine<backend::native> solver;
+        auto r = solver.solve(f);
+        REQUIRE(r.has_value());
+        CHECK(*r == SatResult::Unsat);
+    }
+
+    SECTION("a satisfiable XOR is SAT") {
+        Term p = ctx.make_symbol("xp", b);
+        Term q = ctx.make_symbol("xq", b);
+        Term f = ctx.make_term(Op::Xor, b, std::vector<Term>{p, q});
+        RouterEngine<backend::native> solver;
+        auto r = solver.solve(f);
+        REQUIRE(r.has_value());
+        CHECK(*r == SatResult::Sat);
+    }
+
+    SECTION("implication chain forcing the head false then asserting it is UNSAT") {
+        // v0 && (v0 -> v1) && ... && (v_{n-1} -> v_n) && !v_n  is UNSAT.
+        constexpr int N = 120; // deep enough to exceed the old 64-level LBD cap
+        std::vector<Term> v;
+        v.reserve(N);
+        for (int i = 0; i < N; ++i) v.push_back(ctx.make_symbol("c" + std::to_string(i), b));
+        Term f = v[0];
+        for (int i = 0; i + 1 < N; ++i) f = f && (v[i].implies(v[i + 1]));
+        f = f && ctx.make_term(Op::Not, b, std::vector<Term>{v[N - 1]});
+
+        RouterEngine<backend::native> solver;
+        auto r = solver.solve(f);
+        REQUIRE(r.has_value());
+        CHECK(*r == SatResult::Unsat);
+    }
+
+    SECTION("a constant-true formula is SAT and a constant-false is UNSAT") {
+        RouterEngine<backend::native> sat_solver;
+        auto rs = sat_solver.solve(ctx.make_bool(true));
+        REQUIRE(rs.has_value());
+        CHECK(*rs == SatResult::Sat);
+
+        RouterEngine<backend::native> unsat_solver;
+        auto ru = unsat_solver.solve(ctx.make_bool(false));
+        REQUIRE(ru.has_value());
+        CHECK(*ru == SatResult::Unsat);
+    }
+}
+
 
 
 
