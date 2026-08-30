@@ -123,6 +123,13 @@ namespace kalpa {
                     }
                 }
                 for (std::size_t i = 0; i < n; ++i) out[i] = -s.g[i] + beta * d_prev[i];
+                // Descent safeguard: if the conjugate direction is not a descent
+                // direction (dᵀg ≥ 0, which PR-CG can produce), restart from
+                // steepest descent so the line search always has a valid bracket.
+                T dg{};
+                for (std::size_t i = 0; i < n; ++i) dg += out[i] * s.g[i];
+                if (dg >= T{0})
+                    for (std::size_t i = 0; i < n; ++i) out[i] = -s.g[i];
             }
             d_prev = out;
             g_prev = s.g;

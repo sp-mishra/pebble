@@ -172,8 +172,8 @@ TEST_CASE("kalpa: polytope projection yields a feasible point", "[kalpa][constra
 //   min ½‖x − t‖²,  t = (5,5),  x ∈ [−1,1]²  →  optimum at (1,1) (corner).
 // ===========================================================================
 TEST_CASE("kalpa: projected gradient hits the constrained optimum", "[kalpa][constrained][pgd]") {
-    auto prob = make_problem<double>(Shifted5{}, Unconstrained<ga::Vector<double>>{},
-                                     Box<double>(v2(-1.0,-1.0), v2(1.0,1.0)));
+    auto prob = make_problem(Shifted5{}, Unconstrained<ga::Vector<double>>{},
+                             Box<double>(v2(-1.0,-1.0), v2(1.0,1.0)));
     Solver<ProjectedGradient<double>, Derivatives<Dual,double>, Armijo<double>> s;
     auto r = s.solve(prob, v2(0.0, 0.0));
     REQUIRE(r.has_value());

@@ -39,11 +39,13 @@ namespace {
     ga::Vector<double> vec2(double a, double b) { ga::Vector<double> v(2); v[0]=a; v[1]=b; return v; }
 
     // Local classes cannot hold member templates → keep this at file scope.
-    // log(x0) is NaN for x0 < 0, exercising the solver's NaN trap.
+    // log(x0) is NaN for x0 < 0, exercising the solver's NaN trap. Unqualified
+    // `log` with both namespaces in scope resolves to ga::log for the Dual pass
+    // (ADL) and std::log for the plain-double value / line-search pass.
     struct NanObj {
         template<typename V> auto operator()(const V& x) const {
-            using S = typename V::value_type;
-            return ga::log(x[0]);
+            using std::log; using ga::log;
+            return log(x[0]);
         }
     };
 }
