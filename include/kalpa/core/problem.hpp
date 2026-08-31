@@ -133,6 +133,7 @@ namespace kalpa {
     // Objective F callable on plain ga::Vector<T> -> T. 2N evaluations.
     template<typename T>
     struct Derivatives<FiniteDiff, T> {
+        using Scalar_t = T;
         T step{std::sqrt(std::numeric_limits<T>::epsilon())};
 
         template<typename F, typename V>
@@ -164,6 +165,7 @@ namespace kalpa {
     // F must expose f.value(x)->T and f.grad(x,out). Optionally f.hessian_vec.
     template<typename T>
     struct Derivatives<Analytic, T> {
+        using Scalar_t = T;
         template<typename F, typename V>
         void grad(const F& f, const V& x, V& out) const { f.grad(x, out); }
 

@@ -453,6 +453,18 @@ target_compile_features(pebble_drishya_lib INTERFACE cxx_std_23)
 target_link_libraries(pebble_drishya_lib INTERFACE
     pebble::akruti pebble::kalpana pebble::gati pebble::spandana)
 
+add_library(pebble_manas_lib INTERFACE)
+add_library(pebble::manas ALIAS pebble_manas_lib)
+target_include_directories(pebble_manas_lib INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_compile_features(pebble_manas_lib INTERFACE cxx_std_23)
+
+add_library(pebble_kalpa_lib INTERFACE)
+add_library(pebble::kalpa ALIAS pebble_kalpa_lib)
+target_include_directories(pebble_kalpa_lib INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_compile_features(pebble_kalpa_lib INTERFACE cxx_std_23)
+
 
 
 
@@ -630,7 +642,7 @@ endif()
 # ---------------------------------------------------------------------------
 # Standalone Showcase Executables
 # ---------------------------------------------------------------------------
-foreach(_showcase pebble_akriti pebble_gati pebble_prakriti pebble_gati_prakriti pebble_tanks pebble_verse pebble_rekha)
+foreach(_showcase pebble_akriti pebble_gati pebble_prakriti pebble_gati_prakriti pebble_tanks pebble_verse pebble_rekha pebble_drishya_ml pebble_drishya_hud)
     if (_showcase STREQUAL "pebble_rekha" AND DEFINED PEBBLE_ENABLE_KALPANA_SOKOL_BACKEND AND NOT PEBBLE_ENABLE_KALPANA_SOKOL_BACKEND)
         continue()
     endif()
@@ -669,6 +681,19 @@ foreach(_showcase pebble_akriti pebble_gati pebble_prakriti pebble_gati_prakriti
         endif()
         target_compile_definitions(${_showcase} PRIVATE
             TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+    endif()
+endforeach()
+
+# Extra deps for Drishya intelligence showcase apps
+foreach(_drishya_app pebble_drishya_ml pebble_drishya_hud)
+    if (TARGET ${_drishya_app})
+        target_link_libraries(${_drishya_app} PRIVATE
+            pebble::drishya
+            pebble::rekha
+            pebble::manas
+            pebble::kalpa
+            crc32c
+            hwy)
     endif()
 endforeach()
 

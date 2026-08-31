@@ -16,3 +16,6 @@
 #include "drishya/widgets/game.hpp"
 #include "drishya/widgets/inputs.hpp"
 #include "drishya/widgets/stubs.hpp"
+// Opt-in extensions — guarded; silently skipped if dependencies absent.
+#include "drishya/widgets/rekha_widget.hpp"
+#include "drishya/widgets/spandana_widgets.hpp"

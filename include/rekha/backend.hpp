@@ -26,45 +26,53 @@ concept PlotBackend = requires(B b, std::uint32_t w, std::uint32_t h, Color c, s
 // Kalpana-backed retained scene backend. Agnostic Rekha API renders to Kalpana nodes.
 class KalpanaBackend {
 public:
+    // Standard begin_frame — origin at (0,0).
     void begin_frame(std::uint32_t w, std::uint32_t h, Color clear) {
-        width_ = w;
-        height_ = h;
+        ox_ = 0.0f; oy_ = 0.0f;
+        width_ = w; height_ = h;
+        scene_.clear();
+        scene_.clear_color(clear);
+    }
+
+    // Offset begin_frame — all subsequent draw calls are translated by (ox, oy).
+    // Used by RekhaWidget to paint into a sub-rect of the parent canvas without
+    // coordinate rebasing in the caller.
+    void begin_frame(float ox, float oy, std::uint32_t w, std::uint32_t h, Color clear) {
+        ox_ = ox; oy_ = oy;
+        width_ = w; height_ = h;
         scene_.clear();
         scene_.clear_color(clear);
     }
 
     void draw_line(Scalar x0, Scalar y0, Scalar x1, Scalar y1, StrokeStyle stroke) {
         kalpana::Path path;
-        path.move_to(x0, y0).line_to(x1, y1);
-        auto paint = kalpana::Paint::stroke(stroke.color, stroke.width);
-        scene_.add(kalpana::Node::shape(std::move(path), std::move(paint)));
+        path.move_to(ox_ + x0, oy_ + y0).line_to(ox_ + x1, oy_ + y1);
+        scene_.add(kalpana::Node::shape(std::move(path), kalpana::Paint::stroke(stroke.color, stroke.width)));
     }
 
     void draw_polyline(std::span<const Vec2> pts, StrokeStyle stroke) {
         if (pts.size() < 2) return;
         kalpana::Path path;
-        path.move_to(pts[0].x, pts[0].y);
-        for (std::size_t i = 1; i < pts.size(); ++i) {
-            path.line_to(pts[i].x, pts[i].y);
-        }
-        auto paint = kalpana::Paint::stroke(stroke.color, stroke.width);
-        scene_.add(kalpana::Node::shape(std::move(path), std::move(paint)));
+        path.move_to(ox_ + pts[0].x, oy_ + pts[0].y);
+        for (std::size_t i = 1; i < pts.size(); ++i)
+            path.line_to(ox_ + pts[i].x, oy_ + pts[i].y);
+        scene_.add(kalpana::Node::shape(std::move(path), kalpana::Paint::stroke(stroke.color, stroke.width)));
     }
 
     void draw_circle(Scalar x, Scalar y, Scalar r, Color color) {
         kalpana::Path path;
-        path.circle(x, y, r);
+        path.circle(ox_ + x, oy_ + y, r);
         scene_.add(kalpana::Node::shape(std::move(path), kalpana::Paint::fill(color)));
     }
 
     void draw_rect(Scalar x, Scalar y, Scalar w, Scalar h, Color color) {
         kalpana::Path path;
-        path.rect(x, y, w, h);
+        path.rect(ox_ + x, oy_ + y, w, h);
         scene_.add(kalpana::Node::shape(std::move(path), kalpana::Paint::fill(color)));
     }
 
     void draw_text(std::string_view text, Scalar x, Scalar y, Color color) {
-        scene_.add(kalpana::Node::text(text, color, 13.0f, x, y));
+        scene_.add(kalpana::Node::text(text, color, 13.0f, ox_ + x, oy_ + y));
     }
 
     void end_frame() {}
@@ -78,6 +86,7 @@ public:
     }
 
 private:
+    float         ox_ = 0.0f, oy_ = 0.0f;
     std::uint32_t width_ = 0;
     std::uint32_t height_ = 0;
     kalpana::Scene scene_{};
