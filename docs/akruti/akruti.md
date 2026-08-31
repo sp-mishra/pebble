@@ -302,6 +302,19 @@ for (const auto& shard : shards) {
 - **Smriti Zero-Heap Scratch Memory**: Seamlessly leverages `smriti::pools::ScopedArena` and `smriti::pools::LinearArena` for stack-bounded scratch allocations.
 - **Snapshots & Debugging**: Built-in snapshot ring buffer (`take_snapshot`, `restore_snapshot`) and customizable debug overlay renderer (`DebugOverlay`).
 
+### Additive Sizing, Traversal & Text-Metrics Extensions
+
+The following are backward-compatible additions layered onto the existing engine (the original `SizeSpec::Auto`/`Px`/`Percent`, `hit_test`, and the C-function-pointer `TextMeasure` hook are unchanged and byte-identical when the new features are unused). They back the Drishya widget engine.
+
+- **New `SizeSpec` units** (all additive; mixable inside `SizeSpecClamp` arms):
+  - `SizeSpec::Fr(weight)` — flexible fraction. Splits free space on the main axis proportionally to `weight`; translated to `flex_grow` with a zero basis at bake time.
+  - `SizeSpec::Content(min_px = 0, max_px = 0)` — sizes to intrinsic content, optionally clamped to `[min_px, max_px]` (`max_px <= 0` ⇒ unbounded).
+  - `SizeSpec::Aspect(ratio)` — derives this axis from the resolved other axis via `width : height = ratio`. `Aspect` wins over `Align::Stretch`.
+- **`SizeSpecClamp{min, pref, max}`** — an optional min/pref/max triple stored in `LayoutStyle::width_clamp` and `LayoutStyle::height_clamp`, bounding a resolved size between a min and max window. Each arm is a full `SizeSpec`, so units can be mixed (e.g. `min = Px(120)`, `pref = Fr(1)`, `max = Percent(50)`).
+- **`Engine::hit_test_chain(x, y, std::span<uint32_t> out) -> std::size_t`** — walks the baked `parent[]` array from the hit leaf up to the root, filling `out` leaf-first, and returns the count written. Zero heap. `hit_test` itself is unchanged.
+- **`Engine::for_each_leaf(Fn fn)`** — invokes `fn(node_index)` for every leaf (`child_count == 0`) in baked pre-order, which is the natural tab order. Zero heap.
+- **`ITextMetrics` concept + `make_text_measure(T&)`** — opt-in typed text metrics. Any type satisfying `ITextMetrics` (a `measure(const char*, float) -> Size2D` member) can be adapted into a `TextMeasure` trampoline via `make_text_measure`, which captures `&metrics` as `user_data` (the metrics object must outlive the returned `TextMeasure`; zero allocation). The existing C-function-pointer `TextMeasure` hook still works.
+
 ### Usage Example
 ```cpp
 #include <akruti/layout.hpp>

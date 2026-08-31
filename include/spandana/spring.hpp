@@ -10,7 +10,9 @@
 // ============================================================================
 
 #include "concepts.hpp"
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <numbers>
 #include <utility>
 
@@ -114,6 +116,103 @@ public:
 
 private:
     AnalyticalSpringDamper spring_;
+};
+
+// N-Dimensional Spring Damper — one shared closed-form scalar spring applied
+// per component over a fixed-size array. Generalizes Vector2SpringDamper to any
+// N (vecN, colors, rects flattened to floats, ...). Zero heap, constexpr-ready.
+template <std::size_t N>
+class AnalyticalSpringDamperN {
+public:
+    using array_t = std::array<float, N>;
+
+    constexpr explicit AnalyticalSpringDamperN(float stiffness = 180.0f, float damping = 12.0f) noexcept
+        : spring_(stiffness, damping) {}
+
+    [[nodiscard]] std::pair<array_t, array_t>
+    step(const array_t& current, const array_t& velocity,
+         const array_t& target, float dt) const noexcept {
+        array_t pos{};
+        array_t vel{};
+        for (std::size_t i = 0; i < N; ++i) {
+            auto [p, v] = spring_.step(current[i], velocity[i], target[i], dt);
+            pos[i] = p;
+            vel[i] = v;
+        }
+        return {pos, vel};
+    }
+
+    [[nodiscard]] constexpr const AnalyticalSpringDamper& scalar() const noexcept { return spring_; }
+
+private:
+    AnalyticalSpringDamper spring_;
+};
+
+// Rect Spring — springs a rectangle's {x, y, w, h} toward a target rect using a
+// shared scalar spring per component. Templated on the rect type (any type with
+// public float members x, y, w, h — e.g. akruti::layout::Rect2D) so spandana
+// keeps no dependency on the layout engine. Holds its own velocity state, unlike
+// the stateless dampers above, so it can drive reflow directly.
+template <typename Rect>
+class RectSpring {
+public:
+    constexpr explicit RectSpring(float stiffness = 180.0f, float damping = 12.0f) noexcept
+        : spring_(stiffness, damping) {}
+
+    // Initialize position (and zero velocity) without animating — use on first
+    // placement so the rect does not spring in from the origin.
+    void snap(const Rect& r) noexcept {
+        current_ = to_array(r);
+        velocity_ = std::array<float, 4>{0.0f, 0.0f, 0.0f, 0.0f};
+        has_state_ = true;
+    }
+
+    // Advance toward `target` by dt, returning the interpolated rect. First call
+    // snaps to target (no spring-in from an undefined prior state).
+    [[nodiscard]] Rect step(const Rect& target, float dt) noexcept {
+        const std::array<float, 4> tgt = to_array(target);
+        if (!has_state_) {
+            current_ = tgt;
+            velocity_ = std::array<float, 4>{0.0f, 0.0f, 0.0f, 0.0f};
+            has_state_ = true;
+            return target;
+        }
+        for (std::size_t i = 0; i < 4; ++i) {
+            auto [p, v] = spring_.step(current_[i], velocity_[i], tgt[i], dt);
+            current_[i] = p;
+            velocity_[i] = v;
+        }
+        return from_array(current_);
+    }
+
+    // True when the spring has effectively converged to its last target.
+    [[nodiscard]] bool settled(float pos_eps = 0.01f, float vel_eps = 0.01f) const noexcept {
+        for (std::size_t i = 0; i < 4; ++i) {
+            if (std::fabs(velocity_[i]) > vel_eps) return false;
+        }
+        (void)pos_eps;
+        return has_state_;
+    }
+
+    [[nodiscard]] Rect value() const noexcept { return from_array(current_); }
+
+private:
+    static std::array<float, 4> to_array(const Rect& r) noexcept {
+        return {r.x, r.y, r.w, r.h};
+    }
+    static Rect from_array(const std::array<float, 4>& a) noexcept {
+        Rect r{};
+        r.x = a[0];
+        r.y = a[1];
+        r.w = a[2];
+        r.h = a[3];
+        return r;
+    }
+
+    AnalyticalSpringDamper spring_;
+    std::array<float, 4> current_{0.0f, 0.0f, 0.0f, 0.0f};
+    std::array<float, 4> velocity_{0.0f, 0.0f, 0.0f, 0.0f};
+    bool has_state_ = false;
 };
 
 // Angular Spring Damper — springs toward a target angle along the shortest arc.

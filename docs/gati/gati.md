@@ -5,6 +5,8 @@ Gati sits **above** `pebble::ecs`, `akruti` (geometry/CCD/fracture), and `prakri
 
 Include: `#include <gati/gati.hpp>`
 
+Muscle control/activation bridge details: [`docs/gati/muscle.md`](docs/gati/muscle.md)
+
 ---
 
 ## Table of Contents

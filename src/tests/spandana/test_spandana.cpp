@@ -164,4 +164,56 @@ TEST_CASE("Spandana: Verlet Secondary Cloth Dynamics", "[spandana][cloth]") {
     REQUIRE_FALSE(chain.is_loop);
 }
 
+// ============================================================================
+// Additive Phase-1: RectSpring / AnalyticalSpringDamperN used by drishya reflow.
+// Existing cases above are untouched.
+// ============================================================================
+
+namespace {
+struct TestRect {
+    float x = 0.0f, y = 0.0f, w = 0.0f, h = 0.0f;
+};
+} // namespace
+
+TEST_CASE("Spandana: RectSpring first step snaps, then converges to target", "[spandana][spring]") {
+    using namespace pebble::spandana;
+
+    RectSpring<TestRect> spring;
+    const TestRect target{100.0f, 100.0f, 50.0f, 50.0f};
+
+    // First step snaps (no spring-in from origin).
+    TestRect r = spring.step(target, 0.016f);
+    REQUIRE(r.x == Catch::Approx(100.0f).margin(0.001f));
+
+    // Move the target; integrate a fixed budget. settled() only inspects
+    // velocity, so it reads true right after a snap (zero velocity) even though
+    // position has not yet reached the new target — drive an explicit step count
+    // rather than gating the loop on settled().
+    const TestRect moved{200.0f, 100.0f, 50.0f, 50.0f};
+    for (int i = 0; i < 4000; ++i) {
+        r = spring.step(moved, 0.016f);
+    }
+    CHECK(spring.settled());
+    CHECK(r.x == Catch::Approx(200.0f).margin(1.0f));
+    CHECK(r.h == Catch::Approx(50.0f).margin(1.0f));
+}
+
+TEST_CASE("Spandana: AnalyticalSpringDamperN steps components independently", "[spandana][spring]") {
+    using namespace pebble::spandana;
+
+    AnalyticalSpringDamperN<3> spring;
+    std::array<float, 3> pos{0.0f, 0.0f, 0.0f};
+    std::array<float, 3> vel{0.0f, 0.0f, 0.0f};
+    const std::array<float, 3> target{10.0f, -5.0f, 3.0f};
+
+    for (int i = 0; i < 4000; ++i) {
+        auto [p, v] = spring.step(pos, vel, target, 0.016f);
+        pos = p;
+        vel = v;
+    }
+    CHECK(pos[0] == Catch::Approx(10.0f).margin(0.05f));
+    CHECK(pos[1] == Catch::Approx(-5.0f).margin(0.05f));
+    CHECK(pos[2] == Catch::Approx(3.0f).margin(0.05f));
+}
+
 

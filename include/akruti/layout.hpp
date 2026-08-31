@@ -191,16 +191,75 @@ namespace akruti::layout {
         void* user_data;
     };
 
+    // Concept for any object able to measure a text run. Lets callers pass a typed
+    // metrics object instead of a C function pointer; adapt via make_text_measure.
+    template <class T>
+    concept ITextMetrics = requires(const T &t, const char *s, float mw) {
+        { t.measure(s, mw) } -> std::convertible_to<Size2D>;
+    };
+
+    // Build a TextMeasure trampoline capturing &metrics as user_data. The metrics object
+    // must outlive the returned TextMeasure. Zero allocation.
+    template <ITextMetrics T>
+    TextMeasure make_text_measure(T &metrics) noexcept {
+        return TextMeasure{
+            +[](const char *text, float max_width, void *ud) -> Size2D {
+                return static_cast<T *>(ud)->measure(text, max_width);
+            },
+            static_cast<void *>(&metrics)};
+    }
+
     struct SizeSpec {
-        enum class Kind : std::uint8_t { Auto = 0, Px = 1, Percent = 2 };
+        // 0..2 preserve original numeric values & behavior (byte-identical when new
+        // units are unused). Fr/Content/Aspect are additive.
+        enum class Kind : std::uint8_t {
+            Auto = 0,
+            Px = 1,
+            Percent = 2,
+            Fr = 3,      // fractional free-space share; value = weight
+            Content = 4, // intrinsic content clamped to [value, aux0]
+            Aspect = 5   // derive this axis from the resolved other axis; value = ratio
+        };
         Kind kind = Kind::Auto;
         float value = 0.0f;
+        // Auxiliary parameters used only by additive units (default 0 keeps size lean
+        // for the common Auto/Px/Percent path). Content: aux0 = max (0 => +inf).
+        float aux0 = 0.0f;
+        float aux1 = 0.0f;
 
         static SizeSpec Auto() noexcept { return SizeSpec{Kind::Auto, 0.0f}; }
         static SizeSpec Px(const float v) noexcept { return SizeSpec{Kind::Px, v}; }
         static SizeSpec Percent(const float v) noexcept { return SizeSpec{Kind::Percent, v}; }
 
+        // value = fractional weight (like flex_grow); translated to flex_grow at bake.
+        static SizeSpec Fr(const float weight) noexcept { return SizeSpec{Kind::Fr, weight}; }
+        // Intrinsic content size clamped to [min_px, max_px]; max_px <= 0 => unbounded.
+        static SizeSpec Content(const float min_px = 0.0f, const float max_px = 0.0f) noexcept {
+            return SizeSpec{Kind::Content, min_px, max_px, 0.0f};
+        }
+        // Derive this axis from the resolved cross axis using ratio = this / other.
+        static SizeSpec Aspect(const float ratio) noexcept { return SizeSpec{Kind::Aspect, ratio}; }
+
+        [[nodiscard]] bool is_fr() const noexcept { return kind == Kind::Fr; }
+        [[nodiscard]] bool is_content() const noexcept { return kind == Kind::Content; }
+        [[nodiscard]] bool is_aspect() const noexcept { return kind == Kind::Aspect; }
+
         friend constexpr bool operator==(const SizeSpec&, const SizeSpec&) = default;
+    };
+
+    // Optional min/pref/max triple for a single axis. Each field is a full SizeSpec so
+    // callers can mix units (e.g. min=Px(120), pref=Fr(1), max=Percent(50)). Kept out of
+    // SizeSpec itself to keep the SoA columns lean; lives on LayoutStyle as an opt-in.
+    struct SizeSpecClamp {
+        SizeSpec min = SizeSpec::Auto();
+        SizeSpec pref = SizeSpec::Auto();
+        SizeSpec max = SizeSpec::Auto();
+
+        [[nodiscard]] bool active() const noexcept {
+            return min.kind != SizeSpec::Kind::Auto || pref.kind != SizeSpec::Kind::Auto ||
+                   max.kind != SizeSpec::Kind::Auto;
+        }
+        friend constexpr bool operator==(const SizeSpecClamp&, const SizeSpecClamp&) = default;
     };
 
     struct Constraint {
@@ -236,6 +295,12 @@ namespace akruti::layout {
         SizeSpec min_height = SizeSpec::Auto();
         SizeSpec max_width = SizeSpec::Auto();
         SizeSpec max_height = SizeSpec::Auto();
+
+        // Optional min/pref/max triples. When active(), they override the scalar
+        // min/max above for that axis and drive the resolve in place_pass. Inactive
+        // by default => existing min/max behavior is untouched.
+        SizeSpecClamp width_clamp{};
+        SizeSpecClamp height_clamp{};
 
         // Aspect ratio locking
         float aspect_ratio = 0.0f; // width / height
@@ -287,6 +352,35 @@ namespace akruti::layout {
     };
 
     using LayoutTree = ::NAryTree<LayoutNode>;
+
+    // Parent-relative edge for docking helpers.
+    enum class Side : std::uint8_t { Left = 0, Right = 1, Top = 2, Bottom = 3, Fill = 4 };
+
+    // Pin a node to a parent edge at `inset` px (parent-relative). Fill stretches to all
+    // four edges. Builds on the anchor_* constraints applied in constraints_pass — no
+    // sibling DAG required. Returns the mutated style for chaining.
+    inline LayoutStyle &dock(LayoutStyle &st, const Side side, const float inset = 0.0f) noexcept {
+        switch (side) {
+            case Side::Left:   st.anchor_left = inset;   break;
+            case Side::Right:  st.anchor_right = inset;  break;
+            case Side::Top:    st.anchor_top = inset;    break;
+            case Side::Bottom: st.anchor_bottom = inset; break;
+            case Side::Fill:
+                st.anchor_left = inset; st.anchor_right = inset;
+                st.anchor_top = inset;  st.anchor_bottom = inset;
+                break;
+        }
+        return st;
+    }
+
+    // Give a child a proportional share of the parent's main axis. Two children with
+    // split(1)/split(2) divide free space 1:2. Implemented via the Fr unit (translated to
+    // flex_grow at bake), so no solver change is needed.
+    inline LayoutStyle &split_share(LayoutStyle &st, const float weight, const Axis parent_axis) noexcept {
+        if (parent_axis == Axis::Row) st.width = SizeSpec::Fr(weight);
+        else st.height = SizeSpec::Fr(weight);
+        return st;
+    }
 
     inline constexpr std::uint32_t kInvalid = std::numeric_limits<std::uint32_t>::max();
 
@@ -429,6 +523,35 @@ namespace akruti::layout {
         return content;
     }
 
+    // Resolve one SizeSpec arm against a known parent extent, returning a px value.
+    // Px/Percent resolve; other kinds return the passed fallback.
+    static float resolve_arm_px(const SizeSpec &s, const float parent_extent,
+                                const float fallback) noexcept {
+        switch (s.kind) {
+            case SizeSpec::Kind::Px:      return std::max(0.0f, s.value);
+            case SizeSpec::Kind::Percent: return std::max(0.0f, parent_extent * s.value * 0.01f);
+            default:                      return fallback;
+        }
+    }
+
+    // Clamp a resolved dimension using a min/pref/max triple, resolving each arm against
+    // the parent extent. pref (when set) replaces the value; min/max then bound it.
+    static float resolve_clamp_rel(float dim, const SizeSpecClamp &c,
+                                   const float parent_extent) noexcept {
+        if (!c.active()) return dim;
+        if (c.pref.kind != SizeSpec::Kind::Auto) {
+            dim = resolve_arm_px(c.pref, parent_extent, dim);
+        }
+        if (c.min.kind != SizeSpec::Kind::Auto) {
+            dim = std::max(dim, resolve_arm_px(c.min, parent_extent, 0.0f));
+        }
+        if (c.max.kind != SizeSpec::Kind::Auto) {
+            const float hi = resolve_arm_px(c.max, parent_extent, std::numeric_limits<float>::infinity());
+            dim = std::min(dim, hi);
+        }
+        return std::max(0.0f, dim);
+    }
+
     struct HierarchyBufferView {
         std::vector<std::uint32_t> *parent = nullptr;
         std::vector<std::uint32_t> *first_child = nullptr;
@@ -532,6 +655,9 @@ namespace akruti::layout {
         std::vector<float> flex_grow;
         std::vector<float> flex_shrink;
         std::vector<SizeSpec> flex_basis;
+
+        std::vector<SizeSpecClamp> width_clamp;
+        std::vector<SizeSpecClamp> height_clamp;
 
         std::vector<Overflow> overflow_x;
         std::vector<Overflow> overflow_y;
@@ -669,6 +795,9 @@ namespace akruti::layout {
             flex_shrink.clear();
             flex_basis.clear();
 
+            width_clamp.clear();
+            height_clamp.clear();
+
             overflow_x.clear();
             overflow_y.clear();
             scroll_offset_x.clear();
@@ -731,6 +860,38 @@ namespace akruti::layout {
             flex_grow[node] = st.flex_grow;
             flex_shrink[node] = st.flex_shrink;
             flex_basis[node] = st.flex_basis;
+
+            width_clamp[node] = st.width_clamp;
+            height_clamp[node] = st.height_clamp;
+
+            // --- Additive SizeSpec unit translation (zero solver edit for Fr) ---
+            // Fr(width/height) reuses the existing free-space flex split: translate to
+            // flex_grow + zero basis. An explicit Fr on the main axis overrides the
+            // style's own flex_grow for that node (documented precedence). The axis of
+            // the *parent* decides which of width/height is the main axis, but a node is
+            // laid out inside its parent's axis, so we translate whichever spec is Fr and
+            // let place_pass pick it up via flex_grow (cross-axis Fr degrades to grow too,
+            // which is harmless because free-space split only runs along the main axis).
+            {
+                const SizeSpec ws = st.width;
+                const SizeSpec hs = st.height;
+                if (ws.is_fr() || hs.is_fr()) {
+                    const float w = ws.is_fr() ? ws.value : 0.0f;
+                    const float h = hs.is_fr() ? hs.value : 0.0f;
+                    flex_grow[node] = (w > 0.0f) ? w : ((h > 0.0f) ? h : st.flex_grow);
+                    flex_basis[node] = SizeSpec::Px(0.0f);
+                }
+                // Aspect(ratio) on one axis => lock aspect and let the aspect pass derive
+                // the cross dimension from the resolved main dimension.
+                if (ws.is_aspect() && ws.value > 0.0f) {
+                    aspect_ratio[node] = ws.value;
+                    aspect_lock[node] = 1;
+                } else if (hs.is_aspect() && hs.value > 0.0f) {
+                    // Aspect(r) on height: r = w/h, so h = w/r. Store as w/h directly.
+                    aspect_ratio[node] = hs.value;
+                    aspect_lock[node] = 1;
+                }
+            }
 
             overflow_x[node] = st.overflow_x;
             overflow_y[node] = st.overflow_y;
@@ -975,6 +1136,33 @@ namespace akruti::layout {
             return std::nullopt;
         }
 
+        // Fill `out` with the hit node then its ancestor chain (leaf -> root), writing at
+        // most out.size() entries. Returns the number written. Zero heap: walks the baked
+        // parent[] array. `hit_test` itself is unchanged.
+        std::size_t hit_test_chain(float x, float y, std::span<std::uint32_t> out) const {
+            const auto hit = hit_test(x, y);
+            if (!hit) return 0;
+            std::size_t n = 0;
+            std::uint32_t curr = *hit;
+            while (curr != kInvalid && n < out.size()) {
+                out[n++] = curr;
+                curr = parent[curr];
+            }
+            return n;
+        }
+
+        // Invoke fn(node_index) for every leaf (child_count == 0) in index order, which is
+        // the baked pre-order (natural tab order). Zero heap.
+        template <class Fn>
+        void for_each_leaf(Fn &&fn) const {
+            const std::size_t count = size();
+            for (std::size_t u = 0; u < count; ++u) {
+                if (child_count[u] == 0) {
+                    fn(static_cast<std::uint32_t>(u));
+                }
+            }
+        }
+
     private:
         void reserve_and_resize(std::size_t count) {
             parent.resize(count, kInvalid);
@@ -1000,6 +1188,9 @@ namespace akruti::layout {
             flex_grow.resize(count, 0.0f);
             flex_shrink.resize(count, 1.0f);
             flex_basis.resize(count, SizeSpec::Auto());
+
+            width_clamp.resize(count, SizeSpecClamp{});
+            height_clamp.resize(count, SizeSpecClamp{});
 
             overflow_x.resize(count, Overflow::Visible);
             overflow_y.resize(count, Overflow::Visible);
@@ -1124,10 +1315,41 @@ namespace akruti::layout {
             if (st.width.kind == SizeSpec::Kind::Px) final_size.w = st.width.value;
             if (st.height.kind == SizeSpec::Kind::Px) final_size.h = st.height.value;
 
+            // Content unit: keep the intrinsic (content-derived) size but clamp it to the
+            // spec's [value, aux0] window. aux0 <= 0 means unbounded above.
+            if (st.width.is_content()) {
+                final_size.w = clamp_content_unit(final_size.w, st.width);
+            }
+            if (st.height.is_content()) {
+                final_size.h = clamp_content_unit(final_size.h, st.height);
+            }
+
             final_size = apply_min_max_content(final_size, st);
+            // SizeSpecClamp min/pref/max windows (px-resolvable arms only at measure time;
+            // Percent/Fr arms resolve later in place_pass against the parent).
+            final_size.w = apply_clamp_px(final_size.w, width_clamp[u]);
+            final_size.h = apply_clamp_px(final_size.h, height_clamp[u]);
             final_size = apply_aspect_content(final_size, st);
 
             measured[u] = final_size;
+        }
+
+        static float clamp_content_unit(const float intrinsic, const SizeSpec &s) noexcept {
+            float v = intrinsic;
+            const float lo = std::max(0.0f, s.value);
+            if (v < lo) v = lo;
+            if (s.aux0 > 0.0f && v > s.aux0) v = s.aux0;
+            return v;
+        }
+
+        // Apply only the px-resolvable arms of a clamp at measure time. Non-px arms
+        // (Percent/Fr) are left for place_pass where the parent extent is known.
+        static float apply_clamp_px(float v, const SizeSpecClamp &c) noexcept {
+            if (!c.active()) return v;
+            if (c.pref.kind == SizeSpec::Kind::Px) v = c.pref.value;
+            if (c.min.kind == SizeSpec::Kind::Px) v = std::max(v, c.min.value);
+            if (c.max.kind == SizeSpec::Kind::Px) v = std::min(v, c.max.value);
+            return std::max(0.0f, v);
         }
 
         void measure_pass() {
@@ -1150,6 +1372,15 @@ namespace akruti::layout {
         void place_pass(const Rect2D &root_r) {
             const std::size_t count = size();
             rect[0] = root_r;
+            // Honor root's explicit Px extents and aspect ratio (no parent to derive from).
+            if (count > 0) {
+                if (width[0].kind == SizeSpec::Kind::Px)  rect[0].w = width[0].value;
+                if (height[0].kind == SizeSpec::Kind::Px) rect[0].h = height[0].value;
+                if (aspect_lock[0] != 0 && aspect_ratio[0] > 0.0f) {
+                    if (height[0].is_aspect()) rect[0].h = rect[0].w / aspect_ratio[0];
+                    else if (width[0].is_aspect()) rect[0].w = rect[0].h * aspect_ratio[0];
+                }
+            }
             if (enable_perf_tracking) perf_stats.nodes_placed++;
 
             for (std::size_t u = 0; u < count; ++u) {
@@ -1222,6 +1453,38 @@ namespace akruti::layout {
                         ch_cross = std::max(ch_cross, parent_cross - (cross_margin_before(ch_mg, ax) + cross_margin_after(ch_mg, ax)));
                     }
 
+                    // Resolve parent-relative clamp arms (Percent/Fr) now that the parent
+                    // content extent is known. px arms were already applied at measure.
+                    {
+                        const float par_main = content_main;
+                        const float par_cross = cross_size(content_rect, ax);
+                        const SizeSpecClamp &wc = width_clamp[ch];
+                        const SizeSpecClamp &hc = height_clamp[ch];
+                        const bool w_is_main = (ax == Axis::Row);
+                        if (wc.active()) {
+                            const float par = w_is_main ? par_main : par_cross;
+                            float &dim = w_is_main ? ch_main : ch_cross;
+                            dim = resolve_clamp_rel(dim, wc, par);
+                        }
+                        if (hc.active()) {
+                            const float par = w_is_main ? par_cross : par_main;
+                            float &dim = w_is_main ? ch_cross : ch_main;
+                            dim = resolve_clamp_rel(dim, hc, par);
+                        }
+                    }
+
+                    // Aspect unit: derive the cross dimension from the resolved main.
+                    if (aspect_lock[ch] != 0 && aspect_ratio[ch] > 0.0f) {
+                        // aspect_ratio is width/height. Derive cross from main honoring axis.
+                        if (ax == Axis::Row) {
+                            // main = width, cross = height
+                            ch_cross = ch_main / aspect_ratio[ch];
+                        } else {
+                            // main = height, cross = width
+                            ch_cross = ch_main * aspect_ratio[ch];
+                        }
+                    }
+
                     set_main_len(ch_r, ax, ch_main);
                     set_cross_len(ch_r, ax, ch_cross);
 
@@ -1274,6 +1537,28 @@ namespace akruti::layout {
                 }
                 if (anchor_top[u] != 0.0f && p != kInvalid) {
                     rect[u].y = rect[p].y + anchor_top[u];
+                }
+
+                // Parent-relative right/bottom anchors: pin the node's right/bottom edge
+                // at the given inset from the parent's right/bottom edge (offset measured
+                // inward). Symmetric to left/top; applied after them so an L+R pair
+                // stretches width, and a lone R/B pins that edge.
+                if (anchor_right[u] != 0.0f && p != kInvalid) {
+                    const float parent_right = rect[p].x + rect[p].w;
+                    if (anchor_left[u] != 0.0f) {
+                        // Both edges pinned => derive width from the span.
+                        rect[u].w = std::max(0.0f, (parent_right - anchor_right[u]) - rect[u].x);
+                    } else {
+                        rect[u].x = parent_right - anchor_right[u] - rect[u].w;
+                    }
+                }
+                if (anchor_bottom[u] != 0.0f && p != kInvalid) {
+                    const float parent_bottom = rect[p].y + rect[p].h;
+                    if (anchor_top[u] != 0.0f) {
+                        rect[u].h = std::max(0.0f, (parent_bottom - anchor_bottom[u]) - rect[u].y);
+                    } else {
+                        rect[u].y = parent_bottom - anchor_bottom[u] - rect[u].h;
+                    }
                 }
             }
         }

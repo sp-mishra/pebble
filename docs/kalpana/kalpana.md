@@ -261,6 +261,12 @@ Path stylized_contour = circle({100.0f, 100.0f}, 50.0f)
 | `SokolCanvas` | `sokol_backend` | Metal / Vulkan / WebGL | 60–240 FPS GPU accelerated hardware rendering. |
 | `TerminalCanvas` | `notcurses_backend` | ANSI / Notcurses Terminal | High-performance CLI dashboards and text-mode games. |
 
+Backend APIs can be enabled/disabled at configure time:
+- `-DPEBBLE_ENABLE_KALPANA_SOKOL_BACKEND=ON/OFF`
+- `-DPEBBLE_ENABLE_KALPANA_NOTCURSES_BACKEND=ON/OFF`
+
+When a flag is `OFF`, the corresponding backend type alias is not exported from `kalpana/kalpana.hpp`.
+
 ---
 
 ## 8. Zero-to-Hero Tutorial

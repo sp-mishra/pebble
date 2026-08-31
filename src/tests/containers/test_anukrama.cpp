@@ -133,6 +133,9 @@ TEST_CASE("anukrama: smriti_node_pool version parity", "[anukrama][policy][smrit
     CHECK(churn.size() == 1U);
 }
 
+// Current striped_lock contract: correctness-first locking for commit/publish paths.
+// Disjoint-key parallel commit is intentionally conservative until the backing index
+// supports concurrent structural mutation without global commit serialization.
 TEST_CASE("anukrama: striped_lock disjoint-key concurrency", "[anukrama][concurrency]") {
     using striped_store = anukrama::store<int, int, std::less<>,
                                           anukrama::skip_list_index,

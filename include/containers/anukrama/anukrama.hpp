@@ -161,9 +161,10 @@ namespace anukrama {
         [[nodiscard]] empty_guard commit_lock(const WriteSet&) const noexcept { return {}; }
     };
 
-    // N-way key-hash striping: disjoint keys commit concurrently. read_lock holds
-    // every stripe shared (a reader may touch any key); write/commit acquire only the
-    // stripes their keys hash to, in ascending stripe order to avoid deadlock.
+    // N-way key-hash striping: disjoint keys can use independent write_lock lanes.
+    // read_lock holds every stripe shared (a reader may touch any key).
+    // commit_lock currently takes every stripe exclusively to preserve correctness
+    // with index backends that are not structurally concurrent on inserts/erases.
     // Transparent hasher: dispatches to std::hash<Key> per call so striped_lock
     // need not know the key type up front.
     struct default_stripe_hash {
@@ -187,7 +188,7 @@ namespace anukrama {
             std::array<bool, N> held_{};
         public:
             multi_guard() = default;
-            explicit multi_guard(std::array<std::shared_mutex, N>& stripes) : stripes_{&stripes} {}
+            explicit multi_guard(std::array<std::shared_mutex, N>& stripes) : stripes_{&stripes}, held_{} {}
             void acquire(std::size_t index) { if (!held_[index]) { stripes_->operator[](index).lock(); held_[index] = true; } }
             multi_guard(const multi_guard&) = delete;
             multi_guard& operator=(const multi_guard&) = delete;
@@ -221,14 +222,16 @@ namespace anukrama {
             return guard;
         }
 
-        // WriteSet is any range of elements exposing a `.key`. Acquire the touched
-        // stripes in ascending index order (total order → deadlock-free).
+        // WriteSet is any range of elements exposing a `.key`. Today the backing
+        // index backend is not stripe-concurrent for structural mutation, so commit
+        // takes every stripe (still in ascending total order) to preserve correctness.
+        // This keeps API behavior stable while avoiding data races/UB on disjoint-key
+        // inserts; future concurrent index backends can relax this to touched stripes.
         template <class WriteSet>
         [[nodiscard]] multi_guard commit_lock(const WriteSet& writes) const {
-            std::array<bool, N> wanted{};
-            for (const auto& w : writes) wanted[stripe_of(w.key, Hash{})] = true;
+            (void)writes;
             multi_guard guard{stripes_};
-            for (std::size_t i = 0; i < N; ++i) if (wanted[i]) guard.acquire(i);
+            for (std::size_t i = 0; i < N; ++i) guard.acquire(i);
             return guard;
         }
     };

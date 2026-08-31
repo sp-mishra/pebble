@@ -15,6 +15,10 @@
 #include "input.hpp"
 #include "anim.hpp"
 #include "parallel.hpp"
+#include "components/muscle_controller.hpp"
+#include "systems/muscle_activation.hpp"
+#include "systems/muscle_bridge.hpp"
+#include "systems/muscle_path.hpp"
 
 // Optional bridges
 #include "physics.hpp"

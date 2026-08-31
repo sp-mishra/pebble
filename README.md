@@ -123,17 +123,22 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
   * Fluent/EDSL front end over `vakya` (`minimize(sq(x[0]-constant(1))+…)`, `subject_to` comparison constraints, `property_store`-driven `Auto` method selection); `nadi`-backed introspection (`FullTrace`, `ProgressBar`, `Callback`) with a zero-overhead `NoTelemetry` default (`kalpa/introspect/telemetry.hpp`).
   * Documentation: [`docs/kalpa/kalpa.md`](docs/kalpa/kalpa.md)
 * **Prakriti** (`include/prakriti/`) — Unified material-state 2D continuum simulator, 100x multi-physics acceleration engine (Prakriti 2.0), and **Celestial Cosmological Relativistic Engine** (`include/prakriti/material/celestial.hpp`).
+    * New muscle stack: policy-based active constraints (`constraints/muscle.hpp`), fatigue/fiber/tendon models, SoA storage (`state/muscle_store.hpp`), and XPBD projection (`solvers/muscle.hpp`).
     * Hybrid particle-field Lagrangian continuum dynamics combining Extended Position-Based Dynamics (XPBD) mechanics, Position-Based Fluids (PBF), graph-Laplacian explicit heat diffusion with latent-heat phase transitions, strain-driven plasticity and fracture with `containers::union_find` island tracking, and `akruti` SDF obstacle contact and XPBD kinematic joints.
     * **Celestial & Cosmological Relativistic Engine**: Organic Kelvin-Helmholtz protostar self-gravitational compression heating, main sequence thermonuclear fusion, Chandrasekhar neutron star / pulsar core collapse, Witten Quark-Gluon Plasma (QGP) Strange Quark Stars, TOV black hole collapse with 42-shard supernovae, Roche Lobe Overflow (RLOF) accretion stream stripping, tidal dissipation and spin-orbit locking, planetary geology (Jeans atmospheric escape, surface liquid ocean condensation, lithosphere solidification), Sedov-Taylor supernova remnant (SNR) shockwaves, dipolar magnetohydrodynamic (MHD) magnetic flux tubes, Pulsar Timing Array (PTA) gravitational wave modulation, quadrupole gravitational wave strain chirp ripples ($h \propto \frac{\mu \omega^2}{d}$), Innermost Stable Circular Orbit ($R_{\text{ISCO}} = 3 R_s$) accretion plasma flares, cometary sublimation ion/dust tails, boundless open-universe horizons with SplitMix64 procedural sector discovery, Fast Multipole Method (FMM) far-field tensor potentials, two-tier out-of-core caching (`kosha::LRUCache` RAM + `petika::AsyncPersistenceWorker` lock-free background persistence), and $r$-process cosmic nucleosynthesis chemical evolution ($Z$).
     * **Pebble Verse Application** (`src/app/pebble_verse.cpp`): 100% autonomous boundless N-body planetary & stellar continuum universe simulator with startup configuration modal dialog (including background analytics layer toggle), infinite procedural sector streaming, Barnes-Hut multipole quadtree gravity, $O(N)$ `SpatialHashGrid` collision broadphase, external celestial entity ingress (rogue protogalaxies, hypervelocity stars, interstellar comets), faint Jacobi orbital hierarchy links, ultra-faint Hertzsprung-Russell (H-R) diagram overlay, multi-scale radar, and Multi-Spectral Optical/Thermal/X-Ray rendering modes.
     * Features 3 interchangeable `ComputeBackend` execution tiers: `ScalarBackend` (zero-dep reference), `HighwayBackend` (Google Highway SIMD SPH kernels), and `PravahaBackend` (multi-core task graph chunking with 4-color checkerboard domain decomposition).
     * Incorporates 2D Morton Z-order spatial curve sorting for L1/L2 cache contiguity, Kosha LRU active manifold multiplier warm-starting, and Sokol GFX / Metal GPU instanced particle streaming (`InstancedParticlePipeline`).
     * Documentation: [`docs/prakriti/prakriti.md`](docs/prakriti/prakriti.md)
+    * Muscle docs: [`docs/prakriti/muscle.md`](docs/prakriti/muscle.md)
+    * Muscle perf benchmark: see `Performance Benchmark` in [`docs/prakriti/muscle.md`](docs/prakriti/muscle.md)
 * **Gati** (`include/gati/`) — High-performance, header-only C++23/C++26 realtime game runtime and entity orchestration engine.
+   * New muscle orchestration components/systems: `MuscleController`, `MuscleActivationSystem`, `MuscleBridgeSystem`, and `PathUpdateSystem`.
    * Fixed-step deterministic clock with presentation render interpolation (`alpha`), static `SystemStack` pipeline, Catmull-Rom animation splines & state machines, lock-free `EventBus`, input mapping, and Akruti (geometry/broadphase/narrowphase) + Prakriti (physics/joints) bridges.
    * `SpatialTileStreamer` now fires `on_evict` callbacks for tiles leaving the viewport, enabling resource cleanup (textures, ECS entities) for streamed-out chunks. Backward-compatible 2-callback API preserved.
    * Directly uses `pebble::math` linear algebra primitives and `pravaha` parallel execution.
    * Documentation: [`docs/gati/gati.md`](docs/gati/gati.md)
+   * Muscle docs: [`docs/gati/muscle.md`](docs/gati/muscle.md)
 * **Spandana** (`include/spandana/`) — Plug & Play Contract-Based 2D Animation, Easing, Springs, IK, and Node-Graph World EDSL.
    * Concept-driven architecture (`EasingFunction`, `SpringSolver`, `IKSolver2D`, `Tweenable`), 30+ Robert Penner easings, closed-form exact harmonic spring damper, Two-Bone analytical IK, 2D skeletal bone hierarchy & Linear Blend Skinning (`Skeleton2D`), sprite flipbooks, camera trauma shakes, procedural Voronoi destruction (`DestructionEngine`), parametric 2D directional blend spaces (`BlendSpace2D`), continuous material thermodynamics & phase changes, chemical reaction matrix (`ElementalReactionMatrix`), Glaze JSON serialization, and automatic dependency/parallelism inference node graph.
    * Features a unified declarative World EDSL combining motion, Akruti CSG shape morphs, and Prakriti physics impulses.
@@ -147,6 +152,15 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
    * Native 16-band Kubelka–Munk subtractive pigment mixing, named pigment catalog with extensible custom curves, HSL/OkLab conversions, multi-channel Eulerian `PaintField<>` (20 channels: KM reflectance ×16, water, height, sediment, binder), `MediumSolver` wet-on-wet diffusion/drying/sediment deposition, `RealShaderPass` Cook-Torrance GGX PBR + Karis split-sum IBL, `DropEngine` watercolor drips, `LiquifyBrush` displacement warp, `StrokeStabilizer` (OneEuro/PullLag/CatmullRom), composable `EffectChain` EDSL (`operator|`, `operator>>`), layer compositing with customizable `LayerCombiner` policies, procedural fills (paper texture, marble, wood, grain) with plug-and-play noise generators, geometry modifiers (`offset`, `roughen`, `smooth`, `simplify`), declarative scene authoring EDSL (`NodeBuilder`, `TextBuilder`, `shape()`, `text()`, `operator<<`), and monomorphized render backends (headless capture, Sokol GFX GPU, Notcurses terminal). New presets: `graphite_pencil`, `metallic_paint`, `rough_feather`, `express_oils`, `gouache`. Serializable `BrushProfile` (TOML round-trip) via `BrushCreator`.
    * `SpectralGradient` supports up to 8 stops via `SmallVector<GradientStop, 8>` — zero heap for typical gradients. `BasicPath::from_svg(d)` parses SVG `d` attribute strings (M/L/C/Q/A/Z). `EffectChain` now includes `dof(focus_point, focal_range, max_blur_radius)` depth-of-field effect.
    * Documentation: [`docs/kalpana/kalpana.md`](docs/kalpana/kalpana.md)
+* **Rekha** (`include/rekha/`) — Backend-agnostic plotting and graph-visualization library.
+   * Major plots: line, scatter, bar, histogram; plus graph drawing via `GraphPlot`.
+   * Force-directed spring graph layout with policy-based tuning (`ForceDirectedLayout<Policy>`), and optional deterministic runtime settling via `gati::Clock`.
+   * Ships with `KalpanaBackend` that lowers Rekha primitives into `kalpana::Scene` and can rasterize using `kalpana::DefaultCanvas`.
+   * Documentation: [`docs/rekha/rekha.md`](docs/rekha/rekha.md)
+* **Drishya** (`include/drishya/`) — Header-only C++23 concept-based retained-mode widget/UI composition engine.
+   * Composes value-typed widgets via concepts (no virtual/RTTI/macros), lays out via `akruti::layout`, renders through any `kalpana` canvas, animates via `spandana` reflow, routes pointer/key input, and binds state via `containers::reactive` Signals.
+   * Targets AI/ML dashboards and game HUDs from one widget vocabulary.
+   * Documentation: [`docs/drishya/drishya.md`](docs/drishya/drishya.md)
 
 ---
 
@@ -190,6 +204,12 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 * **SingleFlight** (`include/utils/single_flight.hpp`) — Duplicate function execution suppressor / coalescer for concurrent workloads.
 * **Profiler & Logging** (`include/utils/profiler.hpp`, `include/utils/log.hpp`) — Structured, low-latency logging and micro-benchmarking profilers.
   * Documentation: [`docs/utils/profiler.md`](docs/utils/profiler.md), [`docs/utils/log.md`](docs/utils/log.md)
+* **Manas** (`include/manas/`) — Full-stack C++23/26 machine learning and neural cognition library.
+  * **Classical ML** (`include/manas/ml/`): LinearRegression, LogisticRegression, SVM (SMO, kernel policies), KMeans (Lloyd + KMeans++), KNNClassifier/Regressor, GaussianNaiveBayes, DecisionTree (CART), RandomForest, PCA (power iteration).
+  * **Deep Learning** (`include/manas/nn/`): Reverse-mode autodiff tape, Dense/BatchNorm1D/LayerNorm/Dropout/Embedding layers, MSE/BCE/CrossEntropy/KL losses, SGD/Adam/AdaGrad/RMSProp/AdamW optimizers with gradient clipping policies, `Sequential` model with type-erased `LayerHolder` (no vtable).
+  * **Evolutionary NN** (`include/manas/`): Genome-based neural brains, policy-based evolutionary operators (selection, mutation, crossover), Petika-backed archival.
+  * Design: header-only, no virtual, policy-based; reuses `ts::tensor` gemm/SIMD, `SmallVector` SBO, `pravaha::parallel_for_eager`.
+  * Documentation: [`docs/manas/manas.md`](docs/manas/manas.md)
 
 ---
 
@@ -210,6 +230,7 @@ src/tests/
 ├── petika/            # Petika storage platform, engines, transactions
 ├── rules/             # EasyRules business rules, facts, pipeline
 ├── tarka/             # Tarka SMT solver, theories, CDCL, backends (Native, Z3 differential tests)
+├── manas/             # Manas ML (test_ml.cpp) + Neural (test_nn.cpp, test_brain.cpp, test_network.cpp)
 ├── observability/     # NADI tracing, pulse scopes, telemetry
 ├── utils/             # Setu mmap, SingleFlight, Profiler, Log, UltraCRC
 └── test_harness/      # Example registry and test fixtures
@@ -282,6 +303,8 @@ CMake automatically detects missing dependencies during configuration and seamle
 * **Configuration Options**:
   - `-DBUILD_TESTS=ON/OFF`: Build unit test runner (`pebble_tests`). Default `ON` for top-level build.
   - `-DBUILD_Z3=ON/OFF`: Enable static optimized Z3 backend compilation for Tarka. Default `ON`.
+  - `-DPEBBLE_ENABLE_KALPANA_SOKOL_BACKEND=ON/OFF`: Expose `kalpana::sokol_backend` / `kalpana::SokolCanvas` API. Default `ON`.
+  - `-DPEBBLE_ENABLE_KALPANA_NOTCURSES_BACKEND=ON/OFF`: Expose `kalpana::notcurses_backend` / `kalpana::TerminalCanvas` API. Default `ON`.
   - `-DDEPS_VERBOSE=ON/OFF`: Show verbose dependency fetch output during CMake configuration.
 * **Executable Targets**:
   - `pebble_tests`: Catch2 unit test suite runner.
@@ -289,6 +312,7 @@ CMake automatically detects missing dependencies during configuration and seamle
   - `pebble_akriti`: Akruti geometry & Kalpana vector effects showcase (`src/app/pebble_akriti.cpp`).
   - `pebble_gati`: Gati realtime ECS, elemental chemistry & thermodynamics showcase (`src/app/pebble_gati.cpp`).
   - `pebble_prakriti`: Prakriti multiphysics, continuum fluids & XPBD showcase (`src/app/pebble_prakriti.cpp`).
+  - `pebble_rekha`: Rekha plotting + force-layout graph visualization rendered in a native Kalpana/Sokol window (`src/app/pebble_rekha.cpp`).
   - `pebble_verse`: N-Body planetary continuum & thermodynamic accretion engine (`src/app/pebble_verse.cpp`).
 
 ---

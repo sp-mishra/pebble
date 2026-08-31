@@ -56,6 +56,8 @@ endif()
 
 option(BUILD_TESTS "Build pebble's tests (auto-disabled when used as a subdirectory)" ${PEBBLE_IS_TOP_LEVEL})
 option(BUILD_APP   "Build the application" OFF)
+option(PEBBLE_ENABLE_KALPANA_SOKOL_BACKEND "Enable kalpana::sokol_backend API" ON)
+option(PEBBLE_ENABLE_KALPANA_NOTCURSES_BACKEND "Enable kalpana::notcurses_backend API" ON)
 option(PEBBLE_ENABLE_PRAVAHA_EXTERNAL_ADAPTER_TESTS
        "Build Pravaha tests requiring downstream Lithe, Vulkan, or Sutra headers" OFF)
 
@@ -428,7 +430,28 @@ target_include_directories(pebble_kalpana_lib INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/dependencies/sokol>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/dependencies/notcurses/include>)
 target_compile_features(pebble_kalpana_lib INTERFACE cxx_std_23)
+target_compile_definitions(pebble_kalpana_lib INTERFACE
+    KALPANA_ENABLE_SOKOL_BACKEND=$<BOOL:${PEBBLE_ENABLE_KALPANA_SOKOL_BACKEND}>
+    KALPANA_ENABLE_NOTCURSES_BACKEND=$<BOOL:${PEBBLE_ENABLE_KALPANA_NOTCURSES_BACKEND}>)
 target_link_libraries(pebble_kalpana_lib INTERFACE pebble::akruti pebble::pravaha)
+
+add_library(pebble_rekha_lib INTERFACE)
+add_library(pebble::rekha ALIAS pebble_rekha_lib)
+target_include_directories(pebble_rekha_lib INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_compile_features(pebble_rekha_lib INTERFACE cxx_std_23)
+target_link_libraries(pebble_rekha_lib INTERFACE pebble::akruti pebble::gati pebble::kalpana)
+
+# Drishya — header-only retained-mode widget/UI composition engine. Composes
+# widgets via akruti (layout), kalpana (render), spandana (animation),
+# gati (input), and containers (storage/reactive).
+add_library(pebble_drishya_lib INTERFACE)
+add_library(pebble::drishya ALIAS pebble_drishya_lib)
+target_include_directories(pebble_drishya_lib INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_compile_features(pebble_drishya_lib INTERFACE cxx_std_23)
+target_link_libraries(pebble_drishya_lib INTERFACE
+    pebble::akruti pebble::kalpana pebble::gati pebble::spandana)
 
 
 
@@ -499,6 +522,18 @@ if (BUILD_EXECUTABLE)
         TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endif()
 
+if (EXISTS "${CMAKE_SOURCE_DIR}/src/examples/rekha_demo.cpp")
+    add_executable(pebble_rekha_demo src/examples/rekha_demo.cpp)
+    target_link_libraries(pebble_rekha_demo PRIVATE
+        pebble::rekha
+        pebble::kalpana
+        pebble::gati
+        pebble::akruti
+    )
+    target_compile_definitions(pebble_rekha_demo PRIVATE
+        TURBO_TWIG_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+endif()
+
 if (BUILD_TESTS)
     file(
             GLOB_RECURSE TEST_SOURCE
@@ -515,6 +550,7 @@ if (BUILD_TESTS)
             pebble::medha
             pebble::medha_pravaha
             pebble::pravaha
+            pebble::drishya
             spdlog::spdlog_header_only
             crc32c
     )
@@ -594,7 +630,10 @@ endif()
 # ---------------------------------------------------------------------------
 # Standalone Showcase Executables
 # ---------------------------------------------------------------------------
-foreach(_showcase pebble_akriti pebble_gati pebble_prakriti pebble_gati_prakriti pebble_tanks pebble_verse)
+foreach(_showcase pebble_akriti pebble_gati pebble_prakriti pebble_gati_prakriti pebble_tanks pebble_verse pebble_rekha)
+    if (_showcase STREQUAL "pebble_rekha" AND DEFINED PEBBLE_ENABLE_KALPANA_SOKOL_BACKEND AND NOT PEBBLE_ENABLE_KALPANA_SOKOL_BACKEND)
+        continue()
+    endif()
     if (EXISTS "${CMAKE_SOURCE_DIR}/src/app/${_showcase}.cpp")
         set(_showcase_srcs
             src/app/${_showcase}.cpp

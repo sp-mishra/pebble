@@ -144,6 +144,8 @@ $$\text{Angle} = \text{Perlin}(\text{seed}_3, t \cdot \omega) \cdot T^2 \cdot \t
 |:---|:---|:---|
 | `spandana/easing.hpp` | `ease::in_quad`, `ease::out_elastic`, `ease::in_out_bounce` | 32 standard Penner easing functions. |
 | `spandana/spring.hpp` | `AnalyticalSpringDamper`, `AngleSpringDamper`, `.step(pos, vel, target, dt)` | Exact analytical damped harmonic oscillator; angle variant takes the shortest arc across the ±π wrap. Coefficients ($\omega_0, \zeta$) are precomputed once at construction. |
+| `spandana/spring.hpp` | `AnalyticalSpringDamperN<N>`, `.step(current, velocity, target, dt) -> {pos, vel}` | Closed-form analytical spring integrated per component over a fixed-size `std::array<float, N>`. Generalizes the scalar/`Vector2` dampers to any `N`; stateless, zero heap. |
+| `spandana/spring.hpp` | `RectSpring<Rect>`, `.snap(r)`, `.step(target, dt) -> Rect`, `.settled()`, `.value()` | Springs a rect's `{x, y, w, h}` toward a target using a shared scalar spring per component. Templated on any type with public float members `x, y, w, h` (e.g. `akruti::layout::Rect2D`), so spandana keeps no layout dependency. Holds its own velocity state; the first `step` snaps (no spring-in from the origin). Backs Drishya's `SpringReflow`. |
 | `spandana/ik.hpp` | `TwoBoneIK`, `FABRIK2D`, `.solve(base, target)` | Analytical and iterative inverse kinematics solvers. |
 | `spandana/cloth.hpp` | `ClothVerlet2D`, `.step(dt)`, `.to_chain<N>()` | Verlet distance cloth with Akruti collision conversion. |
 | `spandana/destruction.hpp`| `DestructionEngine`, `.shatter(entity, point)` | Procedural Voronoi fracture with exact mass properties. |

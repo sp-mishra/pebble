@@ -1,5 +1,6 @@
 #pragma once
 
+// ─── Evolutionary Neural Cognition ───────────────────────────────────────────
 #include "activation.hpp"
 #include "archive.hpp"
 #include "brain.hpp"
@@ -15,5 +16,10 @@
 #include "topology.hpp"
 #include "visualization.hpp"
 
-// Evolutionary Neural Cognition Library
+// ─── Classical Machine Learning ──────────────────────────────────────────────
+#include "ml/ml.hpp"
+
+// ─── Deep Learning (reverse-mode autodiff, layers, optimizers) ───────────────
+#include "nn/nn.hpp"
+
 namespace manas {}

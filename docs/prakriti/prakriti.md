@@ -5,6 +5,8 @@ Prakriti is a hybrid particle-field Lagrangian continuum dynamics simulator wher
 
 Include: `#include <prakriti/prakriti.hpp>`
 
+Muscle constraints and activation-coupled XPBD details: [`docs/prakriti/muscle.md`](docs/prakriti/muscle.md)
+
 ---
 
 ## Table of Contents
@@ -664,8 +666,3 @@ int main() {
     std::cout << "Retains Atmosphere:    " << (escape.retains_atmosphere ? "YES" : "NO") << "\n";
 }
 ```
-
-
-
-
-

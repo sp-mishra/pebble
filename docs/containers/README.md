@@ -136,6 +136,10 @@ Concrete named algorithms per container, with the header they live in.
 
 - **ct_parser** — `ct_trie` constexpr keyword dispatch.
 
+### Reactive
+
+- **Signal** / **Computed** / **Callback** — observable value cell, lazily-memoized derived value, and SBO move-only `void()` callback. See [reactive.md](reactive.md).
+
 ---
 
 ## Detailed Docs
@@ -158,4 +162,5 @@ Concrete named algorithms per container, with the header they live in.
 | **N-Ary Tree Hierarchy** | [NAryTree.md](NAryTree.md) (First-child next-sibling pointer trees) |
 | **String Interning Pool** | [symbol/InternPool.md](symbol/InternPool.md) (Concurrent atomic string interning) |
 | **Symbol Table & Namespace Trie** | [symbol/SymbolTable.md](symbol/SymbolTable.md) (Scoped symbol resolution) |
+| **Reactive Value Primitives** | [reactive.md](reactive.md) (`Signal`, `Computed`, `Callback` — observable cells + memoized derivations) |
 

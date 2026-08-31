@@ -272,3 +272,133 @@ TEST_CASE("akruti::layout: Smriti ScopedArena zero-heap scratch integration", "[
     CHECK(arena.used_bytes() == 0);
 }
 
+// ============================================================================
+// Additive Phase-1 units (Fr / Content / Aspect / Clamp) + chain/leaf traversal
+// used by the drishya widget engine. Existing behavior above is untouched.
+// ============================================================================
+
+TEST_CASE("akruti::layout: Fr weights split free space (1:1 and 1:2)", "[akruti][layout]") {
+    LayoutTree tree;
+
+    LayoutNode root;
+    root.style.axis = Axis::Row;
+    root.style.width = SizeSpec::Px(300.0f);
+    root.style.height = SizeSpec::Px(100.0f);
+    auto r_id = tree.insert(nullptr, root);
+
+    LayoutNode a;
+    a.style.width = SizeSpec::Fr(1.0f);
+    tree.insert(r_id, a);
+    LayoutNode b;
+    b.style.width = SizeSpec::Fr(2.0f);
+    tree.insert(r_id, b);
+
+    Engine engine;
+    engine.bake(tree);
+    engine.solve(Bounds2D{{0.0f, 0.0f}, {300.0f, 100.0f}});
+
+    REQUIRE(engine.size() == 3);
+    // Fr(1) : Fr(2) over 300px main axis -> 100 : 200.
+    CHECK(engine.rect[1].w == Catch::Approx(100.0f).margin(0.5f));
+    CHECK(engine.rect[2].w == Catch::Approx(200.0f).margin(0.5f));
+}
+
+TEST_CASE("akruti::layout: Clamp window bounds a preferred size", "[akruti][layout]") {
+    LayoutTree tree;
+
+    LayoutNode root;
+    root.style.axis = Axis::Row;
+    root.style.width = SizeSpec::Px(400.0f);
+    root.style.height = SizeSpec::Px(100.0f);
+    auto r_id = tree.insert(nullptr, root);
+
+    LayoutNode child;
+    child.style.width = SizeSpec::Percent(100.0f);
+    child.style.width_clamp =
+        SizeSpecClamp{SizeSpec::Px(40.0f), SizeSpec::Px(120.0f), SizeSpec::Px(120.0f)};
+    tree.insert(r_id, child);
+
+    Engine engine;
+    engine.bake(tree);
+    engine.solve(Bounds2D{{0.0f, 0.0f}, {400.0f, 100.0f}});
+
+    REQUIRE(engine.size() == 2);
+    CHECK(engine.rect[1].w <= 120.0f + 0.5f);
+    CHECK(engine.rect[1].w >= 40.0f - 0.5f);
+}
+
+TEST_CASE("akruti::layout: Aspect derives the cross axis from the main axis", "[akruti][layout]") {
+    LayoutTree tree;
+
+    LayoutNode node;
+    node.style.width = SizeSpec::Px(120.0f);
+    node.style.height = SizeSpec::Aspect(2.0f); // w:h = 2:1 -> h = 60
+    tree.insert(nullptr, node);
+
+    Engine engine;
+    engine.bake(tree);
+    engine.solve(Bounds2D{{0.0f, 0.0f}, {300.0f, 300.0f}});
+
+    REQUIRE(engine.size() == 1);
+    CHECK(engine.rect[0].w == Catch::Approx(120.0f).margin(0.5f));
+    CHECK(engine.rect[0].h == Catch::Approx(60.0f).margin(1.0f));
+}
+
+TEST_CASE("akruti::layout: hit_test_chain returns leaf-to-root ancestry", "[akruti][layout]") {
+    LayoutTree tree;
+
+    LayoutNode root;
+    root.style.width = SizeSpec::Px(200.0f);
+    root.style.height = SizeSpec::Px(200.0f);
+    auto r_id = tree.insert(nullptr, root);
+
+    LayoutNode mid;
+    mid.style.width = SizeSpec::Px(200.0f);
+    mid.style.height = SizeSpec::Px(200.0f);
+    auto m_id = tree.insert(r_id, mid);
+
+    LayoutNode leaf;
+    leaf.style.width = SizeSpec::Px(50.0f);
+    leaf.style.height = SizeSpec::Px(50.0f);
+    tree.insert(m_id, leaf);
+
+    Engine engine;
+    engine.enable_spatial_hash = true;
+    engine.bake(tree);
+    engine.solve(Bounds2D{{0.0f, 0.0f}, {200.0f, 200.0f}});
+
+    std::uint32_t chain[8];
+    const std::size_t n = engine.hit_test_chain(10.0f, 10.0f, std::span<std::uint32_t>(chain, 8));
+    REQUIRE(n == 3);
+    CHECK(chain[0] == 2);      // leaf first
+    CHECK(chain[n - 1] == 0);  // root last
+}
+
+TEST_CASE("akruti::layout: for_each_leaf visits leaves in tab order", "[akruti][layout]") {
+    LayoutTree tree;
+
+    LayoutNode root;
+    root.style.axis = Axis::Row;
+    root.style.width = SizeSpec::Px(300.0f);
+    root.style.height = SizeSpec::Px(100.0f);
+    auto r_id = tree.insert(nullptr, root);
+
+    LayoutNode a;
+    a.style.width = SizeSpec::Px(100.0f);
+    tree.insert(r_id, a);
+    LayoutNode b;
+    b.style.width = SizeSpec::Px(100.0f);
+    tree.insert(r_id, b);
+
+    Engine engine;
+    engine.bake(tree);
+    engine.solve(Bounds2D{{0.0f, 0.0f}, {300.0f, 100.0f}});
+
+    std::vector<std::uint32_t> leaves;
+    engine.for_each_leaf([&](std::uint32_t u) { leaves.push_back(u); });
+    // Root has children -> not a leaf; the two children are.
+    REQUIRE(leaves.size() == 2);
+    CHECK(leaves[0] == 1);
+    CHECK(leaves[1] == 2);
+}
+
