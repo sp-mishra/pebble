@@ -64,7 +64,6 @@ namespace smriti {
 
         inline constexpr GenId null_genid{};
 
-        template <typename Derived>
         struct ref_counted {
             std::atomic<std::uint32_t> refs{1};
 
@@ -72,9 +71,9 @@ namespace smriti {
                 refs.fetch_add(1, std::memory_order_relaxed);
             }
 
-            void dec() noexcept {
-                if (refs.fetch_sub(1, std::memory_order_acq_rel) == 1)
-                    static_cast<Derived*>(this)->destroy();
+            void dec(this auto& self) noexcept {
+                if (self.refs.fetch_sub(1, std::memory_order_acq_rel) == 1)
+                    self.destroy();
             }
         };
     } // namespace detail

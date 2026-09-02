@@ -45,9 +45,9 @@ public:
             on_add_observers_.resize(type_id + 1);
         }
         on_add_observers_[type_id].push_back(ObserverCallback{
-            .context = reinterpret_cast<void*>(fn_ptr),
+            .context = const_cast<void*>(static_cast<const void*>(fn_ptr)),
             .invoke = [](void* ctx, Entity e, void* comp) noexcept {
-                auto* typed_fn = reinterpret_cast<Fn*>(ctx);
+                auto* typed_fn = static_cast<Fn*>(ctx);
                 (*typed_fn)(OnAdd<C>{e, *static_cast<C*>(comp)});
             }
         });
@@ -60,9 +60,9 @@ public:
             on_remove_observers_.resize(type_id + 1);
         }
         on_remove_observers_[type_id].push_back(ObserverCallback{
-            .context = reinterpret_cast<void*>(fn_ptr),
+            .context = const_cast<void*>(static_cast<const void*>(fn_ptr)),
             .invoke = [](void* ctx, Entity e, void* /*comp*/) noexcept {
-                auto* typed_fn = reinterpret_cast<Fn*>(ctx);
+                auto* typed_fn = static_cast<Fn*>(ctx);
                 (*typed_fn)(OnRemove<C>{e});
             }
         });

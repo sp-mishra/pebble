@@ -198,11 +198,8 @@ public:
     }
 
     template <Component C, typename... Args>
-    C& emplace(Entity e, Args&&... args) {
-        if (!alive(e)) {
-            thread_local C dummy{};
-            return dummy;
-        }
+    C* emplace(Entity e, Args&&... args) {
+        if (!alive(e)) return nullptr;  // Callers must check; no silent thread_local corruption
         const std::uint32_t type_id = ComponentTypeId<C>::id();
         auto& st = store<C>();
         C& ref = st.emplace(e.index, std::forward<Args>(args)...);
@@ -211,7 +208,7 @@ public:
             slot(e.index).component_mask |= (1ULL << type_id);
         }
         observers_.notify_add(type_id, e, &ref);
-        return ref;
+        return &ref;
     }
 
     template <Component C>

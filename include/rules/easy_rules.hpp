@@ -185,17 +185,17 @@ namespace easy_rules {
         [[nodiscard]] auto cbegin() const { return data_.cbegin(); }
         [[nodiscard]] auto cend() const { return data_.cend(); }
 
-        void print() const {
-            std::cout << "--- Facts (" << data_.size() << " items) ---\n";
+        void print(std::ostream& os = std::cout) const {
+            os << "--- Facts (" << data_.size() << " items) ---\n";
             if (data_.empty()) {
-                std::cout << "  (empty)\n";
+                os << "  (empty)\n";
                 return;
             }
 
             for (const auto& [key, value] : data_) {
-                std::cout << "  " << key << ": ";
-                std::visit([](const auto& v) { std::cout << to_string_safe(v); }, value);
-                std::cout << "\n";
+                os << "  " << key << ": ";
+                std::visit([&os](const auto& v) { os << to_string_safe(v); }, value);
+                os << "\n";
             }
         }
 
@@ -532,36 +532,54 @@ namespace easy_rules {
         }
     };
 
-    // CRTP-based listener system (no virtual functions)
-    template <typename Derived>
-    class RuleListener {
+    // Concept for rule listeners
+    template <typename L>
+    concept RuleListenerConcept = requires(L& l, const Rule& r, ExecutionContext& ctx) {
+        { l.before_evaluate(r, ctx) } -> std::convertible_to<bool>;
+        l.on_success(r, ctx);
+        l.on_failure(r, ctx);
+        l.on_skipped(r);
+    };
+
+    // Modern C++23 Listener Base (no virtual functions, deducing this)
+    class RuleListenerBase {
     public:
-        [[nodiscard]] bool before_evaluate(const Rule& rule, const ExecutionContext& context) {
-            return static_cast<Derived*>(this)->before_evaluate_impl(rule, context);
+        [[nodiscard]] bool before_evaluate(this auto& self, const Rule& rule, const ExecutionContext& context) {
+            if constexpr (requires { self.before_evaluate_impl(rule, context); }) {
+                return self.before_evaluate_impl(rule, context);
+            } else {
+                return true;
+            }
         }
 
-        void on_success(const Rule& rule, ExecutionContext& context) {
-            static_cast<Derived*>(this)->on_success_impl(rule, context);
+        void on_success(this auto& self, const Rule& rule, ExecutionContext& context) {
+            if constexpr (requires { self.on_success_impl(rule, context); }) {
+                self.on_success_impl(rule, context);
+            }
         }
 
-        void on_failure(const Rule& rule, ExecutionContext& context) {
-            static_cast<Derived*>(this)->on_failure_impl(rule, context);
+        void on_failure(this auto& self, const Rule& rule, ExecutionContext& context) {
+            if constexpr (requires { self.on_failure_impl(rule, context); }) {
+                self.on_failure_impl(rule, context);
+            }
         }
 
-        void on_skipped(const Rule& rule) {
-            static_cast<Derived*>(this)->on_skipped_impl(rule);
+        void on_skipped(this auto& self, const Rule& rule) {
+            if constexpr (requires { self.on_skipped_impl(rule); }) {
+                self.on_skipped_impl(rule);
+            }
         }
 
     protected:
-        // Default implementations
         bool before_evaluate_impl(const Rule&, const ExecutionContext&) { return true; }
-
         void on_success_impl(const Rule&, ExecutionContext&) {}
-
         void on_failure_impl(const Rule&, ExecutionContext&) {}
-
         void on_skipped_impl(const Rule&) {}
     };
+
+    // Forwarding template for backward compatibility with existing `RuleListener<Derived>` subclasses
+    template <typename Derived = void>
+    using RuleListener = RuleListenerBase;
 
     // Execution context
     class ExecutionContext {
@@ -595,8 +613,8 @@ namespace easy_rules {
               , timestamp(std::chrono::steady_clock::now()) {}
     };
 
-    // CRTP Audit Listener
-    class AuditListener : public RuleListener<AuditListener> {
+    // Modern Audit Listener
+    class AuditListener : public RuleListenerBase {
     private:
         std::vector<AuditEvent> history_;
 
@@ -672,20 +690,38 @@ namespace easy_rules {
 
         [[nodiscard]] const auto& get_all_rules() const { return rule_groups_; }
 
-        // CRTP listener registration
+        // Listener registration (supports both RuleListener derived classes and arbitrary custom listeners)
         template <typename Listener>
         void add_listener(Listener& listener) {
             before_listeners_.emplace_back([&listener](const Rule& rule, const ExecutionContext& ctx) {
-                return listener.before_evaluate(rule, ctx);
+                if constexpr (requires { listener.before_evaluate(rule, ctx); }) {
+                    return listener.before_evaluate(rule, ctx);
+                } else if constexpr (requires { listener.before_evaluate_impl(rule, ctx); }) {
+                    return listener.before_evaluate_impl(rule, ctx);
+                } else {
+                    return true;
+                }
             });
             success_listeners_.emplace_back([&listener](const Rule& rule, ExecutionContext& ctx) {
-                listener.on_success(rule, ctx);
+                if constexpr (requires { listener.on_success(rule, ctx); }) {
+                    listener.on_success(rule, ctx);
+                } else if constexpr (requires { listener.on_success_impl(rule, ctx); }) {
+                    listener.on_success_impl(rule, ctx);
+                }
             });
             failure_listeners_.emplace_back([&listener](const Rule& rule, ExecutionContext& ctx) {
-                listener.on_failure(rule, ctx);
+                if constexpr (requires { listener.on_failure(rule, ctx); }) {
+                    listener.on_failure(rule, ctx);
+                } else if constexpr (requires { listener.on_failure_impl(rule, ctx); }) {
+                    listener.on_failure_impl(rule, ctx);
+                }
             });
             skip_listeners_.emplace_back([&listener](const Rule& rule) {
-                listener.on_skipped(rule);
+                if constexpr (requires { listener.on_skipped(rule); }) {
+                    listener.on_skipped(rule);
+                } else if constexpr (requires { listener.on_skipped_impl(rule); }) {
+                    listener.on_skipped_impl(rule);
+                }
             });
         }
 
@@ -1094,7 +1130,7 @@ namespace easy_rules {
     }
 
     // Enhanced Audit Listener with Statistics
-    class EnhancedAuditListener : public RuleListener<EnhancedAuditListener> {
+    class EnhancedAuditListener : public RuleListenerBase {
         std::vector<AuditEvent> history_;
         std::unordered_map<std::string, size_t> rule_execution_counts_;
         std::unordered_map<std::string, std::chrono::nanoseconds> rule_execution_times_;
@@ -1152,48 +1188,3 @@ namespace easy_rules {
     using EnhancedFacts = Facts; // Already enhanced in the main Facts class
 } // namespace easy_rules
 
-// Example usage demonstrating modern C++23 features
-namespace easy_rules::examples {
-    inline void demo() {
-        using namespace easy_rules::dsl;
-
-        ExecutionContext ctx;
-        ctx.facts.set("age", 25);
-        ctx.facts.set("name", std::string("John"));
-        ctx.facts.set("active", true);
-
-        EasyRuleEngine engine;
-        engine.config.enable_metrics = true;
-
-        // Modern DSL with type safety
-        engine.when("adult_rule", fact<int>("age") >= 18)
-              .then([](ExecutionContext& ctx) {
-                  ctx.facts.set("status", std::string("adult"));
-                  std::cout << "User is an adult\n";
-              })
-              .with_priority(10)
-              .with_description("Check if user is adult");
-
-        // Complex predicate with logical operators
-        engine.when("active_adult",
-                    fact<bool>("active") == true && fact<int>("age") > 21)
-              .then([](ExecutionContext& ctx) {
-                  std::cout << "Active adult user\n";
-              })
-              .with_activation_limit(1);
-
-        // CRTP listener
-        AuditListener audit;
-        engine.add_listener(audit);
-
-        engine.run(ctx);
-
-        std::cout << "Final facts:\n";
-        ctx.facts.print();
-
-        std::cout << "\nAudit trail:\n";
-        for (const auto& event : audit.get_history()) {
-            std::cout << "- " << event.rule_name << ": " << event.description << "\n";
-        }
-    }
-}

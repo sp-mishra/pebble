@@ -165,8 +165,8 @@ namespace ts {
         mlx::core::array &get() { return array_; }
         [[nodiscard]] const mlx::core::array &get() const { return array_; }
 
-        void debug_print() const {
-            std::cout << array_ << std::endl;
+        void debug_print(std::ostream& os = std::cout) const {
+            os << array_ << "\n";
         }
 
         std::vector<T> to_cpu() const {
@@ -257,8 +257,8 @@ namespace ts {
         mlx::core::array &get() { return array_; }
         [[nodiscard]] const mlx::core::array &get() const { return array_; }
 
-        void debug_print() const {
-            std::cout << array_ << std::endl;
+        void debug_print(std::ostream& os = std::cout) const {
+            os << array_ << "\n";
         }
 
         [[nodiscard]] std::vector<double> to_cpu() const {

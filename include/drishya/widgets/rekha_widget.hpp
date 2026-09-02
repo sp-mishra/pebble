@@ -77,7 +77,7 @@ private:
         backend_.end_frame();
 
         const float ox = box.x, oy = box.y;
-        kalpana::Scene& bscene = const_cast<kalpana::Scene&>(backend_.scene());
+        kalpana::Scene& bscene = backend_.scene();  // backend_ is mutable; no cast needed
         kalpana::Node& root = bscene.root();
         if (auto* grp = std::get_if<kalpana::GroupNode>(&root.content)) {
             for (kalpana::Node& child : grp->children) {

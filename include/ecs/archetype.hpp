@@ -27,12 +27,21 @@ struct Column {
     std::size_t elem_size = 0;
     void (*destructor)(void*) noexcept = nullptr;
 
-    void release() noexcept {
+    void release(std::size_t count) noexcept {
         if (data) {
+            if (destructor) {
+                // Call element destructors for all live rows before freeing memory
+                for (std::size_t i = 0; i < count; ++i) {
+                    destructor(static_cast<char*>(data) + i * elem_size);
+                }
+            }
             std::free(data);
             data = nullptr;
         }
     }
+
+    // Convenience overload for columns with no live elements (empty or trivial)
+    void release() noexcept { release(0); }
 };
 
 struct ArchetypeRecord {
@@ -66,7 +75,7 @@ public:
     void clear() noexcept {
         for (auto& arch : archetypes_) {
             for (auto& col : arch->columns) {
-                col.release();
+                col.release(arch->count);  // run element destructors on all live rows
             }
         }
         archetypes_.clear();

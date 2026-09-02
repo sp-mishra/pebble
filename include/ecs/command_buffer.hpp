@@ -89,12 +89,17 @@ public:
         return spawn_out_.back();
     }
 
-    std::span<Entity> spawn_batch(std::size_t n) {
+    [[nodiscard]] std::span<Entity> spawn_batch(std::size_t n) {
         if (n == 0) return {};
         std::lock_guard<std::mutex> lock(mutex_);
-        const std::size_t start = spawn_out_.size();
+        // Allocate entity batch directly from the LinearArena so the returned
+        // span remains pointer-stable until execute() / clear() resets the arena.
+        void* mem = arena_.allocate(sizeof(Entity) * n, alignof(Entity));
+        Entity* batch = mem ? static_cast<Entity*>(mem)
+                            : static_cast<Entity*>(std::malloc(sizeof(Entity) * n));
         for (std::size_t i = 0; i < n; ++i) {
-            spawn_out_.push_back(Entity{});
+            new (batch + i) Entity{};
+            spawn_out_.push_back(batch[i]);
             headers_.push_back(CmdHeader{
                 .op = CmdOp::Spawn,
                 .type_id = 0,
@@ -104,7 +109,7 @@ public:
             });
             payloads_.push_back(nullptr);
         }
-        return std::span<Entity>(spawn_out_.data() + start, n);
+        return std::span<Entity>(batch, n);
     }
 
     void despawn(Entity e) {

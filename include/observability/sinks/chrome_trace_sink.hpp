@@ -67,12 +67,20 @@ namespace utils::nadi {
         };
 
     public:
+        inline static std::atomic<std::size_t> write_errors{0};
+
         static void emit(const auto& pulse) noexcept {
             auto* out_ptr = out.load(std::memory_order_acquire);
             if (!out_ptr) return;
             SpinLockGuard guard(write_lock_);
-            try { write_event(*out_ptr, pulse); }
-            catch (...) {}
+            try {
+                write_event(*out_ptr, pulse);
+                if (out_ptr->fail()) {
+                    write_errors.fetch_add(1, std::memory_order_relaxed);
+                }
+            } catch (...) {
+                write_errors.fetch_add(1, std::memory_order_relaxed);
+            }
         }
 
     private:

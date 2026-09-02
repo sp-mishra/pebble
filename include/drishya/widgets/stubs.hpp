@@ -1,9 +1,10 @@
 #pragma once
 // ============================================================================
-// drishya/widgets/stubs.hpp — placeholder widgets (concept-complete, TODO paint)
+// drishya/widgets/stubs.hpp — stub widgets providing fallback layout and bounds
 // ----------------------------------------------------------------------------
-// These types satisfy the Widget + PaintableWith concepts today so they compose
-// and lay out, but their paint is a labelled placeholder pending a full build.
+// These types satisfy the Widget + PaintableWith concepts so they compose and
+// lay out correctly. Their paint implementation renders a labelled placeholder
+// outline that clearly marks which widget type is not yet graduated.
 // Grouping them here keeps the "real" widget headers focused; each stub is a
 // value type (no virtual, no macros) and nothrow-move for AnyWidget storage.
 //

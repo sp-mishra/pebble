@@ -78,6 +78,7 @@ public:
     void end_frame() {}
 
     [[nodiscard]] const kalpana::Scene& scene() const noexcept { return scene_; }
+    [[nodiscard]] kalpana::Scene& scene() noexcept { return scene_; }
 
     [[nodiscard]] std::vector<std::uint32_t> rasterize() const {
         kalpana::DefaultCanvas canvas(width_, height_);

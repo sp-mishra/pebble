@@ -1,4 +1,5 @@
 #pragma once
+#include "meta/akshara.hpp"
 
 #include <array>
 #include <atomic>
@@ -25,28 +26,11 @@ namespace utils::nadi {
     };
 
     // ---------------------------------------------------------------------------
-    // 2. Compile-Time String Literal (NTTP)
+    // 2. Compile-Time String Literal (NTTP) — Aliased to akshara::fixed_string
     // ---------------------------------------------------------------------------
 
     template <std::size_t N>
-    struct FixedString {
-        std::array<char, N> data{};
-
-        consteval FixedString(const char (&src)[N]) noexcept {
-            std::copy(src, src + N, data.data());
-        }
-
-        [[nodiscard]] constexpr std::string_view view() const noexcept {
-            // N includes the null terminator; exclude it from the view.
-            return {data.data(), N - 1};
-        }
-
-        [[nodiscard]] constexpr bool operator==(const FixedString&) const noexcept = default;
-    };
-
-    // Deduction guide: char[N] → FixedString<N>
-    template <std::size_t N>
-    FixedString(const char (&)[N]) -> FixedString<N>;
+    using FixedString = akshara::fixed_string<N>;
 
     // ---------------------------------------------------------------------------
     // 3. Typed Payload Channels

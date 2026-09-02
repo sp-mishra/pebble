@@ -66,11 +66,11 @@ namespace akshara {
         }
 
         // view() kept for backward compatibility
-        [[nodiscard]] consteval std::string_view view() const noexcept {
+        [[nodiscard]] constexpr std::string_view view() const noexcept {
             return {data, length};
         }
 
-        [[nodiscard]] consteval char operator[](std::size_t i) const noexcept {
+        [[nodiscard]] constexpr char operator[](std::size_t i) const noexcept {
             return data[i];
         }
 

@@ -1503,7 +1503,14 @@ namespace nitya {
                             return std::unexpected(LogError::QueueFull);
                         }
                     }
-                    catch (...) {}
+                    catch (...) {
+                        // Segment file is corrupt or unreadable; mark as invalid and continue
+                        // scanning remaining segments so callers can detect and handle gaps.
+                        segment_descriptor corrupt_desc{};
+                        corrupt_desc.path = entry.path();
+                        corrupt_desc.segment_id = ~std::uint64_t{0};  // sentinel for corrupt
+                        (void)list.push_back(corrupt_desc);
+                    }
                 }
             }
 

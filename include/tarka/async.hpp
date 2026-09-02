@@ -20,11 +20,14 @@
 #include "containers/lockfree/MPMCQueue.hpp"
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <coroutine>
 #include <expected>
 #include <functional>
 #include <future>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <stop_token>
 #include <thread>
@@ -121,9 +124,11 @@ namespace tarka {
                     while (!tok.stop_requested()) {
                         if (auto t = queue_.try_pop()) {
                             (*t)();
-                        }
-                        else {
-                            std::this_thread::yield();
+                        } else {
+                            // Block until work arrives or stop is requested — no CPU spin
+                            std::unique_lock lock(wake_mutex_);
+                            wake_cv_.wait_for(lock, std::chrono::milliseconds(1),
+                                [&] { return !queue_.empty() || tok.stop_requested(); });
                         }
                     }
                     // drain remaining tasks on stop
@@ -134,9 +139,26 @@ namespace tarka {
 
         ~WorkerPool() = default; // jthreads auto-join + request_stop on destruction
 
-        // Submit a task; returns false if queue is full
+        // Submit a task; returns false if queue is full — caller must handle rejection
         bool submit(task_fn fn) {
-            return queue_.try_push(std::move(fn));
+            const bool ok = queue_.try_push(std::move(fn));
+            if (ok) wake_cv_.notify_one();
+            return ok;
+        }
+
+        // Blocking submit — waits until slot is available or timeout
+        // Returns false only on timeout, never silently drops
+        bool submit_wait(task_fn fn,
+                         std::chrono::milliseconds timeout = std::chrono::milliseconds(5000)) {
+            const auto deadline = std::chrono::steady_clock::now() + timeout;
+            while (std::chrono::steady_clock::now() < deadline) {
+                if (queue_.try_push(fn)) {
+                    wake_cv_.notify_one();
+                    return true;
+                }
+                std::this_thread::sleep_for(std::chrono::microseconds(100));
+            }
+            return false;
         }
 
         [[nodiscard]] std::size_t worker_count() const noexcept { return workers_.size(); }
@@ -144,7 +166,10 @@ namespace tarka {
     private:
         lockfree::MPMCQueue<task_fn, kQueueSize> queue_;
         std::vector<std::jthread> workers_;
+        std::mutex wake_mutex_;
+        std::condition_variable wake_cv_;
     };
+
 
     // =========================================================================
     // AsyncSolverEngine — queues solve tasks on a WorkerPool
@@ -161,12 +186,20 @@ namespace tarka {
             auto prom = std::make_shared<std::promise<std::expected<SatResult, SmtError>>>();
             auto fut = prom->get_future();
 
-            pool_.submit([this, t, p = std::move(prom)]() mutable {
+            const bool ok = pool_.submit([this, t, p = std::move(prom)]() mutable {
                 backend_.assert_formula(t);
                 auto r = backend_.check_sat();
                 backend_.reset();
                 p->set_value(std::move(r));
             });
+
+            if (!ok) {
+                // Queue full — reject explicitly rather than hanging the future
+                auto rejected = std::make_shared<std::promise<std::expected<SatResult, SmtError>>>();
+                auto rejected_fut = rejected->get_future();
+                rejected->set_value(std::unexpected(SmtError{SmtError::Kind::Internal, "WorkerPool queue full"}));
+                return rejected_fut;
+            }
 
             return fut;
         }

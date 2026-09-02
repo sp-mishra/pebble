@@ -18,7 +18,7 @@ struct MuscleActivationSystem {
         world.par_view<MuscleController, MuscleExcitation>(
             ctx.executor,
             [dt = ctx.dt](Entity, MuscleController& ctrl, MuscleExcitation& ex) {
-                ctrl.neural_step(ex.value, dt);
+                (void)ctrl.neural_step(ex.value, dt);
             }
         );
     }

@@ -179,11 +179,18 @@ namespace tarka {
         decltype(auto) dispatch_impl(Fn&& fn, std::index_sequence<Is...>) {
             using R = std::invoke_result_t<Fn&, std::tuple_element_t<0, BackendTuple>&>;
             if constexpr (std::is_void_v<R>) {
-                ((active_idx_ == Is ? (void)fn(std::get<Is>(backends_)) : (void)0), ...);
+                // Branchless jump table: O(1) dispatch via constexpr vtable
+                using Trampoline = void(*)(BackendTuple&, Fn&);
+                static constexpr Trampoline vtable[] = {
+                    +[](BackendTuple& t, Fn& f) { f(std::get<Is>(t)); }...
+                };
+                vtable[active_idx_](backends_, fn);
             } else {
-                R result{};
-                ((active_idx_ == Is ? (void)(result = fn(std::get<Is>(backends_))) : (void)0), ...);
-                return result;
+                using Trampoline = R(*)(BackendTuple&, Fn&);
+                static constexpr Trampoline vtable[] = {
+                    +[](BackendTuple& t, Fn& f) -> R { return f(std::get<Is>(t)); }...
+                };
+                return vtable[active_idx_](backends_, fn);
             }
         }
 
@@ -191,11 +198,17 @@ namespace tarka {
         decltype(auto) dispatch_impl(Fn&& fn, std::index_sequence<Is...>) const {
             using R = std::invoke_result_t<Fn&, const std::tuple_element_t<0, BackendTuple>&>;
             if constexpr (std::is_void_v<R>) {
-                ((active_idx_ == Is ? (void)fn(std::get<Is>(backends_)) : (void)0), ...);
+                using Trampoline = void(*)(const BackendTuple&, Fn&);
+                static constexpr Trampoline vtable[] = {
+                    +[](const BackendTuple& t, Fn& f) { f(std::get<Is>(t)); }...
+                };
+                vtable[active_idx_](backends_, fn);
             } else {
-                R result{};
-                ((active_idx_ == Is ? (void)(result = fn(std::get<Is>(backends_))) : (void)0), ...);
-                return result;
+                using Trampoline = R(*)(const BackendTuple&, Fn&);
+                static constexpr Trampoline vtable[] = {
+                    +[](const BackendTuple& t, Fn& f) -> R { return f(std::get<Is>(t)); }...
+                };
+                return vtable[active_idx_](backends_, fn);
             }
         }
     };

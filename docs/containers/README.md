@@ -56,8 +56,8 @@ Concrete named algorithms per container, with the header they live in.
 | LiteGraph           | 30+ graph algorithms: BFS, DFS, Dijkstra, Bellman-Ford, A*, Floyd-Warshall, Tarjan SCC, VF2 subgraph iso, Edmonds-Karp max-flow, Brandes betweenness, Kruskal, Prim, PageRank, graph-edit-distance | `graph/LiteGraphAlgorithms.hpp`  |
 | LiteGraphHighway    | SIMD (Google Highway) batch node/edge sweeps                                                                                                                                                       | `graph/LiteGraphHighway.hpp`     |
 | DominatorTree       | Lengauer-Tarjan dominator tree + Cooper-Harvey-Kennedy iterative immediate-dominator solver                                                                                                        | `graph/DominatorTree.hpp`        |
-| DisjointSet         | Union-by-rank + full path compression (halving variant)                                                                                                                                            | `graph/DisjointSet.hpp`          |
-| union_find          | Disjoint-set forest: union-by-rank + path-splitting (Tarjan / van Leeuwen)                                                                                                                         | `union_find.hpp`                 |
+| DisjointSet         | Union-by-rank + full path compression (halving variant) — **canonical disjoint-set interface**                                                                                                     | `graph/DisjointSet.hpp`          |
+| union_find          | ⚠️ **Deprecated** — use `DisjointSet`. Disjoint-set forest: union-by-rank + path-splitting (Tarjan / van Leeuwen). Kept for egraph internal use only.                                              | `union_find.hpp`                 |
 | egraph              | Equality saturation: union-find (path-splitting) + Kosha hash-cons (Robin-Hood) + egg-style rebuild + saturation + best-cost extraction                                                            | `graph/egraph.hpp`               |
 | NAryTree            | Owning `unique_ptr` n-ary tree + `tree_simd` Highway batch ops                                                                                                                                     | `tree/NAryTree.hpp`              |
 | AABBTree            | Bounding-volume hierarchy: SAH-lite sibling-merge insertion (minimize merged surface area) + AABB refit rebalance                                                                                  | `tree/AABBTree.hpp`              |
@@ -88,8 +88,8 @@ Concrete named algorithms per container, with the header they live in.
 
 - **LiteGraph** — flat SoA graph + 30+ algorithm library (+ Highway SIMD). See [LiteGraph.md](LiteGraph.md).
 - **DominatorTree** — Lengauer-Tarjan + iterative idom over a `LiteGraphModel`.
-- **DisjointSet** / **union_find** — two disjoint-set forests (DisjointSet: rank + path-compression halving; union_find:
-  rank + path-splitting).
+- **DisjointSet** — canonical disjoint-set forest (union-by-rank + path-compression halving). Prefer this for all new code.
+- **union_find** — ⚠️ **Deprecated**: prefer `DisjointSet`. Uses union-by-rank + path-splitting. Currently used internally by `egraph`; do not use in new code.
 - **egraph** — generic equality-saturation engine. See [egraph.md](egraph.md).
 
 ### Trees
