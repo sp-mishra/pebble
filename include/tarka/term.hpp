@@ -716,6 +716,8 @@ namespace tarka {
 
         Kind kind = Kind::Internal;
         std::string message;
+
+        [[nodiscard]] bool operator==(const SmtError&) const noexcept = default;
     };
 
     // =========================================================================

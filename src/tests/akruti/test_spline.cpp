@@ -18,16 +18,16 @@ TEST_CASE (
     };
 
     auto start = bezier.evaluate(0.0f);
-    REQUIRE(start.x == 0.0f);
-    REQUIRE(start.y == 0.0f);
+    REQUIRE(start.x() == 0.0f);
+    REQUIRE(start.y() == 0.0f);
 
     auto end = bezier.evaluate(1.0f);
-    REQUIRE(end.x == 10.0f);
-    REQUIRE(end.y == 0.0f);
+    REQUIRE(end.x() == 10.0f);
+    REQUIRE(end.y() == 0.0f);
 
     auto mid = bezier.evaluate(0.5f);
-    REQUIRE(mid.x == 5.0f);
-    REQUIRE(mid.y == 7.5f);
+    REQUIRE(mid.x() == 5.0f);
+    REQUIRE(mid.y() == 7.5f);
 
     float len = bezier.arc_length();
     REQUIRE(len > 15.0f);

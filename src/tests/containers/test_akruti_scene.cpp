@@ -162,8 +162,8 @@ TEST_CASE (
 
     for (std::uint32_t iy = 0; iy < grid.ny; ++iy)
         for (std::uint32_t ix = 0; ix < grid.nx; ++ix) {
-            const V p{grid.origin.x + Scalar(ix) * grid.cell.x,
-                      grid.origin.y + Scalar(iy) * grid.cell.y};
+            const V p{x(grid.origin) + Scalar(ix) * x(grid.cell),
+                      y(grid.origin) + Scalar(iy) * y(grid.cell)};
             Scalar ref = 1e30f;
             for (auto& c : shapes) ref = std::min(ref, c.sdf(p));
             REQUIRE(field[std::size_t(iy) * grid.nx + ix] == Catch::Approx(ref).margin(1e-3));

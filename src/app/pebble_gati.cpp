@@ -181,7 +181,7 @@ static void poly_verts(const GatiBody& b, std::array<akruti::Vec, kPolyMax>& out
     n = b.poly_n;
     for (int i = 0; i < n; ++i) {
         const auto& l = b.poly[i];
-        out[i] = {b.pos[0] + l.x * c - l.y * s, b.pos[1] + l.x * s + l.y * c};
+        out[i] = {b.pos.x() + l.x() * c - l.y() * s, b.pos.y() + l.x() * s + l.y() * c};
     }
 }
 
@@ -197,7 +197,7 @@ static float bounding_radius(const GatiBody& b) {
     case ShapeKind::Hexagon:
     case ShapeKind::Trapezoid: {
         float m2 = 0.0f;
-        for (int i = 0; i < b.poly_n; ++i) m2 = std::max(m2, b.poly[i].x * b.poly[i].x + b.poly[i].y * b.poly[i].y);
+        for (int i = 0; i < b.poly_n; ++i) m2 = std::max(m2, b.poly[i].x() * b.poly[i].x() + b.poly[i].y() * b.poly[i].y());
         return std::sqrt(m2) + b.corner;
     }
     default: return b.size * 1.2f;
@@ -225,7 +225,7 @@ struct BodyShapeData {
 
 static BodyShapeData extract_body_shape(const GatiBody& b) {
     BodyShapeData out;
-    const akruti::Vec pos{b.pos[0], b.pos[1]};
+    const akruti::Vec pos{b.pos.x(), b.pos.y()};
     const float s = b.size;
 
     switch (b.kind) {
@@ -242,8 +242,8 @@ static BodyShapeData extract_body_shape(const GatiBody& b) {
         const float c = std::cos(b.rot), sn = std::sin(b.rot);
         const float cap_len = s * 0.7f;
         out.capsule = akruti::Capsule{
-            akruti::Vec{pos.x - cap_len * c, pos.y - cap_len * sn},
-            akruti::Vec{pos.x + cap_len * c, pos.y + cap_len * sn},
+            akruti::Vec{pos.x() - cap_len * c, pos.y() - cap_len * sn},
+            akruti::Vec{pos.x() + cap_len * c, pos.y() + cap_len * sn},
             s * 0.6f
         };
         break;
@@ -257,10 +257,10 @@ static BodyShapeData extract_body_shape(const GatiBody& b) {
         const float c = std::cos(b.rot), sn = std::sin(b.rot);
         const float c1 = std::cos(b.rot + 2.0943951f), s1 = std::sin(b.rot + 2.0943951f);
         const float c2 = std::cos(b.rot + 4.1887902f), s2 = std::sin(b.rot + 4.1887902f);
-        akruti::Vec v0{pos.x + c * s, pos.y + sn * s};
-        akruti::Vec v1{pos.x + c1 * s, pos.y + s1 * s};
-        akruti::Vec v2{pos.x + c2 * s, pos.y + s2 * s};
-        if ((v1.x - v0.x) * (v2.y - v0.y) - (v1.y - v0.y) * (v2.x - v0.x) < 0) {
+        akruti::Vec v0{pos.x() + c * s, pos.y() + sn * s};
+        akruti::Vec v1{pos.x() + c1 * s, pos.y() + s1 * s};
+        akruti::Vec v2{pos.x() + c2 * s, pos.y() + s2 * s};
+        if ((v1.x() - v0.x()) * (v2.y() - v0.y()) - (v1.y() - v0.y()) * (v2.x() - v0.x()) < 0) {
             std::swap(v1, v2);
         }
         out.triangle = akruti::Triangle{v0, v1, v2};
@@ -280,8 +280,8 @@ static BodyShapeData extract_body_shape(const GatiBody& b) {
         out.type = akruti::ShapeType::Segment;
         const float c = std::cos(b.rot), sn = std::sin(b.rot);
         out.segment = akruti::Segment{
-            akruti::Vec{pos.x - s * c, pos.y - s * sn},
-            akruti::Vec{pos.x + s * c, pos.y + s * sn}
+            akruti::Vec{pos.x() - s * c, pos.y() - s * sn},
+            akruti::Vec{pos.x() + s * c, pos.y() + s * sn}
         };
         break;
     }
@@ -335,7 +335,7 @@ static akruti::Manifold test_body_collision(const GatiBody& a, const GatiBody& b
     auto m = akruti::collide_matrix < kPolyMax > (sa.type, ptr_a, sb.type, ptr_b, cache);
     if (m.hit && m.depth > 0.0f) {
         pebble::math::vec2 delta = b.pos - a.pos;
-        if (m.normal.x * delta[0] + m.normal.y * delta[1] < 0.0f) {
+        if (m.normal.x() * delta.x() + m.normal.y() * delta.y() < 0.0f) {
             m.normal = -m.normal;
         }
     }
@@ -344,8 +344,8 @@ static akruti::Manifold test_body_collision(const GatiBody& a, const GatiBody& b
 
 static kalpana::Path body_shape_path(const GatiBody& b) {
     kalpana::Path p;
-    const float x = b.pos[0];
-    const float y = b.pos[1];
+    const float x = b.pos.x();
+    const float y = b.pos.y();
     const float s = b.size;
     const float c = std::cos(b.rot);
     const float sn = std::sin(b.rot);
@@ -440,8 +440,8 @@ static kalpana::Path body_shape_path(const GatiBody& b) {
         int n = 0;
         poly_verts(b, wv, n);
         for (int i = 0; i < n; ++i) {
-            if (i == 0) p.move_to(wv[i].x, wv[i].y);
-            else p.line_to(wv[i].x, wv[i].y);
+            if (i == 0) p.move_to(wv[i].x(), wv[i].y());
+            else p.line_to(wv[i].x(), wv[i].y());
         }
         p.close();
         break;
@@ -753,8 +753,8 @@ static void step_gati(float dt) {
                                 auto manifold = test_body_collision(app.bodies[i], app.bodies[j]);
                                 if (!manifold.hit || manifold.depth <= 0.0f) continue;
 
-                                float nx_norm = manifold.normal.x;
-                                float ny_norm = manifold.normal.y;
+                                float nx_norm = manifold.normal.x();
+                                float ny_norm = manifold.normal.y();
                                 float len_n = std::sqrt(nx_norm * nx_norm + ny_norm * ny_norm);
                                 if (len_n > 1e-5f) {
                                     float inv_l = 1.0f / len_n;

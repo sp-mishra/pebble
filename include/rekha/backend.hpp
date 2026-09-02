@@ -56,9 +56,9 @@ namespace rekha {
         void draw_polyline(std::span<const Vec2> pts, StrokeStyle stroke) {
             if (pts.size() < 2) return;
             kalpana::Path path;
-            path.move_to(ox_ + pts[0].x, oy_ + pts[0].y);
+            path.move_to(ox_ + pts[0].x(), oy_ + pts[0].y());
             for (std::size_t i = 1; i < pts.size(); ++i)
-                path.line_to(ox_ + pts[i].x, oy_ + pts[i].y);
+                path.line_to(ox_ + pts[i].x(), oy_ + pts[i].y());
             scene_.add(kalpana::Node::shape(std::move(path), kalpana::Paint::stroke(stroke.color, stroke.width)));
         }
 

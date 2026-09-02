@@ -59,7 +59,7 @@ namespace akruti::scene {
 
     class Scene {
     public:
-        using Tree = containers::AABBTree<AABB<Scalar>, Vec2<Scalar>>;
+        using Tree = containers::AABBTree<Box2, Vec>;
 
         explicit Scene(Scalar margin = Scalar(0), unsigned threads = 0)
             : tree_(margin), exec_(threads) {}

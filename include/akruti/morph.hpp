@@ -20,23 +20,23 @@ namespace akruti {
         ShapeB shape_b{};
         Scalar t = Scalar(0.0); // Morph parameter in [0, 1]
 
-        [[nodiscard]] Scalar sdf(Vec2<Scalar> p) const noexcept {
+        [[nodiscard]] Scalar sdf(Vec p) const noexcept {
             const Scalar da = shape_a.sdf(p);
             const Scalar db = shape_b.sdf(p);
             const Scalar factor = std::clamp(t, Scalar(0.0), Scalar(1.0));
             return da * (Scalar(1.0) - factor) + db * factor;
         }
 
-        [[nodiscard]] AABB<Scalar> aabb() const noexcept {
+        [[nodiscard]] Box2 aabb() const noexcept {
             const auto box_a = shape_a.aabb();
             const auto box_b = shape_b.aabb();
             const Scalar factor = std::clamp(t, Scalar(0.0), Scalar(1.0));
-            const pebble::math::vec2 lo = box_a.lo * (Scalar(1.0) - factor) + box_b.lo * factor;
-            const pebble::math::vec2 hi = box_a.hi * (Scalar(1.0) - factor) + box_b.hi * factor;
-            return AABB<Scalar>{lo, hi};
+            const Vec lo = box_a.lo * (Scalar(1.0) - factor) + box_b.lo * factor;
+            const Vec hi = box_a.hi * (Scalar(1.0) - factor) + box_b.hi * factor;
+            return Box2{lo, hi};
         }
 
-        [[nodiscard]] Vec2<Scalar> support(Vec2<Scalar> d) const noexcept {
+        [[nodiscard]] Vec support(Vec d) const noexcept {
             const auto s_a = shape_a.support(d);
             const auto s_b = shape_b.support(d);
             const Scalar factor = std::clamp(t, Scalar(0.0), Scalar(1.0));

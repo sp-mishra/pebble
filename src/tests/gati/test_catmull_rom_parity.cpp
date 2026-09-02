@@ -47,8 +47,8 @@ TEST_CASE (
         static_cast<pebble::math::vec2>(spline.points[2]),
         static_cast<pebble::math::vec2>(spline.points[3]), 0.5f);
 
-    REQUIRE(got.x == Catch::Approx(expect[0]).margin(1e-4));
-    REQUIRE(got.y == Catch::Approx(expect[1]).margin(1e-4));
+    REQUIRE(got.x() == Catch::Approx(expect[0]).margin(1e-4));
+    REQUIRE(got.y() == Catch::Approx(expect[1]).margin(1e-4));
 }
 
 TEST_CASE (

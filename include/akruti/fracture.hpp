@@ -18,20 +18,21 @@
 #include "primitives.hpp"
 #include "containers/dynamic/SmallVector.hpp"
 #include <vector>
+#include <span>
 
 namespace akruti {
-    using Poly = containers::dynamic::SmallVector<Vec2<Scalar>>;
+    using Poly = containers::dynamic::SmallVector<Vec>;
 
     // ── Single half-plane clip: keep the portion of `subject` on the side where
     //    normal·(p - point) <= 0 (the "inside" / solid side). ─────────────────────────
-    [[nodiscard]] inline Poly clip_halfplane(const Poly& subject, const Vec2<Scalar> normal, const Vec2<Scalar> point) {
+    [[nodiscard]] inline Poly clip_halfplane(const Poly& subject, const Vec normal, const Vec point) {
         Poly out;
         const std::size_t n = subject.size();
         if (n == 0) return out;
-        auto side = [&](const Vec2<Scalar> p) { return normal.dot(p - point); };
+        auto side = [&](const Vec p) { return akruti::dot(normal, p - point); };
         for (std::size_t i = 0; i < n; ++i) {
-            const Vec2<Scalar> cur = subject[i];
-            const Vec2<Scalar> prev = subject[(i + n - 1) % n];
+            const Vec cur = subject[i];
+            const Vec prev = subject[(i + n - 1) % n];
             const Scalar dc = side(cur), dp = side(prev);
             const bool cur_in = dc <= static_cast<Scalar>(0);
             if (const bool prev_in = dp <= static_cast<Scalar>(0); cur_in != prev_in) {
@@ -48,11 +49,11 @@ namespace akruti {
         Poly result = subject;
         const std::size_t m = clip.size();
         for (std::size_t i = 0; i < m && !result.empty(); ++i) {
-            const Vec2<Scalar> a = clip[i];
-            const Vec2<Scalar> b = clip[(i + 1) % m];
-            const Vec2<Scalar> edge = b - a;
+            const Vec a = clip[i];
+            const Vec b = clip[(i + 1) % m];
+            const Vec edge = b - a;
             // Inward normal for CCW clip polygon points to the left of the edge.
-            const Vec2<Scalar> inward{-edge.y, edge.x};
+            const Vec inward{-edge.y(), edge.x()};
             // clip_halfplane keeps normal·(p-point)<=0; we want the inward (left) side => use -inward.
             result = clip_halfplane(result, inward * static_cast<Scalar>(-1), a);
         }
@@ -64,29 +65,29 @@ namespace akruti {
         const std::size_t n = p.size();
         if (n < 3) return static_cast<Scalar>(0);
         Scalar a = 0;
-        for (std::size_t i = 0; i < n; ++i) a += cross(p[i], p[(i + 1) % n]);
+        for (std::size_t i = 0; i < n; ++i) a += akruti::cross(p[i], p[(i + 1) % n]);
         return a * static_cast<Scalar>(0.5);
     }
 
     // ── Polygon centroid ───────────────────────────────────────────────────────────────
-    [[nodiscard]] inline Vec2<Scalar> polygon_centroid(const Poly& p) noexcept {
+    [[nodiscard]] inline Vec polygon_centroid(const Poly& p) noexcept {
         const std::size_t n = p.size();
-        if (n == 0) return Vec2<Scalar>{0, 0};
+        if (n == 0) return Vec{0, 0};
         if (n == 1) return p[0];
         if (n == 2) return (p[0] + p[1]) * static_cast<Scalar>(0.5);
         const Scalar a = polygon_area(p);
         if (std::fabs(a) < static_cast<Scalar>(1e-12)) {
-            Vec2<Scalar> c{0, 0};
-            for (std::size_t i = 0; i < n; ++i) c += p[i];
+            Vec c{0, 0};
+            for (std::size_t i = 0; i < n; ++i) c = c + p[i];
             return c * (static_cast<Scalar>(1) / static_cast<Scalar>(n));
         }
-        Vec2<Scalar> c{0, 0};
+        Vec c{0, 0};
         for (std::size_t i = 0; i < n; ++i) {
             const auto& p0 = p[i];
             const auto& p1 = p[(i + 1) % n];
-            const Scalar factor = cross(p0, p1);
-            c.x += (p0.x + p1.x) * factor;
-            c.y += (p0.y + p1.y) * factor;
+            const Scalar factor = akruti::cross(p0, p1);
+            c.x() += (p0.x() + p1.x()) * factor;
+            c.y() += (p0.y() + p1.y()) * factor;
         }
         return c / (static_cast<Scalar>(6) * a);
     }
@@ -97,18 +98,18 @@ namespace akruti {
     //    boundary (sum == boundary area up to clipping precision).
     template <typename OutContainer>
     inline void voronoi_shatter_into(const Poly& boundary,
-                                     std::span<const Vec2<Scalar>> seeds,
+                                     std::span<const Vec> seeds,
                                      OutContainer& cells) {
         cells.reserve(cells.size() + seeds.size());
         for (std::size_t s = 0; s < seeds.size(); ++s) {
             Poly cell = boundary;
-            const Vec2<Scalar> si = seeds[s];
+            const Vec si = seeds[s];
             for (std::size_t o = 0; o < seeds.size() && !cell.empty(); ++o) {
                 if (o == s) continue;
-                const Vec2<Scalar> so = seeds[o];
+                const Vec so = seeds[o];
                 // Bisector: points equidistant. Keep side closer to si => normal toward so, point at midpoint.
-                const Vec2<Scalar> normal = so - si; // points from si to so
-                const Vec2<Scalar> mid = (si + so) * static_cast<Scalar>(0.5);
+                const Vec normal = so - si; // points from si to so
+                const Vec mid = (si + so) * static_cast<Scalar>(0.5);
                 cell = clip_halfplane(cell, normal, mid); // keep normal·(p-mid)<=0 (si's side)
             }
             cells.push_back(std::move(cell));
@@ -116,16 +117,16 @@ namespace akruti {
     }
 
     [[nodiscard]] inline containers::dynamic::SmallVector<Poly, 16 * sizeof(Poly)>
-    voronoi_shatter(const Poly& boundary, std::span<const Vec2<Scalar>> seeds) {
+    voronoi_shatter(const Poly& boundary, std::span<const Vec> seeds) {
         containers::dynamic::SmallVector<Poly, 16 * sizeof(Poly)> cells;
         voronoi_shatter_into(boundary, seeds, cells);
         return cells;
     }
 
     [[nodiscard]] inline std::vector<Poly>
-    voronoi_shatter(const Poly& boundary, const std::vector<Vec2<Scalar>>& seeds) {
+    voronoi_shatter(const Poly& boundary, const std::vector<Vec>& seeds) {
         std::vector<Poly> cells;
-        voronoi_shatter_into(boundary, std::span<const Vec2<Scalar>>(seeds.data(), seeds.size()), cells);
+        voronoi_shatter_into(boundary, std::span<const Vec>(seeds.data(), seeds.size()), cells);
         return cells;
     }
 
@@ -138,12 +139,12 @@ namespace akruti {
     }
 
     // Convenience: build a rectangular boundary Poly (CCW).
-    [[nodiscard]] inline Poly rect_poly(Vec2<Scalar> lo, Vec2<Scalar> hi) {
+    [[nodiscard]] inline Poly rect_poly(Vec lo, Vec hi) {
         Poly p;
-        p.push_back({lo.x, lo.y});
-        p.push_back({hi.x, lo.y});
-        p.push_back({hi.x, hi.y});
-        p.push_back({lo.x, hi.y});
+        p.push_back({lo.x(), lo.y()});
+        p.push_back({hi.x(), lo.y()});
+        p.push_back({hi.x(), hi.y()});
+        p.push_back({lo.x(), hi.y()});
         return p;
     }
 } // namespace akruti

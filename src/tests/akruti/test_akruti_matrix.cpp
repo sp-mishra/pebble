@@ -58,8 +58,8 @@ TEST_CASE (
     const auto R = akruti::make_rotation2d(std::numbers::pi_v<float> / 2.0f); // 90°: (1,0) → (0,1)
     const akruti::Vec2<float> v{1.0f, 0.0f};
     const akruti::Vec2<float> result = R * v;
-    REQUIRE_THAT(result.x, WithinAbs(0.0f, 1e-5f));
-    REQUIRE_THAT(result.y, WithinAbs(1.0f, 1e-5f));
+    REQUIRE_THAT(result.x(), WithinAbs(0.0f, 1e-5f));
+    REQUIRE_THAT(result.y(), WithinAbs(1.0f, 1e-5f));
 }
 
 TEST_CASE (

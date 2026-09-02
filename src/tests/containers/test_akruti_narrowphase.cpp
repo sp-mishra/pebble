@@ -18,7 +18,7 @@ TEST_CASE (
     Manifold m1 = collide_circle_circle(c1, c2);
     REQUIRE(m1.hit);
     REQUIRE(m1.depth == Catch::Approx(0.5f).margin(1e-3));
-    REQUIRE(m1.normal.x == Catch::Approx(1.0f).margin(1e-3));
+    REQUIRE(m1.normal.x() == Catch::Approx(1.0f).margin(1e-3));
     REQUIRE(m1.points.size() == 1);
 
     Manifold m2 = collide_circle_circle(c1, c3);
@@ -52,7 +52,7 @@ TEST_CASE (
     Manifold m = collide_obb_obb(b1, b2);
     REQUIRE(m.hit);
     REQUIRE(m.depth == Catch::Approx(0.2f).margin(1e-2));
-    REQUIRE(m.normal.y == Catch::Approx(1.0f).margin(1e-2));
+    REQUIRE(m.normal.y() == Catch::Approx(1.0f).margin(1e-2));
     // 2-point manifold generated for face-face contact
     REQUIRE(m.points.size() == 2);
 }

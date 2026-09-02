@@ -26,8 +26,8 @@ namespace akruti {
             for (std::size_t i = 0; i < n; ++i) (void)hull.verts.push_back(pts[i]);
             return hull;
         }
-        std::sort(pts.begin(), pts.end(), [](Vec2<Scalar> a, Vec2<Scalar> b) {
-            return a.x < b.x || (a.x == b.x && a.y < b.y);
+        std::sort(pts.begin(), pts.end(), [](Vec a, Vec b) {
+            return x(a) < x(b) || (x(a) == x(b) && y(a) < y(b));
         });
 
         containers::static_vector<Vec2<Scalar>, 2 * N> ch;

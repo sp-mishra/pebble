@@ -21,8 +21,7 @@ namespace prakriti {namespace detail {
         // Delegate to Akruti's analytical and FD sdf_gradient
         template <class Shape>
         [[nodiscard]] inline pebble::math::vec2 sdf_normal(const Shape& s, const pebble::math::vec2& p) noexcept {
-            const akruti::Vec g = akruti::sdf_gradient(s, akruti::Vec{p[0], p[1]});
-            return pebble::math::vec2(g.x, g.y);
+            return akruti::sdf_gradient(s, p);
         }
     } // namespace detail
 

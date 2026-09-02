@@ -77,12 +77,12 @@ namespace gati {
         [[nodiscard]] std::size_t body_count() const noexcept { return bodies_.size(); }
 
         // === Continuum Particles ===
-        void add_fluid_region(akruti::AABB<float> region, prakriti::MaterialId mat, int count) {
+        void add_fluid_region(akruti::Box2 region, prakriti::MaterialId mat, int count) {
             if (!prakriti_world_ || count <= 0) return;
-            const float dx = (region.hi[0] - region.lo[0]) / std::sqrt(float(count));
-            const float dy = (region.hi[1] - region.lo[1]) / std::sqrt(float(count));
-            for (float y = region.lo[1]; y < region.hi[1]; y += dy) {
-                for (float x = region.lo[0]; x < region.hi[0]; x += dx) {
+            const float dx = (region.hi.x() - region.lo.x()) / std::sqrt(float(count));
+            const float dy = (region.hi.y() - region.lo.y()) / std::sqrt(float(count));
+            for (float y = region.lo.y(); y < region.hi.y(); y += dy) {
+                for (float x = region.lo.x(); x < region.hi.x(); x += dx) {
                     prakriti_world_->particles().add({.position = pebble::math::vec2{x, y}, .material = mat});
                 }
             }

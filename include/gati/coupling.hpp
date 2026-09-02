@@ -19,20 +19,20 @@ namespace gati {
                     const float dist = b.sdf(p);
                     if (dist < 0.0f) {
                         // Penetrating into rigid body: compute outward normal
-                        const akruti::TransformedShape ts{b.shape, akruti::Vec{b.position[0], b.position[1]}, b.angle};
-                        const akruti::Vec norm = akruti::sdf_gradient(ts, akruti::Vec{p[0], p[1]});
+                        const akruti::TransformedShape ts{b.shape, b.position, b.angle};
+                        const akruti::Vec norm = akruti::sdf_gradient(ts, p);
 
                         // Project position to boundary
-                        particles.pred_x[i] -= norm.x * dist;
-                        particles.pred_y[i] -= norm.y * dist;
+                        particles.pred_x[i] -= norm.x() * dist;
+                        particles.pred_y[i] -= norm.y() * dist;
 
                         // Match rigid body velocity at contact
-                        const akruti::Vec r = akruti::Vec{p[0], p[1]} - akruti::Vec{b.position[0], b.position[1]};
-                        const float r_vx = b.velocity[0] - b.angular_velocity * r.y;
-                        const float r_vy = b.velocity[1] + b.angular_velocity * r.x;
+                        const akruti::Vec r = p - b.position;
+                        const float r_vx = b.velocity[0] - b.angular_velocity * r.y();
+                        const float r_vy = b.velocity[1] + b.angular_velocity * r.x();
 
-                        particles.vel_x[i] = r_vx + norm.x * 0.1f;
-                        particles.vel_y[i] = r_vy + norm.y * 0.1f;
+                        particles.vel_x[i] = r_vx + norm.x() * 0.1f;
+                        particles.vel_y[i] = r_vy + norm.y() * 0.1f;
                     }
                 }
             }
@@ -50,11 +50,11 @@ namespace gati {
                     if (b.is_static()) continue;
                     const float dist = b.sdf(p);
                     if (dist < 0.1f) {
-                        const akruti::TransformedShape ts{b.shape, akruti::Vec{b.position[0], b.position[1]}, b.angle};
-                        const akruti::Vec norm = akruti::sdf_gradient(ts, akruti::Vec{p[0], p[1]});
+                        const akruti::TransformedShape ts{b.shape, b.position, b.angle};
+                        const akruti::Vec norm = akruti::sdf_gradient(ts, p);
 
                         const float force_mag = (0.1f - dist) * 100.0f * m;
-                        const pebble::math::vec2 f{-norm.x * force_mag, -norm.y * force_mag};
+                        const pebble::math::vec2 f{-norm.x() * force_mag, -norm.y() * force_mag};
                         b.apply_force(f);
                     }
                 }

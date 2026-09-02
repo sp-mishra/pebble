@@ -417,17 +417,17 @@ static void build_scene(kalpana::Scene& scene) {
     // 2. Render Static Obstacles (Circles & Capsules)
     for (const auto& c : app.obstacles.circles) {
         kalpana::Path p;
-        p.circle(c.center.x, c.center.y, c.radius);
+        p.circle(c.center.x(), c.center.y(), c.radius);
         scene.add(kalpana::Node::shape(p, kalpana::Paint::fill(kalpana::Color{0.12f, 0.16f, 0.24f, 0.95f})));
         scene.add(kalpana::Node::shape(p, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.5f, 0.85f, 0.8f}, 3.0f)));
     }
     for (const auto& cap : app.obstacles.capsules) {
         kalpana::Path p;
-        p.circle(cap.a.x, cap.a.y, cap.radius);
-        p.circle(cap.b.x, cap.b.y, cap.radius);
+        p.circle(cap.a.x(), cap.a.y(), cap.radius);
+        p.circle(cap.b.x(), cap.b.y(), cap.radius);
         kalpana::Path seg;
-        seg.move_to(cap.a.x, cap.a.y);
-        seg.line_to(cap.b.x, cap.b.y);
+        seg.move_to(cap.a.x(), cap.a.y());
+        seg.line_to(cap.b.x(), cap.b.y());
         scene.add(kalpana::Node::shape(
             seg, kalpana::Paint::stroke(kalpana::Color{0.14f, 0.18f, 0.28f, 0.95f}, cap.radius * 2.0f)));
         scene.add(kalpana::Node::shape(seg, kalpana::Paint::stroke(kalpana::Color{0.4f, 0.6f, 0.95f, 0.8f}, 2.5f)));

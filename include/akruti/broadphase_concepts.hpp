@@ -4,18 +4,17 @@
 #include "narrowphase.hpp"
 #include "fracture.hpp"
 #include <concepts>
-#include <vector>
 #include <span>
 
 namespace akruti {
     // ── Broadphase: spatial acceleration structure ─────────────────────────
     template <class T>
-    concept Broadphase = requires(T bp, AABB<Scalar> box, uint32_t id) {
+    concept Broadphase = requires(T bp, Box2 box, uint32_t id) {
         { bp.insert(box, id) } -> std::same_as<uint32_t>;
         { bp.remove(id) };
         { bp.update(id, box) } -> std::same_as<bool>;
         bp.query(box, [](uint32_t) {});
-        bp.raycast(Vec2<Scalar>{}, Vec2<Scalar>{}, Scalar{}, [](uint32_t) {});
+        bp.raycast(Vec{}, Vec{}, Scalar{}, [](uint32_t) {});
         { bp.size() } -> std::convertible_to<std::size_t>;
     };
 

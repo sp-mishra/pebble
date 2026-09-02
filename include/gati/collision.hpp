@@ -339,8 +339,8 @@ private:
                 if (m.hit) {
                     const Vec2 cp = m.points.empty()
                                         ? Vec2{0.0f, 0.0f}
-                                        : Vec2{m.points[0].point.x, m.points[0].point.y};
-                    ctx.events.publish(ContactEvent{a, b, {m.normal.x, m.normal.y}, m.depth, cp});
+                                        : Vec2{m.points[0].point.x(), m.points[0].point.y()};
+                    ctx.events.publish(ContactEvent{a, b, {m.normal.x(), m.normal.y()}, m.depth, cp});
                 }
             }, vb);
         }, va);

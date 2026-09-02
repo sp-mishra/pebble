@@ -44,6 +44,12 @@
 #include "deform.hpp"
 #include "body.hpp"
 #include "layout.hpp"
+#include "cdt.hpp"
+#include "voronoi.hpp"
+#include "shape_store.hpp"
+#include "spatial_hash.hpp"
+#include "broadphase_concepts.hpp"
+#include "auto_policies.hpp"
 
 // Scene layer
 #include "scene/parallel.hpp"

@@ -37,11 +37,21 @@ namespace ga {
 
         constexpr explicit StaticMatrix(T fill_val) noexcept { data_.fill(fill_val); }
 
+        template <typename... Args>
+            requires (sizeof...(Args) == size_v && (std::is_convertible_v<Args, T> && ...))
+        constexpr StaticMatrix(Args... args) noexcept : data_{static_cast<T>(args)...} {}
+
         constexpr StaticMatrix(std::initializer_list<T> list) {
             if (list.size() != size_v)
                 throw std::invalid_argument("StaticMatrix: initializer_list size mismatch");
             std::size_t i = 0;
             for (T v : list) data_[i++] = v;
+        }
+
+        template <typename U>
+            requires (!std::is_same_v<T, U> && std::is_convertible_v<U, T>)
+        constexpr StaticMatrix(const StaticMatrix<U, R, C>& other) noexcept {
+            for (std::size_t i = 0; i < size_v; ++i) data_[i] = static_cast<T>(other.data()[i]);
         }
 
         static constexpr StaticMatrix identity() noexcept
@@ -345,6 +355,14 @@ namespace ga {
 
     [[nodiscard]] inline pebble::math::vec2 from_static_vec(const Vec2<float>& v) noexcept {
         return pebble::math::vec2(v(0, 0), v(1, 0));
+    }
+
+    template <typename T>
+    [[nodiscard]] constexpr pebble::math::vec_type<T, 2> operator*(const StaticMatrix<T, 2, 2>& m, const pebble::math::vec_type<T, 2>& v) noexcept {
+        return pebble::math::vec_type<T, 2>(
+            m(0, 0) * v[0] + m(0, 1) * v[1],
+            m(1, 0) * v[0] + m(1, 1) * v[1]
+        );
     }
 } // namespace ga
 #endif

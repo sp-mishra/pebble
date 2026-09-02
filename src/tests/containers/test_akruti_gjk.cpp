@@ -30,7 +30,7 @@ TEST_CASE (
     Contact ct = epa(a, b);
     REQUIRE(ct.hit);
     REQUIRE(ct.depth == Catch::Approx(0.5).margin(0.02)); // (r+r) - dist
-    REQUIRE(std::fabs(ct.normal.x) == Catch::Approx(1.0).margin(0.02));
+    REQUIRE(std::fabs(ct.normal.x()) == Catch::Approx(1.0).margin(0.02));
 
     Box ba{{0, 0}, {1, 1}}, bb{{1.5f, 0}, {1, 1}};
     Contact cb = epa(ba, bb);
@@ -47,5 +47,5 @@ TEST_CASE (
     Circle a{{0, 0}, 1}, b{{5, 0}, 1};
     Separation s = gjk_distance(a, b);
     REQUIRE(s.distance == Catch::Approx(3.0).margin(0.02)); // surface gap
-    REQUIRE(std::fabs(s.dir.x) == Catch::Approx(1.0).margin(0.02));
+    REQUIRE(std::fabs(s.dir.x()) == Catch::Approx(1.0).margin(0.02));
 }

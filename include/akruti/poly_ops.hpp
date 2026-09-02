@@ -3,7 +3,7 @@
 //
 // Complements fracture.hpp's `clip_polygon` (Sutherland-Hodgman intersection). Provides the
 // remaining vertex-list boolean ops (union / difference) plus true polygon offset with join
-// resolution. Operates on `Poly = SmallVector<Vec2<Scalar>>`, CCW convention (matches
+// resolution. Operates on `Poly = SmallVector<Vec>`, CCW convention (matches
 // polygon_area>0). Pure geometry — no dynamics, no rendering. Consumers (e.g. Kalpana path
 // booleans/offset) delegate here so the algorithms live in exactly one place.
 //
@@ -34,32 +34,32 @@ namespace akruti {
         }
 
         // Point-in-polygon (ray cast, CCW or CW agnostic). Boundary counts as inside.
-        [[nodiscard]] inline bool contains_point(const Poly& poly, const Vec2<Scalar>& q) noexcept {
+        [[nodiscard]] inline bool contains_point(const Poly& poly, const Vec& q) noexcept {
             const std::size_t n = poly.size();
             if (n < 3) return false;
             bool inside = false;
             for (std::size_t i = 0, j = n - 1; i < n; j = i++) {
-                const Vec2<Scalar>& a = poly[i];
-                const Vec2<Scalar>& b = poly[j];
-                const bool straddles = (a.y > q.y) != (b.y > q.y);
+                const Vec& a = poly[i];
+                const Vec& b = poly[j];
+                const bool straddles = (a.y() > q.y()) != (b.y() > q.y());
                 if (straddles) {
-                    const Scalar xcross = (b.x - a.x) * (q.y - a.y) / (b.y - a.y) + a.x;
-                    if (q.x < xcross) inside = !inside;
+                    const Scalar xcross = (b.x() - a.x()) * (q.y() - a.y()) / (b.y() - a.y()) + a.x();
+                    if (q.x() < xcross) inside = !inside;
                 }
             }
             return inside;
         }
 
         // Segment/segment intersection parameter (returns true + t on ab if they cross strictly).
-        [[nodiscard]] inline bool segment_intersect(const Vec2<Scalar>& a, const Vec2<Scalar>& b,
-                                                    const Vec2<Scalar>& c, const Vec2<Scalar>& d,
+        [[nodiscard]] inline bool segment_intersect(const Vec& a, const Vec& b,
+                                                    const Vec& c, const Vec& d,
                                                     Scalar& t_ab) noexcept {
-            const Vec2<Scalar> r = b - a;
-            const Vec2<Scalar> s = d - c;
-            const Scalar denom = cross(r, s);
+            const Vec r = b - a;
+            const Vec s = d - c;
+            const Scalar denom = akruti::cross(r, s);
             if (std::fabs(denom) < Scalar(1e-12)) return false; // parallel
-            const Scalar t = cross(c - a, s) / denom;
-            const Scalar u = cross(c - a, r) / denom;
+            const Scalar t = akruti::cross(c - a, s) / denom;
+            const Scalar u = akruti::cross(c - a, r) / denom;
             if (t < Scalar(0) || t > Scalar(1) || u < Scalar(0) || u > Scalar(1)) return false;
             t_ab = t;
             return true;
@@ -77,34 +77,34 @@ namespace akruti {
         if (n < 3 || std::fabs(delta) < Scalar(1e-9)) return poly;
 
         // Outward normal of a CCW polygon edge (a->b) is (dy, -dx) normalized.
-        auto edge_normal = [](const Vec2<Scalar>& a, const Vec2<Scalar>& b) -> Vec2<Scalar> {
-            const Vec2<Scalar> e = b - a;
-            const Vec2<Scalar> nrm{e.y, -e.x};
-            return nrm.normalized();
+        auto edge_normal = [](const Vec& a, const Vec& b) -> Vec {
+            const Vec e = b - a;
+            const Vec nrm{e.y(), -e.x()};
+            return akruti::normalize(nrm);
         };
 
         Poly out;
         out.reserve(join == JoinStyle::Round ? n * 3 : n * 2);
 
         for (std::size_t i = 0; i < n; ++i) {
-            const Vec2<Scalar>& prev = poly[(i + n - 1) % n];
-            const Vec2<Scalar>& cur = poly[i];
-            const Vec2<Scalar>& next = poly[(i + 1) % n];
+            const Vec& prev = poly[(i + n - 1) % n];
+            const Vec& cur = poly[i];
+            const Vec& next = poly[(i + 1) % n];
 
-            const Vec2<Scalar> n0 = edge_normal(prev, cur); // incoming edge normal
-            const Vec2<Scalar> n1 = edge_normal(cur, next); // outgoing edge normal
+            const Vec n0 = edge_normal(prev, cur); // incoming edge normal
+            const Vec n1 = edge_normal(cur, next); // outgoing edge normal
 
-            const Vec2<Scalar> p0 = cur + n0 * delta;
-            const Vec2<Scalar> p1 = cur + n1 * delta;
+            const Vec p0 = cur + n0 * delta;
+            const Vec p1 = cur + n1 * delta;
 
             // Miter apex along the averaged normal, scaled to reach the edge lines.
-            Vec2<Scalar> bis = (n0 + n1);
-            const Scalar bis_len2 = bis.len2();
-            const bool convex = cross(cur - prev, next - cur) > Scalar(0);
+            Vec bis = (n0 + n1);
+            const Scalar bis_len2 = akruti::length_sq(bis);
+            const bool convex = akruti::cross(cur - prev, next - cur) > Scalar(0);
 
             if (join == JoinStyle::Miter && bis_len2 > Scalar(1e-12)) {
-                bis = bis.normalized();
-                const Scalar cos_half = bis.dot(n0); // = cos(theta/2)
+                bis = akruti::normalize(bis);
+                const Scalar cos_half = akruti::dot(bis, n0); // = cos(theta/2)
                 if (cos_half > Scalar(1) / miter_limit) {
                     out.push_back(cur + bis * (delta / cos_half));
                     continue;
@@ -114,8 +114,8 @@ namespace akruti {
             if (join == JoinStyle::Round && convex) {
                 // Emit p0, an arc midpoint, then p1.
                 out.push_back(p0);
-                Vec2<Scalar> mid = (n0 + n1);
-                if (mid.len2() > Scalar(1e-12)) out.push_back(cur + mid.normalized() * delta);
+                Vec mid = (n0 + n1);
+                if (akruti::length_sq(mid) > Scalar(1e-12)) out.push_back(cur + akruti::normalize(mid) * delta);
                 out.push_back(p1);
                 continue;
             }
@@ -157,8 +157,8 @@ namespace akruti {
             const std::size_t ns = s.size();
             const std::size_t nc = c.size();
             for (std::size_t i = 0; i < ns; ++i) {
-                const Vec2<Scalar>& a0 = s[i];
-                const Vec2<Scalar>& a1 = s[(i + 1) % ns];
+                const Vec& a0 = s[i];
+                const Vec& a1 = s[(i + 1) % ns];
                 for (std::size_t j = 0; j < nc; ++j) {
                     Scalar t;
                     if (poly_detail::segment_intersect(a0, a1, c[j], c[(j + 1) % nc], t))
@@ -171,11 +171,11 @@ namespace akruti {
         if (merged.size() < 3) return a;
 
         // Order boundary CCW about centroid (result is a simple contour for the merged region).
-        Vec2<Scalar> c{0, 0};
-        for (const auto& p : merged) c += p;
+        Vec c{0, 0};
+        for (const auto& p : merged) c = c + p;
         c = c * (Scalar(1) / static_cast<Scalar>(merged.size()));
-        std::sort(merged.begin(), merged.end(), [&](const Vec2<Scalar>& u, const Vec2<Scalar>& v) {
-            return std::atan2(u.y - c.y, u.x - c.x) < std::atan2(v.y - c.y, v.x - c.x);
+        std::sort(merged.begin(), merged.end(), [&](const Vec& u, const Vec& v) {
+            return std::atan2(u[1] - c[1], u[0] - c[0]) < std::atan2(v[1] - c[1], v[0] - c[0]);
         });
         return merged;
     }
@@ -205,11 +205,11 @@ namespace akruti {
         const std::size_t ns = subject.size();
         const std::size_t nc = clip.size();
         for (std::size_t i = 0; i < ns; ++i) {
-            const Vec2<Scalar>& s0 = subject[i];
-            const Vec2<Scalar>& s1 = subject[(i + 1) % ns];
+            const Vec& s0 = subject[i];
+            const Vec& s1 = subject[(i + 1) % ns];
             if (!poly_detail::contains_point(clip, s0)) out.push_back(s0);
             // Insert crossings on this edge in parametric order.
-            std::vector<std::pair<Scalar, Vec2<Scalar>>> xs;
+            std::vector<std::pair<Scalar, Vec>> xs;
             for (std::size_t j = 0; j < nc; ++j) {
                 Scalar t;
                 if (poly_detail::segment_intersect(s0, s1, clip[j], clip[(j + 1) % nc], t))

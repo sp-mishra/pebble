@@ -19,13 +19,13 @@ TEST_CASE (
 
     // Normal at (-2, 0) should point outward along -X
     auto norm_left = normal_auto_diff(shape, {-2.0f, 0.0f});
-    REQUIRE(norm_left.x == Catch::Approx(-1.0f).margin(1e-3f));
-    REQUIRE(std::fabs(norm_left.y) < 1e-3f);
+    REQUIRE(norm_left.x() == Catch::Approx(-1.0f).margin(1e-3f));
+    REQUIRE(std::fabs(norm_left.y()) < 1e-3f);
 
     // Normal at (0, 2) should point outward along +Y
     auto norm_top = normal_auto_diff(shape, {0.0f, 2.0f});
-    REQUIRE(std::fabs(norm_top.x) < 1e-3f);
-    REQUIRE(norm_top.y == Catch::Approx(1.0f).margin(1e-3f));
+    REQUIRE(std::fabs(norm_top.x()) < 1e-3f);
+    REQUIRE(norm_top.y() == Catch::Approx(1.0f).margin(1e-3f));
 }
 
 TEST_CASE (
@@ -90,16 +90,16 @@ TEST_CASE (
     static_assert(akruti::Shape<akruti::ConvexPoly<4>>);
 
     akruti::Circle c{{1.0f, 2.0f}, 1.0f};
-    REQUIRE(c.centroid().x == Catch::Approx(1.0f));
-    REQUIRE(c.centroid().y == Catch::Approx(2.0f));
+    REQUIRE(c.centroid().x() == Catch::Approx(1.0f));
+    REQUIRE(c.centroid().y() == Catch::Approx(2.0f));
 
     akruti::Box b{{3.0f, 4.0f}, {1.0f, 1.0f}};
-    REQUIRE(b.centroid().x == Catch::Approx(3.0f));
-    REQUIRE(b.centroid().y == Catch::Approx(4.0f));
+    REQUIRE(b.centroid().x() == Catch::Approx(3.0f));
+    REQUIRE(b.centroid().y() == Catch::Approx(4.0f));
 
     akruti::Capsule cap{{0.0f, 0.0f}, {0.0f, 2.0f}, 0.5f};
-    REQUIRE(cap.centroid().x == Catch::Approx(0.0f));
-    REQUIRE(cap.centroid().y == Catch::Approx(1.0f));
+    REQUIRE(cap.centroid().x() == Catch::Approx(0.0f));
+    REQUIRE(cap.centroid().y() == Catch::Approx(1.0f));
 
     akruti::ConvexPoly<4> poly;
     (void)poly.verts.push_back({0.0f, 0.0f});
@@ -107,6 +107,6 @@ TEST_CASE (
     (void)poly.verts.push_back({2.0f, 2.0f});
     (void)poly.verts.push_back({0.0f, 2.0f});
     auto cen = poly.centroid();
-    REQUIRE(cen.x == Catch::Approx(1.0f).margin(1e-4f));
-    REQUIRE(cen.y == Catch::Approx(1.0f).margin(1e-4f));
+    REQUIRE(cen.x() == Catch::Approx(1.0f).margin(1e-4f));
+    REQUIRE(cen.y() == Catch::Approx(1.0f).margin(1e-4f));
 }

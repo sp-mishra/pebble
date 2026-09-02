@@ -16,8 +16,8 @@ TEST_CASE (
     akruti::Circle c{ .center = {0.0f, 0.0f}, .radius = 2.0f };
     akruti::Vec2<akruti::Scalar> p{0.5f, -0.3f};       // inside (‖p‖≈0.58 < 2)
     auto q = akruti::project(c, p);
-    CHECK(q.x == Catch::Approx(p.x));
-    CHECK(q.y == Catch::Approx(p.y));
+    CHECK(q.x() == Catch::Approx(p.x()));
+    CHECK(q.y() == Catch::Approx(p.y()));
     CHECK(c.sdf(q) <= Catch::Approx(0.0f).margin(1e-4f));   // feasible
 }
 
@@ -32,8 +32,8 @@ TEST_CASE (
     auto q = akruti::project(c, p);
     // on the boundary: sdf ≈ 0, and radius away from center along +x
     CHECK(c.sdf(q) == Catch::Approx(0.0f).margin(1e-2f));
-    CHECK(std::sqrt(q.x*q.x + q.y*q.y) == Catch::Approx(2.0f).margin(1e-2f));
-    CHECK(q.x > 0.0f);                                  // same side as p
+    CHECK(std::sqrt(q.x()*q.x() + q.y()*q.y()) == Catch::Approx(2.0f).margin(1e-2f));
+    CHECK(q.x() > 0.0f);                                  // same side as p
 }
 
 TEST_CASE (
@@ -45,13 +45,13 @@ TEST_CASE (
     akruti::Box b{ .center = {0.0f, 0.0f}, .half = {1.0f, 1.0f} };
     akruti::Vec2<akruti::Scalar> inside{0.2f, 0.9f};
     auto qi = akruti::project(b, inside);
-    CHECK(qi.x == Catch::Approx(inside.x));
-    CHECK(qi.y == Catch::Approx(inside.y));
+    CHECK(qi.x() == Catch::Approx(inside.x()));
+    CHECK(qi.y() == Catch::Approx(inside.y()));
 
     akruti::Vec2<akruti::Scalar> outside{3.0f, 0.0f};
     auto qo = akruti::project(b, outside);
     CHECK(b.sdf(qo) == Catch::Approx(0.0f).margin(1e-2f));   // on boundary
-    CHECK(qo.x == Catch::Approx(1.0f).margin(1e-2f));
+    CHECK(qo.x() == Catch::Approx(1.0f).margin(1e-2f));
 }
 
 TEST_CASE("Akruti: sdf_normal and sdf_curvature evaluate analytical differential geometry", "[akruti][query][curvature]") {
@@ -59,8 +59,8 @@ TEST_CASE("Akruti: sdf_normal and sdf_curvature evaluate analytical differential
     akruti::Vec2<akruti::Scalar> p{2.0f, 0.0f};
 
     auto n = akruti::sdf_normal(c, p);
-    CHECK(n.x == Catch::Approx(1.0f).margin(1e-3f));
-    CHECK(n.y == Catch::Approx(0.0f).margin(1e-3f));
+    CHECK(n.x() == Catch::Approx(1.0f).margin(1e-3f));
+    CHECK(n.y() == Catch::Approx(0.0f).margin(1e-3f));
 
     // Curvature of circle with radius R=2 is kappa = 1/R = 0.5
     auto kappa = akruti::sdf_curvature(c, p);

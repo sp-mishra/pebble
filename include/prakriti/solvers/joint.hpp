@@ -85,7 +85,7 @@ namespace prakriti {
         template <class Store>
         void solve_prismatic(Store& P, Index ia, Index ib, Scalar wa, Scalar wb,
                              const akruti::Joint& j, Scalar alpha) {
-            const pebble::math::vec2 axis{j.axis.x, j.axis.y};
+            const pebble::math::vec2 axis = j.axis;
             pebble::math::vec2 d = P.pred_v(ib) - P.pred_v(ia);
             const Scalar along = pebble::math::dot(d, axis);
             const pebble::math::vec2 along_v = axis * along;

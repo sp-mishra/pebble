@@ -34,10 +34,10 @@ TEST_CASE (
 
     // Test Support function
     auto sup_x = chain.support({1.0f, 0.0f});
-    REQUIRE(sup_x.x >= 10.5f);
+    REQUIRE(sup_x.x() >= 10.5f);
 
     auto sup_y = chain.support({0.0f, 1.0f});
-    REQUIRE(sup_y.y >= 10.5f);
+    REQUIRE(sup_y.y() >= 10.5f);
 }
 
 TEST_CASE (
@@ -60,5 +60,5 @@ TEST_CASE (
 
     // Edge normal check
     auto n0 = loop.edge_normal(0); // (0,0) -> (10,0), normal should be (0, -1) or (0, 1) depending on perp
-    REQUIRE(std::fabs(n0.y) == Catch::Approx(1.0f).margin(1e-4f));
+    REQUIRE(std::fabs(n0.y()) == Catch::Approx(1.0f).margin(1e-4f));
 }

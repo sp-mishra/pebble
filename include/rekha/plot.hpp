@@ -596,7 +596,7 @@ namespace rekha {
                         for (const auto& pt : p.series.points()) bump(pt.x, pt.y);
                     }
                     else if constexpr (std::same_as<T, GraphPlot>) {
-                        for (const auto& n : p.graph.nodes) bump(n.x, n.y);
+                        for (const auto& n : p.graph.nodes) bump(n.x(), n.y());
                     }
                     else if constexpr (std::same_as<T, BubblePlot>) {
                         for (const auto& bp : p.points) bump(bp.x, bp.y);
@@ -736,7 +736,7 @@ namespace rekha {
                         }
                     }
                     else if constexpr (std::same_as<T, GraphPlot>) {
-                        for (const auto& n : p.graph.nodes) include_point(n.x, n.y);
+                        for (const auto& n : p.graph.nodes) include_point(n.x(), n.y());
                     }
                     else if constexpr (std::same_as<T, BubblePlot>) {
                         for (const auto& bp : p.points) {
@@ -931,14 +931,14 @@ namespace rekha {
             std::vector<Vec2> nodes;
             nodes.reserve(plot.graph.nodes.size());
             for (const auto& n : plot.graph.nodes) {
-                nodes.push_back(Vec2{n.x, n.y});
+                nodes.push_back(Vec2{n.x(), n.y()});
             }
             if (plot.deoverlap && !nodes.empty()) {
                 const Scalar min_d2 = plot.deoverlap_radius * plot.deoverlap_radius;
                 for (std::size_t i = 0; i < nodes.size(); ++i) {
                     for (std::size_t j = i + 1; j < nodes.size(); ++j) {
                         Vec2 d = nodes[j] - nodes[i];
-                        const Scalar l2 = d.len2();
+                        const Scalar l2 = akruti::length_sq(d);
                         if (l2 < min_d2) {
                             const Scalar a = static_cast<Scalar>((i * 97 + j * 57) % 360) * 0.0174532925f;
                             const Vec2 push{std::cos(a), std::sin(a)};
@@ -951,10 +951,10 @@ namespace rekha {
                 if (e.from >= nodes.size() || e.to >= nodes.size()) continue;
                 const Vec2& a = nodes[e.from];
                 const Vec2& b = nodes[e.to];
-                backend.draw_line(xs.map(a.x), ys.map(a.y), xs.map(b.x), ys.map(b.y), plot.edge_stroke);
+                backend.draw_line(xs.map(a.x()), ys.map(a.y()), xs.map(b.x()), ys.map(b.y()), plot.edge_stroke);
             }
             for (const auto& n : nodes) {
-                backend.draw_circle(xs.map(n.x), ys.map(n.y), plot.node_style.radius, plot.node_style.color);
+                backend.draw_circle(xs.map(n.x()), ys.map(n.y()), plot.node_style.radius, plot.node_style.color);
             }
         }
 

@@ -21,44 +21,43 @@ namespace akruti {
     template <Shape S>
     struct Translated {
         const S& base;
-        Vec2<Scalar> offset;
-        [[nodiscard]] Scalar sdf(const Vec2<Scalar> p) const noexcept { return base.sdf(p - offset); }
+        Vec offset;
+        [[nodiscard]] Scalar sdf(const Vec p) const noexcept { return base.sdf(p - offset); }
 
-        [[nodiscard]] AABB<Scalar> aabb() const noexcept {
-            const AABB<Scalar> b = base.aabb();
-            const Vec2<Scalar> blo{b.lo}, bhi{b.hi};
-            return {{blo.x + offset.x, blo.y + offset.y}, {bhi.x + offset.x, bhi.y + offset.y}};
+        [[nodiscard]] Box2 aabb() const noexcept {
+            const Box2 b = base.aabb();
+            return {b.lo + offset, b.hi + offset};
         }
 
-        [[nodiscard]] Vec2<Scalar> support(Vec2<Scalar> d) const noexcept { return base.support(d) + offset; }
-        [[nodiscard]] Vec2<Scalar> centroid() const noexcept { return base.centroid() + offset; }
+        [[nodiscard]] Vec support(Vec d) const noexcept { return base.support(d) + offset; }
+        [[nodiscard]] Vec centroid() const noexcept { return base.centroid() + offset; }
     };
 
     // Fast O(1) swept-AABB overlap test: returns false when swept bounds cannot overlap.
     // Rejects ~80% of non-colliding pairs before conservative advancement.
-    [[nodiscard]] inline bool swept_aabb_overlap(const AABB<Scalar> a, const Vec2<Scalar> va,
-                                                 const AABB<Scalar> b, const Vec2<Scalar> vb,
+    [[nodiscard]] inline bool swept_aabb_overlap(const Box2 a, const Vec va,
+                                                 const Box2 b, const Vec vb,
                                                  const Scalar dt) noexcept {
         // Expand each AABB by its motion over dt, then test overlap.
-        const Vec2<Scalar> rel = (vb - va) * dt;
-        AABB<Scalar> swept_a = a;
-        AABB<Scalar> swept_b = b;
+        const Vec rel = (vb - va) * dt;
+        Box2 swept_a = a;
+        Box2 swept_b = b;
         // Expand a by 0 (static reference), expand b by relative motion
-        swept_b.lo[0] += (rel.x < 0 ? rel.x : static_cast<Scalar>(0));
-        swept_b.hi[0] += (rel.x > 0 ? rel.x : static_cast<Scalar>(0));
-        swept_b.lo[1] += (rel.y < 0 ? rel.y : static_cast<Scalar>(0));
-        swept_b.hi[1] += (rel.y > 0 ? rel.y : static_cast<Scalar>(0));
-        return swept_a.hi[0] >= swept_b.lo[0] && swept_a.lo[0] <= swept_b.hi[0] &&
-            swept_a.hi[1] >= swept_b.lo[1] && swept_a.lo[1] <= swept_b.hi[1];
+        swept_b.lo.x() += (rel.x() < 0 ? rel.x() : static_cast<Scalar>(0));
+        swept_b.hi.x() += (rel.x() > 0 ? rel.x() : static_cast<Scalar>(0));
+        swept_b.lo.y() += (rel.y() < 0 ? rel.y() : static_cast<Scalar>(0));
+        swept_b.hi.y() += (rel.y() > 0 ? rel.y() : static_cast<Scalar>(0));
+        return swept_a.hi.x() >= swept_b.lo.x() && swept_a.lo.x() <= swept_b.hi.x() &&
+            swept_a.hi.y() >= swept_b.lo.y() && swept_a.lo.y() <= swept_b.hi.y();
     }
 
     // Conservative advancement: A is static, B translates by `motion` over the step. Returns the
     // earliest t in [0,1] at which the gap closes to `target_gap` (default ~contact), else t=1.
     template <Shape A, Shape B>
-    [[nodiscard]] inline TOIResult time_of_impact(const A& a, const B& b, const Vec2<Scalar> motion,
+    [[nodiscard]] inline TOIResult time_of_impact(const A& a, const B& b, const Vec motion,
                                                   const Scalar target_gap = static_cast<Scalar>(1e-3),
                                                   const int max_iter = 32) noexcept {
-        const Scalar speed = motion.len();
+        const Scalar speed = akruti::length(motion);
         if (speed < static_cast<Scalar>(1e-9)) {
             // No motion: purely a static overlap query.
             return gjk_overlap(a, b)
@@ -66,7 +65,7 @@ namespace akruti {
                        : TOIResult{.hit = false, .t = 1, .iters = 0};
         }
         // Fast swept-AABB reject: skip expensive advancement for clearly non-overlapping pairs.
-        if (!swept_aabb_overlap(a.aabb(), Vec2<Scalar>{}, b.aabb(), motion, static_cast<Scalar>(1))) {
+        if (!swept_aabb_overlap(a.aabb(), Vec{}, b.aabb(), motion, static_cast<Scalar>(1))) {
             return TOIResult{.hit = false, .t = 1, .iters = 0};
         }
         Scalar t = 0;
@@ -77,7 +76,7 @@ namespace akruti {
 
             // mpr.normal points from A toward B.
             // For B to approach A, motion must point opposite mpr.normal:
-            const Scalar closing_proj = -motion.dot(mpr.normal);
+            const Scalar closing_proj = -akruti::dot(motion, mpr.normal);
             const Scalar closing = (closing_proj > static_cast<Scalar>(1e-6)) ? closing_proj : speed;
 
             const Scalar dt = (mpr.distance - target_gap) / closing;

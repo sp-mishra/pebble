@@ -109,12 +109,12 @@ TEST_CASE (
 }
 
 TEST_CASE (
-"akruti: khanda impact-biased Poisson densifies near impact"
+"akruti: khanda impact-biased Poisson generates cluster near impact"
 ,
 "[akruti][khanda]"
 )
  {
-    AABB<Scalar> b{{0, 0}, {4, 4}};
+    Box2 b{{0, 0}, {4, 4}};
     Vec center{2, 2};
     Scalar r = 0.8f;
     PoissonConfig pc; pc.min_dist = 0.25f; pc.seed = 42;
@@ -122,7 +122,7 @@ TEST_CASE (
     ImpactField field{center, 4.0f, 0.8f};
     auto biased = poisson_disk_sites(b, pc, &field);
     auto near = [&](const std::vector<Vec>& v) {
-        int n = 0; for (auto p : v) if ((p - center).len2() <= r * r) ++n; return n;
+        int n = 0; for (auto p : v) if (akruti::length_sq(p - center) <= r * r) ++n; return n;
     };
     REQUIRE(near(biased) > near(uniform));
 }
@@ -139,9 +139,9 @@ TEST_CASE (
     REQUIRE(!shards.empty());
 
     const Shard& parent = shards.front();
-    AABB<Scalar> pb = khanda::detail::bounds_of(parent.outline);
+    Box2 pb = khanda::detail::bounds_of(parent.outline);
     Vec c = pb.center();
-    std::vector<Vec> subs = {{c.x - 0.05f, c.y}, {c.x + 0.05f, c.y}, {c.x, c.y + 0.05f}};
+    std::vector<Vec> subs = {{c.x() - 0.05f, c.y()}, {c.x() + 0.05f, c.y()}, {c.x(), c.y() + 0.05f}};
     auto subshards = refracture(parent, std::span<const Vec>(subs));
     double sum = 0;
     for (const auto& s : subshards) sum += s.area;

@@ -115,17 +115,17 @@ namespace kalpana {
         // ── Akruti Spline & Polygon Import ──────────────────────────────────────────
         static BasicPath from_bezier(const akruti::CubicBezierCurve& curve) {
             BasicPath p;
-            p.move_to(curve.p0.x, curve.p0.y);
-            p.cubic_to(curve.p1.x, curve.p1.y, curve.p2.x, curve.p2.y, curve.p3.x, curve.p3.y);
+            p.move_to(curve.p0[0], curve.p0[1]);
+            p.cubic_to(curve.p1[0], curve.p1[1], curve.p2[0], curve.p2[1], curve.p3[0], curve.p3[1]);
             return p;
         }
 
         static BasicPath from_catmull_rom(const akruti::CatmullRomSpline& spline) {
             BasicPath p;
             if (spline.points.empty()) return p;
-            p.move_to(spline.points[0].x, spline.points[0].y);
+            p.move_to(spline.points[0][0], spline.points[0][1]);
             for (std::size_t i = 1; i < spline.points.size(); ++i) {
-                p.line_to(spline.points[i].x, spline.points[i].y);
+                p.line_to(spline.points[i][0], spline.points[i][1]);
             }
             if (spline.closed) p.close();
             return p;
@@ -135,9 +135,9 @@ namespace kalpana {
         static BasicPath from_chain(const akruti::ChainShape<N>& chain) {
             BasicPath p;
             if (chain.verts.empty()) return p;
-            p.move_to(chain.verts[0].x, chain.verts[0].y);
+            p.move_to(chain.verts[0][0], chain.verts[0][1]);
             for (std::size_t i = 1; i < chain.verts.size(); ++i) {
-                p.line_to(chain.verts[i].x, chain.verts[i].y);
+                p.line_to(chain.verts[i][0], chain.verts[i][1]);
             }
             if (chain.is_loop) p.close();
             return p;
@@ -146,9 +146,9 @@ namespace kalpana {
         static BasicPath from_poly(const akruti::Poly& poly) {
             BasicPath p;
             if (poly.empty()) return p;
-            p.move_to(poly[0].x, poly[0].y);
+            p.move_to(poly[0][0], poly[0][1]);
             for (std::size_t i = 1; i < poly.size(); ++i) {
-                p.line_to(poly[i].x, poly[i].y);
+                p.line_to(poly[i][0], poly[i][1]);
             }
             p.close();
             return p;
@@ -157,7 +157,7 @@ namespace kalpana {
         [[nodiscard]] akruti::Poly to_poly() const {
             akruti::Poly poly;
             for (const auto& pt : pts_) {
-                poly.push_back(akruti::Vec2<akruti::Scalar>{pt[0], pt[1]});
+                poly.push_back(pt);
             }
             return poly;
         }

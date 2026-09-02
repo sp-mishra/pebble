@@ -44,16 +44,16 @@ namespace akruti {
             return payloads_.size();
         }
 
-        // Insert entity AABB and payload ID
-        uint32_t insert(AABB<Scalar> box, Payload id) {
+        // Insert entity Box2 and payload ID
+        uint32_t insert(Box2 box, Payload id) {
             const uint32_t index = static_cast<uint32_t>(payloads_.size());
             payloads_.push_back(id);
             boxes_.push_back(box);
             next_.push_back(kInvalid);
 
-            const Vec2<Scalar> center = Vec2<Scalar>((box.lo[0] + box.hi[0]) * 0.5f,
-                                                     (box.lo[1] + box.hi[1]) * 0.5f);
-            const auto [cx, cy] = cell_coord(center.x, center.y);
+            const Vec center = Vec((x(box.lo) + x(box.hi)) * 0.5f,
+                                   (y(box.lo) + y(box.hi)) * 0.5f);
+            const auto [cx, cy] = cell_coord(x(center), y(center));
             cell_of_.push_back(pack_coords(cx, cy));
 
             const std::uint32_t slot = hash_coords(cx, cy);
@@ -73,7 +73,7 @@ namespace akruti {
             }
         }
 
-        bool update(uint32_t id, AABB<Scalar> box) {
+        bool update(uint32_t id, Box2 box) {
             for (std::size_t i = 0; i < payloads_.size(); ++i) {
                 if (payloads_[i] == id) {
                     boxes_[i] = box;
@@ -84,14 +84,14 @@ namespace akruti {
         }
 
         // Full batch rebuild from spans with automatic dynamic cell sizing if requested
-        void rebuild(std::span<const AABB<Scalar>> boxes, std::span<const Payload> ids, bool auto_cell_size = false) {
+        void rebuild(std::span<const Box2> boxes, std::span<const Payload> ids, bool auto_cell_size = false) {
             const std::size_t n = std::min(boxes.size(), ids.size());
             if (auto_cell_size && n > 0) {
                 // Compute median radius
                 std::vector<Scalar> radii(n);
                 for (std::size_t i = 0; i < n; ++i) {
-                    const Scalar dx = (boxes[i].hi[0] - boxes[i].lo[0]) * 0.5f;
-                    const Scalar dy = (boxes[i].hi[1] - boxes[i].lo[1]) * 0.5f;
+                    const Scalar dx = (x(boxes[i].hi) - x(boxes[i].lo)) * 0.5f;
+                    const Scalar dy = (y(boxes[i].hi) - y(boxes[i].lo)) * 0.5f;
                     radii[i] = std::max(dx, dy);
                 }
                 std::nth_element(radii.begin(), radii.begin() + n / 2, radii.end());
@@ -106,9 +106,9 @@ namespace akruti {
             std::fill(head_.begin(), head_.end(), kInvalid);
 
             for (std::size_t i = 0; i < n; ++i) {
-                const Vec2<Scalar> center = Vec2<Scalar>((boxes[i].lo[0] + boxes[i].hi[0]) * 0.5f,
-                                                         (boxes[i].lo[1] + boxes[i].hi[1]) * 0.5f);
-                const auto [cx, cy] = cell_coord(center.x, center.y);
+                const Vec center = Vec((x(boxes[i].lo) + x(boxes[i].hi)) * 0.5f,
+                                       (y(boxes[i].lo) + y(boxes[i].hi)) * 0.5f);
+                const auto [cx, cy] = cell_coord(x(center), y(center));
                 cell_of_[i] = pack_coords(cx, cy);
 
                 const std::uint32_t slot = hash_coords(cx, cy);
@@ -118,9 +118,9 @@ namespace akruti {
         }
 
         template <class Fn>
-        void query(AABB<Scalar> box, Fn&& fn) const {
-            const auto [min_cx, min_cy] = cell_coord(box.lo[0], box.lo[1]);
-            const auto [max_cx, max_cy] = cell_coord(box.hi[0], box.hi[1]);
+        void query(Box2 box, Fn&& fn) const {
+            const auto [min_cx, min_cy] = cell_coord(x(box.lo), y(box.lo));
+            const auto [max_cx, max_cy] = cell_coord(x(box.hi), y(box.hi));
 
             for (std::int32_t cy = min_cy; cy <= max_cy; ++cy) {
                 for (std::int32_t cx = min_cx; cx <= max_cx; ++cx) {
@@ -142,16 +142,16 @@ namespace akruti {
         }
 
         template <class Fn>
-        void raycast(Vec2<Scalar> origin, Vec2<Scalar> dir, Scalar max_t, Fn&& fn) const {
+        void raycast(Vec origin, Vec dir, Scalar max_t, Fn&& fn) const {
             // DDA or bounding box query
-            AABB<Scalar> ray_box{
-                Vec2<Scalar>{
-                    std::min(origin.x, origin.x + dir.x * max_t),
-                    std::min(origin.y, origin.y + dir.y * max_t)
+            Box2 ray_box{
+                Vec{
+                    std::min(x(origin), x(origin) + x(dir) * max_t),
+                    std::min(y(origin), y(origin) + y(dir) * max_t)
                 },
-                Vec2<Scalar>{
-                    std::max(origin.x, origin.x + dir.x * max_t),
-                    std::max(origin.y, origin.y + dir.y * max_t)
+                Vec{
+                    std::max(x(origin), x(origin) + x(dir) * max_t),
+                    std::max(y(origin), y(origin) + y(dir) * max_t)
                 }
             };
             query(ray_box, fn);
@@ -223,7 +223,7 @@ namespace akruti {
         std::vector<std::uint32_t> next_;
         std::vector<std::uint32_t> cell_of_;
         std::vector<Payload> payloads_;
-        std::vector<AABB<Scalar>> boxes_;
+        std::vector<Box2> boxes_;
     };
 
     // ── Multi-Grid Hierarchical Spatial Hash for 1M+ Entities ────────────────────────
@@ -249,16 +249,16 @@ namespace akruti {
 
         [[nodiscard]] std::size_t size() const noexcept { return payloads_.size(); }
 
-        uint32_t insert(AABB<Scalar> box, Payload id) {
+        uint32_t insert(Box2 box, Payload id) {
             const uint32_t index = static_cast<uint32_t>(payloads_.size());
             payloads_.push_back(id);
             boxes_.push_back(box);
             next_.push_back(kInvalid);
 
-            const Vec2<Scalar> center = Vec2<Scalar>((box.lo[0] + box.hi[0]) * 0.5f,
-                                                     (box.lo[1] + box.hi[1]) * 0.5f);
-            const std::int32_t cx = static_cast<std::int32_t>(std::floor(center.x * inv_cell_));
-            const std::int32_t cy = static_cast<std::int32_t>(std::floor(center.y * inv_cell_));
+            const Vec center = Vec((x(box.lo) + x(box.hi)) * 0.5f,
+                                   (y(box.lo) + y(box.hi)) * 0.5f);
+            const std::int32_t cx = static_cast<std::int32_t>(std::floor(x(center) * inv_cell_));
+            const std::int32_t cy = static_cast<std::int32_t>(std::floor(y(center) * inv_cell_));
             cell_of_.push_back(
                 (static_cast<std::uint32_t>(cx & 0xFFFF) << 16) | static_cast<std::uint32_t>(cy & 0xFFFF));
 
@@ -269,11 +269,11 @@ namespace akruti {
         }
 
         template <class Fn>
-        void query(AABB<Scalar> query_box, Fn&& fn) const {
-            const std::int32_t min_cx = static_cast<std::int32_t>(std::floor(query_box.lo[0] * inv_cell_));
-            const std::int32_t min_cy = static_cast<std::int32_t>(std::floor(query_box.lo[1] * inv_cell_));
-            const std::int32_t max_cx = static_cast<std::int32_t>(std::floor(query_box.hi[0] * inv_cell_));
-            const std::int32_t max_cy = static_cast<std::int32_t>(std::floor(query_box.hi[1] * inv_cell_));
+        void query(Box2 query_box, Fn&& fn) const {
+            const std::int32_t min_cx = static_cast<std::int32_t>(std::floor(x(query_box.lo) * inv_cell_));
+            const std::int32_t min_cy = static_cast<std::int32_t>(std::floor(y(query_box.lo) * inv_cell_));
+            const std::int32_t max_cx = static_cast<std::int32_t>(std::floor(x(query_box.hi) * inv_cell_));
+            const std::int32_t max_cy = static_cast<std::int32_t>(std::floor(y(query_box.hi) * inv_cell_));
 
             for (std::int32_t cy = min_cy; cy <= max_cy; ++cy) {
                 for (std::int32_t cx = min_cx; cx <= max_cx; ++cx) {
@@ -309,7 +309,7 @@ namespace akruti {
         std::vector<std::uint32_t> next_;
         std::vector<std::uint32_t> cell_of_;
         std::vector<Payload> payloads_;
-        std::vector<AABB<Scalar>> boxes_;
+        std::vector<Box2> boxes_;
     };
 
     using SpatialHashBroadphase = SpatialHash<std::uint32_t, MortonOrder>;

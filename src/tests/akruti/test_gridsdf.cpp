@@ -38,5 +38,5 @@ TEST_CASE (
 
     // Support check
     auto sup = grid.support({1.0f, 0.0f});
-    REQUIRE(sup.x >= 0.99f);
+    REQUIRE(sup.x() >= 0.99f);
 }

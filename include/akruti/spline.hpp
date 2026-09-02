@@ -44,28 +44,26 @@ namespace akruti {
             const Vec2<Scalar> d = (p1 - p0) * (Scalar(3.0) * u * u) +
                 (p2 - p1) * (Scalar(6.0) * u * t) +
                 (p3 - p2) * (Scalar(3.0) * t * t);
-            const Scalar len = std::sqrt(d.x * d.x + d.y * d.y);
+            const Scalar len = akruti::length(d);
             return (len > Scalar(1e-6)) ? d * (Scalar(1.0) / len) : Vec2<Scalar>(Scalar(1.0), Scalar(0.0));
         }
 
         [[nodiscard]] Vec2<Scalar> normal(Scalar t) const noexcept {
             const auto tan = tangent(t);
-            return Vec2<Scalar>(-tan.y, tan.x);
+            return akruti::perp(tan);
         }
 
         // Arc-length approximation via Gaussian quadrature / multi-segment sampling
         [[nodiscard]] Scalar arc_length(std::size_t samples = 16) const noexcept {
-            Scalar length = Scalar(0.0);
+            Scalar length_val = Scalar(0.0);
             Vec2<Scalar> prev = p0;
             const Scalar step = Scalar(1.0) / static_cast<Scalar>(samples);
             for (std::size_t i = 1; i <= samples; ++i) {
                 Vec2<Scalar> curr = evaluate(static_cast<Scalar>(i) * step);
-                const Scalar dx = curr.x - prev.x;
-                const Scalar dy = curr.y - prev.y;
-                length += std::sqrt(dx * dx + dy * dy);
+                length_val += akruti::distance(curr, prev);
                 prev = curr;
             }
-            return length;
+            return length_val;
         }
 
         // ── Akruti Shape Contract ───────────────────────────────────────────────
@@ -83,13 +81,11 @@ namespace akruti {
                 Vec2<Scalar> curr = evaluate(t_val);
                 const Vec2<Scalar> ab = curr - prev;
                 const Vec2<Scalar> ap = p - prev;
-                const Scalar ab_len_sq = ab.x * ab.x + ab.y * ab.y;
-                Scalar t_seg = (ab_len_sq > Scalar(1e-6)) ? (ap.x * ab.x + ap.y * ab.y) / ab_len_sq : Scalar(0.0);
+                const Scalar ab_len_sq = akruti::length_sq(ab);
+                Scalar t_seg = (ab_len_sq > Scalar(1e-6)) ? akruti::dot(ap, ab) / ab_len_sq : Scalar(0.0);
                 t_seg = std::clamp(t_seg, Scalar(0.0), Scalar(1.0));
                 const Vec2<Scalar> proj = prev + ab * t_seg;
-                const Scalar dx = p.x - proj.x;
-                const Scalar dy = p.y - proj.y;
-                const Scalar d2 = dx * dx + dy * dy;
+                const Scalar d2 = akruti::distance_sq(p, proj);
                 if (d2 < min_dist_sq) {
                     min_dist_sq = d2;
                     best_t = (static_cast<Scalar>(i - 1) + t_seg) * step;
@@ -103,9 +99,9 @@ namespace akruti {
                 const Vec2<Scalar> bt = evaluate(t);
                 const Vec2<Scalar> dbt = tangent_unnormalized(t);
                 const Vec2<Scalar> diff = bt - p;
-                const Scalar f = diff.dot(dbt);
+                const Scalar f = akruti::dot(diff, dbt);
                 const Vec2<Scalar> d2bt = second_derivative(t);
-                const Scalar f_prime = dbt.len2() + diff.dot(d2bt);
+                const Scalar f_prime = akruti::length_sq(dbt) + akruti::dot(diff, d2bt);
                 if (std::fabs(f_prime) < Scalar(1e-8)) break;
                 const Scalar dt = f / f_prime;
                 t = std::clamp(t - dt, Scalar(0.0), Scalar(1.0));
@@ -113,8 +109,7 @@ namespace akruti {
             }
 
             const Vec2<Scalar> exact_pt = evaluate(t);
-            const Vec2<Scalar> exact_diff = p - exact_pt;
-            return exact_diff.len() - radius;
+            return akruti::distance(p, exact_pt) - radius;
         }
 
         [[nodiscard]] Vec2<Scalar> tangent_unnormalized(Scalar t) const noexcept {
@@ -130,20 +125,19 @@ namespace akruti {
                    (p3 - p2 * Scalar(2.0) + p1) * (Scalar(6.0) * t);
         }
 
-        [[nodiscard]] AABB<Scalar> aabb() const noexcept {
-            const Scalar min_x = std::min({p0.x, p1.x, p2.x, p3.x}) - radius;
-            const Scalar min_y = std::min({p0.y, p1.y, p2.y, p3.y}) - radius;
-            const Scalar max_x = std::max({p0.x, p1.x, p2.x, p3.x}) + radius;
-            const Scalar max_y = std::max({p0.y, p1.y, p2.y, p3.y}) + radius;
-            return AABB<Scalar>{Vec2<Scalar>{min_x, min_y}, Vec2<Scalar>{max_x, max_y}};
+        [[nodiscard]] Box2 aabb() const noexcept {
+            const Scalar min_x = std::min({p0[0], p1[0], p2[0], p3[0]}) - radius;
+            const Scalar min_y = std::min({p0[1], p1[1], p2[1], p3[1]}) - radius;
+            const Scalar max_x = std::max({p0[0], p1[0], p2[0], p3[0]}) + radius;
+            const Scalar max_y = std::max({p0[1], p1[1], p2[1], p3[1]}) + radius;
+            return Box2{Vec2<Scalar>{min_x, min_y}, Vec2<Scalar>{max_x, max_y}};
         }
 
         [[nodiscard]] Vec2<Scalar> support(Vec2<Scalar> d) const noexcept {
-            // Farthest control point + radius in direction d
-            const Scalar d0 = p0.x * d.x + p0.y * d.y;
-            const Scalar d1 = p1.x * d.x + p1.y * d.y;
-            const Scalar d2 = p2.x * d.x + p2.y * d.y;
-            const Scalar d3 = p3.x * d.x + p3.y * d.y;
+            const Scalar d0 = akruti::dot(p0, d);
+            const Scalar d1 = akruti::dot(p1, d);
+            const Scalar d2 = akruti::dot(p2, d);
+            const Scalar d3 = akruti::dot(p3, d);
 
             Vec2<Scalar> best = p0;
             Scalar max_dot = d0;
@@ -157,7 +151,7 @@ namespace akruti {
             }
             if (d3 > max_dot) { best = p3; }
 
-            const Scalar d_len = std::sqrt(d.x * d.x + d.y * d.y);
+            const Scalar d_len = akruti::length(d);
             if (d_len > Scalar(1e-6)) {
                 best = best + d * (radius / d_len);
             }
@@ -200,9 +194,7 @@ namespace akruti {
             const Vec2<Scalar> p3 = get_point(static_cast<int>(seg_idx) + 2);
 
             // Single Catmull-Rom source: pebble::math (shared with gati animation curves).
-            return Vec2<Scalar>(pebble::math::catmull_rom(
-                static_cast<pebble::math::vec2>(p0), static_cast<pebble::math::vec2>(p1),
-                static_cast<pebble::math::vec2>(p2), static_cast<pebble::math::vec2>(p3), local_t));
+            return pebble::math::catmull_rom(p0, p1, p2, p3, local_t);
         }
 
         [[nodiscard]] Vec2<Scalar> tangent(Scalar t) const noexcept {
@@ -210,7 +202,7 @@ namespace akruti {
             const auto p_next = evaluate(std::min(Scalar(1.0), t + dt));
             const auto p_prev = evaluate(std::max(Scalar(0.0), t - dt));
             const auto diff = p_next - p_prev;
-            const Scalar len = std::sqrt(diff.x * diff.x + diff.y * diff.y);
+            const Scalar len = akruti::length(diff);
             return (len > Scalar(1e-6)) ? diff * (Scalar(1.0) / len) : Vec2<Scalar>(Scalar(1.0), Scalar(0.0));
         }
 
@@ -221,9 +213,7 @@ namespace akruti {
             const Scalar step = Scalar(1.0) / static_cast<Scalar>(samples);
             for (std::size_t i = 1; i <= samples; ++i) {
                 Vec2<Scalar> curr = evaluate(static_cast<Scalar>(i) * step);
-                const Scalar dx = curr.x - prev.x;
-                const Scalar dy = curr.y - prev.y;
-                len += std::sqrt(dx * dx + dy * dy);
+                len += akruti::distance(curr, prev);
                 prev = curr;
             }
             return len;
@@ -242,30 +232,28 @@ namespace akruti {
                 Vec2<Scalar> curr = evaluate(static_cast<Scalar>(i) * step);
                 const Vec2<Scalar> ab = curr - prev;
                 const Vec2<Scalar> ap = p - prev;
-                const Scalar ab_len_sq = ab.x * ab.x + ab.y * ab.y;
-                Scalar t_seg = (ab_len_sq > Scalar(1e-6)) ? (ap.x * ab.x + ap.y * ab.y) / ab_len_sq : Scalar(0.0);
+                const Scalar ab_len_sq = akruti::length_sq(ab);
+                Scalar t_seg = (ab_len_sq > Scalar(1e-6)) ? akruti::dot(ap, ab) / ab_len_sq : Scalar(0.0);
                 t_seg = std::clamp(t_seg, Scalar(0.0), Scalar(1.0));
                 const Vec2<Scalar> proj = prev + ab * t_seg;
-                const Scalar dx = p.x - proj.x;
-                const Scalar dy = p.y - proj.y;
-                min_dist_sq = std::min(min_dist_sq, dx * dx + dy * dy);
+                min_dist_sq = std::min(min_dist_sq, akruti::distance_sq(p, proj));
                 prev = curr;
             }
 
             return std::sqrt(min_dist_sq) - radius;
         }
 
-        [[nodiscard]] AABB<Scalar> aabb() const noexcept {
-            if (points.empty()) return AABB<Scalar>{};
-            Scalar min_x = points[0].x, min_y = points[0].y;
-            Scalar max_x = points[0].x, max_y = points[0].y;
+        [[nodiscard]] Box2 aabb() const noexcept {
+            if (points.empty()) return Box2{};
+            Scalar min_x = points[0][0], min_y = points[0][1];
+            Scalar max_x = points[0][0], max_y = points[0][1];
             for (const auto& pt : points) {
-                min_x = std::min(min_x, pt.x);
-                min_y = std::min(min_y, pt.y);
-                max_x = std::max(max_x, pt.x);
-                max_y = std::max(max_y, pt.y);
+                min_x = std::min(min_x, pt[0]);
+                min_y = std::min(min_y, pt[1]);
+                max_x = std::max(max_x, pt[0]);
+                max_y = std::max(max_y, pt[1]);
             }
-            return AABB<Scalar>{
+            return Box2{
                 Vec2<Scalar>{min_x - radius, min_y - radius},
                 Vec2<Scalar>{max_x + radius, max_y + radius}
             };
@@ -274,15 +262,15 @@ namespace akruti {
         [[nodiscard]] Vec2<Scalar> support(Vec2<Scalar> d) const noexcept {
             if (points.empty()) return Vec2<Scalar>{};
             Vec2<Scalar> best = points[0];
-            Scalar max_dot = points[0].x * d.x + points[0].y * d.y;
+            Scalar max_dot = akruti::dot(points[0], d);
             for (const auto& pt : points) {
-                const Scalar dot = pt.x * d.x + pt.y * d.y;
-                if (dot > max_dot) {
-                    max_dot = dot;
+                const Scalar d_dot = akruti::dot(pt, d);
+                if (d_dot > max_dot) {
+                    max_dot = d_dot;
                     best = pt;
                 }
             }
-            const Scalar d_len = std::sqrt(d.x * d.x + d.y * d.y);
+            const Scalar d_len = akruti::length(d);
             if (d_len > Scalar(1e-6)) {
                 best = best + d * (radius / d_len);
             }

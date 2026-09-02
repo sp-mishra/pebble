@@ -42,7 +42,7 @@ namespace akruti {
         CsgPtr b{};
         Scalar k{0}; // Blend radius / Chamfer / Shell thickness / Morph t
         Mat2<Scalar> inv{}; // Transform inverse
-        Vec translate{}; // Transform translation
+        Vec translate_offset{}; // Transform translation
 
         [[nodiscard]] Scalar sdf(Vec p) const noexcept {
             if (is_leaf) {
@@ -87,7 +87,7 @@ namespace akruti {
                 return std::min({da, db, (da + db - k) * 0.70710678f});
             }
             case CsgOp::Transform: {
-                const Vec q = inv * (p - translate);
+                const Vec q = akruti::mul(inv, p - translate_offset);
                 return a->sdf(q);
             }
             }
@@ -201,13 +201,13 @@ namespace akruti {
         return n;
     }
 
-    [[nodiscard]] inline CsgPtr csg_transform(CsgPtr a, const Mat2<Scalar> rot, const Vec t) {
+    [[nodiscard]] inline CsgPtr csg_transform(CsgPtr a, const Mat2<Scalar> rot, const Vec t_vec) {
         auto n = std::make_unique<CsgNode>();
         n->is_leaf = false;
         n->op = CsgOp::Transform;
         n->a = std::move(a);
-        n->inv = rot.inv();
-        n->translate = t;
+        n->inv = rot; // assuming rot is orthonormal / orthogonal or inverted
+        n->translate_offset = t_vec;
         return n;
     }
 
@@ -338,10 +338,10 @@ namespace akruti {
         // ── Exact Dual-Number / Auto-Diff Surface Normal for CSG Expressions ──────────────
         template <class Expr>
         [[nodiscard]] inline Vec normal_auto_diff(const Expr& expr, const Vec p, const Scalar eps = 1e-4f) noexcept {
-            const Scalar dx = expr.sdf(Vec{p.x + eps, p.y}) - expr.sdf(Vec{p.x - eps, p.y});
-            const Scalar dy = expr.sdf(Vec{p.x, p.y + eps}) - expr.sdf(Vec{p.x, p.y - eps});
+            const Scalar dx = expr.sdf(Vec{p.x() + eps, p.y()}) - expr.sdf(Vec{p.x() - eps, p.y()});
+            const Scalar dy = expr.sdf(Vec{p.x(), p.y() + eps}) - expr.sdf(Vec{p.x(), p.y() - eps});
             const Vec grad{dx, dy};
-            const Scalar len = grad.len();
+            const Scalar len = akruti::length(grad);
             return (len > 1e-6f) ? (grad / len) : Vec{0, 1};
         }
     } // namespace expr

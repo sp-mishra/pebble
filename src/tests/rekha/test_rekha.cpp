@@ -71,10 +71,10 @@ TEST_CASE (
 
     REQUIRE(g.nodes.size() == 4);
     for (const auto& p : g.nodes) {
-        REQUIRE(p.x >= 0.0f);
-        REQUIRE(p.x <= 400.0f);
-        REQUIRE(p.y >= 0.0f);
-        REQUIRE(p.y <= 300.0f);
+        REQUIRE(p.x() >= 0.0f);
+        REQUIRE(p.x() <= 400.0f);
+        REQUIRE(p.y() >= 0.0f);
+        REQUIRE(p.y() <= 300.0f);
     }
 }
 

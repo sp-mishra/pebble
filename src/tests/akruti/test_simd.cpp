@@ -18,16 +18,16 @@ TEST_CASE (
 
     // Direction along +X
     auto sup_x = akruti::simd::vectorized_support_poly(poly, {1.0f, 0.0f});
-    REQUIRE(sup_x.x == Catch::Approx(10.0f).margin(1e-3f));
+    REQUIRE(sup_x.x() == Catch::Approx(10.0f).margin(1e-3f));
 
     // Direction along +Y
     auto sup_y = akruti::simd::vectorized_support_poly(poly, {0.0f, 1.0f});
-    REQUIRE(sup_y.y == Catch::Approx(10.0f).margin(1e-3f));
+    REQUIRE(sup_y.y() == Catch::Approx(10.0f).margin(1e-3f));
 
     // Diagonal direction
     auto sup_diag = akruti::simd::vectorized_support_poly(poly, {1.0f, 1.0f});
-    REQUIRE(sup_diag.x > 5.0f);
-    REQUIRE(sup_diag.y > 5.0f);
+    REQUIRE(sup_diag.x() > 5.0f);
+    REQUIRE(sup_diag.y() > 5.0f);
 }
 
 TEST_CASE (
@@ -42,7 +42,7 @@ TEST_CASE (
     rays.o[2] = {0.0f, -10.0f};  rays.d[2] = {0.0f, 1.0f}; rays.tmax[2] = 100.0f; // Hit from bottom
     rays.o[3] = {-10.0f, 0.0f};  rays.d[3] = {-1.0f, 0.0f}; rays.tmax[3] = 100.0f; // Facing away
 
-    akruti::AABB<float> box{{-2.0f, -2.0f}, {2.0f, 2.0f}};
+    akruti::Box2 box{{-2.0f, -2.0f}, {2.0f, 2.0f}};
     auto hits = akruti::simd::packet_raycast_aabb(rays, box);
 
     REQUIRE(hits.hit[0] == true);

@@ -38,7 +38,7 @@
 
 namespace akruti::layout {
     using Vec2 = akruti::Vec;
-    using Bounds2D = akruti::AABB<float>;
+    using Bounds2D = akruti::Box2;
 
     // Basic 2D layout types
     struct Size2D {

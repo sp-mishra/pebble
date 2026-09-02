@@ -61,8 +61,8 @@ namespace akruti {
         return j;
     }
 
-    [[nodiscard]] inline Joint make_prismatic(std::uint32_t a, std::uint32_t b, Vec2<Scalar> la,
-                                              Vec2<Scalar> lb, Vec2<Scalar> axis,
+    [[nodiscard]] inline Joint make_prismatic(std::uint32_t a, std::uint32_t b, Vec la,
+                                              Vec lb, Vec axis,
                                               Scalar lo, Scalar hi, Scalar compliance = 0) noexcept {
         Joint j;
         j.type = JointType::Prismatic;
@@ -70,7 +70,7 @@ namespace akruti {
         j.body_b = b;
         j.anchor_a = la;
         j.anchor_b = lb;
-        j.axis = axis.normalized();
+        j.axis = akruti::normalize(axis);
         j.min_limit = lo;
         j.max_limit = hi;
         j.compliance = compliance;

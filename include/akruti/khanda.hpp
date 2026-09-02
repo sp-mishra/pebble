@@ -34,11 +34,11 @@ namespace akruti::khanda {
 
     // ── detail: geometry helpers (reuse fracture.hpp where possible) ───────────────────────
     namespace detail {
-        [[nodiscard]] inline bool finite(Vec p) noexcept { return std::isfinite(p.x) && std::isfinite(p.y); }
+        [[nodiscard]] inline bool finite(Vec p) noexcept { return std::isfinite(p.x()) && std::isfinite(p.y()); }
 
         // Orientation of the triple a->b->c (z of the 2D cross of (b-a)x(c-a)); >0 CCW turn.
         [[nodiscard]] inline Scalar orient(Vec a, Vec b, Vec c) noexcept {
-            return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+            return (b.x() - a.x()) * (c.y() - a.y()) - (b.y() - a.y()) * (c.x() - a.x());
         }
 
         inline void ensure_ccw(Poly& p) {
@@ -53,7 +53,7 @@ namespace akruti::khanda {
         inline void cleanup_poly(Poly& poly, Scalar eps) {
             if (poly.empty()) return;
             const Scalar eps2 = eps * eps;
-            auto near = [&](Vec a, Vec b) { return (a - b).len2() <= eps2; };
+            auto near = [&](Vec a, Vec b) { return akruti::length_sq(a - b) <= eps2; };
 
             Poly out;
             out.reserve(poly.size());
@@ -73,9 +73,9 @@ namespace akruti::khanda {
                     const Vec prev = out[(i + n - 1) % n];
                     const Vec cur = out[i];
                     const Vec next = out[(i + 1) % n];
-                    const Vec e1 = (cur - prev).normalized();
-                    const Vec e2 = (next - cur).normalized();
-                    if (std::fabs(cross(e1, e2)) <= eps) continue; // collinear interior vertex
+                    const Vec e1 = akruti::normalize(cur - prev);
+                    const Vec e2 = akruti::normalize(next - cur);
+                    if (std::fabs(akruti::cross(e1, e2)) <= eps) continue; // collinear interior vertex
                     tmp.push_back(cur);
                 }
                 if (tmp.size() >= 3) out = std::move(tmp);
@@ -83,9 +83,9 @@ namespace akruti::khanda {
             poly = std::move(out);
         }
 
-        [[nodiscard]] inline AABB<Scalar> bounds_of(const Poly& p) noexcept {
-            if (p.empty()) return AABB<Scalar>{};
-            AABB<Scalar> b{p[0], p[0]};
+        [[nodiscard]] inline Box2 bounds_of(const Poly& p) noexcept {
+            if (p.empty()) return Box2{};
+            Box2 b{p[0], p[0]};
             for (std::size_t i = 1; i < p.size(); ++i) b.expand(p[i]);
             return b;
         }
@@ -152,7 +152,7 @@ namespace akruti::khanda {
         Scalar radius{1}; // influence radius
 
         [[nodiscard]] Scalar local_radius(Vec p, Scalar base_r) const noexcept {
-            const Scalar d = (p - center).len();
+            const Scalar d = akruti::length(p - center);
             if (d >= radius || radius <= Scalar(1e-6)) return base_r;
             const Scalar t = d / radius; // 0 at center, 1 at edge
             const Scalar factor = Scalar(1) / (Scalar(1) + (falloff - Scalar(1)) * (Scalar(1) - t));
@@ -261,7 +261,7 @@ namespace akruti::khanda {
             std::sort(holes.begin(), holes.end(), [](const Poly& a, const Poly& b) {
                 auto maxx = [](const Poly& p) {
                     Scalar m = -1e18f;
-                    for (auto v : p) m = std::max(m, v.x);
+                    for (auto v : p) m = std::max(m, x(v));
                     return m;
                 };
                 return maxx(a) > maxx(b);
@@ -269,10 +269,10 @@ namespace akruti::khanda {
 
             for (const auto& hole : holes) {
                 std::size_t h_idx = 0;
-                Scalar max_hx = hole[0].x;
+                Scalar max_hx = x(hole[0]);
                 for (std::size_t i = 1; i < hole.size(); ++i)
-                    if (hole[i].x > max_hx) {
-                        max_hx = hole[i].x;
+                    if (x(hole[i]) > max_hx) {
+                        max_hx = x(hole[i]);
                         h_idx = i;
                     }
                 const Vec hp = hole[h_idx];
@@ -282,8 +282,8 @@ namespace akruti::khanda {
                 const std::size_t rn = ring.size();
                 for (std::size_t i = 0; i < rn; ++i) {
                     const Vec rp = ring[i];
-                    if (rp.x < hp.x - Scalar(1e-5)) continue;
-                    const Scalar d2 = (rp - hp).len2();
+                    if (x(rp) < x(hp) - Scalar(1e-5)) continue;
+                    const Scalar d2 = akruti::length_sq(rp - hp);
                     if (d2 < best_dist2) {
                         bool blocked = false;
                         for (std::size_t j = 0; j < rn && !blocked; ++j) {
@@ -298,7 +298,7 @@ namespace akruti::khanda {
                 }
                 if (best_dist2 >= Scalar(1e17)) {
                     for (std::size_t i = 0; i < rn; ++i) {
-                        const Scalar d2 = (ring[i] - hp).len2();
+                        const Scalar d2 = akruti::length_sq(ring[i] - hp);
                         if (d2 < best_dist2) {
                             best_dist2 = d2;
                             best_r = i;
@@ -338,8 +338,8 @@ namespace akruti::khanda {
             if (std::fabs(tri_area) <= 1e-12) continue;
 
             total_area += tri_area;
-            cx += (double(a.x) + double(b.x) + double(c.x)) * (tri_area / 3.0);
-            cy += (double(a.y) + double(b.y) + double(c.y)) * (tri_area / 3.0);
+            cx += (double(x(a)) + double(x(b)) + double(x(c))) * (tri_area / 3.0);
+            cy += (double(y(a)) + double(y(b)) + double(y(c))) * (tri_area / 3.0);
 
             // dot2: scalar inner product for akruti::Vec (double precision for inertia accumulation)
             auto dot2 = [](Vec u, Vec v) noexcept { return double(akruti::dot(u, v)); };
@@ -353,8 +353,8 @@ namespace akruti::khanda {
         mp.area = Scalar(std::fabs(total_area));
         mp.centroid = Vec{Scalar(cx / total_area), Scalar(cy / total_area)};
 
-        const double d2 = double(mp.centroid.x) * double(mp.centroid.x) +
-            double(mp.centroid.y) * double(mp.centroid.y);
+        const double d2 = double(x(mp.centroid)) * double(x(mp.centroid)) +
+            double(y(mp.centroid)) * double(y(mp.centroid));
         const double I_c = I_origin - total_area * d2;
         mp.inertia = Scalar(std::max(0.0, I_c));
         return mp;
@@ -411,7 +411,7 @@ namespace akruti::khanda {
         [[nodiscard]] std::vector<Poly> merge_polys(std::vector<Poly> current) const {
             auto try_merge = [](const Poly& a, const Poly& b, Poly& out) -> bool {
                 const std::size_t na = a.size(), nb = b.size();
-                auto near = [](Vec p, Vec q) { return (p - q).len2() <= Scalar(1e-8); };
+                auto near = [](Vec p, Vec q) { return akruti::length_sq(p - q) <= Scalar(1e-8); };
                 for (std::size_t ia = 0; ia < na; ++ia) {
                     const Vec u = a[ia], v = a[(ia + 1) % na];
                     for (std::size_t ib = 0; ib < nb; ++ib) {
@@ -502,7 +502,7 @@ namespace akruti::khanda {
                     if (detail::segments_intersect(r, q, p[k], p[(k + 1) % n])) blocked = true;
                 }
                 if (!blocked) {
-                    const Scalar score = (r - q).len2();
+                    const Scalar score = akruti::length_sq(r - q);
                     if (score < best_score) {
                         best_score = score;
                         best_j = j;
@@ -531,7 +531,7 @@ namespace akruti::khanda {
 
     // ── Poisson-disk impact site sampler ──────────────────────────────────────────────────
     [[nodiscard]] inline std::vector<Vec>
-    poisson_disk_sites(const AABB<Scalar>& bounds, const PoissonConfig& cfg = {},
+    poisson_disk_sites(const Box2& bounds, const PoissonConfig& cfg = {},
                        const ImpactField* impact = nullptr) {
         std::vector<Vec> samples;
         const Scalar base_r = std::max(cfg.min_dist, Scalar(1e-3));
@@ -539,8 +539,8 @@ namespace akruti::khanda {
         const Scalar min_r = impact ? std::max(base_r * 0.1f, base_r / std::max(1.0f, impact->falloff)) : base_r;
         const Scalar cell_size = std::max(min_r / std::sqrt(Scalar(2)), Scalar(1e-4));
         const Vec extent = bounds.extent();
-        const int grid_w = std::max(1, static_cast<int>(std::ceil(extent.x / cell_size)));
-        const int grid_h = std::max(1, static_cast<int>(std::ceil(extent.y / cell_size)));
+        const int grid_w = std::max(1, static_cast<int>(std::ceil(x(extent) / cell_size)));
+        const int grid_h = std::max(1, static_cast<int>(std::ceil(y(extent) / cell_size)));
 
         std::vector<int> grid(static_cast<std::size_t>(grid_w) * grid_h, -1);
         std::vector<std::size_t> active;
@@ -550,8 +550,8 @@ namespace akruti::khanda {
 
         const Vec blo{bounds.lo};
         auto grid_idx = [&](Vec p) -> std::pair<int, int> {
-            const int gx = std::clamp(static_cast<int>((p.x - blo.x) / cell_size), 0, grid_w - 1);
-            const int gy = std::clamp(static_cast<int>((p.y - blo.y) / cell_size), 0, grid_h - 1);
+            const int gx = std::clamp(static_cast<int>((x(p) - x(blo)) / cell_size), 0, grid_w - 1);
+            const int gy = std::clamp(static_cast<int>((y(p) - y(blo)) / cell_size), 0, grid_h - 1);
             return {gx, gy};
         };
 
@@ -562,13 +562,13 @@ namespace akruti::khanda {
             const int min_x = std::max(0, gx - r_cells), max_x = std::min(grid_w - 1, gx + r_cells);
             const int min_y = std::max(0, gy - r_cells), max_y = std::min(grid_h - 1, gy + r_cells);
 
-            for (int y = min_y; y <= max_y; ++y) {
-                for (int x = min_x; x <= max_x; ++x) {
-                    const int s_idx = grid[static_cast<std::size_t>(y) * grid_w + x];
+            for (int cy_it = min_y; cy_it <= max_y; ++cy_it) {
+                for (int cx_it = min_x; cx_it <= max_x; ++cx_it) {
+                    const int s_idx = grid[static_cast<std::size_t>(cy_it) * grid_w + cx_it];
                     if (s_idx >= 0) {
                         const Vec other = samples[static_cast<std::size_t>(s_idx)];
                         const Scalar req_r = impact ? impact->local_radius((p + other) * Scalar(0.5), base_r) : base_r;
-                        if ((p - other).len2() < req_r * req_r) return false;
+                        if (akruti::length_sq(p - other) < req_r * req_r) return false;
                     }
                 }
             }
@@ -596,8 +596,8 @@ namespace akruti::khanda {
                 const Scalar theta = urand(rng) * Scalar(2 * 3.141592653589793);
                 const Scalar radius = local_r * (Scalar(1) + urand(rng));
                 const Vec candidate{
-                    center.x + radius * std::cos(theta),
-                    center.y + radius * std::sin(theta)
+                    x(center) + radius * std::cos(theta),
+                    y(center) + radius * std::sin(theta)
                 };
                 const Scalar cand_r = impact ? impact->local_radius(candidate, base_r) : base_r;
 
@@ -621,7 +621,7 @@ namespace akruti::khanda {
 
     // ── Voronoi cells on arbitrary bounding container ─────────────────────────────────────
     [[nodiscard]] inline containers::dynamic::SmallVector<Poly, 16 * sizeof(Poly)>
-    voronoi_cells(std::span<const Vec> sites, const AABB<Scalar>& container, Scalar pad = Scalar(0.1)) {
+    voronoi_cells(std::span<const Vec> sites, const Box2& container, Scalar pad = Scalar(0.1)) {
         const Vec clo{container.lo}, chi{container.hi};
         const Poly boundary = rect_poly(clo - Vec{pad, pad}, chi + Vec{pad, pad});
         return voronoi_shatter(boundary, sites);
@@ -640,8 +640,8 @@ namespace akruti::khanda {
         detail::cleanup_poly(outer, cfg.eps);
         if (outer.size() < 3) return;
 
-        const AABB<Scalar> bounds = detail::bounds_of(outer);
-        const auto raw_cells = voronoi_cells(sites, bounds, Vec{bounds.extent()}.len() * Scalar(0.1));
+        const Box2 bounds = detail::bounds_of(outer);
+        const auto raw_cells = voronoi_cells(sites, bounds, akruti::length(Vec{bounds.extent()}) * Scalar(0.1));
 
         TriangleMergeDecomposer merge_decomp;
         BayazitDecomposer bayazit_decomp;
@@ -657,10 +657,10 @@ namespace akruti::khanda {
             const Scalar area = std::fabs(polygon_area(shard_outer));
             if (area < cfg.min_shard_area) continue;
 
-            const AABB<Scalar> sb = detail::bounds_of(shard_outer);
+            const Box2 sb = detail::bounds_of(shard_outer);
             const Vec ext = sb.extent();
-            const Scalar max_dim = std::max(ext.x, ext.y);
-            const Scalar min_dim = std::max(std::min(ext.x, ext.y), Scalar(1e-6));
+            const Scalar max_dim = std::max(x(ext), y(ext));
+            const Scalar min_dim = std::max(std::min(x(ext), y(ext)), Scalar(1e-6));
             if (max_dim / min_dim > cfg.max_aspect_ratio) continue;
 
             std::vector<Poly> shard_holes;
@@ -724,7 +724,7 @@ namespace akruti::khanda {
     fracture_voronoi_poisson(const Poly& outer, std::span<const Poly> holes,
                              const PoissonConfig& pcfg, const ImpactField* impact = nullptr,
                              const FractureConfig& fcfg = {}, const Tri& triangulate = {}) {
-        const AABB<Scalar> b = detail::bounds_of(outer);
+        const Box2 b = detail::bounds_of(outer);
         const auto sites = poisson_disk_sites(b, pcfg, impact);
         return fracture_voronoi<Tri>(outer, holes, std::span<const Vec>(sites.data(), sites.size()), fcfg, triangulate);
     }

@@ -30,8 +30,8 @@ namespace akruti::scene {
         std::vector<Scalar> cx, cy, r;
 
         std::uint32_t push(const Circle& c) {
-            cx.push_back(c.center.x);
-            cy.push_back(c.center.y);
+            cx.push_back(x(c.center));
+            cy.push_back(y(c.center));
             r.push_back(c.radius);
             return static_cast<std::uint32_t>(cx.size() - 1);
         }
@@ -45,10 +45,10 @@ namespace akruti::scene {
         std::vector<Scalar> cx, cy, hx, hy;
 
         std::uint32_t push(const Box& b) {
-            cx.push_back(b.center.x);
-            cy.push_back(b.center.y);
-            hx.push_back(b.half.x);
-            hy.push_back(b.half.y);
+            cx.push_back(x(b.center));
+            cy.push_back(y(b.center));
+            hx.push_back(x(b.half));
+            hy.push_back(y(b.half));
             return static_cast<std::uint32_t>(cx.size() - 1);
         }
 
@@ -61,10 +61,10 @@ namespace akruti::scene {
         std::vector<Scalar> ax, ay, bx, by;
 
         std::uint32_t push(const Segment& s) {
-            ax.push_back(s.a.x);
-            ay.push_back(s.a.y);
-            bx.push_back(s.b.x);
-            by.push_back(s.b.y);
+            ax.push_back(x(s.a));
+            ay.push_back(y(s.a));
+            bx.push_back(x(s.b));
+            by.push_back(y(s.b));
             return static_cast<std::uint32_t>(ax.size() - 1);
         }
 
@@ -77,10 +77,10 @@ namespace akruti::scene {
         std::vector<Scalar> ax, ay, bx, by, r;
 
         std::uint32_t push(const Capsule& c) {
-            ax.push_back(c.a.x);
-            ay.push_back(c.a.y);
-            bx.push_back(c.b.x);
-            by.push_back(c.b.y);
+            ax.push_back(x(c.a));
+            ay.push_back(y(c.a));
+            bx.push_back(x(c.b));
+            by.push_back(y(c.b));
             r.push_back(c.radius);
             return static_cast<std::uint32_t>(ax.size() - 1);
         }
@@ -97,7 +97,7 @@ namespace akruti::scene {
     template <class Prim>
     struct ShapeBatch {
         BatchColumns<Prim> cols;
-        std::vector<AABB<Scalar>> boxes; // cached tight box, refit() recomputes
+        std::vector<Box2> boxes; // cached tight box, refit() recomputes
         std::vector<std::uint32_t> leaves; // AABBTree leaf id per element
 
         std::uint32_t add(const Prim& p) {
@@ -108,9 +108,9 @@ namespace akruti::scene {
         }
 
         [[nodiscard]] Prim get(std::uint32_t i) const noexcept { return cols.get(i); }
-        [[nodiscard]] AABB<Scalar> box(std::uint32_t i) const noexcept { return boxes[i]; }
+        [[nodiscard]] Box2 box(std::uint32_t i) const noexcept { return boxes[i]; }
 
-        [[nodiscard]] Scalar sdf(std::uint32_t i, Vec2<Scalar> p) const noexcept {
+        [[nodiscard]] Scalar sdf(std::uint32_t i, Vec p) const noexcept {
             return cols.get(i).sdf(p);
         }
 

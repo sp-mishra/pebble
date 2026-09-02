@@ -36,8 +36,8 @@ TEST_CASE (
     REQUIRE(point_inside(c, V{0.5f, 0}));
     REQUIRE_FALSE(point_inside(c, V{2, 0}));
     V cp = closest_point(c, V{3, 0});
-    REQUIRE(cp.x == Catch::Approx(1.0).margin(0.01));
-    REQUIRE(cp.y == Catch::Approx(0.0).margin(0.01));
+    REQUIRE(cp.x() == Catch::Approx(1.0).margin(0.01));
+    REQUIRE(cp.y() == Catch::Approx(0.0).margin(0.01));
 }
 
 TEST_CASE (
@@ -50,7 +50,7 @@ TEST_CASE (
     RayHit h = raycast(c, V{0, 0}, V{1, 0});
     REQUIRE(h.hit);
     REQUIRE(h.t == Catch::Approx(4.0).margin(0.02));
-    REQUIRE(h.normal.x == Catch::Approx(-1.0).margin(0.02));
+    REQUIRE(h.normal.x() == Catch::Approx(-1.0).margin(0.02));
     REQUIRE_FALSE(raycast(c, V{0, 10}, V{1, 0}, 20).hit);
 }
 

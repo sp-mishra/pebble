@@ -21,13 +21,12 @@ namespace akruti {
     [[nodiscard]] inline MprResult mpr_collide(const A& a, const B& b) noexcept {
         // 1. Center of Minkowski difference (v0)
         // Approximate centers from AABB
-        const Vec c_a = Vec{a.aabb().center()};
-        const Vec c_b = Vec{b.aabb().center()};
+        const Vec c_a = a.aabb().center();
+        const Vec c_b = b.aabb().center();
         const Vec v0 = c_a - c_b;
 
-        if (v0.len2() < Scalar(1e-12)) {
+        if (akruti::length_sq(v0) < Scalar(1e-12)) {
             // Degenerate center: fallback to support diff
-            const Vec p = support_diff(a, b, Vec{1, 0});
             return MprResult{true, 0.0f, 0.0f, Vec{1, 0}, c_a, 1};
         }
 
@@ -36,15 +35,16 @@ namespace akruti {
         Vec v1 = support_diff(a, b, d1);
 
         // If support along d1 doesn't cross origin: shapes are separated along d1
-        const Scalar proj = v1.dot(d1.normalized());
+        const Vec nd1 = akruti::normalize(d1);
+        const Scalar proj = akruti::dot(v1, nd1);
         if (proj <= 0.0f) {
             const Scalar dist = -proj;
-            return MprResult{false, dist, 0.0f, d1.normalized(), a.support(d1), 1};
+            return MprResult{false, dist, 0.0f, nd1, a.support(d1), 1};
         }
 
         // 3. Find v2 to form candidate 2D portal (v0, v1, v2)
-        Vec n = Vec{-(v1.y - v0.y), v1.x - v0.x}; // normal to segment v0-v1
-        if (n.dot(-v0) < 0.0f) n = -n;
+        Vec n = Vec{-(v1.y() - v0.y()), v1.x() - v0.x()}; // normal to segment v0-v1
+        if (akruti::dot(n, -v0) < 0.0f) n = -n;
 
         Vec v2 = support_diff(a, b, n);
 
@@ -57,19 +57,19 @@ namespace akruti {
             // Check if origin is inside portal triangle (v0, v1, v2)
             const Vec e1 = v1 - v0;
             const Vec e2 = v2 - v0;
-            const Scalar det = e1.x * e2.y - e1.y * e2.x;
+            const Scalar det = e1.x() * e2.y() - e1.y() * e2.x();
 
             // Normal to portal edge v1-v2 facing away from v0
-            Vec portal_n = Vec{v2.y - v1.y, -(v2.x - v1.x)};
-            if (portal_n.dot(v0 - v1) > 0.0f) portal_n = -portal_n;
-            if (portal_n.len2() > 1e-12f) portal_n = portal_n.normalized();
-            else portal_n = d1.normalized();
+            Vec portal_n = Vec{v2.y() - v1.y(), -(v2.x() - v1.x())};
+            if (akruti::dot(portal_n, v0 - v1) > 0.0f) portal_n = -portal_n;
+            if (akruti::length_sq(portal_n) > 1e-12f) portal_n = akruti::normalize(portal_n);
+            else portal_n = nd1;
 
             // Distance from origin to portal line segment v1-v2
-            const Scalar d = portal_n.dot(v1);
+            const Scalar d = akruti::dot(portal_n, v1);
 
             const Vec v3 = support_diff(a, b, portal_n);
-            const Scalar d_new = portal_n.dot(v3);
+            const Scalar d_new = akruti::dot(portal_n, v3);
 
             if (d_new - d < Scalar(1e-4) || iter == 15) {
                 // Portal converged
@@ -92,7 +92,7 @@ namespace akruti {
             }
 
             // Refine portal: replace v1 or v2 with v3
-            if (det * (e1.x * v3.y - e1.y * v3.x) > 0.0f) {
+            if (det * (e1.x() * v3.y() - e1.y() * v3.x()) > 0.0f) {
                 v2 = v3;
             }
             else {

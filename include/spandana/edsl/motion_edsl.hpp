@@ -184,7 +184,7 @@ namespace pebble::spandana::edsl {
             prop_ = spline_.evaluate(eased);
             if (rot_ptr_) {
                 const auto tan = spline_.tangent(eased);
-                *rot_ptr_ = std::atan2(tan.y, tan.x);
+                *rot_ptr_ = std::atan2(tan.y(), tan.x());
             }
         }
 

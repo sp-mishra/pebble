@@ -18,26 +18,165 @@
 
 namespace pebble::math {
     // ========================================================================
-    // 1. Vector & Matrix Type Aliases (Zero Heap Allocation / Stack Array)
+    // 1. Vector Coordinate Mixin (Zero Overhead, Zero Struct Duplication)
     // ========================================================================
-    using vec2 = ts::static_tensor<float, ts::default_storage_policy, ts::default_computation_policy, 2>;
-    using vec3 = ts::static_tensor<float, ts::default_storage_policy, ts::default_computation_policy, 3>;
-    using vec4 = ts::static_tensor<float, ts::default_storage_policy, ts::default_computation_policy, 4>;
-    using quat = ts::static_tensor<float, ts::default_storage_policy, ts::default_computation_policy, 4>;
+    template <typename Derived, typename T, size_t N>
+    struct VectorCoords {
+        [[nodiscard]] constexpr T& x() noexcept requires (N >= 1) {
+            return static_cast<Derived*>(this)->operator[](0);
+        }
+        [[nodiscard]] constexpr const T& x() const noexcept requires (N >= 1) {
+            return static_cast<const Derived*>(this)->operator[](0);
+        }
+
+        [[nodiscard]] constexpr T& y() noexcept requires (N >= 2) {
+            return static_cast<Derived*>(this)->operator[](1);
+        }
+        [[nodiscard]] constexpr const T& y() const noexcept requires (N >= 2) {
+            return static_cast<const Derived*>(this)->operator[](1);
+        }
+
+        [[nodiscard]] constexpr T& z() noexcept requires (N >= 3) {
+            return static_cast<Derived*>(this)->operator[](2);
+        }
+        [[nodiscard]] constexpr const T& z() const noexcept requires (N >= 3) {
+            return static_cast<const Derived*>(this)->operator[](2);
+        }
+
+        [[nodiscard]] constexpr T& w() noexcept requires (N >= 4) {
+            return static_cast<Derived*>(this)->operator[](3);
+        }
+        [[nodiscard]] constexpr const T& w() const noexcept requires (N >= 4) {
+            return static_cast<const Derived*>(this)->operator[](3);
+        }
+    };
+
+    template <typename T, size_t N>
+    struct vec_type : public ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>,
+                      public VectorCoords<vec_type<T, N>, T, N> {
+        using Base = ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>;
+        using Base::Base;
+
+        constexpr vec_type() noexcept : Base() {}
+        constexpr vec_type(const Base& b) noexcept : Base(b) {}
+        constexpr vec_type(Base&& b) noexcept : Base(std::move(b)) {}
+        constexpr vec_type(std::initializer_list<T> list) : Base(list) {}
+        constexpr vec_type(const vec_type&) noexcept = default;
+        constexpr vec_type(vec_type&&) noexcept = default;
+        vec_type& operator=(const vec_type&) noexcept = default;
+        vec_type& operator=(vec_type&&) noexcept = default;
+        vec_type& operator=(std::initializer_list<T> list) {
+            Base::operator=(Base(list));
+            return *this;
+        }
+        // Arithmetic hidden friends ensuring vec_type is returned
+        friend constexpr vec_type operator+(const vec_type& a, const vec_type& b) noexcept {
+            vec_type res;
+            for (size_t i = 0; i < N; ++i) res[i] = a[i] + b[i];
+            return res;
+        }
+
+        friend constexpr vec_type operator-(const vec_type& a, const vec_type& b) noexcept {
+            vec_type res;
+            for (size_t i = 0; i < N; ++i) res[i] = a[i] - b[i];
+            return res;
+        }
+
+        friend constexpr vec_type operator-(const vec_type& v) noexcept {
+            vec_type res;
+            for (size_t i = 0; i < N; ++i) res[i] = -v[i];
+            return res;
+        }
+
+        template <typename S>
+            requires std::is_arithmetic_v<S>
+        friend constexpr vec_type operator*(const vec_type& v, S s) noexcept {
+            vec_type res;
+            for (size_t i = 0; i < N; ++i) res[i] = static_cast<T>(v[i] * s);
+            return res;
+        }
+
+        template <typename S>
+            requires std::is_arithmetic_v<S>
+        friend constexpr vec_type operator*(S s, const vec_type& v) noexcept {
+            return v * s;
+        }
+
+        template <typename S>
+            requires std::is_arithmetic_v<S>
+        friend constexpr vec_type operator/(const vec_type& v, S s) noexcept {
+            vec_type res;
+            for (size_t i = 0; i < N; ++i) res[i] = static_cast<T>(v[i] / s);
+            return res;
+        }
+
+        constexpr vec_type& operator+=(const vec_type& other) noexcept {
+            for (size_t i = 0; i < N; ++i) (*this)[i] += other[i];
+            return *this;
+        }
+
+        constexpr vec_type& operator-=(const vec_type& other) noexcept {
+            for (size_t i = 0; i < N; ++i) (*this)[i] -= other[i];
+            return *this;
+        }
+
+        template <typename S>
+            requires std::is_arithmetic_v<S>
+        constexpr vec_type& operator*=(S s) noexcept {
+            for (size_t i = 0; i < N; ++i) (*this)[i] = static_cast<T>((*this)[i] * s);
+            return *this;
+        }
+
+        template <typename S>
+            requires std::is_arithmetic_v<S>
+        constexpr vec_type& operator/=(S s) noexcept {
+            for (size_t i = 0; i < N; ++i) (*this)[i] = static_cast<T>((*this)[i] / s);
+            return *this;
+        }
+    };
+
+    // ========================================================================
+    // 2. Vector & Matrix Type Aliases (Zero Heap Allocation / Stack Array)
+    // ========================================================================
+    using vec2 = vec_type<float, 2>;
+    using vec3 = vec_type<float, 3>;
+    using vec4 = vec_type<float, 4>;
+    using quat = vec_type<float, 4>;
     using mat2 = ts::static_tensor<float, ts::default_storage_policy, ts::default_computation_policy, 2, 2>;
     using mat3 = ts::static_tensor<float, ts::default_storage_policy, ts::default_computation_policy, 3, 3>;
     using mat4 = ts::static_tensor<float, ts::default_storage_policy, ts::default_computation_policy, 4, 4>;
 
     // Double-precision variants
-    using vec2d = ts::static_tensor<double, ts::default_storage_policy, ts::default_computation_policy, 2>;
-    using vec3d = ts::static_tensor<double, ts::default_storage_policy, ts::default_computation_policy, 3>;
-    using vec4d = ts::static_tensor<double, ts::default_storage_policy, ts::default_computation_policy, 4>;
+    using vec2d = vec_type<double, 2>;
+    using vec3d = vec_type<double, 3>;
+    using vec4d = vec_type<double, 4>;
     using mat4d = ts::static_tensor<double, ts::default_storage_policy, ts::default_computation_policy, 4, 4>;
 
     // Integer variants
-    using vec2i = ts::static_tensor<int32_t, ts::default_storage_policy, ts::default_computation_policy, 2>;
-    using vec3i = ts::static_tensor<int32_t, ts::default_storage_policy, ts::default_computation_policy, 3>;
-    using vec4i = ts::static_tensor<int32_t, ts::default_storage_policy, ts::default_computation_policy, 4>;
+    using vec2i = vec_type<int32_t, 2>;
+    using vec3i = vec_type<int32_t, 3>;
+    using vec4i = vec_type<int32_t, 4>;
+
+    // Free function coordinate accessors
+    template <typename Derived, typename T, size_t N>
+    [[nodiscard]] constexpr T& x(VectorCoords<Derived, T, N>& v) noexcept requires (N >= 1) { return v.x(); }
+    template <typename Derived, typename T, size_t N>
+    [[nodiscard]] constexpr const T& x(const VectorCoords<Derived, T, N>& v) noexcept requires (N >= 1) { return v.x(); }
+
+    template <typename Derived, typename T, size_t N>
+    [[nodiscard]] constexpr T& y(VectorCoords<Derived, T, N>& v) noexcept requires (N >= 2) { return v.y(); }
+    template <typename Derived, typename T, size_t N>
+    [[nodiscard]] constexpr const T& y(const VectorCoords<Derived, T, N>& v) noexcept requires (N >= 2) { return v.y(); }
+
+    template <typename Derived, typename T, size_t N>
+    [[nodiscard]] constexpr T& z(VectorCoords<Derived, T, N>& v) noexcept requires (N >= 3) { return v.z(); }
+    template <typename Derived, typename T, size_t N>
+    [[nodiscard]] constexpr const T& z(const VectorCoords<Derived, T, N>& v) noexcept requires (N >= 3) { return v.z(); }
+
+    template <typename Derived, typename T, size_t N>
+    [[nodiscard]] constexpr T& w(VectorCoords<Derived, T, N>& v) noexcept requires (N >= 4) { return v.w(); }
+    template <typename Derived, typename T, size_t N>
+    [[nodiscard]] constexpr const T& w(const VectorCoords<Derived, T, N>& v) noexcept requires (N >= 4) { return v.w(); }
 
     // ========================================================================
     // 2. Vector Arithmetic & Geometric Functions
@@ -45,29 +184,29 @@ namespace pebble::math {
 
     // Vector Addition (a + b)
     template <typename T, size_t N>
-    constexpr ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>
+    constexpr vec_type<T, N>
     operator+(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>& a,
               const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>& b) noexcept {
-        ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> res;
+        vec_type<T, N> res;
         for (size_t i = 0; i < N; ++i) res[i] = a[i] + b[i];
         return res;
     }
 
     // Vector Subtraction (a - b)
     template <typename T, size_t N>
-    constexpr ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>
+    constexpr vec_type<T, N>
     operator-(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>& a,
               const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>& b) noexcept {
-        ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> res;
+        vec_type<T, N> res;
         for (size_t i = 0; i < N; ++i) res[i] = a[i] - b[i];
         return res;
     }
 
     // Vector Negation (-v)
     template <typename T, size_t N>
-    constexpr ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>
+    constexpr vec_type<T, N>
     operator-(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>& v) noexcept {
-        ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> res;
+        vec_type<T, N> res;
         for (size_t i = 0; i < N; ++i) res[i] = -v[i];
         return res;
     }
@@ -75,10 +214,10 @@ namespace pebble::math {
     // Vector * Scalar
     template <typename T, size_t N, typename S>
         requires std::is_arithmetic_v<S>
-    constexpr ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>
+    constexpr vec_type<T, N>
     operator*(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>& v,
               S s) noexcept {
-        ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> res;
+        vec_type<T, N> res;
         for (size_t i = 0; i < N; ++i) res[i] = static_cast<T>(v[i] * s);
         return res;
     }
@@ -86,7 +225,7 @@ namespace pebble::math {
     // Scalar * Vector
     template <typename T, size_t N, typename S>
         requires std::is_arithmetic_v<S>
-    constexpr ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>
+    constexpr vec_type<T, N>
     operator*(
         S s, const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>& v) noexcept {
         return v * s;
@@ -95,10 +234,10 @@ namespace pebble::math {
     // Vector / Scalar
     template <typename T, size_t N, typename S>
         requires std::is_arithmetic_v<S>
-    constexpr ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>
+    constexpr vec_type<T, N>
     operator/(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>& v,
               S s) noexcept {
-        ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> res;
+        vec_type<T, N> res;
         for (size_t i = 0; i < N; ++i) res[i] = static_cast<T>(v[i] / s);
         return res;
     }
@@ -165,10 +304,11 @@ namespace pebble::math {
 
     // Vector Normalization
     template <typename T, size_t N>
-    inline auto normalize(
+    inline vec_type<T, N> normalize(
         const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>& v) noexcept {
         auto l = length(v);
-        auto res = v;
+        vec_type<T, N> res;
+        for (size_t i = 0; i < N; ++i) res[i] = v[i];
         if (l > static_cast<decltype(l)>(0)) {
             for (size_t i = 0; i < N; ++i) {
                 res[i] = static_cast<T>(res[i] / l);
@@ -187,6 +327,18 @@ namespace pebble::math {
             diff[i] = a[i] - b[i];
         }
         return length(diff);
+    }
+
+    // Squared distance between two points
+    template <typename T, size_t N>
+    constexpr auto distance_sq(const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>& a,
+                               const ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N>& b)
+        noexcept {
+        ts::static_tensor<T, ts::default_storage_policy, ts::default_computation_policy, N> diff;
+        for (size_t i = 0; i < N; ++i) {
+            diff[i] = a[i] - b[i];
+        }
+        return length_sq(diff);
     }
 
     // Linear Interpolation (lerp)

@@ -70,8 +70,8 @@ namespace pebble::spandana {
             for (const auto& shard : shards) {
                 const float area = shard.area;
                 if (area < 1e-4f) continue;
-                const float cx = shard.centroid.x;
-                const float cy = shard.centroid.y;
+                const float cx = shard.centroid.x();
+                const float cy = shard.centroid.y();
 
                 // Radial velocity directed away from impact point
                 const float dx = cx - impact_point[0];
@@ -135,7 +135,7 @@ namespace pebble::spandana {
                     akruti::ConvexPoly < 8 > cp;
                     for (const auto& v : shard.polygon) {
                         // Local relative coordinates to centroid
-                        (void)cp.verts.push_back(akruti::Vec{v.x - shard.centroid[0], v.y - shard.centroid[1]});
+                        (void)cp.verts.push_back(akruti::Vec{v.x() - shard.centroid.x(), v.y() - shard.centroid.y()});
                     }
                     world.add<gati::ShapeRef>(shard_entity, {.shape = cp});
                 }

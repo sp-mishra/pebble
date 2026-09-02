@@ -22,23 +22,23 @@
 namespace akruti::simd {
     // ── 1. Batch Point Membership / SDF Evaluation (Circles) ──────────────────────────
 
-    inline void batch_sdf_circles(std::span<const Vec2<Scalar>> pts, const Circle& c, std::span<Scalar> out) noexcept {
+    inline void batch_sdf_circles(std::span<const Vec> pts, const Circle& c, std::span<Scalar> out) noexcept {
         const std::size_t n = pts.size();
 #if defined(AKRUTI_HAS_HIGHWAY)
         namespace hn = hwy::HWY_NAMESPACE;
         const hn::ScalableTag<float> d;
         const std::size_t N = hn::Lanes(d);
 
-        const auto cx = hn::Set(d, c.center.x);
-        const auto cy = hn::Set(d, c.center.y);
+        const auto cx = hn::Set(d, c.center[0]);
+        const auto cy = hn::Set(d, c.center[1]);
         const auto r = hn::Set(d, c.radius);
 
         std::size_t i = 0;
         for (; i + N <= n; i += N) {
             alignas(64) float px_buf[64], py_buf[64];
             for (std::size_t k = 0; k < N; ++k) {
-                px_buf[k] = pts[i + k].x;
-                py_buf[k] = pts[i + k].y;
+                px_buf[k] = pts[i + k][0];
+                py_buf[k] = pts[i + k][1];
             }
             const auto px = hn::Load(d, px_buf);
             const auto py = hn::Load(d, py_buf);
@@ -61,11 +61,11 @@ namespace akruti::simd {
 
     // ── 2. Batch Point Inside Query (Boxes) ───────────────────────────────────────────
 
-    inline void batch_point_inside_box(std::span<const Vec2<Scalar>> pts, const Box& b,
+    inline void batch_point_inside_box(std::span<const Vec> pts, const Box& b,
                                        std::span<std::uint8_t> out) noexcept {
         const std::size_t n = pts.size();
-        const Scalar min_x = b.center.x - b.half.x, max_x = b.center.x + b.half.x;
-        const Scalar min_y = b.center.y - b.half.y, max_y = b.center.y + b.half.y;
+        const Scalar min_x = b.center[0] - b.half[0], max_x = b.center[0] + b.half[0];
+        const Scalar min_y = b.center[1] - b.half[1], max_y = b.center[1] + b.half[1];
 
 #if defined(AKRUTI_HAS_HIGHWAY)
         namespace hn = hwy::HWY_NAMESPACE;
@@ -81,8 +81,8 @@ namespace akruti::simd {
         for (; i + N <= n; i += N) {
             alignas(64) float px_buf[64], py_buf[64];
             for (std::size_t k = 0; k < N; ++k) {
-                px_buf[k] = pts[i + k].x;
-                py_buf[k] = pts[i + k].y;
+                px_buf[k] = pts[i + k][0];
+                py_buf[k] = pts[i + k][1];
             }
             const auto px = hn::Load(d, px_buf);
             const auto py = hn::Load(d, py_buf);
@@ -97,12 +97,12 @@ namespace akruti::simd {
         }
         for (; i < n; ++i) {
             const auto p = pts[i];
-            out[i] = (p.x >= min_x && p.x <= max_x && p.y >= min_y && p.y <= max_y) ? 1 : 0;
+            out[i] = (p[0] >= min_x && p[0] <= max_x && p[1] >= min_y && p[1] <= max_y) ? 1 : 0;
         }
 #else
         for (std::size_t i = 0; i < n; ++i) {
             const auto p = pts[i];
-            out[i] = (p.x >= min_x && p.x <= max_x && p.y >= min_y && p.y <= max_y) ? 1 : 0;
+            out[i] = (p[0] >= min_x && p[0] <= max_x && p[1] >= min_y && p[1] <= max_y) ? 1 : 0;
         }
 #endif
     }
@@ -110,8 +110,8 @@ namespace akruti::simd {
     // ── 3. 4-Ray / Packet Ray-AABB Intersection ───────────────────────────────────────
 
     struct Ray4 {
-        Vec2<Scalar> o[4];
-        Vec2<Scalar> d[4];
+        Vec o[4];
+        Vec d[4];
         Scalar tmax[4];
     };
 
@@ -120,22 +120,22 @@ namespace akruti::simd {
         Scalar t[4]{1e18f, 1e18f, 1e18f, 1e18f};
     };
 
-    inline RayHit4 packet_raycast_aabb(const Ray4& rays, const AABB<Scalar>& box) noexcept {
+    inline RayHit4 packet_raycast_aabb(const Ray4& rays, const AABB& box) noexcept {
         RayHit4 res{};
-        const Vec2<Scalar> blo{box.lo}, bhi{box.hi};
+        const Vec blo = box.lo, bhi = box.hi;
         for (int k = 0; k < 4; ++k) {
-            const Vec2<Scalar> inv_d{
-                1.0f / (std::fabs(rays.d[k].x) > 1e-9f ? rays.d[k].x : 1e-9f),
-                1.0f / (std::fabs(rays.d[k].y) > 1e-9f ? rays.d[k].y : 1e-9f)
+            const Vec inv_d{
+                1.0f / (std::fabs(rays.d[k][0]) > 1e-9f ? rays.d[k][0] : 1e-9f),
+                1.0f / (std::fabs(rays.d[k][1]) > 1e-9f ? rays.d[k][1] : 1e-9f)
             };
 
-            const Scalar t0x = (blo.x - rays.o[k].x) * inv_d.x;
-            const Scalar t1x = (bhi.x - rays.o[k].x) * inv_d.x;
+            const Scalar t0x = (blo[0] - rays.o[k][0]) * inv_d[0];
+            const Scalar t1x = (bhi[0] - rays.o[k][0]) * inv_d[0];
             const Scalar tmin_x = std::min(t0x, t1x);
             const Scalar tmax_x = std::max(t0x, t1x);
 
-            const Scalar t0y = (blo.y - rays.o[k].y) * inv_d.y;
-            const Scalar t1y = (bhi.y - rays.o[k].y) * inv_d.y;
+            const Scalar t0y = (blo[1] - rays.o[k][1]) * inv_d[1];
+            const Scalar t1y = (bhi[1] - rays.o[k][1]) * inv_d[1];
             const Scalar tmin_y = std::min(t0y, t1y);
             const Scalar tmax_y = std::max(t0y, t1y);
 
@@ -154,17 +154,17 @@ namespace akruti::simd {
     // ── 4. Vectorized Polygon Support Point Sweep ─────────────────────────────────────
 
     template <std::size_t N>
-    inline Vec2<Scalar> vectorized_support_poly(const ConvexPoly<N>& poly, Vec2<Scalar> d) noexcept {
+    inline Vec vectorized_support_poly(const ConvexPoly<N>& poly, Vec d) noexcept {
         const std::size_t n = poly.verts.size();
-        if (n == 0) return Vec2<Scalar>{};
+        if (n == 0) return Vec{};
 
 #if defined(AKRUTI_HAS_HIGHWAY)
         namespace hn = hwy::HWY_NAMESPACE;
         const hn::ScalableTag<float> tag;
         const std::size_t lanes = hn::Lanes(tag);
 
-        const auto dx = hn::Set(tag, d.x);
-        const auto dy = hn::Set(tag, d.y);
+        const auto dx = hn::Set(tag, d[0]);
+        const auto dy = hn::Set(tag, d[1]);
 
         Scalar max_dot = -1e18f;
         std::size_t best_idx = 0;
@@ -173,8 +173,8 @@ namespace akruti::simd {
         for (; i + lanes <= n; i += lanes) {
             alignas(64) float vx_buf[64], vy_buf[64];
             for (std::size_t k = 0; k < lanes; ++k) {
-                vx_buf[k] = poly.verts[i + k].x;
-                vy_buf[k] = poly.verts[i + k].y;
+                vx_buf[k] = poly.verts[i + k][0];
+                vy_buf[k] = poly.verts[i + k][1];
             }
             const auto vx = hn::Load(tag, vx_buf);
             const auto vy = hn::Load(tag, vy_buf);
@@ -190,7 +190,7 @@ namespace akruti::simd {
             }
         }
         for (; i < n; ++i) {
-            const Scalar dot_s = d.dot(poly.verts[i]);
+            const Scalar dot_s = akruti::dot(d, poly.verts[i]);
             if (dot_s > max_dot) {
                 max_dot = dot_s;
                 best_idx = i;
@@ -201,7 +201,7 @@ namespace akruti::simd {
         Scalar max_dot = -1e18f;
         std::size_t best_idx = 0;
         for (std::size_t i = 0; i < n; ++i) {
-            const Scalar dot_s = d.dot(poly.verts[i]);
+            const Scalar dot_s = akruti::dot(d, poly.verts[i]);
             if (dot_s > max_dot) {
                 max_dot = dot_s;
                 best_idx = i;
@@ -213,7 +213,7 @@ namespace akruti::simd {
 
     // ── 5. Batch AABB Overlap Tests ───────────────────────────────────────────────────
 
-    inline void batch_aabb_overlap(std::span<const AABB<Scalar>> a, std::span<const AABB<Scalar>> b,
+    inline void batch_aabb_overlap(std::span<const AABB> a, std::span<const AABB> b,
                                    std::span<std::uint8_t> out) noexcept {
         const std::size_t n = std::min({a.size(), b.size(), out.size()});
         for (std::size_t i = 0; i < n; ++i) {
@@ -223,7 +223,7 @@ namespace akruti::simd {
 
     // ── 6. Batch Box SDF Evaluation ───────────────────────────────────────────────────
 
-    inline void batch_sdf_boxes(std::span<const Vec2<Scalar>> pts, const Box& b, std::span<Scalar> out) noexcept {
+    inline void batch_sdf_boxes(std::span<const Vec> pts, const Box& b, std::span<Scalar> out) noexcept {
         const std::size_t n = std::min(pts.size(), out.size());
         for (std::size_t i = 0; i < n; ++i) {
             out[i] = b.sdf(pts[i]);
@@ -232,7 +232,7 @@ namespace akruti::simd {
 
     // ── 7. Batch Capsule SDF Evaluation ───────────────────────────────────────────────
 
-    inline void batch_sdf_capsules(std::span<const Vec2<Scalar>> pts, const Capsule& cap,
+    inline void batch_sdf_capsules(std::span<const Vec> pts, const Capsule& cap,
                                    std::span<Scalar> out) noexcept {
         const std::size_t n = std::min(pts.size(), out.size());
         for (std::size_t i = 0; i < n; ++i) {
@@ -242,8 +242,8 @@ namespace akruti::simd {
 
     // ── 8. Batch 2D Transformation (Rotation + Translation) ───────────────────────────
 
-    inline void batch_transform(std::span<const Vec2<Scalar>> in_pts, Vec2<Scalar> pos, Scalar angle,
-                                std::span<Vec2<Scalar>> out_pts) noexcept {
+    inline void batch_transform(std::span<const Vec> in_pts, Vec pos, Scalar angle,
+                                std::span<Vec> out_pts) noexcept {
         const std::size_t n = std::min(in_pts.size(), out_pts.size());
         if (std::fabs(angle) < 1e-7f) {
             for (std::size_t i = 0; i < n; ++i) out_pts[i] = in_pts[i] + pos;
@@ -253,15 +253,15 @@ namespace akruti::simd {
         const Scalar s = std::sin(angle);
         for (std::size_t i = 0; i < n; ++i) {
             const auto p = in_pts[i];
-            out_pts[i] = Vec2<Scalar>{c * p.x - s * p.y + pos.x, s * p.x + c * p.y + pos.y};
+            out_pts[i] = Vec{c * p[0] - s * p[1] + pos[0], s * p[0] + c * p[1] + pos[1]};
         }
     }
 
     // ── 9. Ray8 Packet Raycast ────────────────────────────────────────────────────────
 
     struct Ray8 {
-        Vec2<Scalar> o[8];
-        Vec2<Scalar> d[8];
+        Vec o[8];
+        Vec d[8];
         Scalar tmax[8];
     };
 
@@ -270,7 +270,7 @@ namespace akruti::simd {
         Scalar t[8]{1e18f, 1e18f, 1e18f, 1e18f, 1e18f, 1e18f, 1e18f, 1e18f};
     };
 
-    inline RayHit8 packet_raycast_aabb(const Ray8& rays, const AABB<Scalar>& box) noexcept {
+    inline RayHit8 packet_raycast_aabb(const Ray8& rays, const AABB& box) noexcept {
         RayHit8 res{};
         Ray4 r0, r1;
         for (int i = 0; i < 4; ++i) {

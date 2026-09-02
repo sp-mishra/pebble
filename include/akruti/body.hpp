@@ -38,39 +38,39 @@ namespace akruti {
               inertia(i), inv_inertia(i > 0.0f ? 1.0f / i : 0.0f) {}
 
         [[nodiscard]] Scalar sdf(pebble::math::vec2 p) const noexcept {
-            const TransformedShape ts{shape, Vec{position[0], position[1]}, angle};
-            return ts.sdf(Vec{p[0], p[1]});
+            const TransformedShape ts{shape, position, angle};
+            return ts.sdf(p);
         }
 
-        [[nodiscard]] AABB<Scalar> aabb() const noexcept {
-            const TransformedShape ts{shape, Vec{position[0], position[1]}, angle};
+        [[nodiscard]] AABB aabb() const noexcept {
+            const TransformedShape ts{shape, position, angle};
             return ts.aabb();
         }
 
-        [[nodiscard]] Vec2<Scalar> support(Vec2<Scalar> d) const noexcept {
-            const TransformedShape ts{shape, Vec{position[0], position[1]}, angle};
+        [[nodiscard]] Vec support(Vec d) const noexcept {
+            const TransformedShape ts{shape, position, angle};
             return ts.support(d);
         }
 
-        [[nodiscard]] Vec2<Scalar> centroid() const noexcept {
-            const TransformedShape ts{shape, Vec{position[0], position[1]}, angle};
+        [[nodiscard]] Vec centroid() const noexcept {
+            const TransformedShape ts{shape, position, angle};
             return ts.centroid();
         }
 
-        void step(const Scalar dt, const pebble::math::vec2 gravity = {0.0f, 0.0f}) noexcept {
+        void step(const Scalar dt, const Vec gravity = Vec{0.0f, 0.0f}) noexcept {
             if (inv_mass <= 0.0f) return;
             linear_vel = linear_vel + (gravity + force * inv_mass) * dt;
             position = position + linear_vel * dt;
             angular_vel += (torque * inv_inertia) * dt;
             angle += angular_vel * dt;
-            force = {0.0f, 0.0f};
+            force = Vec{0.0f, 0.0f};
             torque = 0.0f;
         }
 
-        void apply_impulse(pebble::math::vec2 impulse, const pebble::math::vec2 world_pt) noexcept {
+        void apply_impulse(Vec impulse, const Vec world_pt) noexcept {
             linear_vel = linear_vel + impulse * inv_mass;
-            pebble::math::vec2 r = world_pt - position;
-            torque += (r[0] * impulse[1] - r[1] * impulse[0]);
+            Vec r = world_pt - position;
+            torque += (x(r) * y(impulse) - y(r) * x(impulse));
         }
     };
 

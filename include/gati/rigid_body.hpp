@@ -66,17 +66,17 @@ namespace gati {
         }
 
         [[nodiscard]] Scalar sdf(pebble::math::vec2 p) const noexcept {
-            const akruti::TransformedShape ts{shape, Vec{position[0], position[1]}, angle};
-            return ts.sdf(Vec{p[0], p[1]});
+            const akruti::TransformedShape ts{shape, position, angle};
+            return ts.sdf(p);
         }
 
-        [[nodiscard]] akruti::AABB<Scalar> aabb() const noexcept {
-            const akruti::TransformedShape ts{shape, Vec{position[0], position[1]}, angle};
+        [[nodiscard]] akruti::Box2 aabb() const noexcept {
+            const akruti::TransformedShape ts{shape, position, angle};
             return ts.aabb();
         }
 
         [[nodiscard]] Vec support(Vec d) const noexcept {
-            const akruti::TransformedShape ts{shape, Vec{position[0], position[1]}, angle};
+            const akruti::TransformedShape ts{shape, position, angle};
             return ts.support(d);
         }
 

@@ -15,8 +15,8 @@ TEST_CASE (
     REQUIRE(values.begin().put("theme", "light").commit().has_value());
     auto stable = values.snapshot_at_current();
     REQUIRE(values.begin().put("theme", "dark").commit().has_value());
-    CHECK(stable.get("theme") == "light");
-    CHECK(values.get("theme") == "dark");
+    CHECK(stable.get("theme").value() == "light");
+    CHECK(values.get("theme").value() == "dark");
 }
 
 TEST_CASE (
@@ -33,7 +33,7 @@ TEST_CASE (
     second.put("counter", 3);
     REQUIRE(first.commit().has_value());
     CHECK_FALSE(second.commit().has_value());
-    CHECK(values.get("counter") == 2);
+    CHECK(values.get("counter").value() == 2);
 }
 
 TEST_CASE (
@@ -46,10 +46,10 @@ TEST_CASE (
     REQUIRE(values.begin().put("answer", 42).commit().has_value());
     auto before_delete = values.snapshot_at_current();
     REQUIRE(values.begin().erase("answer").commit().has_value());
-    CHECK(before_delete.get("answer") == 42);
+    CHECK(before_delete.get("answer").value() == 42);
     CHECK_FALSE(values.get("answer").has_value());
     values.prune();
-    CHECK(before_delete.get("answer") == 42);
+    CHECK(before_delete.get("answer").value() == 42);
 }
 
 TEST_CASE (
@@ -65,7 +65,7 @@ TEST_CASE (
     strict_store values;
     REQUIRE(values.begin().put("a", 1).commit().has_value());
     auto reader = values.begin();
-    REQUIRE(reader.get("a") == 1);
+    REQUIRE(reader.get("a").value() == 1);
     REQUIRE(values.begin().put("a", 2).commit().has_value());
     reader.put("b", 3);
     CHECK_FALSE(reader.commit().has_value());
@@ -125,7 +125,7 @@ TEST_CASE (
 
     reads[0].version = values.version_of("source");
     REQUIRE(values.commit_if_unchanged(reads, writes).has_value());
-    CHECK(values.get("derived") == 3);
+    CHECK(values.get("derived").value() == 3);
 }
 
 // --- Anukrama Next: additive policy coverage ---------------------------------
@@ -140,10 +140,10 @@ TEST_CASE (
 )
  {
     using arena_store = anukrama::store<std::string, std::string, std::less<>,
-                                        anukrama::skip_list_index,
-                                        anukrama::atomic_clock,
-                                        anukrama::snapshot_isolation,
-                                        anukrama::smriti_node_pool>;
+                                         anukrama::skip_list_index,
+                                         anukrama::atomic_clock,
+                                         anukrama::snapshot_isolation,
+                                         anukrama::smriti_node_pool>;
 
     // Same snapshot-visibility scenario as the heap default must read identically.
     anukrama::store<std::string, std::string> heap;
@@ -154,8 +154,8 @@ TEST_CASE (
     auto arena_stable = arena.snapshot_at_current();
     REQUIRE(heap.begin().put("theme", "dark").commit().has_value());
     REQUIRE(arena.begin().put("theme", "dark").commit().has_value());
-    CHECK(heap_stable.get("theme") == arena_stable.get("theme"));
-    CHECK(heap.get("theme") == arena.get("theme"));
+    CHECK(heap_stable.get("theme").value() == arena_stable.get("theme").value());
+    CHECK(heap.get("theme").value() == arena.get("theme").value());
 
     // Churn + prune: reclaimed nodes must be recycled, so repeated overwrite of a
     // single key stays bounded rather than allocating without bound. Fresh store so
@@ -164,12 +164,12 @@ TEST_CASE (
     for (int i = 0; i < 1000; ++i)
         REQUIRE(churn.begin().put("k", std::to_string(i)).commit().has_value());
     churn.prune();
-    CHECK(churn.get("k") == "999");
+    CHECK(churn.get("k").value() == "999");
     CHECK(churn.size() == 1U);
     for (int i = 1000; i < 2000; ++i)
         REQUIRE(churn.begin().put("k", std::to_string(i)).commit().has_value());
     churn.prune();
-    CHECK(churn.get("k") == "1999");
+    CHECK(churn.get("k").value() == "1999");
     CHECK(churn.size() == 1U);
 }
 
@@ -211,7 +211,7 @@ TEST_CASE (
     second.put(100, 3);
     REQUIRE(first.commit().has_value());
     CHECK_FALSE(second.commit().has_value());
-    CHECK(values.get(100) == 2);
+    CHECK(values.get(100).value() == 2);
 }
 
 TEST_CASE (
@@ -230,18 +230,18 @@ TEST_CASE (
 
     // With both snapshots live, prune must retain everything the oldest sees.
     values.prune();
-    CHECK(early.get("k") == 1);
-    CHECK(late.get("k") == 2);
-    CHECK(values.get("k") == 3);
+    CHECK(early.get("k").value() == 1);
+    CHECK(late.get("k").value() == 2);
+    CHECK(values.get("k").value() == 3);
 
     // Close the oldest: version 1 is now unreachable and may be reclaimed.
     { auto drop = std::move(early); }
     values.prune();
-    CHECK(late.get("k") == 2);
-    CHECK(values.get("k") == 3);
+    CHECK(late.get("k").value() == 2);
+    CHECK(values.get("k").value() == 3);
 
     // All snapshots closed: prune collapses to the latest.
     { auto drop = std::move(late); }
     values.prune();
-    CHECK(values.get("k") == 3);
+    CHECK(values.get("k").value() == 3);
 }

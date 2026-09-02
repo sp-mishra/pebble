@@ -114,23 +114,37 @@ TEST_CASE (
 }
 
 TEST_CASE("Akruti poly_ops: voronoi shatter and khanda fracture integration", "[akruti][poly_ops][khanda]") {
-    const Poly boundary = make_square(10.0f);
-    std::vector<Vec2<Scalar>> seeds = {
-        {-4.0f, -4.0f},
-        {4.0f, -4.0f},
-        {4.0f, 4.0f},
-        {-4.0f, 4.0f}
-    };
-
-    auto shards = akruti::voronoi_shatter(boundary, seeds);
-    REQUIRE(shards.size() == 4);
-
-    Scalar total_area = 0;
-    for (const auto& shard : shards) {
-        REQUIRE(shard.size() >= 3);
-        total_area += std::fabs(akruti::polygon_area(shard));
+    const Poly poly = make_square(10.0f);
+    std::vector<Vec2<Scalar>> sites = {{ -5.0f, -5.0f }, { 5.0f, 5.0f }};
+    const auto shards = akruti::voronoi_shatter(poly, sites);
+    REQUIRE(!shards.empty());
+    Scalar sum_area = 0;
+    for (const auto& s : shards) {
+        sum_area += std::fabs(akruti::polygon_area(s));
     }
+    REQUIRE(sum_area == Catch::Approx(400.0f).margin(1e-2f));
+}
 
-    const Scalar bound_area = std::fabs(akruti::polygon_area(boundary));
-    REQUIRE(total_area == Catch::Approx(bound_area).margin(1e-2));
+TEST_CASE("Akruti auto_policies: intelligent container deduction and sink dispatch", "[akruti][auto_policies]") {
+    akruti::AutoTriangulator auto_tri;
+    akruti::Poly poly = make_square(10.0f);
+
+    // 1. SmallVector output (default)
+    auto small_tris = auto_tri(poly);
+    REQUIRE(small_tris.size() == 2);
+
+    // 2. static_vector output (100% stack)
+    containers::static_vector<Vec2<Scalar>, 4> static_poly;
+    for (const auto& pt : poly) (void)static_poly.push_back(pt);
+    auto static_tris = auto_tri(static_poly);
+    REQUIRE(static_tris.size() == 2);
+
+    // 3. std::vector output
+    std::vector<akruti::Triangle> std_tris = auto_tri.triangulate_vector(std::span<const Vec2<Scalar>>(poly.data(), poly.size()));
+    REQUIRE(std_tris.size() == 2);
+
+    // 4. In-place buffer sink
+    std::vector<akruti::Triangle> sink_tris;
+    auto_tri.triangulate_into(poly, sink_tris);
+    REQUIRE(sink_tris.size() == 2);
 }

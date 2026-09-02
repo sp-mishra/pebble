@@ -17,7 +17,7 @@ namespace akruti {
 
         // Type-erased function pointers (vtable-free, static table cached)
         Scalar (*sdf_fn)(const void*, Vec) noexcept = nullptr;
-        AABB<Scalar> (*aabb_fn)(const void*) noexcept = nullptr;
+        Box2 (*aabb_fn)(const void*) noexcept = nullptr;
         Vec (*support_fn)(const void*, Vec) noexcept = nullptr;
         Vec (*centroid_fn)(const void*) noexcept = nullptr;
 
@@ -74,7 +74,7 @@ namespace akruti {
             sdf_fn = [](const void* ptr, Vec p) noexcept -> Scalar {
                 return static_cast<const S*>(ptr)->sdf(p);
             };
-            aabb_fn = [](const void* ptr) noexcept -> AABB<Scalar> {
+            aabb_fn = [](const void* ptr) noexcept -> Box2 {
                 return static_cast<const S*>(ptr)->aabb();
             };
             support_fn = [](const void* ptr, Vec d) noexcept -> Vec {
@@ -89,8 +89,8 @@ namespace akruti {
             return sdf_fn ? sdf_fn(storage, p) : Scalar(1e9);
         }
 
-        [[nodiscard]] AABB<Scalar> aabb() const noexcept {
-            return aabb_fn ? aabb_fn(storage) : AABB<Scalar>{};
+        [[nodiscard]] Box2 aabb() const noexcept {
+            return aabb_fn ? aabb_fn(storage) : Box2{};
         }
 
         [[nodiscard]] Vec support(Vec d) const noexcept {

@@ -21,17 +21,17 @@ namespace akruti::scene {
     struct NearestHit {
         std::uint32_t payload{};
         Scalar dist{};
-        Vec2<Scalar> point{};
+        Vec point{};
     };
 
     struct Ray {
-        Vec2<Scalar> o{}, d{};
+        Vec o{}, d{};
         Scalar tmax{Scalar(1e4)};
     };
 
     struct GridSpec {
-        Vec2<Scalar> origin{};
-        Vec2<Scalar> cell{Scalar(1), Scalar(1)};
+        Vec origin{};
+        Vec cell{Scalar(1), Scalar(1)};
         std::uint32_t nx{}, ny{};
     };
 
@@ -41,7 +41,7 @@ namespace akruti::scene {
     [[nodiscard]] inline std::vector<PairId> broadphase_pairs(const Scene& scene) {
         std::vector<PairId> pairs;
         scene.for_each_leaf([&](std::uint32_t a) {
-            AABB<Scalar> box{};
+            Box2 box{};
             scene.dispatch(a, [&](const auto& batch, std::uint32_t idx) { box = batch.box(idx); });
             scene.tree().query(box, [&](std::uint32_t b) {
                 if (a < b) pairs.push_back(PairId{a, b});
@@ -60,7 +60,7 @@ namespace akruti::scene {
         buffer.reserve(chunk_capacity);
 
         scene.for_each_leaf([&](std::uint32_t a) {
-            AABB<Scalar> box{};
+            Box2 box{};
             scene.dispatch(a, [&](const auto& batch, std::uint32_t idx) { box = batch.box(idx); });
             scene.tree().query(box, [&](std::uint32_t b) {
                 if (a < b) {
@@ -99,12 +99,12 @@ namespace akruti::scene {
     // ── (c) Bulk point membership ────────────────────────────────────────────────────────────
     // Parallel over query points; a point is inside iff some shape whose box contains it has sdf<0.
     // (Box-containment cull is exact for membership: sdf<0 => point in tight box.)
-    inline void bulk_point_inside(Scene& scene, std::span<const Vec2<Scalar>> pts,
+    inline void bulk_point_inside(Scene& scene, std::span<const Vec> pts,
                                   std::span<std::uint8_t> out) {
         scene.executor().for_range(pts.size(), [&](std::size_t i) {
-            const Vec2<Scalar> p = pts[i];
+            const Vec p = pts[i];
             bool inside = false;
-            scene.tree().query(AABB<Scalar>{p, p}, [&](std::uint32_t payload) {
+            scene.tree().query(Box2{p, p}, [&](std::uint32_t payload) {
                 if (inside) return;
                 scene.dispatch(payload, [&](const auto& batch, std::uint32_t idx) {
                     if (batch.sdf(idx, p) < Scalar(0)) inside = true;
@@ -134,7 +134,7 @@ namespace akruti::scene {
 
     // ── (c/d) Exact nearest shape ────────────────────────────────────────────────────────────
     // Expanding-radius query: grow a box around p until the current best distance is provably <= the query half-extent.
-    [[nodiscard]] inline NearestHit nearest_at(const Scene& scene, Vec2<Scalar> p) {
+    [[nodiscard]] inline NearestHit nearest_at(const Scene& scene, Vec p) {
         NearestHit best{0, std::numeric_limits<Scalar>::max(), {}};
         if (scene.count() == 0) return best;
         // Seed radius from the scene's overall extent so the first pass usually suffices.
@@ -142,7 +142,7 @@ namespace akruti::scene {
         for (int pass = 0; pass < 40; ++pass) {
             best.dist = std::numeric_limits<Scalar>::max();
             best.payload = 0;
-            const AABB<Scalar> q{{p.x - r, p.y - r}, {p.x + r, p.y + r}};
+            const Box2 q{{x(p) - r, y(p) - r}, {x(p) + r, y(p) + r}};
             scene.tree().query(q, [&](std::uint32_t payload) {
                 scene.dispatch(payload, [&](const auto& batch, std::uint32_t idx) {
                     const Scalar d = std::fabs(batch.sdf(idx, p));
@@ -160,19 +160,19 @@ namespace akruti::scene {
         return best;
     }
 
-    inline void bulk_nearest_shape(Scene& scene, std::span<const Vec2<Scalar>> pts,
+    inline void bulk_nearest_shape(Scene& scene, std::span<const Vec> pts,
                                    std::span<NearestHit> out) {
         scene.executor().for_range(pts.size(), [&](std::size_t i) { out[i] = nearest_at(scene, pts[i]); });
     }
 
     // ── (d) Bulk SDF field ───────────────────────────────────────────────────────────────────
     // Min signed distance of the whole scene at each sample. Signed: negative inside any shape.
-    [[nodiscard]] inline Scalar scene_sdf(const Scene& scene, Vec2<Scalar> p) {
+    [[nodiscard]] inline Scalar scene_sdf(const Scene& scene, Vec p) {
         Scalar best = std::numeric_limits<Scalar>::max();
         Scalar r = Scalar(1);
         for (int pass = 0; pass < 40; ++pass) {
             Scalar pass_best = std::numeric_limits<Scalar>::max();
-            const AABB<Scalar> q{{p.x - r, p.y - r}, {p.x + r, p.y + r}};
+            const Box2 q{{x(p) - r, y(p) - r}, {x(p) + r, y(p) + r}};
             scene.tree().query(q, [&](std::uint32_t payload) {
                 scene.dispatch(payload, [&](const auto& batch, std::uint32_t idx) {
                     const Scalar d = batch.sdf(idx, p);
@@ -186,7 +186,7 @@ namespace akruti::scene {
         return best;
     }
 
-    inline void bulk_sdf_field(Scene& scene, std::span<const Vec2<Scalar>> pts, std::span<Scalar> out) {
+    inline void bulk_sdf_field(Scene& scene, std::span<const Vec> pts, std::span<Scalar> out) {
         scene.executor().for_range(pts.size(), [&](std::size_t i) { out[i] = scene_sdf(scene, pts[i]); });
     }
 
@@ -195,9 +195,9 @@ namespace akruti::scene {
         scene.executor().for_range(total, [&](std::size_t i) {
             const std::uint32_t ix = static_cast<std::uint32_t>(i % grid.nx);
             const std::uint32_t iy = static_cast<std::uint32_t>(i / grid.nx);
-            const Vec2<Scalar> p{
-                grid.origin.x + Scalar(ix) * grid.cell.x,
-                grid.origin.y + Scalar(iy) * grid.cell.y
+            const Vec p{
+                x(grid.origin) + Scalar(ix) * x(grid.cell),
+                y(grid.origin) + Scalar(iy) * y(grid.cell)
             };
             out[i] = scene_sdf(scene, p);
         });
