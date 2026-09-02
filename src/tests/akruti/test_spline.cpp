@@ -87,3 +87,23 @@ TEST_CASE (
     float d = node.sdf({0.0f, 0.0f});
     REQUIRE(d < 0.0f);
 }
+
+TEST_CASE("Akruti: CubicBezierCurve exact Halley root-finding", "[akruti][spline][halley]") {
+    akruti::CubicBezierCurve bezier{
+        .p0 = {0.0f, 0.0f},
+        .p1 = {0.0f, 10.0f},
+        .p2 = {10.0f, 10.0f},
+        .p3 = {10.0f, 0.0f},
+        .radius = 0.5f
+    };
+
+    // Test midpoint of curve at t=0.5 -> (5.0, 7.5)
+    // Point displaced along outward normal at t=0.5 by 2.0 units
+    const auto mid = bezier.evaluate(0.5f);
+    const auto norm = bezier.normal(0.5f);
+    const auto query_pt = mid + norm * 2.0f;
+
+    // Distance should be exact displacement minus stroke radius: 2.0 - 0.5 = 1.5
+    float d = bezier.sdf(query_pt);
+    REQUIRE(d == Catch::Approx(1.5f).margin(1e-3f));
+}

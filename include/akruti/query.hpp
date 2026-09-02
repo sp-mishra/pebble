@@ -46,6 +46,44 @@ namespace akruti {
         Vec2<Scalar> normal{}; // outward SDF gradient at hit
     };
 
+    // ── Analytical normal from SDF gradient with 4-tap stencil ───────────────────────
+    template <Shape S>
+    [[nodiscard]] inline Vec2<Scalar> sdf_normal(const S& s, Vec2<Scalar> p, Scalar h = Scalar(1e-4)) noexcept {
+        const Scalar dx = s.sdf({p.x + h, p.y}) - s.sdf({p.x - h, p.y});
+        const Scalar dy = s.sdf({p.x, p.y + h}) - s.sdf({p.x, p.y - h});
+        const Vec2<Scalar> g{dx, dy};
+        const Scalar len = g.len();
+        return (len > Scalar(1e-12)) ? g * (Scalar(1) / len) : Vec2<Scalar>{0, 1};
+    }
+
+    // ── Principal Curvature (divergence of normal field: kappa = ∇·(∇f / |∇f|)) ───────
+    template <Shape S>
+    [[nodiscard]] inline Scalar sdf_curvature(const S& s, Vec2<Scalar> p, Scalar h = Scalar(1e-2)) noexcept {
+        const double hd = static_cast<double>(h);
+        const double f0 = static_cast<double>(s.sdf(p));
+        const double fxp = static_cast<double>(s.sdf({p.x + h, p.y}));
+        const double fxm = static_cast<double>(s.sdf({p.x - h, p.y}));
+        const double fyp = static_cast<double>(s.sdf({p.x, p.y + h}));
+        const double fym = static_cast<double>(s.sdf({p.x, p.y - h}));
+        const double fxp_yp = static_cast<double>(s.sdf({p.x + h, p.y + h}));
+        const double fxp_ym = static_cast<double>(s.sdf({p.x + h, p.y - h}));
+        const double fxm_yp = static_cast<double>(s.sdf({p.x - h, p.y + h}));
+        const double fxm_ym = static_cast<double>(s.sdf({p.x - h, p.y - h}));
+
+        const double fxx = (fxp - 2.0 * f0 + fxm) / (hd * hd);
+        const double fyy = (fyp - 2.0 * f0 + fym) / (hd * hd);
+        const double fxy = (fxp_yp - fxp_ym - fxm_yp + fxm_ym) / (4.0 * hd * hd);
+        const double fx = (fxp - fxm) / (2.0 * hd);
+        const double fy = (fyp - fym) / (2.0 * hd);
+
+        const double grad_sq = fx * fx + fy * fy;
+        if (grad_sq < 1e-12) return Scalar(0);
+        const double grad_norm = std::sqrt(grad_sq);
+        // 2D Principal Curvature formula: (fxx*fy^2 - 2*fxy*fx*fy + fyy*fx^2) / (fx^2 + fy^2)^(3/2)
+        const double kappa = (fxx * fy * fy - 2.0 * fxy * fx * fy + fyy * fx * fx) / (grad_norm * grad_sq);
+        return static_cast<Scalar>(kappa);
+    }
+
     // ── SDF sphere-trace raycast. dir need not be normalized; t is measured in |dir| units. ──
     template <Shape S>
     [[nodiscard]] inline RayHit raycast(const S& s, Vec2<Scalar> origin, Vec2<Scalar> dir,
@@ -57,12 +95,7 @@ namespace akruti {
             const Vec2<Scalar> p = origin + nd * t;
             const Scalar d = s.sdf(p);
             if (d < eps) {
-                const Scalar h = Scalar(1e-3);
-                Vec2<Scalar> g{
-                    s.sdf({p.x + h, p.y}) - s.sdf({p.x - h, p.y}),
-                    s.sdf({p.x, p.y + h}) - s.sdf({p.x, p.y - h})
-                };
-                return RayHit{true, t, p, g.normalized()};
+                return RayHit{true, t, p, sdf_normal(s, p)};
             }
             t += d; // safe advance: distance to nearest surface
         }

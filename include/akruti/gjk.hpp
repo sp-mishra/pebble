@@ -20,42 +20,68 @@ namespace akruti {
         Vec2<Scalar> normal{}; // unit contact normal (from A into B)
     };
 
+    // Simplex cache for warm-starting consecutive simulation frames (reduces GJK to 1-2 iters)
+    struct SimplexCache {
+        containers::static_vector<Vec2<Scalar>, 3> simplex{};
+        Vec2<Scalar> separating_axis{1, 0};
+        bool valid{false};
+
+        void reset() noexcept {
+            simplex.clear();
+            separating_axis = Vec2<Scalar>{1, 0};
+            valid = false;
+        }
+    };
+
     namespace detail {
+        // Deterministic signed cross for 2D vectors
+        [[nodiscard]] inline constexpr Scalar cross2d(Vec2<Scalar> a, Vec2<Scalar> b) noexcept {
+            return a.x * b.y - a.y * b.x;
+        }
+
         // Vector perpendicular to ab pointing toward ao (2D cross(ab, ao) cross ab)
         inline Vec2<Scalar> triple_perp(Vec2<Scalar> ab, Vec2<Scalar> ao) noexcept {
-            // cross(ab, ao) = ab.x * ao.y - ab.y * ao.x
-            const Scalar z = ab.x * ao.y - ab.y * ao.x;
-            // (0, 0, z) x (ab.x, ab.y, 0) = (-z * ab.y, z * ab.x, 0)
+            const Scalar z = cross2d(ab, ao);
             return {-z * ab.y, z * ab.x};
         }
     } // namespace detail
 
-    // GJK boolean: do convex A and B overlap? Fills the final simplex for EPA if requested.
+    // GJK boolean with optional SimplexCache warm-starting & Voronoi region solver
     template <Shape A, Shape B>
     [[nodiscard]] bool gjk_overlap(const A& a, const B& b,
-                                   containers::static_vector<Vec2<Scalar>, 3>* out_simplex = nullptr) noexcept {
+                                   containers::static_vector<Vec2<Scalar>, 3>* out_simplex = nullptr,
+                                   SimplexCache* cache = nullptr) noexcept {
         using V = Vec2<Scalar>;
-        // Initial direction: vector from shape A center toward shape B center
-        V d = b.support(V{1, 0}) - a.support(V{-1, 0});
-        if (d.len2() < Scalar(1e-12)) d = V{1, 0};
-
         containers::static_vector<V, 3> simplex;
-        (void)simplex.push_back(support_diff(a, b, d));
-        d = -simplex[0]; // Point toward origin
+        V d{1, 0};
+
+        // Warm-start from cached direction or prior simplex if available
+        if (cache && cache->valid && cache->separating_axis.len2() > Scalar(1e-8)) {
+            d = cache->separating_axis;
+            (void)simplex.push_back(support_diff(a, b, d));
+            d = -simplex[0];
+        } else {
+            d = b.support(V{1, 0}) - a.support(V{-1, 0});
+            if (d.len2() < Scalar(1e-12)) d = V{1, 0};
+            (void)simplex.push_back(support_diff(a, b, d));
+            d = -simplex[0]; // Point toward origin
+        }
 
         for (int iter = 0; iter < 32; ++iter) {
             if (d.len2() < Scalar(1e-12)) {
-                // Origin is exactly on simplex vertex
                 if (out_simplex) { *out_simplex = simplex; }
+                if (cache) { cache->simplex = simplex; cache->separating_axis = d; cache->valid = true; }
                 return true;
             }
             const V p = support_diff(a, b, d);
-            if (p.dot(d) < 0) return false; // No overlap: support point did not cross origin
+            if (p.dot(d) < 0) {
+                if (cache) { cache->separating_axis = d; cache->valid = true; }
+                return false; // Separating axis found
+            }
             (void)simplex.push_back(p);
 
-            // Simplex evolution:
+            // Simplex evolution via Voronoi region classification:
             if (simplex.size() == 2) {
-                // Line segment A (newest = simplex[1]) -> B (simplex[0])
                 const V a_pt = simplex[1];
                 const V b_pt = simplex[0];
                 const V ab = b_pt - a_pt;
@@ -71,9 +97,7 @@ namespace akruti {
                 const V ac = c_pt - a_pt;
                 const V ao = -a_pt;
 
-                // Outward normal of AB away from C: triple_perp(ab, -ac)
                 const V ab_perp = detail::triple_perp(ab, -ac);
-                // Outward normal of AC away from B: triple_perp(ac, -ab)
                 const V ac_perp = detail::triple_perp(ac, -ab);
 
                 if (ab_perp.dot(ao) > 0) {
@@ -90,6 +114,7 @@ namespace akruti {
                 }
                 else {
                     if (out_simplex) { *out_simplex = simplex; }
+                    if (cache) { cache->simplex = simplex; cache->separating_axis = d; cache->valid = true; }
                     return true; // Origin enclosed in triangle
                 }
             }

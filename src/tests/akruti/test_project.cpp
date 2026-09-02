@@ -53,3 +53,16 @@ TEST_CASE (
     CHECK(b.sdf(qo) == Catch::Approx(0.0f).margin(1e-2f));   // on boundary
     CHECK(qo.x == Catch::Approx(1.0f).margin(1e-2f));
 }
+
+TEST_CASE("Akruti: sdf_normal and sdf_curvature evaluate analytical differential geometry", "[akruti][query][curvature]") {
+    akruti::Circle c{ .center = {0.0f, 0.0f}, .radius = 2.0f };
+    akruti::Vec2<akruti::Scalar> p{2.0f, 0.0f};
+
+    auto n = akruti::sdf_normal(c, p);
+    CHECK(n.x == Catch::Approx(1.0f).margin(1e-3f));
+    CHECK(n.y == Catch::Approx(0.0f).margin(1e-3f));
+
+    // Curvature of circle with radius R=2 is kappa = 1/R = 0.5
+    auto kappa = akruti::sdf_curvature(c, p);
+    CHECK(kappa == Catch::Approx(0.5f).margin(0.03f));
+}

@@ -649,13 +649,6 @@ namespace akruti {
     }
 
     // ── 3. Warm-Started GJK / EPA Solver ──────────────────────────────────────────────
-
-    struct SimplexCache {
-        containers::static_vector<Vec, 3> simplex;
-        Vec separating_axis{1, 0};
-        bool valid{false};
-    };
-
     template <Shape A, Shape B>
     [[nodiscard]] inline Manifold collide_gjk_warm_started(const A& a, const B& b,
                                                            SimplexCache* cache = nullptr) noexcept {
