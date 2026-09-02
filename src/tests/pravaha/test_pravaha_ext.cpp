@@ -1342,6 +1342,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "classify_node_kind returns heavy for plugin-domain nodes"
 ,
 "[pravaha_ext][classify][tensor]"
@@ -1364,6 +1365,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "classify_node_kind returns scalar for scalar-domain builtin ops"
 ,
 "[pravaha_ext][classify][scalar]"
@@ -1379,6 +1381,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "classify_node_kind returns heavy for plugin-domain plugin ops"
@@ -1414,6 +1417,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "clamp propagates tensor shape through ternary node"
 ,
 "[pravaha_ext][tensor][clamp][shape]"
@@ -1445,6 +1449,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "compile_parallel_full handles mixed scalar+tensor DAG"
@@ -1503,6 +1508,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "eval_sequential scratch buffer overload"
 ,
 "[pravaha_ext]"
@@ -1521,6 +1527,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "math_ext lerp eval"
 ,
 "[math_ext]"
@@ -1535,6 +1542,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "math_ext clamp eval"
@@ -1565,6 +1573,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "jit_x86_64 + math_ext: sin compiles to JIT and evaluates correctly"
 ,
 "[sutra][jit][math_ext]"
@@ -1590,6 +1599,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "jit_x86_64 + math_ext: cos compiles to JIT and evaluates correctly"
 ,
 "[sutra][jit][math_ext]"
@@ -1611,6 +1621,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "jit_x86_64 + math_ext: exp compiles to JIT and evaluates correctly"
 ,
 "[sutra][jit][math_ext]"
@@ -1630,6 +1641,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "jit_x86_64 + math_ext: compound expr sin(x)*exp(x) is JIT, no fallback"
@@ -1654,6 +1666,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "jit_x86_64 + math_ext: atan2 (binary plugin op) compiles to JIT"
 ,
 "[sutra][jit][math_ext]"
@@ -1673,6 +1686,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "jit_x86_64 + math_ext: mixed arithmetic and plugin ops produce JIT artifact"
@@ -1703,6 +1717,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "lazy if_: branch coordinator task has Inline domain"
 ,
 "[pravaha_ext][if][lazy][domain]"
@@ -1724,6 +1739,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "lazy if_: then/else edges are control edges"
@@ -1754,6 +1770,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "lazy if_: condition edge to branch coordinator is data_flow"
 ,
 "[pravaha_ext][if][lazy][edgekind]"
@@ -1779,6 +1796,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "lazy if_: inactive branch slot is NaN (State::Skipped) after eval"
@@ -1814,6 +1832,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "lazy if_: AnySuccess join policy on branch coordinator edges"
 ,
 "[pravaha_ext][if][lazy][joinpolicy]"
@@ -1837,6 +1856,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "lazy if_: eval correctness preserved for nested conditionals"
@@ -1871,6 +1891,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "lazy if_: branch task classified as TaskNodeKind::branch (unchanged)"
 ,
 "[pravaha_ext][if][lazy][nodekind]"
@@ -1892,6 +1913,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "build_backprop_dag: produces non-empty waves for non-trivial formula"
@@ -1929,6 +1951,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "build_backprop_dag: forward values correct for a+b"
@@ -1972,6 +1995,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "grad_parallel: gradient of constant w.r.t. x is 0"
 ,
 "[sutra][grad_parallel]"
@@ -1994,6 +2018,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "grad_parallel: gradient of x w.r.t. x is 1"
 ,
 "[sutra][grad_parallel]"
@@ -2014,6 +2039,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "grad_parallel: gradient of x+y w.r.t. x is 1"
@@ -2039,6 +2065,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "grad_parallel: gradient of x*y w.r.t. x is y"
 ,
 "[sutra][grad_parallel]"
@@ -2061,6 +2088,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "grad_parallel: gradient of x*x w.r.t. x is 2*x"
@@ -2093,6 +2121,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "grad_parallel: gradient of a-b w.r.t. b is -1"
 ,
 "[sutra][grad_parallel]"
@@ -2112,6 +2141,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "grad_parallel: var overload mirrors param overload"
@@ -2135,6 +2165,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "grad_parallel: math_ext sin diff rule — d(sin(x))/dx = cos(x)"
 ,
 "[sutra][grad_parallel][math]"
@@ -2156,6 +2187,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "grad_parallel: math_ext exp diff rule — d(exp(x))/dx = exp(x)"

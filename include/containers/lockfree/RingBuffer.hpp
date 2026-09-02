@@ -108,7 +108,8 @@ namespace lockfree { namespace detail {
             Slot& slot = slots_[pos & mask];
             const std::size_t seq = slot.sequence.load(std::memory_order_acquire);
             if (const std::ptrdiff_t diff = static_cast<std::ptrdiff_t>(seq) - static_cast<std::ptrdiff_t>(pos + 1);
-                diff != 0) return std::nullopt; // empty
+                diff != 0)
+                return std::nullopt; // empty
             tail_.store(pos + 1, std::memory_order_relaxed);
             T result = std::move(slot.ref());
             slot.ref().~T();

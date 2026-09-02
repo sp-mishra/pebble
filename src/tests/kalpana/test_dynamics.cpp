@@ -1,7 +1,12 @@
 #include "catch_amalgamated.hpp"
 #include "kalpana/kalpana.hpp"
 
-TEST_CASE("Kalpana: Dynamics Binding Evaluation", "[kalpana][brush][dynamics]") {
+TEST_CASE (
+"Kalpana: Dynamics Binding Evaluation"
+,
+"[kalpana][brush][dynamics]"
+)
+ {
     using namespace kalpana;
 
     BrushInputState input{

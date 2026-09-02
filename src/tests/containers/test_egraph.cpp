@@ -337,7 +337,12 @@ TEST_CASE (
     REQUIRE(report.hit_limit == false);
 }
 
-TEST_CASE("e_graph: smriti arena allocator integration", "[egraph][mem][arena]") {
+TEST_CASE (
+"e_graph: smriti arena allocator integration"
+,
+"[egraph][mem][arena]"
+)
+ {
     using Resource = smriti::ManagedResource<smriti::domains::SystemRAMDomain,
                                             smriti::pools::BumpPool<smriti::domains::SystemRAMDomain>>;
     Resource res{smriti::domains::SystemRAMDomain{},

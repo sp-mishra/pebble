@@ -13,7 +13,7 @@ inline void prakriti_demo() {
     using namespace prakriti;
 
     WorldConfig cfg;
-    cfg.bounds   = {{-50.0f, 0.0f}, {50.0f, 100.0f}}; // floor at y=0
+    cfg.bounds = {{-50.0f, 0.0f}, {50.0f, 100.0f}}; // floor at y=0
     cfg.cell_size = 1.0f;
     World<> w(cfg);
     w.thermal().cfg.enabled = false;
@@ -32,9 +32,11 @@ inline void prakriti_demo() {
     // A 6x6 liquid block that will splash on the floor.
     for (int i = 0; i < 6; ++i)
         for (int j = 0; j < 6; ++j)
-            w.particles().add({.position = {Scalar(i) * 0.5f - 10.0f, Scalar(j) * 0.5f + 5.0f},
-                               .temperature = 50, .material = water,
-                               .f_solid = 0, .f_liquid = 1});
+            w.particles().add({
+                .position = {Scalar(i) * 0.5f - 10.0f, Scalar(j) * 0.5f + 5.0f},
+                .temperature = 50, .material = water,
+                .f_solid = 0, .f_liquid = 1
+            });
 
     std::printf("Prakriti demo: %u particles, %u bonds\n",
                 w.particles().size(), w.edges().size());

@@ -19,61 +19,60 @@
 #include <type_traits>
 
 namespace {
+    enum class SK : std::uint8_t { root, stmt, leaf };
 
-enum class SK : std::uint8_t { root, stmt, leaf };
-enum class TK : std::uint8_t { eof, id, num };
+    enum class TK : std::uint8_t { eof, id, num };
 
-using namespace lang::samasa;
+    using namespace lang::samasa;
 
-// ---- Alias static assertions -----------------------------------------------
+    // ---- Alias static assertions -----------------------------------------------
 
-// event_stream<SK> must be lang::event_log<SK, samasa_diag_code>
-static_assert(std::is_same_v<event_stream<SK>,
-                             lang::event_log<SK, samasa_diag_code>>,
-              "event_stream<SK> must alias lang::event_log<SK, samasa_diag_code>");
+    // event_stream<SK> must be lang::event_log<SK, samasa_diag_code>
+    static_assert(std::is_same_v<event_stream<SK>,
+                                 lang::event_log<SK, samasa_diag_code>>,
+                  "event_stream<SK> must alias lang::event_log<SK, samasa_diag_code>");
 
-// green_tree<SK> must inherit lang::green_arena<SK>
-static_assert(std::is_base_of_v<lang::green_arena<SK>, green_tree<SK>>,
-              "green_tree<SK> must inherit lang::green_arena<SK>");
+    // green_tree<SK> must inherit lang::green_arena<SK>
+    static_assert(std::is_base_of_v<lang::green_arena<SK>, green_tree<SK>>,
+                  "green_tree<SK> must inherit lang::green_arena<SK>");
 
-// green_id == arena_id
-static_assert(std::is_same_v<green_id, lang::arena_id>,
-              "green_id must alias lang::arena_id");
+    // green_id == arena_id
+    static_assert(std::is_same_v<green_id, lang::arena_id>,
+                  "green_id must alias lang::arena_id");
 
-// k_null_green matches k_null_arena
-static_assert(k_null_green == lang::k_null_arena,
-              "k_null_green must equal k_null_arena");
+    // k_null_green matches k_null_arena
+    static_assert(k_null_green == lang::k_null_arena,
+                  "k_null_green must equal k_null_arena");
 
-// ---- Test fixture -----------------------------------------------------------
-//
-// Event sequence:
-//   begin(root) → begin(stmt) → token(0) → token(1) → end(stmt) → end(root)
-//
-// Tokens:
-//   id@[0,2)  → source "ab"   (len=2)
-//   num@[2,3) → source "7"    (len=1)
-//
-// Source: "ab7"
+    // ---- Test fixture -----------------------------------------------------------
+    //
+    // Event sequence:
+    //   begin(root) → begin(stmt) → token(0) → token(1) → end(stmt) → end(root)
+    //
+    // Tokens:
+    //   id@[0,2)  → source "ab"   (len=2)
+    //   num@[2,3) → source "7"    (len=1)
+    //
+    // Source: "ab7"
 
-token_buffer<TK> make_tokens() {
-    token_buffer<TK> buf;
-    buf.data.push_back({TK::id,  0, 2, 0, 0});  // "ab"
-    buf.data.push_back({TK::num, 2, 1, 0, 0});  // "7"
-    buf.data.push_back({TK::eof, 3, 0, 0, 0});
-    return buf;
-}
+    token_buffer<TK> make_tokens() {
+        token_buffer<TK> buf;
+        buf.data.push_back({TK::id, 0, 2, 0, 0}); // "ab"
+        buf.data.push_back({TK::num, 2, 1, 0, 0}); // "7"
+        buf.data.push_back({TK::eof, 3, 0, 0, 0});
+        return buf;
+    }
 
-event_stream<SK> make_events() {
-    event_stream<SK> ev;
-    auto mr = ev.begin(SK::root);
-    auto ms = ev.begin(SK::stmt);
-    ev.token(0);
-    ev.token(1);
-    ev.end(ms, byte_span{0, 3});
-    ev.end(mr, byte_span{0, 3});
-    return ev;
-}
-
+    event_stream<SK> make_events() {
+        event_stream<SK> ev;
+        auto mr = ev.begin(SK::root);
+        auto ms = ev.begin(SK::stmt);
+        ev.token(0);
+        ev.token(1);
+        ev.end(ms, byte_span{0, 3});
+        ev.end(mr, byte_span{0, 3});
+        return ev;
+    }
 } // anonymous namespace
 
 // ============================================================================
@@ -81,12 +80,22 @@ event_stream<SK> make_events() {
 // surfaced as runtime test for visibility in test output).
 // ============================================================================
 
-TEST_CASE("Stage3 adapter: event_stream aliases event_log", "[samasa][stage3]") {
+TEST_CASE (
+"Stage3 adapter: event_stream aliases event_log"
+,
+"[samasa][stage3]"
+)
+ {
     CHECK(std::is_same_v<event_stream<SK>,
                          lang::event_log<SK, samasa_diag_code>>);
 }
 
-TEST_CASE("Stage3 adapter: green_tree inherits green_arena", "[samasa][stage3]") {
+TEST_CASE (
+"Stage3 adapter: green_tree inherits green_arena"
+,
+"[samasa][stage3]"
+)
+ {
     CHECK(std::is_base_of_v<lang::green_arena<SK>, green_tree<SK>>);
 }
 
@@ -95,7 +104,12 @@ TEST_CASE("Stage3 adapter: green_tree inherits green_arena", "[samasa][stage3]")
 // builder. Captures bit-identical structural_hash for each node.
 // ============================================================================
 
-TEST_CASE("Stage3 hash-equality: build_green produces same node count as build", "[samasa][stage3]") {
+TEST_CASE (
+"Stage3 hash-equality: build_green produces same node count as build"
+,
+"[samasa][stage3]"
+)
+ {
     auto buf    = make_tokens();
     auto ev     = make_events();
     auto stream = buf.view();
@@ -110,7 +124,12 @@ TEST_CASE("Stage3 hash-equality: build_green produces same node count as build",
     CHECK(tree_adapter.size() == tree_direct.size());
 }
 
-TEST_CASE("Stage3 hash-equality: structural_hash identical for root", "[samasa][stage3]") {
+TEST_CASE (
+"Stage3 hash-equality: structural_hash identical for root"
+,
+"[samasa][stage3]"
+)
+ {
     auto buf    = make_tokens();
     auto ev1    = make_events();
     auto ev2    = make_events();
@@ -124,7 +143,12 @@ TEST_CASE("Stage3 hash-equality: structural_hash identical for root", "[samasa][
     CHECK(t1[t1.root()].structural_hash == t2[t2.root()].structural_hash);
 }
 
-TEST_CASE("Stage3 hash-equality: structural_hash identical for all nodes", "[samasa][stage3]") {
+TEST_CASE (
+"Stage3 hash-equality: structural_hash identical for all nodes"
+,
+"[samasa][stage3]"
+)
+ {
     auto buf    = make_tokens();
     auto ev1    = make_events();
     auto ev2    = make_events();
@@ -143,7 +167,12 @@ TEST_CASE("Stage3 hash-equality: structural_hash identical for all nodes", "[sam
     }
 }
 
-TEST_CASE("Stage3 hash-equality: golden hash for root node is stable", "[samasa][stage3]") {
+TEST_CASE (
+"Stage3 hash-equality: golden hash for root node is stable"
+,
+"[samasa][stage3]"
+)
+ {
     // Capture the golden hash once from a fresh build and verify it is stable
     // across two independent builds (determinism regression).
     auto buf = make_tokens();
@@ -161,7 +190,12 @@ TEST_CASE("Stage3 hash-equality: golden hash for root node is stable", "[samasa]
     CHECK(h1 == h2);  // determinism
 }
 
-TEST_CASE("Stage3: child structure preserved — stmt has 2 children", "[samasa][stage3]") {
+TEST_CASE (
+"Stage3: child structure preserved — stmt has 2 children"
+,
+"[samasa][stage3]"
+)
+ {
     auto buf    = make_tokens();
     auto ev     = make_events();
     auto tree   = build_green<SK>(ev, buf.view(), "ab7");
@@ -179,7 +213,12 @@ TEST_CASE("Stage3: child structure preserved — stmt has 2 children", "[samasa]
     CHECK(stmt_children.size() == 2);
 }
 
-TEST_CASE("Stage3: different source yields different hash", "[samasa][stage3]") {
+TEST_CASE (
+"Stage3: different source yields different hash"
+,
+"[samasa][stage3]"
+)
+ {
     auto buf = make_tokens();
 
     auto ev1 = make_events();
@@ -192,7 +231,12 @@ TEST_CASE("Stage3: different source yields different hash", "[samasa][stage3]") 
     CHECK(t1[t1.root()].structural_hash != t2[t2.root()].structural_hash);
 }
 
-TEST_CASE("Stage3 rollback: tombstoned begin_node still produces valid tree", "[samasa][stage3]") {
+TEST_CASE (
+"Stage3 rollback: tombstoned begin_node still produces valid tree"
+,
+"[samasa][stage3]"
+)
+ {
     // Rollback path: token committed after begin → tombstone, not truncate
     token_buffer<TK> buf;
     buf.data.push_back({TK::id, 0, 1, 0, 0});

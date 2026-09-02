@@ -105,6 +105,7 @@ struct medha::resource_traits<thread_safe_resource> {
 
 TEST_CASE (
 
+
 "isolation: snapshot → serializable_protocol::none"
 ,
 "[medha][isolation]"
@@ -115,6 +116,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "isolation: serializable + atomic_multi_key_commit → resource_provided"
 ,
@@ -127,6 +129,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "isolation: serializable + thread_safe_commit → read_write_key_locking"
 ,
 "[medha][isolation]"
@@ -137,6 +140,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "isolation: serializable + no protocol → none (MEDHA-SER-011 path)"
 ,
@@ -154,6 +158,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "isolation: serializable_available false for no-protocol resource"
 ,
 "[medha][isolation]"
@@ -163,6 +168,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "isolation: serializable_available true for thread_safe_commit resource"
 ,
@@ -178,6 +184,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "conflict: optimistic_tag has no locks"
 ,
 "[medha][isolation]"
@@ -190,6 +197,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "conflict: pessimistic acquires locks, can deadlock"
 ,
 "[medha][isolation]"
@@ -201,6 +209,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "conflict: deterministic acquires locks, cannot deadlock"
 ,
@@ -217,6 +226,7 @@ TEST_CASE (
 // =============================================================================
 
 TEST_CASE (
+
 
 "isolation: enum values distinct"
 ,
@@ -363,6 +373,7 @@ struct medha::resource_traits<cap_serial_val_resource> {
 
 TEST_CASE (
 
+
 "isolation: commit_capability::none → no serializable protocol"
 ,
 "[medha][isolation][commit_capability]"
@@ -374,6 +385,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "isolation: commit_capability::atomic_multi_key → resource_provided"
 ,
@@ -387,6 +399,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "isolation: commit_capability::pessimistic → read_write_key_locking"
 ,
 "[medha][isolation][commit_capability]"
@@ -398,6 +411,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "isolation: commit_capability::ssi → ssi protocol"
 ,
@@ -411,6 +425,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "isolation: commit_capability::deterministic → deterministic_executor"
 ,
 "[medha][isolation][commit_capability]"
@@ -422,6 +437,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "isolation: commit_capability::serial_validation → serial_validation"
 ,
@@ -435,6 +451,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "isolation: snapshot isolation always returns none regardless of commit_capability"
 ,
 "[medha][isolation][commit_capability]"
@@ -447,6 +464,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "isolation: commit_capability enum values are distinct and ordered"
 ,

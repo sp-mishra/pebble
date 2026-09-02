@@ -19,9 +19,7 @@
 #include <string_view>
 #include "meta/akshara.hpp"
 
-namespace lang::samasa {
-
-    namespace detail {
+namespace lang::samasa { namespace detail {
         [[nodiscard]] constexpr std::uint64_t fnv1a_rt(std::string_view sv) noexcept {
             std::uint64_t h = 14695981039346656037ULL;
             for (unsigned char c : sv) {
@@ -34,34 +32,36 @@ namespace lang::samasa {
 
     template <akshara::fixed_string Name, auto Kind>
     struct keyword {
-        static constexpr auto name    = Name;
-        static constexpr auto kind    = Kind;
+        static constexpr auto name = Name;
+        static constexpr auto kind = Kind;
         static constexpr std::uint64_t hash = akshara::fnv1a64(Name);
     };
 
     template <class... KWs>
     struct keyword_table {
-      private:
+    private:
         // Common kind type across all keywords in this table.
         using kind_type = std::common_type_t<decltype(KWs::kind)...>;
 
         struct entry {
-            std::uint64_t    hash = 0;
+            std::uint64_t hash = 0;
             std::string_view name;
-            kind_type        kind{};
+            kind_type kind{};
         };
 
         // Sorted-by-hash entry table, built once at compile time.
         static constexpr auto sorted_entries = [] {
             std::array<entry, sizeof...(KWs)> arr{
-                entry{KWs::hash, static_cast<std::string_view>(KWs::name),
-                      static_cast<kind_type>(KWs::kind)}...
+                entry{
+                    KWs::hash, static_cast<std::string_view>(KWs::name),
+                    static_cast<kind_type>(KWs::kind)
+                }...
             };
             std::ranges::sort(arr, {}, &entry::hash);
             return arr;
         }();
 
-      public:
+    public:
         // Returns the TokenKind for sv if it matches any keyword, else nullopt.
         template <class TokenKind>
         [[nodiscard]] static constexpr std::optional<TokenKind> lookup(std::string_view sv) noexcept {
@@ -94,8 +94,8 @@ namespace lang::samasa {
         [[nodiscard]] static constexpr std::optional<TokenKind> lookup(std::string_view) noexcept {
             return std::nullopt;
         }
+
         [[nodiscard]] static constexpr bool is_keyword(std::string_view) noexcept { return false; }
         static constexpr std::size_t size = 0;
     };
-
 } // namespace lang::samasa

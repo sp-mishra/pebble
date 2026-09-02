@@ -50,7 +50,12 @@ static_assert([] {
 
 enum class TK : std::uint8_t { root = 0, inner = 1 };
 
-TEST_CASE("event_log: basic begin/token/end", "[lang][tree]") {
+TEST_CASE (
+"event_log: basic begin/token/end"
+,
+"[lang][tree]"
+)
+ {
     lang::event_log<TK> log;
     const auto m = log.begin(TK::root);
     log.token(0);
@@ -63,7 +68,12 @@ TEST_CASE("event_log: basic begin/token/end", "[lang][tree]") {
     REQUIRE(log.all()[3].kind == lang::event_kind::end_node);
 }
 
-TEST_CASE("event_log: rollback clean", "[lang][tree]") {
+TEST_CASE (
+"event_log: rollback clean"
+,
+"[lang][tree]"
+)
+ {
     lang::event_log<TK> log;
     const auto snap = log.snapshot();
     const auto m = log.begin(TK::inner);
@@ -77,7 +87,12 @@ TEST_CASE("event_log: rollback clean", "[lang][tree]") {
     REQUIRE(log.event_count() == 0);
 }
 
-TEST_CASE("event_log: rollback tombstone", "[lang][tree]") {
+TEST_CASE (
+"event_log: rollback tombstone"
+,
+"[lang][tree]"
+)
+ {
     lang::event_log<TK> log;
     const auto m = log.begin(TK::inner);
     log.token(0); // committed token
@@ -89,7 +104,12 @@ TEST_CASE("event_log: rollback tombstone", "[lang][tree]") {
 
 // ---- green_arena::build — structure + stable hashes ----------------------
 
-TEST_CASE("green_arena: build structure and stable hashes", "[lang][tree]") {
+TEST_CASE (
+"green_arena: build structure and stable hashes"
+,
+"[lang][tree]"
+)
+ {
     lang::event_log<TK> log;
     const auto m = log.begin(TK::root);
     log.token(0);
@@ -134,11 +154,11 @@ static_assert([] {
     // With MaxEvents=3: begin + token fills 2; third push_back fills exactly; next overflows.
     lang::static_event_buffer<TK, std::uint16_t, 3> buf;
     static_cast<void>(buf.begin(TK::root)); // event 0
-    buf.token(0);                            // event 1
-    buf.token(1);                            // event 2 — now at capacity
-    buf.token(2);                            // overflow: push_back returns false, sticky set
+    buf.token(0); // event 1
+    buf.token(1); // event 2 — now at capacity
+    buf.token(2); // overflow: push_back returns false, sticky set
     assert(buf.overflow());
-    assert(buf.event_count() == 3);          // count stays at max
+    assert(buf.event_count() == 3); // count stays at max
     return true;
 }());
 

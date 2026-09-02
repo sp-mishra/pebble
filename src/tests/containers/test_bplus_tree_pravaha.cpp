@@ -13,7 +13,12 @@
 using namespace pebble::containers;
 using namespace pebble::containers::pravaha;
 
-TEST_CASE("BPlusTree Pravaha Add-on: Parallel Range Scan", "[bplus_tree][pravaha][scan]") {
+TEST_CASE (
+"BPlusTree Pravaha Add-on: Parallel Range Scan"
+,
+"[bplus_tree][pravaha][scan]"
+)
+ {
     BPlusMap<int, int> tree;
     constexpr int kCount = 1000;
     for (int i = 0; i < kCount; ++i) {
@@ -37,7 +42,12 @@ TEST_CASE("BPlusTree Pravaha Add-on: Parallel Range Scan", "[bplus_tree][pravaha
     CHECK(sum.load() == expected_sum);
 }
 
-TEST_CASE("BPlusTree Pravaha Add-on: Parallel Reduce", "[bplus_tree][pravaha][reduce]") {
+TEST_CASE (
+"BPlusTree Pravaha Add-on: Parallel Reduce"
+,
+"[bplus_tree][pravaha][reduce]"
+)
+ {
     BPlusMap<int, int> tree;
     constexpr int kCount = 2000;
     for (int i = 1; i <= kCount; ++i) {
@@ -58,7 +68,12 @@ TEST_CASE("BPlusTree Pravaha Add-on: Parallel Reduce", "[bplus_tree][pravaha][re
     CHECK(total_sum == expected);
 }
 
-TEST_CASE("BPlusTree Pravaha Add-on: Parallel Batch Find", "[bplus_tree][pravaha][batch_find]") {
+TEST_CASE (
+"BPlusTree Pravaha Add-on: Parallel Batch Find"
+,
+"[bplus_tree][pravaha][batch_find]"
+)
+ {
     BPlusMap<int, std::string> tree;
     for (int i = 0; i < 500; ++i) {
         tree.insert_or_assign(i, "val_" + std::to_string(i));

@@ -1,12 +1,12 @@
 #pragma once
 
 // =============================================================================
-// vakya/types/effect.hpp — effect descriptor + mask (V3, opt-in)
+// vakya/types/effect.hpp — effect descriptor + mask (opt-in)
 //
 // C++23, header-only, no virtual, no macros.
 // Namespace: vakya::types
 //
-// Effects become first-class constraints in V3. A function type carries an
+// Effects become first-class constraints in the reasoning layer. A function type carries an
 // effect_mask; calling it emits effect obligations into the constraint batch.
 // Simple aggregate checks: rule solver.
 // Quantified/path-sensitive obligations: Tarka SMT solver.

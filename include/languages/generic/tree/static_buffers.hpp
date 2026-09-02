@@ -17,7 +17,6 @@
 #include "../../../containers/static/static_vector.hpp"
 
 namespace lang {
-
     // ---- static_event_buffer -----------------------------------------------
 
     template <class KindEnum, class DiagCode = std::uint16_t, std::uint32_t MaxEvents = 4096>
@@ -44,8 +43,8 @@ namespace lang {
 
         constexpr void error(DiagCode code, byte_span span) noexcept {
             event_type ev{};
-            ev.kind      = event_kind::error;
-            ev.span      = span;
+            ev.kind = event_kind::error;
+            ev.span = span;
             ev.diag_code = code;
             static_cast<void>(events_.push_back(ev));
         }
@@ -53,7 +52,8 @@ namespace lang {
         constexpr void end(marker m, byte_span span = {}) noexcept {
             if (depth_ > 0) --depth_;
             KindEnum k = (m.event_index < static_cast<std::uint32_t>(events_.size()))
-                         ? events_[m.event_index].node_kind : KindEnum{};
+                             ? events_[m.event_index].node_kind
+                             : KindEnum{};
             static_cast<void>(events_.push_back({event_kind::end_node, k, 0, span, {}}));
         }
 
@@ -66,17 +66,20 @@ namespace lang {
             if (!committed) {
                 truncate_events(m.event_index);
                 token_count_ = m.token_count;
-            } else {
+            }
+            else {
                 if (m.event_index < static_cast<std::uint32_t>(events_.size()))
                     events_[m.event_index].kind = event_kind::tombstone;
             }
             if (depth_ > 0) --depth_;
         }
 
-        [[nodiscard]] constexpr std::uint32_t depth()       const noexcept { return depth_; }
+        [[nodiscard]] constexpr std::uint32_t depth() const noexcept { return depth_; }
+
         [[nodiscard]] constexpr std::uint32_t event_count() const noexcept {
             return static_cast<std::uint32_t>(events_.size());
         }
+
         [[nodiscard]] constexpr bool overflow() const noexcept { return events_.overflow(); }
 
         // Read-only access to underlying buffer.
@@ -94,8 +97,8 @@ namespace lang {
         }
 
         containers::static_vector<event_type, MaxEvents> events_;
-        std::uint32_t                                     token_count_ = 0;
-        std::uint32_t                                     depth_       = 0;
+        std::uint32_t token_count_ = 0;
+        std::uint32_t depth_ = 0;
     };
 
     // ---- static_span_buffer ------------------------------------------------
@@ -103,5 +106,4 @@ namespace lang {
 
     template <class T, std::size_t N>
     using static_span_buffer = containers::static_vector<T, N>;
-
 } // namespace lang

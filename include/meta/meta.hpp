@@ -39,28 +39,28 @@ namespace meta {
 #if defined(__cpp_lib_ranges) && __cpp_lib_ranges >= 201911L
             true;
 #else
-        false;
+            false;
 #endif
         // C++23 std::expected
         inline constexpr bool has_expected =
 #if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202211L
             true;
 #else
-        false;
+            false;
 #endif
         // C++23 std::mdspan
         inline constexpr bool has_mdspan =
 #if defined(__cpp_lib_mdspan) && __cpp_lib_mdspan >= 202207L
             true;
 #else
-        false;
+            false;
 #endif
         // C++20 std::source_location
         inline constexpr bool has_source_location =
 #if defined(__cpp_lib_source_location) && __cpp_lib_source_location >= 201907L
             true;
 #else
-        false;
+            false;
 #endif
         // C++23 std::stacktrace
         inline constexpr bool has_stacktrace =
@@ -74,28 +74,28 @@ namespace meta {
 #if defined(__cpp_lib_flat_map) && __cpp_lib_flat_map >= 202207L
             true;
 #else
-        false;
+            false;
 #endif
         // C++23 std::print
         inline constexpr bool has_print =
 #if defined(__cpp_lib_print) && __cpp_lib_print >= 202207L
             true;
 #else
-        false;
+            false;
 #endif
         // C++26 Pack Indexing (P2662R3)
         inline constexpr bool has_pack_indexing =
 #if defined(__cpp_pack_indexing) && __cpp_pack_indexing >= 202311L
             true;
 #else
-        false;
+            false;
 #endif
         // C++26 User-generated static_assert messages (P2741R3)
         inline constexpr bool has_user_generated_static_assert =
 #if defined(__cpp_static_assert) && __cpp_static_assert >= 202306L
             true;
 #else
-        false;
+            false;
 #endif
         // C++26 Placeholder variables (P2169R4)
         inline constexpr bool has_placeholder_variables =
@@ -277,16 +277,22 @@ namespace meta {
         static constexpr bool empty_seq = (size == 0);
 
         // front / back (only well-formed when size > 0)
-        using front = std::tuple_element_t<0, std::conditional_t<
-                                               (size > 0),
-                                               std::tuple<Descriptors...>,
-                                               std::tuple<void>>>;
+        using front = std::tuple_element_t<0, std::conditional_t <
+                                           (size > 0),
+                                           std::tuple < Descriptors...>
+        ,
+        std::tuple<void>
+        >
+        >;
 
         using back = std::tuple_element_t<
             (size > 0 ? size - 1 : 0),
-            std::conditional_t<(size > 0),
-                               std::tuple<Descriptors...>,
-                               std::tuple<void>>>;
+            std::conditional_t < (size > 0),
+            std::tuple < Descriptors...>
+        ,
+        std::tuple<void>
+        >
+        >;
 
         // contains_type<T> — true if T is one of the descriptors
         template <typename T>
@@ -811,12 +817,14 @@ namespace meta {
             else {
                 constexpr std::size_t Mid = Lo + (Hi - Lo + 1) / 2;
                 if constexpr (is_constructible_n<T>(
-                        std::make_index_sequence<Mid>{}
-                    )
-                ) {
+                    std::make_index_sequence < Mid > {}
+                )
+                )
+                {
                     return count_fields_binary<T, Mid, Hi>();
                 }
-                else {
+                else
+                {
                     return count_fields_binary<T, Lo, Mid - 1>();
                 }
             }
@@ -845,12 +853,14 @@ namespace meta {
             }
             else {
                 constexpr std::size_t tail = count_fields_linear<T, N + 1>();
-                if constexpr (is_constructible_n<T>(std::make_index_sequence<N>{}
-                    )
-                ) {
+                if constexpr (is_constructible_n<T>(std::make_index_sequence < N > {}
+                )
+                )
+                {
                     return N > tail ? N : tail;
                 }
-                else {
+                else
+                {
                     return tail;
                 }
             }
@@ -1416,7 +1426,7 @@ namespace meta {
             return aggregate::apply_aggregate<aggregate_info<U>::field_count>(
                 std::forward<T>(obj),
                 []<typename... Fs>(Fs&&... fs) -> decltype(auto) {
-                    return std::get<Index>(
+                    return std::get < Index > (
                         std::forward_as_tuple(std::forward<Fs>(fs)...));
                 });
         }
@@ -1523,8 +1533,8 @@ namespace meta {
     consteval auto decompose() {
         using U = std::remove_cvref_t<T>;
         return detail::decompose_impl<U>(
-            std::make_index_sequence<detail::aggregate_info<U>::field_count>
-            {}
+            std::make_index_sequence < detail::aggregate_info<U>::field_count >
+        {}
         );
     }
 
@@ -1899,8 +1909,8 @@ namespace meta {
             }
             else {
                 return count_enum_values_impl<E, Min>(
-                    std::make_integer_sequence<int, Max - Min + 1>
-                    {}
+                    std::make_integer_sequence < int, Max - Min + 1 >
+                {}
                 );
             }
         }
@@ -1923,8 +1933,8 @@ namespace meta {
         template <MetaEnum E, int Min, int Max>
         consteval auto collect_enum_values() noexcept {
             return collect_enum_values_impl<E, Min>(
-                std::make_integer_sequence<int, Max - Min + 1>
-                {}
+                std::make_integer_sequence < int, Max - Min + 1 >
+            {}
             );
         }
     } // namespace detail::enums
@@ -1991,8 +2001,8 @@ namespace meta {
         template <MetaEnum E, int Min = enum_min, int Max = enum_max>
         consteval auto enum_entries() noexcept {
             constexpr std::size_t N = count_enum_values<E, Min, Max>();
-            return make_enum_entries<E, Min, Max>(std::make_index_sequence<N>
-                {}
+            return make_enum_entries<E, Min, Max>(std::make_index_sequence < N >
+            {}
             );
         }
 
@@ -2099,8 +2109,8 @@ namespace meta {
     constexpr void for_each(Fn&& fn) {
         [&]<std::size_t... I>(std::index_sequence<I...>) {
             (fn(typename Seq::template element<I>{}), ...);
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
     }
 
@@ -2111,7 +2121,8 @@ namespace meta {
     constexpr void for_each_index(Fn&& fn) {
         [&]<std::size_t... I>(std::index_sequence<I...>) {
             (fn(std::integral_constant<std::size_t, I>{}, typename Seq::template element<I>{}), ...);
-        }(std::make_index_sequence<Seq::size>{});
+        }(std::make_index_sequence < Seq::size >
+        {});
     }
 
     // for_each with instance (runtime object access)
@@ -2130,8 +2141,8 @@ namespace meta {
             (fn(typename Seq::template element<I>{},
                 Seq::template element<I>::get(obj)),
                 ...);
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
     }
 
@@ -2141,8 +2152,8 @@ namespace meta {
             (fn(typename Seq::template element<I>{},
                 Seq::template element<I>::get(obj)),
                 ...);
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
     }
 
@@ -2169,8 +2180,8 @@ namespace meta {
     constexpr auto transform(Fn&& fn) {
         return [&]<std::size_t... I>(std::index_sequence<I...>) {
             return std::tuple{fn(typename Seq::template element<I>{})...};
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
     }
 
@@ -2209,8 +2220,8 @@ namespace meta {
             static auto compute(std::index_sequence<I...>)
                 -> concat_seqs<slot<typename S::template element<I>>...>::type;
 
-            using type = decltype(compute<Seq>(std::make_index_sequence<Seq::size>
-                    {})
+            using type = decltype(compute<Seq>(std::make_index_sequence < Seq::size >
+{})
             );
         };
 
@@ -2232,8 +2243,8 @@ namespace meta {
         auto result = init;
         [&]<std::size_t... I>(std::index_sequence<I...>) {
             ((result = fn(result, typename Seq::template element<I>{})), ...);
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
         return result;
     }
@@ -2250,8 +2261,8 @@ namespace meta {
                   ? (result = I, found = true)
                   : false),
                 ...);
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
         return result;
     }
@@ -2267,8 +2278,8 @@ namespace meta {
                   ? (result = I, found = true)
                   : false),
                 ...);
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
         return result;
     }
@@ -2289,8 +2300,8 @@ namespace meta {
         std::size_t count = 0;
         [&]<std::size_t... I>(std::index_sequence<I...>) {
             ((pred(typename Seq::template element<I>{}) ? ++count : count), ...);
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
         return count;
     }
@@ -2302,8 +2313,8 @@ namespace meta {
     consteval bool any_of(Pred pred) {
         return [&]<std::size_t... I>(std::index_sequence<I...>) {
             return (pred(typename Seq::template element<I>{}) || ...);
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
     }
 
@@ -2312,8 +2323,8 @@ namespace meta {
         if constexpr (Seq::size == 0) return true;
         return [&]<std::size_t... I>(std::index_sequence<I...>) {
             return (pred(typename Seq::template element<I>{}) && ...);
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
     }
 
@@ -2378,9 +2389,9 @@ namespace meta {
         []<std::size_t... I>(std::index_sequence<I...>) {
             using Seq = reflect_t<T>;
             return (Concept<typename Seq::template element<I>::value_type>::value && ...);
-        }(std::make_index_sequence<reflect_t<T>::size>{}
+        }(std::make_index_sequence < reflect_t<T>::size > {}
 
-        );
+    );
 
     // any_field_satisfies<T, Concept> — true iff Concept<field_value_type> holds for
     // at least one reflected field of T.
@@ -2389,9 +2400,9 @@ namespace meta {
         []<std::size_t... I>(std::index_sequence<I...>) {
             using Seq = reflect_t<T>;
             return (Concept<typename Seq::template element<I>::value_type>::value || ...);
-        }(std::make_index_sequence<reflect_t<T>::size>{}
+        }(std::make_index_sequence < reflect_t<T>::size > {}
 
-        );
+    );
 
     // ---------------------------------------------------------------------------
     // 8.1 tie_members — lvalue references to all fields
@@ -2600,17 +2611,17 @@ namespace meta {
     // Using explicit std::get<I> avoids any risk of recursion.
     template <std::size_t I, typename Tup>
     constexpr decltype(auto) get(MemberTie<Tup>& m) noexcept {
-        return std::get<I>(m.tup);
+        return std::get < I > (m.tup);
     }
 
     template <std::size_t I, typename Tup>
     constexpr decltype(auto) get(const MemberTie<Tup>& m) noexcept {
-        return std::get<I>(m.tup);
+        return std::get < I > (m.tup);
     }
 
     template <std::size_t I, typename Tup>
     constexpr decltype(auto) get(MemberTie<Tup>&& m) noexcept {
-        return std::get<I>(std::move(m.tup));
+        return std::get < I > (std::move(m.tup));
     }
 
 
@@ -2733,8 +2744,8 @@ namespace meta {
             // makes the empty-pack base case explicit and avoids reliance on
             // compiler-specific behavior for the unary right fold.
             result = (... || Seq::template element<I>::is_pointer());
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
         return result;
     }
@@ -2751,8 +2762,8 @@ namespace meta {
             // makes the empty-pack base case explicit and avoids reliance on
             // compiler-specific behaviour for the unary right fold.
             result = (... || Seq::template element<I>::is_reference());
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
         return result;
     }
@@ -2766,12 +2777,12 @@ namespace meta {
         using Seq = reflect_t<T>;
         bool result = true;
         [&]<std::size_t... I>(std::index_sequence<I...>) {
-            result = (std::is_trivially_copyable_v<
-                    typename Seq::template element<I>::value_type> &&
-                ...
+            result = (std::is_trivially_copyable_v <
+                typename Seq::template element<I>::value_type > &&
+            ...
             );
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
         return result;
     }
@@ -3013,8 +3024,8 @@ namespace meta {
             ((hash ^= fnv1a_hash(Seq::template element<I>::name()),
                     hash ^= type_hash<typename Seq::template element<I>::value_type>()),
                 ...);
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
         return hash;
     }
@@ -3039,8 +3050,8 @@ namespace meta {
         bool valid = true;
         [&]<std::size_t... I>(std::index_sequence<I...>) {
             valid = ((Seq::template element<I>::index() == I) && ...);
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
         return valid;
     }
@@ -3056,8 +3067,8 @@ namespace meta {
             return std::array<std::string_view, Seq::size>{
                 Seq::template element<I>::name()...
             };
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
     }
 
@@ -3072,8 +3083,8 @@ namespace meta {
         [&]<std::size_t... I>(std::index_sequence<I...>) {
             result =
                 (Pred<typename Seq::template element<I>::value_type>::value && ...);
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
         return result;
     }
@@ -3092,8 +3103,8 @@ namespace meta {
             ((eq = eq && (Seq::template element<I>::get(a) ==
                     Seq::template element<I>::get(b))),
                 ...);
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
         return eq;
     }
@@ -3115,8 +3126,8 @@ namespace meta {
                          : 0)
                   : 0),
                 ...);
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
         return cmp_result < 0;
     }
@@ -3157,8 +3168,8 @@ namespace meta {
                   ? (result = Seq::template element<I>::get(a) <=> Seq::template element<I>::get(b))
                   : std::strong_ordering::equal),
                 ...);
-        }(std::make_index_sequence<Seq::size>
-            {}
+        }(std::make_index_sequence < Seq::size >
+        {}
         );
         return result;
     }
@@ -3333,10 +3344,11 @@ namespace meta {
     using reflect_backend_t = std::conditional_t<
         detail::HasCustomReflection<std::remove_cvref_t<T>>,
         adl_backend,
-        std::conditional_t<
-            AggregateDecomposable<std::remove_cvref_t<T>>,
-            aggregate_backend,
-            void>>;
+        std::conditional_t <
+        AggregateDecomposable<std::remove_cvref_t<T>>,
+        aggregate_backend,
+        void>
+    >;
 
     // reflect_with<Backend, T>() — explicit backend dispatch
     template <typename Backend, typename T>
@@ -3388,28 +3400,30 @@ namespace meta {
         template <std::size_t FieldIdx>
             requires(FieldIdx < field_count)
         [[nodiscard]] constexpr auto& column() noexcept {
-            return std::get<FieldIdx>(columns);
+            return std::get < FieldIdx > (columns);
         }
 
         template <std::size_t FieldIdx>
             requires(FieldIdx < field_count)
         [[nodiscard]] constexpr const auto& column() const noexcept {
-            return std::get<FieldIdx>(columns);
+            return std::get < FieldIdx > (columns);
         }
 
         /// Append a single struct instance into the SoA buffer
         constexpr void push_back(const T& obj) {
             const std::size_t idx = count++;
             [&]<std::size_t... I>(std::index_sequence<I...>) {
-                ((std::get<I>(columns)[idx] = Seq::template element<I>::get(obj)), ...);
-            }(std::make_index_sequence<field_count>{});
+                ((std::get < I > (columns)[idx] = Seq::template element<I>::get(obj)), ...);
+            }(std::make_index_sequence < field_count >
+            {});
         }
 
         /// Retrieve an element by reconstructing the original struct T
         [[nodiscard]] constexpr T get(std::size_t idx) const {
             return [&]<std::size_t... I>(std::index_sequence<I...>) {
-                return T{std::get<I>(columns)[idx]...};
-            }(std::make_index_sequence<field_count>{});
+                return T{std::get < I > (columns)[idx]...};
+            }(std::make_index_sequence < field_count >
+            {});
         }
 
         [[nodiscard]] constexpr std::size_t size() const noexcept { return count; }

@@ -3,7 +3,12 @@
 #include "gati/gati.hpp"
 #include <cmath>
 
-TEST_CASE("Gati: Collision with Akruti ChainShape and GridSDF", "[gati][collision]") {
+TEST_CASE (
+"Gati: Collision with Akruti ChainShape and GridSDF"
+,
+"[gati][collision]"
+)
+ {
     pebble::ecs::World world;
     gati::CollisionSystem col_sys;
     gati::EventBus bus;
@@ -39,7 +44,12 @@ TEST_CASE("Gati: Collision with Akruti ChainShape and GridSDF", "[gati][collisio
     REQUIRE(contacts >= 1);
 }
 
-TEST_CASE("Gati: Policy-Based TensorBroadphase with 250 Entities", "[gati][collision][tensor]") {
+TEST_CASE (
+"Gati: Policy-Based TensorBroadphase with 250 Entities"
+,
+"[gati][collision][tensor]"
+)
+ {
     pebble::ecs::World world;
     gati::CollisionSystem col_sys;
     gati::EventBus bus;

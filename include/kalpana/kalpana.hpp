@@ -34,22 +34,28 @@
 #include "edsl/scene_builder.hpp"
 #include "backend/backend_concept.hpp"
 #include "backend/capture_backend.hpp"
+#if !defined(KALPANA_ENABLE_SOKOL_BACKEND) || KALPANA_ENABLE_SOKOL_BACKEND
 #include "backend/sokol_backend.hpp"
+#endif
 #include "backend/instanced_pipeline.hpp"
+#if !defined(KALPANA_ENABLE_NOTCURSES_BACKEND) || KALPANA_ENABLE_NOTCURSES_BACKEND
 #include "backend/notcurses_backend.hpp"
+#endif
 #include "canvas/canvas.hpp"
 
 namespace kalpana {
+    // Default headless canvas for tests and software frame recording
+    using DefaultCanvas = Canvas<capture_backend>;
 
-// Default headless canvas for tests and software frame recording
-using DefaultCanvas = Canvas<capture_backend>;
+    // GPU hardware canvas using Sokol GFX
+#if !defined(KALPANA_ENABLE_SOKOL_BACKEND) || KALPANA_ENABLE_SOKOL_BACKEND
+    using SokolCanvas = Canvas<sokol_backend>;
+#endif
 
-// GPU hardware canvas using Sokol GFX
-using SokolCanvas = Canvas<sokol_backend>;
-
-// Terminal text-mode canvas using Notcurses
-using TerminalCanvas = Canvas<notcurses_backend>;
-
+    // Terminal text-mode canvas using Notcurses
+#if !defined(KALPANA_ENABLE_NOTCURSES_BACKEND) || KALPANA_ENABLE_NOTCURSES_BACKEND
+    using TerminalCanvas = Canvas<notcurses_backend>;
+#endif
 } // namespace kalpana
 
 namespace pebble {

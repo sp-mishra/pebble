@@ -42,22 +42,26 @@ namespace tarka::native {
                 if (name.empty()) continue;
 
                 ss << "  (define-fun " << name << " () "
-                   << frontend::smt2_printer::to_string(term.sort()) << " ";
+                    << frontend::smt2_printer::to_string(term.sort()) << " ";
 
                 std::visit([&ss](const auto& v) {
                     using T = std::decay_t<decltype(v)>;
                     if constexpr (std::is_same_v<T, bool>) {
                         ss << (v ? "true" : "false");
-                    } else if constexpr (std::is_same_v<T, bv_value>) {
+                    }
+                    else if constexpr (std::is_same_v<T, bv_value>) {
                         std::uint32_t hex_digits = (v.width + 3) / 4;
                         ss << "#x" << std::hex << std::setfill('0') << std::setw(hex_digits)
-                           << v.bits << std::dec << std::setfill(' ');
-                    } else if constexpr (std::is_same_v<T, std::int64_t>) {
+                            << v.bits << std::dec << std::setfill(' ');
+                    }
+                    else if constexpr (std::is_same_v<T, std::int64_t>) {
                         ss << v;
-                    } else if constexpr (std::is_same_v<T, rational>) {
+                    }
+                    else if constexpr (std::is_same_v<T, rational>) {
                         if (v.den == 1) ss << v.num << ".0";
                         else ss << "(/ " << v.num << ".0 " << v.den << ".0)";
-                    } else if constexpr (std::is_same_v<T, std::string>) {
+                    }
+                    else if constexpr (std::is_same_v<T, std::string>) {
                         ss << "\"" << v << "\"";
                     }
                 }, val);
@@ -166,30 +170,31 @@ namespace tarka::native {
             }
 
             // BitVector arithmetic / bitwise
-            if (ch_vals.size() == 2 && std::holds_alternative<bv_value>(ch_vals[0]) && std::holds_alternative<bv_value>(ch_vals[1])) {
+            if (ch_vals.size() == 2 && std::holds_alternative<bv_value>(ch_vals[0]) && std::holds_alternative<
+                bv_value>(ch_vals[1])) {
                 const auto& a = std::get<bv_value>(ch_vals[0]);
                 const auto& b = std::get<bv_value>(ch_vals[1]);
                 const std::uint64_t mask = (a.width == 64) ? ~0ULL : ((1ULL << a.width) - 1ULL);
 
                 switch (t.op()) {
-                    case Op::BvAdd: return bv_value{(a.bits + b.bits) & mask, a.width};
-                    case Op::BvSub: return bv_value{(a.bits - b.bits) & mask, a.width};
-                    case Op::BvMul: return bv_value{(a.bits * b.bits) & mask, a.width};
-                    case Op::BvUdiv: return bv_value{(b.bits == 0) ? mask : ((a.bits / b.bits) & mask), a.width};
-                    case Op::BvUrem: return bv_value{(b.bits == 0) ? a.bits : ((a.bits % b.bits) & mask), a.width};
-                    case Op::BvAnd: return bv_value{(a.bits & b.bits) & mask, a.width};
-                    case Op::BvOr:  return bv_value{(a.bits | b.bits) & mask, a.width};
-                    case Op::BvXor: return bv_value{(a.bits ^ b.bits) & mask, a.width};
-                    case Op::BvShl: return bv_value{(b.bits >= a.width) ? 0ULL : ((a.bits << b.bits) & mask), a.width};
-                    case Op::BvLshr: return bv_value{(b.bits >= a.width) ? 0ULL : ((a.bits >> b.bits) & mask), a.width};
-                    case Op::BvUlt: return (a.bits < b.bits);
-                    case Op::BvUle: return (a.bits <= b.bits);
-                    case Op::BvSlt: {
-                        std::int64_t sa = static_cast<std::int64_t>(a.bits);
-                        std::int64_t sb = static_cast<std::int64_t>(b.bits);
-                        return (sa < sb);
-                    }
-                    default: break;
+                case Op::BvAdd: return bv_value{(a.bits + b.bits) & mask, a.width};
+                case Op::BvSub: return bv_value{(a.bits - b.bits) & mask, a.width};
+                case Op::BvMul: return bv_value{(a.bits * b.bits) & mask, a.width};
+                case Op::BvUdiv: return bv_value{(b.bits == 0) ? mask : ((a.bits / b.bits) & mask), a.width};
+                case Op::BvUrem: return bv_value{(b.bits == 0) ? a.bits : ((a.bits % b.bits) & mask), a.width};
+                case Op::BvAnd: return bv_value{(a.bits & b.bits) & mask, a.width};
+                case Op::BvOr: return bv_value{(a.bits | b.bits) & mask, a.width};
+                case Op::BvXor: return bv_value{(a.bits ^ b.bits) & mask, a.width};
+                case Op::BvShl: return bv_value{(b.bits >= a.width) ? 0ULL : ((a.bits << b.bits) & mask), a.width};
+                case Op::BvLshr: return bv_value{(b.bits >= a.width) ? 0ULL : ((a.bits >> b.bits) & mask), a.width};
+                case Op::BvUlt: return (a.bits < b.bits);
+                case Op::BvUle: return (a.bits <= b.bits);
+                case Op::BvSlt: {
+                    std::int64_t sa = static_cast<std::int64_t>(a.bits);
+                    std::int64_t sb = static_cast<std::int64_t>(b.bits);
+                    return (sa < sb);
+                }
+                default: break;
                 }
             }
 

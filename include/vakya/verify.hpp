@@ -1,7 +1,7 @@
 #pragma once
 
 // =============================================================================
-// vakya/verify.hpp — formal verification via Tarka SMT (V3, opt-in)
+// vakya/verify.hpp — formal verification via Tarka SMT (opt-in)
 //
 // C++23, header-only, no virtual, no macros.
 // Namespace: vakya::types
@@ -16,7 +16,7 @@
 // Refuted obligations attach the Tarka counter-model as refutation_payload.
 //
 // Zero-cost path: with no_smt_backend, every obligation resolves to deferred —
-// verification degrades to V2 best-effort, build stays SMT-free.
+// verification degrades to core best-effort, build stays SMT-free.
 //
 // New ext constraint_kind values (registered in constraint_registry):
 //   kRefineKind = kConstraintKindExtensionBase + 1  (refinement predicate)

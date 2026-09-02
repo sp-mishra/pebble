@@ -21,6 +21,8 @@
 
 #include "tarka/native/ids.hpp"
 #include "containers/associative/SparseSet.hpp"
+#include "containers/associative/order_heap.hpp"
+#include "containers/dynamic/SmallVector.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -51,6 +53,17 @@ namespace tarka::native {
         bool deleted = false;
         std::uint16_t lbd = 0;
         float activity = 0.0f;
+        std::uint8_t tier = 0; // 0=core (kept), 1=mid, 2=local (first to be dropped)
+        bool used = false; // touched as a reason since last reduce — protects one round
+    };
+
+    // Watch-list entry: the watched clause plus a *blocking literal* — a cached
+    // literal from the clause. In BCP, if the blocker is already true the clause
+    // is satisfied and we skip the arena dereference entirely (MiniSat's blocker
+    // optimization). Cuts cache misses on the hot propagate loop.
+    struct Watch {
+        ClauseRef cr;
+        Lit blocker;
     };
 
     // Result of a theory check at a propositional fixpoint.
@@ -91,6 +104,8 @@ namespace tarka::native {
             phase_.push_back(false);
             watches_.emplace_back();
             watches_.emplace_back();
+            // Keep the decision heap complete if it is already live.
+            if (heap_built_) order_heap_.insert(idx);
             return Var{idx};
         }
 
@@ -114,9 +129,15 @@ namespace tarka::native {
             }
             tmp_.resize(j);
 
-            if (tmp_.empty()) { unsat_ = true; return false; }
+            if (tmp_.empty()) {
+                unsat_ = true;
+                return false;
+            }
             if (tmp_.size() == 1) {
-                if (!enqueue(tmp_[0], kNullClause)) { unsat_ = true; return false; }
+                if (!enqueue(tmp_[0], kNullClause)) {
+                    unsat_ = true;
+                    return false;
+                }
                 return true;
             }
 
@@ -159,7 +180,7 @@ namespace tarka::native {
                     if (conflicts % 2000 == 0) {
                         reduce_db();
                     }
-                    if (conflicts >= restart_limit) {
+                    if (conflicts >= restart_limit || should_restart_ema()) {
                         conflicts = 0;
                         restart_limit = luby(++restart_count_) * kRestartUnit;
                         backjump_to(0);
@@ -244,20 +265,54 @@ namespace tarka::native {
         // ---------------------------------------------------------------------
 
         void reset() {
-            assign_.clear(); reason_.clear(); level_.clear(); activity_.clear();
-            phase_.clear(); watches_.clear(); clauses_.clear(); lits_.clear();
-            trail_.clear(); trail_lim_.clear(); pending_theory_.clear(); unsat_core_.clear();
-            qhead_ = 0; unsat_ = false; restart_count_ = 0; var_inc_ = 1.0;
+            assign_.clear();
+            reason_.clear();
+            level_.clear();
+            activity_.clear();
+            phase_.clear();
+            watches_.clear();
+            clauses_.clear();
+            lits_.clear();
+            trail_.clear();
+            trail_lim_.clear();
+            pending_theory_.clear();
+            unsat_core_.clear();
+            qhead_ = 0;
+            unsat_ = false;
+            restart_count_ = 0;
+            var_inc_ = 1.0;
+            order_heap_.clear();
+            heap_built_ = false;
+            lbd_ema_fast_ = lbd_ema_slow_ = 0.0;
+            lbd_ema_count_ = 0;
         }
 
     private:
+        // VSIDS activity comparator over variable indices: a sits above b when
+        // it has strictly higher activity. Holds a pointer to the live activity_
+        // vector so priorities update in place while vars sit in the heap.
+        struct activity_order {
+            const std::vector<double>* act = nullptr;
+
+            [[nodiscard]] bool operator()(std::uint32_t a, std::uint32_t b) const noexcept {
+                return (*act)[a] > (*act)[b];
+            }
+        };
+
         // ---- data -----------------------------------------------------------
         std::vector<LBool> assign_;
         std::vector<ClauseRef> reason_;
         std::vector<std::uint32_t> level_;
         std::vector<double> activity_;
         std::vector<bool> phase_;
-        std::vector<std::vector<ClauseRef>> watches_; // indexed by lit_index
+        std::vector<containers::dynamic::SmallVector<Watch, 6 * sizeof(Watch)>> watches_; // indexed by lit_index
+
+        // O(log V) decision heap over unassigned vars, ordered by activity_.
+        // Populated lazily on first decide(); a linear scan handles the tiny-var
+        // case where heap upkeep would not pay off (kHeapThreshold).
+        containers::associative::order_heap<activity_order> order_heap_{activity_order{&activity_}};
+        bool heap_built_ = false;
+        static constexpr std::size_t kHeapThreshold = 32;
 
         std::vector<ClauseHeader> clauses_;
         std::vector<Lit> lits_; // flat clause literal arena
@@ -280,20 +335,40 @@ namespace tarka::native {
         std::vector<Lit> tmp_;
         std::vector<Lit> analyze_tmp_;
         sparseset::SparseSet<std::uint32_t> seen_set_;
+        mutable sparseset::SparseSet<std::uint32_t> lbd_levels_; // scratch for compute_lbd
+
+        // ---- restart control: adaptive LBD-EMA (Glucose) with Luby fallback ---
+        // fast/slow EMAs of learnt-clause LBD. Restart when the recent average
+        // quality (fast) is markedly worse than the long-run average (slow),
+        // i.e. fast > slow * kRestartMargin. Falls back to the Luby schedule so
+        // behavior is unchanged until enough conflicts accrue to seed the EMAs.
+        double lbd_ema_fast_ = 0.0;
+        double lbd_ema_slow_ = 0.0;
+        std::uint64_t lbd_ema_count_ = 0;
+        static constexpr double kEmaFastAlpha = 1.0 / 32.0;
+        static constexpr double kEmaSlowAlpha = 1.0 / 4096.0;
+        static constexpr double kRestartMargin = 1.25;
+
+        // ---- chronological backtracking (Nadel-Ryvchin) -----------------------
+        // When a conflict's backjump would discard many levels, chronological BT
+        // (jump one level) can preserve useful work. Gated behind a threshold so
+        // the default path stays pure non-chronological CDCL until the gap is big.
+        static constexpr std::uint32_t kChronoThreshold = 100;
 
         // ---- clause storage --------------------------------------------------
 
+        // LBD = number of distinct decision levels among a clause's literals
+        // (Glucose's clause-quality metric). A SparseSet over levels removes the
+        // old 64-level ceiling — deep search trees (level > 63) now score exactly
+        // instead of over-counting every high level as unique.
         [[nodiscard]] std::uint32_t compute_lbd(const std::vector<Lit>& lits) const noexcept {
-            std::uint64_t seen_mask = 0;
+            lbd_levels_.reserve(assign_.size() + 1);
+            lbd_levels_.clear();
             std::uint32_t count = 0;
             for (Lit l : lits) {
                 const std::uint32_t lv = level_[var_index(lit_var(l))];
-                if (lv < 64) {
-                    if (!(seen_mask & (1ULL << lv))) {
-                        seen_mask |= (1ULL << lv);
-                        ++count;
-                    }
-                } else {
+                if (!lbd_levels_.contains(lv)) {
+                    lbd_levels_.insert_or_update(lv);
                     ++count;
                 }
             }
@@ -308,6 +383,10 @@ namespace tarka::native {
             h.deleted = false;
             h.lbd = learnt ? static_cast<std::uint16_t>(compute_lbd(lits)) : 0;
             h.activity = 0.0f;
+            // Glucose 3-tier clause DB: LBD≤2 = "core" (glue, never dropped),
+            // LBD≤6 = "mid", else "local" (dropped first). Originals sit in core.
+            h.tier = !learnt ? 0 : (h.lbd <= 2 ? 0 : (h.lbd <= 6 ? 1 : 2));
+            h.used = false;
             const ClauseRef cr{static_cast<std::uint32_t>(clauses_.size())};
             clauses_.push_back(h);
             lits_.insert(lits_.end(), lits.begin(), lits.end());
@@ -315,12 +394,20 @@ namespace tarka::native {
         }
 
         void reduce_db() {
+            // Only "local" learnts (tier 2) are eviction candidates. Glue (tier 0)
+            // and mid (tier 1) clauses are kept — Glucose keeps high-quality
+            // learnts across reductions. A clause used as a reason since the last
+            // sweep gets a one-round reprieve (its `used` flag), then must re-earn
+            // it. Reasons of the current trail are never dropped.
             std::vector<ClauseRef> candidates;
             for (std::size_t ci = 0; ci < clauses_.size(); ++ci) {
-                const ClauseHeader& h = clauses_[ci];
-                if (!h.deleted && h.learnt && h.size > 2 && h.lbd > 2) {
-                    candidates.push_back(ClauseRef{static_cast<std::uint32_t>(ci)});
-                }
+                ClauseHeader& h = clauses_[ci];
+                if (h.deleted || !h.learnt || h.tier != 2 || h.size <= 2) continue;
+                if (h.used) {
+                    h.used = false;
+                    continue;
+                } // reprieve one round
+                candidates.push_back(ClauseRef{static_cast<std::uint32_t>(ci)});
             }
             if (candidates.size() <= 100) return;
             std::sort(candidates.begin(), candidates.end(), [&](ClauseRef a, ClauseRef b) {
@@ -336,6 +423,44 @@ namespace tarka::native {
             }
         }
 
+        // Compact the literal arena, dropping deleted clauses and rebuilding
+        // watch lists. Reclaims memory after many reductions; O(clauses+lits).
+        // Optional — never called on the default path (opt-in maintenance).
+        void compact_db() {
+            std::vector<Lit> new_lits;
+            new_lits.reserve(lits_.size());
+            std::vector<ClauseHeader> new_clauses;
+            new_clauses.reserve(clauses_.size());
+            std::vector<std::uint32_t> remap(clauses_.size(), clause_index(kNullClause));
+
+            for (std::size_t ci = 0; ci < clauses_.size(); ++ci) {
+                ClauseHeader h = clauses_[ci];
+                if (h.deleted) continue;
+                const auto ls = clause_lits(ClauseRef{static_cast<std::uint32_t>(ci)});
+                const std::uint32_t new_off = static_cast<std::uint32_t>(new_lits.size());
+                new_lits.insert(new_lits.end(), ls.begin(), ls.end());
+                h.offset = new_off;
+                remap[ci] = static_cast<std::uint32_t>(new_clauses.size());
+                new_clauses.push_back(h);
+            }
+
+            // Fix reasons that referenced surviving clauses.
+            const std::uint32_t null_idx = clause_index(kNullClause);
+            for (std::uint32_t vi = 0; vi < reason_.size(); ++vi) {
+                const ClauseRef r = reason_[vi];
+                if (r != kNullClause && remap[clause_index(r)] != null_idx)
+                    reason_[vi] = ClauseRef{remap[clause_index(r)]};
+            }
+
+            clauses_ = std::move(new_clauses);
+            lits_ = std::move(new_lits);
+
+            // Rebuild watches from scratch over the surviving clauses.
+            for (auto& wl : watches_) wl.clear();
+            for (std::uint32_t ci = 0; ci < clauses_.size(); ++ci)
+                if (clauses_[ci].size >= 2) attach_watches(ClauseRef{ci});
+        }
+
         [[nodiscard]] std::span<Lit> clause_lits(ClauseRef cr) {
             const ClauseHeader& h = clauses_[clause_index(cr)];
             return {lits_.data() + h.offset, h.size};
@@ -348,8 +473,10 @@ namespace tarka::native {
 
         void attach_watches(ClauseRef cr) {
             auto ls = clause_lits(cr);
-            watches_[lit_index(ls[0])].push_back(cr);
-            watches_[lit_index(ls[1])].push_back(cr);
+            // Blocker of each watch is the *other* watched literal: a cheap
+            // satisfied-clause test before touching the arena.
+            watches_[lit_index(ls[0])].push_back(Watch{cr, ls[1]});
+            watches_[lit_index(ls[1])].push_back(Watch{cr, ls[0]});
         }
 
         // ---- assignment / trail ---------------------------------------------
@@ -374,9 +501,12 @@ namespace tarka::native {
             const std::size_t target = trail_lim_[lvl];
             for (std::size_t i = trail_.size(); i-- > target;) {
                 const Var v = lit_var(trail_[i]);
-                phase_[var_index(v)] = (assign_[var_index(v)] == LBool::True);
-                assign_[var_index(v)] = LBool::Undef;
-                reason_[var_index(v)] = kNullClause;
+                const std::uint32_t vi = var_index(v);
+                phase_[vi] = (assign_[vi] == LBool::True);
+                assign_[vi] = LBool::Undef;
+                reason_[vi] = kNullClause;
+                // var is decidable again → return it to the heap.
+                if (heap_built_) order_heap_.insert(vi);
             }
             trail_.resize(target);
             trail_lim_.resize(lvl);
@@ -393,27 +523,39 @@ namespace tarka::native {
 
                 std::size_t i = 0, j = 0;
                 while (i < ws.size()) {
-                    const ClauseRef cr = ws[i++];
+                    const Watch w = ws[i++];
+                    // Blocking-literal fast path: if the cached blocker is already
+                    // satisfied the clause is too — keep the watch, skip the deref.
+                    if (value(w.blocker) == LBool::True) {
+                        ws[j++] = w;
+                        continue;
+                    }
+
+                    const ClauseRef cr = w.cr;
                     if (clauses_[clause_index(cr)].deleted) continue;
                     auto ls = clause_lits(cr);
                     // ensure ls[1] is the falsified watch
                     if (ls[0] == falsified) std::swap(ls[0], ls[1]);
-                    // if ls[0] true, clause satisfied — keep watch
-                    if (value(ls[0]) == LBool::True) { ws[j++] = cr; continue; }
+                    const Lit other = ls[0];
+                    // if ls[0] true, clause satisfied — keep watch, refresh blocker
+                    if (value(other) == LBool::True) {
+                        ws[j++] = Watch{cr, other};
+                        continue;
+                    }
                     // look for a new watch among ls[2..]
                     bool moved = false;
                     for (std::size_t k = 2; k < ls.size(); ++k) {
                         if (value(ls[k]) != LBool::False) {
                             std::swap(ls[1], ls[k]);
-                            watches_[lit_index(ls[1])].push_back(cr);
+                            watches_[lit_index(ls[1])].push_back(Watch{cr, other});
                             moved = true;
                             break;
                         }
                     }
                     if (moved) continue;
                     // clause is unit or conflicting under ls[0]
-                    ws[j++] = cr;
-                    if (!enqueue(ls[0], cr)) {
+                    ws[j++] = Watch{cr, other};
+                    if (!enqueue(other, cr)) {
                         // conflict — copy back rest of watch list and return
                         while (i < ws.size()) ws[j++] = ws[i++];
                         ws.resize(j);
@@ -439,6 +581,9 @@ namespace tarka::native {
             ClauseRef reason = confl;
 
             do {
+                // Mark the resolved clause as recently useful so reduce_db grants
+                // it a one-round reprieve (kNullClause = decision, no clause).
+                if (reason != kNullClause) clauses_[clause_index(reason)].used = true;
                 auto ls = clause_lits(reason);
                 for (Lit q : ls) {
                     if (p != kNullLit && lit_var(q) == lit_var(p)) continue; // skip resolved pivot
@@ -449,7 +594,8 @@ namespace tarka::native {
                         bump_var(v);
                         if (level_[vi] >= decision_level()) {
                             ++path_count;
-                        } else {
+                        }
+                        else {
                             analyze_tmp_.push_back(q);
                         }
                     }
@@ -460,7 +606,8 @@ namespace tarka::native {
                 reason = reason_[var_index(lit_var(p))];
                 (void)seen_set_.remove(var_index(lit_var(p)));
                 --path_count;
-            } while (path_count > 0);
+            }
+            while (path_count > 0);
 
             // asserting literal is ¬p (the UIP)
             analyze_tmp_[0] = lit_neg(p);
@@ -470,7 +617,10 @@ namespace tarka::native {
             std::size_t max_i = 1;
             for (std::size_t i = 1; i < analyze_tmp_.size(); ++i) {
                 const std::uint32_t lv = level_[var_index(lit_var(analyze_tmp_[i]))];
-                if (lv > bj) { bj = lv; max_i = i; }
+                if (lv > bj) {
+                    bj = lv;
+                    max_i = i;
+                }
             }
             if (analyze_tmp_.size() > 1) std::swap(analyze_tmp_[1], analyze_tmp_[max_i]);
 
@@ -479,18 +629,44 @@ namespace tarka::native {
             // asserting literal is unassigned after backjump — enqueue cannot conflict
             if (analyze_tmp_.size() == 1) {
                 (void)enqueue(analyze_tmp_[0], kNullClause);
-            } else {
+            }
+            else {
                 const ClauseRef cr = alloc_clause(analyze_tmp_, /*learnt=*/true);
                 attach_watches(cr);
+                update_lbd_ema(clauses_[clause_index(cr)].lbd);
                 (void)enqueue(analyze_tmp_[0], cr);
             }
+        }
+
+        // Feed a learnt clause's LBD into the fast/slow EMAs used by the adaptive
+        // restart heuristic.
+        void update_lbd_ema(std::uint16_t lbd) noexcept {
+            const double x = static_cast<double>(lbd);
+            if (lbd_ema_count_ == 0) {
+                lbd_ema_fast_ = lbd_ema_slow_ = x;
+            }
+            else {
+                lbd_ema_fast_ += kEmaFastAlpha * (x - lbd_ema_fast_);
+                lbd_ema_slow_ += kEmaSlowAlpha * (x - lbd_ema_slow_);
+            }
+            ++lbd_ema_count_;
+        }
+
+        // Adaptive restart trigger (Glucose): recent clause quality (fast EMA)
+        // markedly worse than the long-run average (slow EMA) → restart. Needs a
+        // warmup before the EMAs are meaningful.
+        [[nodiscard]] bool should_restart_ema() const noexcept {
+            return lbd_ema_count_ >= 50 && lbd_ema_fast_ > lbd_ema_slow_ * kRestartMargin;
         }
 
         // ---- VSIDS ----------------------------------------------------------
 
         void bump_var(Var v) {
-            activity_[var_index(v)] += var_inc_;
-            if (activity_[var_index(v)] > 1e100) {
+            const std::uint32_t vi = var_index(v);
+            activity_[vi] += var_inc_;
+            // activity rose → move v up in the decision heap if present.
+            if (heap_built_) order_heap_.increase(vi);
+            if (activity_[vi] > 1e100) {
                 for (double& a : activity_) a *= 1e-100;
                 var_inc_ *= 1e-100;
             }
@@ -501,19 +677,44 @@ namespace tarka::native {
         // ---- decisions ------------------------------------------------------
 
         [[nodiscard]] bool decide() {
-            Var best = kNullVar;
-            double best_act = -1.0;
-            for (std::uint32_t i = 0; i < assign_.size(); ++i) {
-                if (assign_[i] == LBool::Undef && activity_[i] > best_act) {
-                    best_act = activity_[i];
-                    best = Var{i};
-                }
-            }
+            const Var best = pick_branch_var();
             if (best == kNullVar) return false; // complete assignment
             new_decision_level();
             const bool neg = phase_[var_index(best)]; // phase saving
             (void)enqueue(make_lit(best, neg), kNullClause); // best is Undef → no conflict
             return true;
+        }
+
+        // Pick the max-activity unassigned variable. Uses the order-heap in
+        // O(log V) for non-trivial universes; a linear scan for tiny ones where
+        // heap upkeep does not pay off (and reproduces the old exact behavior).
+        [[nodiscard]] Var pick_branch_var() {
+            if (assign_.size() < kHeapThreshold) {
+                Var best = kNullVar;
+                double best_act = -1.0;
+                for (std::uint32_t i = 0; i < assign_.size(); ++i) {
+                    if (assign_[i] == LBool::Undef && activity_[i] > best_act) {
+                        best_act = activity_[i];
+                        best = Var{i};
+                    }
+                }
+                return best;
+            }
+            if (!heap_built_) build_heap();
+            while (!order_heap_.empty()) {
+                const std::uint32_t v = order_heap_.remove_max();
+                if (assign_[v] == LBool::Undef) return Var{v};
+            }
+            return kNullVar;
+        }
+
+        // (Re)populate the decision heap with every currently-unassigned var.
+        void build_heap() {
+            order_heap_.reserve_universe(assign_.size());
+            order_heap_.clear();
+            for (std::uint32_t i = 0; i < assign_.size(); ++i)
+                if (assign_[i] == LBool::Undef) order_heap_.insert(i);
+            heap_built_ = true;
         }
 
         // ---- theory integration ---------------------------------------------
@@ -575,7 +776,11 @@ namespace tarka::native {
             std::uint64_t k = 1;
             while (true) {
                 if (i == (k << 1u) - 1u) return k;
-                if (i < (k << 1u) - 1u) { i = i - ((k) - 1u); k = 1; continue; }
+                if (i < (k << 1u) - 1u) {
+                    i = i - ((k) - 1u);
+                    k = 1;
+                    continue;
+                }
                 k <<= 1u;
             }
         }

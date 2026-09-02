@@ -31,7 +31,6 @@
 #include <vector>
 
 namespace lang {
-
     // =========================================================================
     // diag_severity
     // =========================================================================
@@ -40,9 +39,9 @@ namespace lang {
 
     [[nodiscard]] constexpr std::string_view to_string(diag_severity s) noexcept {
         switch (s) {
-        case diag_severity::error:   return "error";
+        case diag_severity::error: return "error";
         case diag_severity::warning: return "warning";
-        case diag_severity::note:    return "note";
+        case diag_severity::note: return "note";
         }
         return "error";
     }
@@ -64,12 +63,12 @@ namespace lang {
     // =========================================================================
 
     struct diag_explanation {
-        std::string code;      // e.g. "MY-GEN-001"
-        std::string summary;   // headline (no code prefix)
+        std::string code; // e.g. "MY-GEN-001"
+        std::string summary; // headline (no code prefix)
         source_span primary{};
 
-        std::string expected;  // optional ("" = n/a)
-        std::string found;     // optional ("" = n/a)
+        std::string expected; // optional ("" = n/a)
+        std::string found; // optional ("" = n/a)
 
         std::vector<diag_label> secondary;
         std::vector<std::string> notes;
@@ -79,7 +78,7 @@ namespace lang {
 
         [[nodiscard]] std::string render_message() const {
             if (summary.empty()) return code;
-            if (code.empty())    return summary;
+            if (code.empty()) return summary;
             return code + ": " + summary;
         }
 
@@ -95,7 +94,7 @@ namespace lang {
                 out += "\n  expected: ";
                 out += expected.empty() ? "<n/a>" : expected;
                 out += "\n  found:    ";
-                out += found.empty()    ? "<n/a>" : found;
+                out += found.empty() ? "<n/a>" : found;
             }
             for (const auto& n : notes) {
                 out += "\n  note: ";
@@ -131,33 +130,74 @@ namespace lang {
         diag_explanation e;
 
         explain(std::string code, std::string summary, source_span at) {
-            e.code    = std::move(code);
+            e.code = std::move(code);
             e.summary = std::move(summary);
             e.primary = at;
         }
 
         // lvalue chaining
-        explain& expected(std::string v) & { e.expected = std::move(v); return *this; }
-        explain& found   (std::string v) & { e.found    = std::move(v); return *this; }
-        explain& note    (std::string v) & { e.notes.push_back(std::move(v)); return *this; }
-        explain& help    (std::string v) & { e.help.push_back(std::move(v));  return *this; }
-        explain& label   (source_span at, std::string text) & {
-            e.secondary.push_back({at, std::move(text)}); return *this;
+        explain& expected(std::string v) & {
+            e.expected = std::move(v);
+            return *this;
         }
-        explain& severity(diag_severity s) & { e.severity = s; return *this; }
+
+        explain& found(std::string v) & {
+            e.found = std::move(v);
+            return *this;
+        }
+
+        explain& note(std::string v) & {
+            e.notes.push_back(std::move(v));
+            return *this;
+        }
+
+        explain& help(std::string v) & {
+            e.help.push_back(std::move(v));
+            return *this;
+        }
+
+        explain& label(source_span at, std::string text) & {
+            e.secondary.push_back({at, std::move(text)});
+            return *this;
+        }
+
+        explain& severity(diag_severity s) & {
+            e.severity = s;
+            return *this;
+        }
 
         // rvalue chaining (builder used as temporary)
-        explain&& expected(std::string v) && { e.expected = std::move(v); return std::move(*this); }
-        explain&& found   (std::string v) && { e.found    = std::move(v); return std::move(*this); }
-        explain&& note    (std::string v) && { e.notes.push_back(std::move(v)); return std::move(*this); }
-        explain&& help    (std::string v) && { e.help.push_back(std::move(v));  return std::move(*this); }
-        explain&& label   (source_span at, std::string text) && {
-            e.secondary.push_back({at, std::move(text)}); return std::move(*this);
+        explain&& expected(std::string v) && {
+            e.expected = std::move(v);
+            return std::move(*this);
         }
-        explain&& severity(diag_severity s) && { e.severity = s; return std::move(*this); }
 
-        [[nodiscard]] diag_explanation build() &&       { return std::move(e); }
-        [[nodiscard]] diag_explanation build() const &  { return e; }
+        explain&& found(std::string v) && {
+            e.found = std::move(v);
+            return std::move(*this);
+        }
+
+        explain&& note(std::string v) && {
+            e.notes.push_back(std::move(v));
+            return std::move(*this);
+        }
+
+        explain&& help(std::string v) && {
+            e.help.push_back(std::move(v));
+            return std::move(*this);
+        }
+
+        explain&& label(source_span at, std::string text) && {
+            e.secondary.push_back({at, std::move(text)});
+            return std::move(*this);
+        }
+
+        explain&& severity(diag_severity s) && {
+            e.severity = s;
+            return std::move(*this);
+        }
+
+        [[nodiscard]] diag_explanation build() && { return std::move(e); }
+        [[nodiscard]] diag_explanation build() const & { return e; }
     };
-
 } // namespace lang

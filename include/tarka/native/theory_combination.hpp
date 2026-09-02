@@ -45,12 +45,19 @@ namespace tarka::native {
             }, theories_);
         }
 
-        // Broadcast atom registration to all theories so subterms are collected
+        // Broadcast atom registration to all theories so each collects the
+        // subterms it owns. Atoms in combined logics (QF_AUFBV: select/store over
+        // BV elements, uninterpreted functions applied to array reads) carry more
+        // than one theory's structure, so single-family routing would starve a
+        // theory of atoms it must reason about and silently return SAT on an UNSAT
+        // formula. Broadcast keeps every theory's view complete; family-tag
+        // dispatch is sound only once full Nelson-Oppen shared-variable exchange
+        // is in place (not yet implemented), so it is intentionally not used here.
         void register_atom(AtomId a) {
             std::apply([&](auto&... th) { (th.register_atom(a), ...); }, theories_);
         }
 
-        // Broadcast literal assertions to all theories
+        // Broadcast literal assertions to all theories (see register_atom).
         void assert_lit(AtomId a, bool value) {
             std::apply([&](auto&... th) { (th.assert_lit(a, value), ...); }, theories_);
         }
@@ -83,9 +90,11 @@ namespace tarka::native {
         void push_level() {
             std::apply([](auto&... th) { (th.push_level(), ...); }, theories_);
         }
+
         void pop_level() {
             std::apply([](auto&... th) { (th.pop_level(), ...); }, theories_);
         }
+
         void reset() {
             conflict_theory_ = kNoTheory;
             std::apply([](auto&... th) { (th.reset(), ...); }, theories_);
@@ -96,12 +105,14 @@ namespace tarka::native {
 
         // Direct access to a specific theory (for model extraction).
         template <std::size_t I>
-        [[nodiscard]] auto& get() noexcept { return std::get<I>(theories_); }
+        [[nodiscard]] auto& get() noexcept { return std::get < I > (theories_); }
+
         template <std::size_t I>
-        [[nodiscard]] const auto& get() const noexcept { return std::get<I>(theories_); }
+        [[nodiscard]] const auto& get() const noexcept { return std::get < I > (theories_); }
 
         template <class Th>
         [[nodiscard]] Th& get() noexcept { return std::get<Th>(theories_); }
+
         template <class Th>
         [[nodiscard]] const Th& get() const noexcept { return std::get<Th>(theories_); }
 
@@ -112,7 +123,8 @@ namespace tarka::native {
         static void attach_sat_one(Th& th, cdcl_solver& sat) {
             if constexpr (requires { th.attach_sat(sat); }) {
                 th.attach_sat(sat);
-            } else {
+            }
+            else {
                 (void)th;
                 (void)sat;
             }
@@ -120,12 +132,16 @@ namespace tarka::native {
 
         template <class Th>
         void check_one(Th& th, std::size_t& idx, bool& any_propagated, bool& conflict) {
-            if (conflict) { ++idx; return; } // short-circuit
+            if (conflict) {
+                ++idx;
+                return;
+            } // short-circuit
             const TheoryStatus s = th.check();
             if (s == TheoryStatus::Conflict) {
                 conflict = true;
                 conflict_theory_ = idx;
-            } else if (s == TheoryStatus::Propagated) {
+            }
+            else if (s == TheoryStatus::Propagated) {
                 any_propagated = true;
             }
             ++idx;

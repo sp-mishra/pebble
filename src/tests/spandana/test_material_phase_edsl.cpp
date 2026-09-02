@@ -4,7 +4,12 @@
 #include "gati/material_reaction.hpp"
 #include "spandana/spandana.hpp"
 
-TEST_CASE("Spandana & Gati: Ice Melting into Water and Boiling to Gas", "[spandana][material][phase]") {
+TEST_CASE (
+"Spandana & Gati: Ice Melting into Water and Boiling to Gas"
+,
+"[spandana][material][phase]"
+)
+ {
     pebble::ecs::World world;
 
     auto ice_entity = world.spawn();
@@ -28,7 +33,12 @@ TEST_CASE("Spandana & Gati: Ice Melting into Water and Boiling to Gas", "[spanda
     REQUIRE(mat->phase_fractions.gas() > 0.8f);
 }
 
-TEST_CASE("Spandana & Gati: Brittle Glass Shatter on High-Velocity Collision", "[spandana][material][shatter]") {
+TEST_CASE (
+"Spandana & Gati: Brittle Glass Shatter on High-Velocity Collision"
+,
+"[spandana][material][shatter]"
+)
+ {
     pebble::ecs::World world;
 
     auto glass_entity = world.spawn();
@@ -55,7 +65,12 @@ TEST_CASE("Spandana & Gati: Brittle Glass Shatter on High-Velocity Collision", "
     REQUIRE(world.entity_count() >= 3);
 }
 
-TEST_CASE("Spandana & Gati: Molten Material Fusion / Welding on Contact", "[spandana][material][fusion]") {
+TEST_CASE (
+"Spandana & Gati: Molten Material Fusion / Welding on Contact"
+,
+"[spandana][material][fusion]"
+)
+ {
     pebble::ecs::World world;
 
     auto lava_a = world.spawn();
@@ -81,7 +96,12 @@ TEST_CASE("Spandana & Gati: Molten Material Fusion / Welding on Contact", "[span
     REQUIRE_FALSE(world.alive(lava_b));
 }
 
-TEST_CASE("Spandana: Declarative Thermodynamics EDSL", "[spandana][edsl][thermodynamics]") {
+TEST_CASE (
+"Spandana: Declarative Thermodynamics EDSL"
+,
+"[spandana][edsl][thermodynamics]"
+)
+ {
     pebble::ecs::World world;
     pebble::spandana::Timeline timeline;
 

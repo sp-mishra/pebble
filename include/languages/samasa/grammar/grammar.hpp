@@ -19,21 +19,19 @@
 #include "meta/meta.hpp"
 
 namespace lang::samasa {
-
     template <class SyntaxKindT, class TokenKindT,
               class RootRule, class... Rules>
     struct grammar {
         static_assert(std::is_enum_v<SyntaxKindT>,
-            "grammar<>: SyntaxKind must be an enum type.");
+                      "grammar<>: SyntaxKind must be an enum type.");
         static_assert(std::is_enum_v<TokenKindT>,
-            "grammar<>: TokenKind must be an enum type.");
+                      "grammar<>: TokenKind must be an enum type.");
 
         using syntax_kind = SyntaxKindT;
-        using token_kind  = TokenKindT;
-        using root_rule   = RootRule;
-        using rules       = meta::TypeList<Rules...>;
+        using token_kind = TokenKindT;
+        using root_rule = RootRule;
+        using rules = meta::TypeList<Rules...>;
 
         static constexpr std::size_t rule_count = sizeof...(Rules);
     };
-
 } // namespace lang::samasa

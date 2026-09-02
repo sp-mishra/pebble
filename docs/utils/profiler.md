@@ -106,14 +106,14 @@ auto result = profiler::measure(config, func [, on_iteration_callback], args...)
 
 #### Methods
 
-- `median()` - Compute median using nth_element (O(n) average); thread-local scratch buffer, no data races
+- `median()` - Compute median using nth_element (O (n) average); thread-local scratch buffer, no data races
 - `percentile(double p)` - Get p-th percentile [0-100]; thread-local scratch buffer
 - `standard_deviation()` - Population standard deviation
 - `variance()` - Population variance
 - `coefficient_of_variation()` - CV = stddev / mean
 - `confidence_interval_95()` - 95% confidence interval (±1.96σ)
 - `is_bimodal()` - Detect bimodal distribution (performance instability)
-- `histogram(size_t buckets)` - Get frequency distribution; result cached per bucket count (O(1) on repeat calls)
+- `histogram(size_t buckets)` - Get frequency distribution; result cached per bucket count (O (1) on repeat calls)
 - `to_csv()` - Export as CSV (iteration, duration_ns)
 - `to_json()` - Export as JSON with full metadata
 - `to_chrome_trace()` - Export for Chrome tracing viewer
@@ -525,9 +525,9 @@ if (comparison.is_significant && comparison.speedup_factor > 1.1) {
 
 ### Algorithm Complexity
 
-- **Median and percentile**: O(n) average using `std::nth_element` instead of O(n log n) full sort
-- **Histogram**: O(n) single pass with constant-time bucket assignment
-- **Variance/StdDev**: O(n) single pass with online accumulation
+- **Median and percentile**: O (n) average using `std::nth_element` instead of O (n log n) full sort
+- **Histogram**: O (n) single pass with constant-time bucket assignment
+- **Variance/StdDev**: O (n) single pass with online accumulation
 - **Per-thread vectors**: Pre-reserved to minimize reallocations
 
 ### Overhead Reduction

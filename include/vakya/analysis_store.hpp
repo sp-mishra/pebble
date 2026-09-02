@@ -1,7 +1,7 @@
 #pragma once
 
 // =============================================================================
-// vakya/analysis_store.hpp — schema'd semantic analysis sidecar (V3, opt-in)
+// vakya/analysis_store.hpp — schema'd semantic analysis sidecar (opt-in)
 //
 // C++23, header-only, no virtual, no macros.
 // Namespace: vakya::types
@@ -28,9 +28,11 @@
 
 #include "vakya/types/capability.hpp"
 #include "vakya/types/effect.hpp"
+#include "vakya/types/opt_handles.hpp"
 
 #include <cstdint>
 #include <shared_mutex>
+#include <type_traits>
 #include <unordered_map>
 
 namespace vakya::types {
@@ -66,10 +68,30 @@ namespace vakya::types {
         // Bare uint32 so Vakya stays ignorant of sutra::domain (downward-only layering).
         std::uint32_t domain = 0;
 
+        // ------------------------------------------------------------------------
+        // Semantic-optimization block (opt-in; all default null/unknown/0).
+        // Populated by the optimization-layer headers; payloads live in per-phase
+        // side-arenas keyed by these handles. Leaving them at defaults costs nothing.
+        // ------------------------------------------------------------------------
+        region_ref region{}; // aliasing region of this node's value
+        effect_row_ref effect_row{}; // polymorphic effect row (concrete+tail)
+        rw_summary_ref rw{}; // read/write region summary
+        typestate_id state = kNoTypestate; // affine typestate protocol state
+        std::uint16_t simd_width = 0; // synthesized SIMD lane count (0 = none)
+        std::uint16_t tile_hint = 0; // synthesized loop-tile size (0 = none)
+        execution_affinity affinity = execution_affinity::unknown; // scheduling hint
+        cost_class cost = cost_class::unknown; // compile-time cost lattice band
+        std::uint32_t cert_id = 0; // rewrite_certificate index (0 = none)
+
         [[nodiscard]] bool has_type() const noexcept { return !type.is_null(); }
         [[nodiscard]] bool has_shape() const noexcept { return !shape.is_null(); }
         [[nodiscard]] bool is_proven() const noexcept { return proofs == proof_status::proven; }
     };
+
+    // analysis_record must stay a trivially-copyable POD: the store copies records
+    // by value under lock, and downstream sidecars memcpy them. Every optimization
+    // field is a handle / enum / integer, so this holds.
+    static_assert(std::is_trivially_copyable_v<analysis_record>);
 
     // ============================================================================
     // analysis_store — thread-safe map from structural_hash → analysis_record

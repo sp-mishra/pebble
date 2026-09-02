@@ -51,12 +51,15 @@ namespace tarka::native {
                 if (c != std::strong_ordering::equal) return c == std::strong_ordering::less;
                 return strict && !o.strict;
             }
+
             [[nodiscard]] bool operator>(const bound_val& o) const {
                 return o < *this;
             }
+
             [[nodiscard]] bool operator<=(const bound_val& o) const {
                 return !(o < *this);
             }
+
             [[nodiscard]] bool operator>=(const bound_val& o) const {
                 return !(*this < o);
             }
@@ -234,44 +237,45 @@ namespace tarka::native {
 
         void collect_linear(Term t, rat multiplier, std::unordered_map<std::uint32_t, rat>& coeffs, rat& const_acc) {
             switch (t.op()) {
-                case Op::Add: {
-                    for (Term c : t.children()) {
-                        collect_linear(c, multiplier, coeffs, const_acc);
+            case Op::Add: {
+                for (Term c : t.children()) {
+                    collect_linear(c, multiplier, coeffs, const_acc);
+                }
+                break;
+            }
+            case Op::Sub: {
+                auto ch = t.children();
+                if (ch.size() == 2) {
+                    collect_linear(ch[0], multiplier, coeffs, const_acc);
+                    collect_linear(ch[1], -multiplier, coeffs, const_acc);
+                }
+                break;
+            }
+            case Op::Neg: {
+                collect_linear(t.children()[0], -multiplier, coeffs, const_acc);
+                break;
+            }
+            case Op::Mul: {
+                auto ch = t.children();
+                if (ch.size() == 2) {
+                    if (ch[0].op() == Op::Lit) {
+                        collect_linear(ch[1], multiplier * const_val(ch[0]), coeffs, const_acc);
                     }
-                    break;
-                }
-                case Op::Sub: {
-                    auto ch = t.children();
-                    if (ch.size() == 2) {
-                        collect_linear(ch[0], multiplier, coeffs, const_acc);
-                        collect_linear(ch[1], -multiplier, coeffs, const_acc);
+                    else if (ch[1].op() == Op::Lit) {
+                        collect_linear(ch[0], multiplier * const_val(ch[1]), coeffs, const_acc);
                     }
-                    break;
                 }
-                case Op::Neg: {
-                    collect_linear(t.children()[0], -multiplier, coeffs, const_acc);
-                    break;
-                }
-                case Op::Mul: {
-                    auto ch = t.children();
-                    if (ch.size() == 2) {
-                        if (ch[0].op() == Op::Lit) {
-                            collect_linear(ch[1], multiplier * const_val(ch[0]), coeffs, const_acc);
-                        } else if (ch[1].op() == Op::Lit) {
-                            collect_linear(ch[0], multiplier * const_val(ch[1]), coeffs, const_acc);
-                        }
-                    }
-                    break;
-                }
-                case Op::Lit: {
-                    const_acc = const_acc + multiplier * const_val(t);
-                    break;
-                }
-                default: {
-                    const std::uint32_t v = get_or_create_var(t);
-                    coeffs[v] = coeffs[v] + multiplier;
-                    break;
-                }
+                break;
+            }
+            case Op::Lit: {
+                const_acc = const_acc + multiplier * const_val(t);
+                break;
+            }
+            default: {
+                const std::uint32_t v = get_or_create_var(t);
+                coeffs[v] = coeffs[v] + multiplier;
+                break;
+            }
             }
         }
 
@@ -302,7 +306,8 @@ namespace tarka::native {
                 auto& target = is_upper ? upper_bounds_[v] : lower_bounds_[v];
                 trail_.push_back(UndoBound{v, is_upper, target});
                 target = BoundRecord{b, atom, value, level_};
-            } else if (row.terms.size() > 1) {
+            }
+            else if (row.terms.size() > 1) {
                 // Multivariate bound: allocate slack variable and attach row bound
                 const std::uint32_t s = num_vars_++;
                 lower_bounds_.emplace_back();
@@ -344,7 +349,8 @@ namespace tarka::native {
                 // Update assignment to be within [lb, ub]
                 if (lower_bounds_[v]) {
                     assignment_[v] = lower_bounds_[v]->bound.val;
-                } else if (upper_bounds_[v]) {
+                }
+                else if (upper_bounds_[v]) {
                     assignment_[v] = upper_bounds_[v]->bound.val;
                 }
             }
@@ -365,7 +371,8 @@ namespace tarka::native {
                             assignment_[v] = assignment_[v] - (s_val - upper_bounds_[s]->bound.val) / c;
                             fixed = true;
                             break;
-                        } else if (c.sign() < 0 && (!upper_bounds_[v] || assignment_[v] < upper_bounds_[v]->bound.val)) {
+                        }
+                        else if (c.sign() < 0 && (!upper_bounds_[v] || assignment_[v] < upper_bounds_[v]->bound.val)) {
                             assignment_[v] = assignment_[v] + (s_val - upper_bounds_[s]->bound.val) / (-c);
                             fixed = true;
                             break;
@@ -380,7 +387,8 @@ namespace tarka::native {
                         for (const auto& [v, c] : tr.row.terms) {
                             auto& b = (c.sign() > 0) ? lower_bounds_[v] : upper_bounds_[v];
                             if (b && b->reason_atom != kNullAtom) {
-                                explanation_.push_back(make_lit(reg_->var_of(b->reason_atom), /*negated=*/b->reason_val));
+                                explanation_.push_back(
+                                    make_lit(reg_->var_of(b->reason_atom), /*negated=*/b->reason_val));
                             }
                         }
                         return false;
@@ -394,7 +402,8 @@ namespace tarka::native {
                             assignment_[v] = assignment_[v] + (lower_bounds_[s]->bound.val - s_val) / c;
                             fixed = true;
                             break;
-                        } else if (c.sign() < 0 && (!lower_bounds_[v] || assignment_[v] > lower_bounds_[v]->bound.val)) {
+                        }
+                        else if (c.sign() < 0 && (!lower_bounds_[v] || assignment_[v] > lower_bounds_[v]->bound.val)) {
                             assignment_[v] = assignment_[v] - (lower_bounds_[s]->bound.val - s_val) / (-c);
                             fixed = true;
                             break;
@@ -409,7 +418,8 @@ namespace tarka::native {
                         for (const auto& [v, c] : tr.row.terms) {
                             auto& b = (c.sign() > 0) ? upper_bounds_[v] : lower_bounds_[v];
                             if (b && b->reason_atom != kNullAtom) {
-                                explanation_.push_back(make_lit(reg_->var_of(b->reason_atom), /*negated=*/b->reason_val));
+                                explanation_.push_back(
+                                    make_lit(reg_->var_of(b->reason_atom), /*negated=*/b->reason_val));
                             }
                         }
                         return false;

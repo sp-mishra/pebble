@@ -109,6 +109,7 @@ void tx_rollback(test_resource&, transaction_context&) noexcept {}
 
 TEST_CASE (
 
+
 "tx_error: is_conflict"
 ,
 "[medha][core]"
@@ -122,6 +123,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "tx_error: is_oom"
 ,
 "[medha][core]"
@@ -133,6 +135,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "tx_error: non-retriable"
 ,
@@ -150,6 +153,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "version_stamp: next() increments value"
 ,
 "[medha][core]"
@@ -162,6 +166,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "version_stamp: overflow bumps generation and resets value"
 ,
@@ -176,6 +181,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "version_stamp: operator== is full stamp comparison (ABA protection)"
 ,
 "[medha][core]"
@@ -189,6 +195,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "version_stamp: newer_than ordering"
 ,
@@ -213,6 +220,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "canonical_key: deterministic total order"
 ,
 "[medha][core]"
@@ -234,6 +242,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "read_set: record and find"
 ,
 "[medha][core]"
@@ -250,6 +259,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "read_set: duplicate record is last-wins"
 ,
 "[medha][core]"
@@ -264,6 +274,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "read_set: mark_shadowed sets flag"
 ,
@@ -284,6 +295,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "write_set: stage_inline and find"
 ,
 "[medha][core]"
@@ -303,6 +315,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "write_set: duplicate stage_inline is last-wins"
 ,
 "[medha][core]"
@@ -319,6 +332,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "write_set: merge_from imports entries"
 ,
@@ -343,6 +357,7 @@ struct unregistered_resource {};
 
 TEST_CASE (
 
+
 "resource_traits: default specialization all-false"
 ,
 "[medha][core]"
@@ -359,6 +374,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "transaction_context: active phase on construction"
 ,
 "[medha][core]"
@@ -369,6 +385,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "transaction_context: commit returns committed status"
 ,
@@ -383,6 +400,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "transaction_context: abort sets aborted phase"
 ,
 "[medha][core]"
@@ -394,6 +412,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "transaction_context: RAII auto-abort on scope exit"
 ,
@@ -414,6 +433,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "transaction_context: reset_for_retry clears sets"
 ,
@@ -436,6 +456,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "atomic: commits on first attempt (no conflict)"
 ,
 "[medha][core]"
@@ -451,6 +472,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "atomic: retry::none returns immediately on non-retriable error"
 ,
@@ -472,6 +494,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "read_kind: enum values distinct and ordered"
 ,
 "[medha][core][read_kind]"
@@ -485,6 +508,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "read_set: point read records with read_kind::point"
 ,
@@ -503,6 +527,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "read_set: range read recorded in range_entries"
 ,
@@ -523,6 +548,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "read_set: predicate read recorded in pred_entries"
 ,
 "[medha][core][read_kind]"
@@ -539,6 +565,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "read_set: clear removes all entry types"
 ,
@@ -564,6 +591,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "options: replay_safety and partial_commit_policy default values"
 ,
 "[medha][core][replay]"
@@ -575,6 +603,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "options: replay_safety enum values distinct"
 ,
@@ -589,6 +618,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "atomic: non_idempotent + bounded retry → rejected (MEDHA-004)"
 ,
@@ -612,6 +642,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "atomic: non_idempotent + backoff retry → rejected (MEDHA-004)"
 ,
 "[medha][core][replay]"
@@ -631,6 +662,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "atomic: non_idempotent + retry::none → allowed (no retry, no rejection)"
 ,
@@ -652,6 +684,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "atomic: body_and_effects_idempotent + bounded retry → allowed"
 ,
 "[medha][core][replay]"
@@ -671,6 +704,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "partial_commit_policy: enum values distinct"
 ,

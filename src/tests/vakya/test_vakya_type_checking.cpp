@@ -82,6 +82,7 @@ struct vakya::types::typing_rule<bool_leaf_tag> {
 
 TEST_CASE (
 
+
 "infer: leaf integer node → integer type"
 ,
 "[vakya][type_checking]"
@@ -108,6 +109,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "infer: add(int_leaf, int_leaf) → integer type"
 ,
@@ -138,6 +140,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "infer: add(int_leaf, bool_leaf) → infer_error"
 ,
 "[vakya][type_checking]"
@@ -164,6 +167,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "type_check: add(int, int) expression → validation_status::success"
 ,
@@ -192,6 +196,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "type_check: add(int, bool) expression → type_error"
 ,
 "[vakya][type_checking]"
@@ -219,6 +224,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "infer: cache hit returns same type_ref for structurally equal expressions"
 ,
 "[vakya][type_checking]"
@@ -245,6 +251,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "type_environment: push_scope / pop_scope manages bindings"
 ,
@@ -277,6 +284,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "generalize: var not in env_free → quantified scheme"
 ,
 "[vakya][type_checking]"
@@ -305,6 +313,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "type_check: inferred types stored in property_store via TypeResultKey"
 ,
@@ -337,6 +346,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "non-regression: constructing vakya nodes does not require type_checking.hpp"
 ,

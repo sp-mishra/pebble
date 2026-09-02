@@ -1,7 +1,7 @@
 #pragma once
 
 // =============================================================================
-// vakya/type_rewrite.hpp — type-level rewriting via egraph (V3, opt-in)
+// vakya/type_rewrite.hpp — type-level rewriting via egraph (opt-in)
 //
 // C++23, header-only, no virtual, no macros.
 // Namespace: vakya::types

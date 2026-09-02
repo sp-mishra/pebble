@@ -14,11 +14,10 @@
 #include <numeric>
 
 namespace ts::edsl {
-
     // ========================================================================
     // 1. Elementwise / Broadcast Shape Inference
     // ========================================================================
-    inline tensor_shape infer_broadcast_shape(const tensor_shape &s1, const tensor_shape &s2) {
+    inline tensor_shape infer_broadcast_shape(const tensor_shape& s1, const tensor_shape& s2) {
         if (s1.empty()) return s2;
         if (s2.empty()) return s1;
         return broadcast_shapes_unif(s1, s2);
@@ -27,7 +26,7 @@ namespace ts::edsl {
     // ========================================================================
     // 2. Matrix Multiplication Shape Inference ([..., M, K] x [..., K, N] -> [..., M, N])
     // ========================================================================
-    inline tensor_shape infer_matmul_shape(const tensor_shape &s1, const tensor_shape &s2) {
+    inline tensor_shape infer_matmul_shape(const tensor_shape& s1, const tensor_shape& s2) {
         // If either shape is dynamic/unspecified at build time, defer shape validation
         if (s1.empty() || s2.empty()) {
             return {};
@@ -84,7 +83,7 @@ namespace ts::edsl {
     // ========================================================================
     // 3. Reduction Shape Inference
     // ========================================================================
-    inline tensor_shape infer_reduction_shape(const tensor_shape &s, int axis = -1, bool keepdims = false) {
+    inline tensor_shape infer_reduction_shape(const tensor_shape& s, int axis = -1, bool keepdims = false) {
         if (s.empty()) return {};
         if (axis < 0) {
             // Full reduction across all axes -> scalar
@@ -100,7 +99,8 @@ namespace ts::edsl {
         for (size_t i = 0; i < s.size(); ++i) {
             if (static_cast<int>(i) == axis) {
                 if (keepdims) out.push_back(1);
-            } else {
+            }
+            else {
                 out.push_back(s[i]);
             }
         }
@@ -110,11 +110,10 @@ namespace ts::edsl {
     // ========================================================================
     // 4. Transpose Shape Inference
     // ========================================================================
-    inline tensor_shape infer_transpose_shape(const tensor_shape &s) {
+    inline tensor_shape infer_transpose_shape(const tensor_shape& s) {
         tensor_shape out(s.rbegin(), s.rend());
         return out;
     }
-
 } // namespace ts::edsl
 
 #endif // PEBBLE_CONTAINERS_TENSOR_EDSL_SHAPE_INFERENCE_HPP

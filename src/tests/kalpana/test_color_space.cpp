@@ -1,7 +1,12 @@
 #include "catch_amalgamated.hpp"
 #include "kalpana/kalpana.hpp"
 
-TEST_CASE("Kalpana: Color Space Conversions and OkLab Lerp", "[kalpana][color][space]") {
+TEST_CASE (
+"Kalpana: Color Space Conversions and OkLab Lerp"
+,
+"[kalpana][color][space]"
+)
+ {
     using namespace kalpana;
     using namespace kalpana::color_space;
 

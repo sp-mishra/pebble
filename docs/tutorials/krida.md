@@ -1,12 +1,19 @@
 # Tutorial: The Whole Elephant — Akruti, Gati, Kalpana & Spandana as One System
 
-A parable: four blind sages meet an elephant. "A rope!" says the one clutching the tail. "A wall!" insists the one at its flank. "A snake!" cries the one holding the trunk. "A tree trunk!" booms the one hugging the leg. Every one of them is describing the same animal, and every one of them is wrong about what it is.
+A parable: four blind sages meet an elephant. "A rope!" says the one clutching the tail. "A wall!" insists the one at
+its flank. "A snake!" cries the one holding the trunk. "A tree trunk!" booms the one hugging the leg. Every one of them
+is describing the same animal, and every one of them is wrong about what it is.
 
-Pebble's realtime stack is the same. **Akruti** is the mathematics of *where* — shapes and the space they occupy. **Kalpana** is the art of *how it looks* — paint, paths, and pixels. **Gati** is the discipline of *when* — the clock, the loop, the orchestration of change. **Spandana** is the *what happens* — the declarative pulse that gives a world life.
+Pebble's realtime stack is the same. **Akruti** is the mathematics of *where* — shapes and the space they occupy.
+**Kalpana** is the art of *how it looks* — paint, paths, and pixels. **Gati** is the discipline of *when* — the clock,
+the loop, the orchestration of change. **Spandana** is the *what happens* — the declarative pulse that gives a world
+life.
 
 Pick up any one header and you have a library. This tutorial picks up all four, and builds a *game*.
 
-By the end you will hold the whole elephant: a space-rope-snake-tree-game with bouncing shapes, a steady 60&nbsp;Hz simulation, vector-graphics presentation, and buttery tweens — with each piece living where it belongs and not a layer of glue anywhere.
+By the end you will hold the whole elephant: a space-rope-snake-tree-game with bouncing shapes, a steady 60&nbsp;Hz
+simulation, vector-graphics presentation, and buttery tweens — with each piece living where it belongs and not a layer
+of glue anywhere.
 
 ---
 
@@ -29,14 +36,15 @@ By the end you will hold the whole elephant: a space-rope-snake-tree-game with b
 
 Only four words you need to remember:
 
-| Library | Sanskrit root | Answers the question | Owns |
-|---|---|---|---|
-| **Akruti** | आकृति — *shape / form* | Where is everything, and what does it collide with? | Geometry, SDFs, narrowphase, CSG, fracture |
-| **Kalpana** | कल्पना — *imagination* | What does it look like? | 2D vector graphics, paint, color, backends |
-| **Gati** | गति — *motion / gait* | When does simulation step? | Game clock, ECS, systems, fixed-timestep loop |
-| **Spandana** | स्पन्दन — *pulsation* | What does the world *do*? | Tyveens, springs, particles, materials, destruction |
+| Library      | Sanskrit root        | Answers the question                                | Owns                                                |
+|--------------|----------------------|-----------------------------------------------------|-----------------------------------------------------|
+| **Akruti**   | आकृति — *shape / form* | Where is everything, and what does it collide with? | Geometry, SDFs, narrowphase, CSG, fracture          |
+| **Kalpana**  | कल्पना — *imagination*  | What does it look like?                             | 2D vector graphics, paint, color, backends          |
+| **Gati**     | गति — *motion / gait* | When does simulation step?                          | Game clock, ECS, systems, fixed-timestep loop       |
+| **Spandana** | स्पन्दन — *pulsation*    | What does the world *do*?                           | Tyveens, springs, particles, materials, destruction |
 
-There is deliberate overlap in *capability* — Akruti can raycast a scene, and Spandana can move a shape. The art is not in what each one *can* do; it is in the *direction of the dependency*:
+There is deliberate overlap in *capability* — Akruti can raycast a scene, and Spandana can move a shape. The art is not
+in what each one *can* do; it is in the *direction of the dependency*:
 
 ```text
         ┌────────────────────────────────────────────┐
@@ -57,9 +65,12 @@ There is deliberate overlap in *capability* — Akruti can raycast a scene, and 
         the leaves except through published data.
 ```
 
-**The holistic rule:** *simulation state lives in your ECS components; Akruti computes geometric facts about them; Gati advances them on a fixed clock; Kalpana turns the result into pixels; Spandana writes the animation/particle material as a pure function of time.*
+**The holistic rule:** *simulation state lives in your ECS components; Akruti computes geometric facts about them; Gati
+advances them on a fixed clock; Kalpana turns the result into pixels; Spandana writes the animation/particle material as
+a pure function of time.*
 
-When you honor that sentence, every library interoperates with the others with zero glue code, because they all speak the same nouns: `pebble::math::vec2`, units of seconds, and your ECS components.
+When you honor that sentence, every library interoperates with the others with zero glue code, because they all speak
+the same nouns: `pebble::math::vec2`, units of seconds, and your ECS components.
 
 ---
 
@@ -85,9 +96,12 @@ Let's compress one frame of the game we're about to build and label every transi
                                          → render(SOKOL | HEADLESS | TERMINAL)
 ```
 
-Four libraries, one loop, three state transitions (`simulate → present → composite`). Notice what is **not** in the loop: conversions, copies, or callbacks stitching "engine A" to "engine B". Akruti and Kalpana would barely ten lines apart; Gati's `Game` facade is what glues them via your `World`.
+Four libraries, one loop, three state transitions (`simulate → present → composite`). Notice what is **not** in the
+loop: conversions, copies, or callbacks stitching "engine A" to "engine B". Akruti and Kalpana would barely ten lines
+apart; Gati's `Game` facade is what glues them via your `World`.
 
-We'll build that game now, in dependency order — not the order you read about them, but the order truth flows: geometry, paint, clock, life.
+We'll build that game now, in dependency order — not the order you read about them, but the order truth flows: geometry,
+paint, clock, life.
 
 ---
 
@@ -95,13 +109,15 @@ We'll build that game now, in dependency order — not the order you read about 
 
 ### 3.1 Everything is a shape
 
-Akruti's contract is one concept, `akruti::Shape`, satisfied by a dozen primitives — `Circle`, `Box`, `OrientedBox`, `Capsule`, `Triangle`, `RoundedBox`, `Sector`, `HalfPlane`, `ConvexPoly<N>`, and more — each carrying three queries:
+Akruti's contract is one concept, `akruti::Shape`, satisfied by a dozen primitives — `Circle`, `Box`, `OrientedBox`,
+`Capsule`, `Triangle`, `RoundedBox`, `Sector`, `HalfPlane`, `ConvexPoly<N>`, and more — each carrying three queries:
 
 - `sdf(p)` — the signed distance to the shape's boundary at point `p`
 - `aabb()` — axis-aligned bounding box
 - `support(d)` — the point farthest along direction `d`
 
-That is the entire zoo. No `virtual`, no RTTI, no trait registration. A function templated on the shape type *is* the interface:
+That is the entire zoo. No `virtual`, no RTTI, no trait registration. A function templated on the shape type *is* the
+interface:
 
 ```cpp
 #include <akruti/akruti.hpp>
@@ -120,7 +136,7 @@ OrientedBox ob{{0.0f, 0.0f}, {1.0f, 2.0f},
                pebble::math::mat2::rotation(pebble::math::kPi / 4.0f)};
 ```
 
-### 3.2 Collision, from O(1) to generic
+### 3.2 Collision, from O (1) to generic
 
 Because Akruti is header-only and concept-based, the fast paths never wait for the slow ones:
 
@@ -140,11 +156,14 @@ SimplexCache cache;
 Manifold m3  = akruti::collide_gjk_warm_started(pa, pb, &cache); // previous axis reused
 ```
 
-**The holistic point:** `Manifold` gives you `hit`, `depth`, a contact **normal**, and (on the SAT paths) **2 points** for a stable manifold. Your physics, your particles, and your sound trigger all read the *same* facts — no second code path for "close enough".
+**The holistic point:** `Manifold` gives you `hit`, `depth`, a contact **normal**, and (on the SAT paths) **2 points**
+for a stable manifold. Your physics, your particles, and your sound trigger all read the *same* facts — no second code
+path for "close enough".
 
 ### 3.3 CSG: carve what you need
 
-Your game will want a green pipe that is "a rounded box with a circle chewed out". Akruti's CSG expression EDSL does it with zero heap and zero copies — just shape algebra:
+Your game will want a green pipe that is "a rounded box with a circle chewed out". Akruti's CSG expression EDSL does it
+with zero heap and zero copies — just shape algebra:
 
 ```cpp
 #include <akruti/csg.hpp>
@@ -157,11 +176,14 @@ auto pickaxe = coin - slot;                         // one expression, no alloca
 Scalar d = pickaxe.sdf({0.5f, 0.0f});               // > 0 — the slot is carved out
 ```
 
-Compose with `operator|` (union), `&` (intersection), `-` (difference), or inflate with `csg_shell` / `csg_offset`. Dynamic shapes you inspect at runtime use the same operators on `FlatCsgTree` — the *expression* stays the interface.
+Compose with `operator|` (union), `&` (intersection), `-` (difference), or inflate with `csg_shell` / `csg_offset`.
+Dynamic shapes you inspect at runtime use the same operators on `FlatCsgTree` — the *expression* stays the interface.
 
 ### 3.4 Scene layer: shapes at scale
 
-For anything beyond a dozen bodies, hand-rolling nested loops wastes the core count. Akruti's `scene::Scene` gives you SoA batches per primitive type, a dynamic `AABBTree` broadphase, and `LayerMask` collision filtering, with bulk operations that are Pravaha-parallel when `AKRUTI_ENABLE_PRAVAHA` is set:
+For anything beyond a dozen bodies, hand-rolling nested loops wastes the core count. Akruti's `scene::Scene` gives you
+SoA batches per primitive type, a dynamic `AABBTree` broadphase, and `LayerMask` collision filtering, with bulk
+operations that are Pravaha-parallel when `AKRUTI_ENABLE_PRAVAHA` is set:
 
 ```cpp
 #include <akruti/scene/scene.hpp>
@@ -178,13 +200,17 @@ for (auto [i, j] : scene.broadphase_pairs()) {
 ```
 
 > [!TIP]
-> **The holistic rule for Akruti:** your *logic* decides entities exist; Akruti decides *what the geometry says*. Never store gameplay state inside an Akruti shape — that is what ECS components are for. Treat Akruti as a stateless geometry oracle you query during a fixed step.
+> **The holistic rule for Akruti:** your *logic* decides entities exist; Akruti decides *what the geometry says*. Never
+store gameplay state inside an Akruti shape — that is what ECS components are for. Treat Akruti as a stateless geometry
+oracle you query during a fixed step.
 
 ---
 
 ## 4. Act 2 — Kalpana: The World Has Color
 
-A world of manifolds and distances is indistinguishable from a physics test. Kalpana is the layer that renders. It shares Akruti's DNA — header-only C++23, concept-monomorphized backends — but it renders *paint*, not pixels. You describe a `Scene` of `Node`s; the backend (Sokol GPU, headless capture, or Notcurses terminal) does the rest.
+A world of manifolds and distances is indistinguishable from a physics test. Kalpana is the layer that renders. It
+shares Akruti's DNA — header-only C++23, concept-monomorphized backends — but it renders *paint*, not pixels. You
+describe a `Scene` of `Node`s; the backend (Sokol GPU, headless capture, or Notcurses terminal) does the rest.
 
 ### 4.1 Your first sprite, painted properly
 
@@ -206,7 +232,10 @@ scene.add(Node::shape(std::move(card), Paint::filled_outlined(
 
 ### 4.2 Money shot: subtractive spectral pigment mixing
 
-Here is where Kalpana stops being "a canvas" and starts being magic. **If you mix blue and yellow pigment in the physical world, you get green — not grey.** Linear RGB blending of `(0,0,1)` and `(1,1,0)` gives you grey-brown mush, which is why digital art software keeps disappointing children. Kalpana instead models *light reflectance* via the **Kubelka–Munk** theory of pigment mixing:
+Here is where Kalpana stops being "a canvas" and starts being magic. **If you mix blue and yellow pigment in the
+physical world, you get green — not grey.** Linear RGB blending of `(0,0,1)` and `(1,1,0)` gives you grey-brown mush,
+which is why digital art software keeps disappointing children. Kalpana instead models *light reflectance* via the
+**Kubelka–Munk** theory of pigment mixing:
 
 ```cpp
 // Linear RGB "mixing" — B + Y = grey. Wrong reality, wrong instinct.
@@ -216,7 +245,9 @@ Color mud    = Color{0, 0, 1} * 0.5f + Color{1, 1, 0} * 0.5f;
 Color vibrant = spectral::mix(colors::blue(), colors::yellow(), 0.5f);
 ```
 
-Why do we care in a *game*? **Juice.** When your player heals, mixes a potion, lashes a laser pistol — pigments, potions, and light get *mixed*. Do it with the model that matches human perception, not the one that matches your graphics card.
+Why do we care in a *game*? **Juice.** When your player heals, mixes a potion, lashes a laser pistol — pigments,
+potions, and light get *mixed*. Do it with the model that matches human perception, not the one that matches your
+graphics card.
 
 ### 4.3 Minimal full-app golden path
 
@@ -238,7 +269,9 @@ term.render(scene);
 ```
 
 > [!TIP]
-> **Keep Akruti shapes importable.** `kalpana::geom::Path` imports Akruti curves and polylines directly. Design your `Path`-producing functions to take `akruti::Circle` or `akruti::Poly` and convert at the edge — you get collision from Akruti *and* rendering from Kalpana with a single source of truth for each body's geometry:
+> **Keep Akruti shapes importable.** `kalpana::geom::Path` imports Akruti curves and polylines directly. Design your
+`Path`-producing functions to take `akruti::Circle` or `akruti::Poly` and convert at the edge — you get collision from
+Akruti *and* rendering from Kalpana with a single source of truth for each body's geometry:
 > ```cpp
 > kalpana::Path from_akruti(const akruti::Circle& c);       // dst changes, src doesn't
 > ```
@@ -247,7 +280,10 @@ term.render(scene);
 
 ## 5. Act 3 — Gati: The World Has a Pulse
 
-We have a world with shape and color. Now: *when* does it move? This is Gati's entire personality — it is a **realtime runtime**, not a "game framework with a `while` loop inside." It owns the clock, the ECS `World`, the system schedule, events, and the interpolation factor, and it forces every simulation step to be **deterministic** and **fixed-rate** so 100 Hz is 100 Hz regardless of whether the monitor is 60 Hz or 144 Hz.
+We have a world with shape and color. Now: *when* does it move? This is Gati's entire personality — it is a **realtime
+runtime**, not a "game framework with a `while` loop inside." It owns the clock, the ECS `World`, the system schedule,
+events, and the interpolation factor, and it forces every simulation step to be **deterministic** and **fixed-rate** so
+100 Hz is 100 Hz regardless of whether the monitor is 60 Hz or 144 Hz.
 
 ### 5.1 The fixed-timestep heart
 
@@ -263,9 +299,12 @@ while (running) {
 }
 ```
 
-`Game::update(real_dt)` does the "Fix Your Timestep" dance: it advances an accumulator, runs a fixed `Clock`-spaced step as often as needed (up to `max_steps` so you don't spiral to death), and calls `World::flush_commands()` — which is where `world.destroy(entity)` is safe, because destruction during iteration is a footgun.
+`Game::update(real_dt)` does the "Fix Your Timestep" dance: it advances an accumulator, runs a fixed `Clock`-spaced step
+as often as needed (up to `max_steps` so you don't spiral to death), and calls `World::flush_commands()` — which is
+where `world.destroy(entity)` is safe, because destruction during iteration is a footgun.
 
-**Rendering** then uses `alpha` to interpolate between each entity's `Transform` at the previous and current fixed steps, so a 10&nbsp;Hz logic simulation still renders at 243&nbsp;fps glass:
+**Rendering** then uses `alpha` to interpolate between each entity's `Transform` at the previous and current fixed
+steps, so a 10&nbsp;Hz logic simulation still renders at 243&nbsp;fps glass:
 
 ```cpp
 while (running) {
@@ -279,11 +318,14 @@ while (running) {
 ```
 
 > [!NOTE]
-> Gati aliases the math types — `gati::Vec2` *is* `pebble::math::vec2`, `gati::Mat2` *is* `peace::math::mat2`, `gati::AABB` *is* `pebbling::math::aabb2`. No conversion layer, no `to_gfx`/`from_gfx`. Your physics math, your renderer, and your game code all share one source of truth for a 2D vector.
+> Gati aliases the math types — `gati::Vec2` *is* `pebble::math::vec2`, `gati::Mat2` *is* `peace::math::mat2`,
+`gati::AABB` *is* `pebbling::math::aabb2`. No conversion layer, no `to_gfx`/`from_gfx`. Your physics math, your
+renderer, and your game code all share one source of truth for a 2D vector.
 
 ### 5.2 The whole world is your ECS
 
-`Game::world()` is a `pebble::ecs::World`; entities are just `Entity` handles. Components are plain structs you define — Gati never touches them, it just moves them:
+`Game::world()` is a `pebble::ecs::World`; entities are just `Entity` handles. Components are plain structs you define —
+Gati never touches them, it just moves them:
 
 ```cpp
 struct Position { Vec2 position; };
@@ -292,11 +334,13 @@ Entity player = game.world().spawn();
 game.world().add<Position>(player, {.position = {0.0f, 10.0f}});
 ```
 
-**No `Start()`/`Update()` overrides, no reflection, no MonoBehaviour.** If you have ever fought a game engine's initialization order or tried to inherit from a component, this is deliberately the opposite of that.
+**No `Start()`/`Update()` overrides, no reflection, no MonoBehaviour.** If you have ever fought a game engine's
+initialization order or tried to inherit from a component, this is deliberately the opposite of that.
 
 ### 5.3 The bridges
 
-Gati doesn't know what Akruti or Prakriti (dynamics engine) *are* — it just plays nicely with their data. Enable the integrations with compile-time macros so the cost is exactly zero when off:
+Gati doesn't know what Akruti or Prakriti (dynamics engine) *are* — it just plays nicely with their data. Enable the
+integrations with compile-time macros so the cost is exactly zero when off:
 
 ```cpp
 #define GATI_ENABLE_PRAKRITI
@@ -312,17 +356,23 @@ AnimationSystem → PhysicsSyncSystem → CollisionSystem → (your systems)
 
 - **AnimationSystem** — advances per-entity `AnimationState`s.
 - **PhysicsSyncSystem** — pushes `Transform`s into/out of Prakriti bodies.
-- **CollisionSystem** — fans Akruti overlaps into collision *events* (pair them with Gati's `EventBus` in `game.events()`).
+- **CollisionSystem** — fans Akruti overlaps into collision *events* (pair them with Gati's `EventBus` in
+  `game.events()`).
 
 ---
 
 ## 6. Act 4 — Spandana: The World Speaks
 
-Now the real magic. You have a world that has shape, color, and a pulse. **Spandana is the language you use to tell that world what to do.** No more imperative `if (needs_to_wait) { timer -= dt; }` bookkeeping — you declare the *desired effect* as a value that automatically schedules, dependencies, and parallelizes itself.
+Now the real magic. You have a world that has shape, color, and a pulse. **Spandana is the language you use to tell that
+world what to do.** No more imperative `if (needs_to_wait) { timer -= dt; }` bookkeeping — you declare the *desired
+effect* as a value that automatically schedules, dependencies, and parallelizes itself.
 
 ### 6.1 Timelines: animations as values, parallelism for free
 
-A `Timeline` is a list of `IAnimationAction`s. Every action declares its **`ResourceKey`** — an *exact* `(entity-id, component-field)` pair. Actions touching *different* `ResourceKey`s automatically run concurrently; actions touching the *same* field **automatically serialize in declaration order**. No manual synchronization, no data races on your component state:
+A `Timeline` is a list of `IAnimationAction`s. Every action declares its **`ResourceKey`** — an *exact*
+`(entity-id, component-field)` pair. Actions touching *different* `ResourceKey`s automatically run concurrently; actions
+touching the *same* field **automatically serialize in declaration order**. No manual synchronization, no data races on
+your component state:
 
 ```cpp
 #include <spandana/spandana.hpp>
@@ -345,7 +395,8 @@ We moved the *what* (a `tween` from X to Y), not the *how* (a million `if`s).
 
 ### 6.2 The World EDSL: everything in one composable language
 
-All of Spandana's subsystems speak the same operator-overloaded EDSL, so you can mix motion, particles, and physics in a single call:
+All of Spandana's subsystems speak the same operator-overloaded EDSL, so you can mix motion, particles, and physics in a
+single call:
 
 ```cpp
 // Motion
@@ -376,11 +427,13 @@ BlendSpace2D blend = /* ... */;
 shake_camera(camera).trauma(0.7f).duration(0.3f);
 ```
 
-All of this is a pure value — build it once, feed it to the `Timeline`, `update(dt)` and the magic of `ResourceKey` does the rest.
+All of this is a pure value — build it once, feed it to the `Timeline`, `update(dt)` and the magic of `ResourceKey` does
+the rest.
 
 ### 6.3 Materials that melt and elements that react
 
-Spandana doesn't stop at position. If a world has context — heat, state of matter, elemental composition — Spandana gives it a pulse:
+Spandana doesn't stop at position. If a world has context — heat, state of matter, elemental composition — Spandana
+gives it a pulse:
 
 ```cpp
 using namespace gati;   // materials & elements are core-real
@@ -400,16 +453,22 @@ apply_heat(world).at({50.0f, 0.0f})
 reaction(Water{}, Lava{});   // → Obsidian + Steam
 ```
 
-**Water + Lava → Obsidian + Steam.** That's elemental resolution — Spandana's `elemental.hpp` actually *checks material pairs* and emits a reaction with products. Your game doesn't have to care about the periodic table; it just asks "what happens when X and Y touch?" and the engine knows.
+**Water + Lava → Obsidian + Steam.** That's elemental resolution — Spandana's `elemental.hpp` actually *checks material
+pairs* and emits a reaction with products. Your game doesn't have to care about the periodic table; it just asks "what
+happens when X and Y touch?" and the engine knows.
 
 > [!TIP]
-> The whole Spandana layer is **serializable** via Glaze-based `serialization.hpp` — freeze a `Timeline` or a material configuration to JSON and back. Build your game's content pipeline on top of it, and hot-reloading becomes a `BlendSpace2D` reload away.
+> The whole Spandana layer is **serializable** via Glaze-based `serialization.hpp` — freeze a `Timeline` or a material
+configuration to JSON and back. Build your game's content pipeline on top of it, and hot-reloading becomes a
+`BlendSpace2D` reload away.
 
 ---
 
 ## 7. The Whole Elephant: A Playable Game Loop
 
-Now, assemble all four acts. Our game: *"Krida — an ode to Newton"*. You control a player circle. You shoot projectiles (juice!) at shapes that tumble in. Every collision is real (Akruti), every pixel is painted (Kalpana), everything steps in rhythm with the fixed clock (Gati), and every explosion, tween, and mutter of "material" is Spandana.
+Now, assemble all four acts. Our game: *"Krida — an ode to Newton"*. You control a player circle. You shoot projectiles
+(juice!) at shapes that tumble in. Every collision is real (Akruti), every pixel is painted (Kalpana), everything steps
+in rhythm with the fixed clock (Gati), and every explosion, tween, and mutter of "material" is Spandana.
 
 ```cpp
 #include <akruti/akruti.hpp>
@@ -484,60 +543,71 @@ int main() {
 
 ## 8. Choosing Your Weapon: A Decision Table
 
-The single most common real-world question the author sees: *"Should my effect be a Spandana tween or a Gati PhysicsSystem?"* Here is your rule of thumb:
+The single most common real-world question the author sees: *"Should my effect be a Spandana tween or a Gati
+PhysicsSystem?"* Here is your rule of thumb:
 
-| I want to… | …use this | Because |
-|---|---|---|
-| Define the shape of a level | **Akruti** | `Shape` has SDF/AABB/support, which is everything collision needs |
-| Test if two things overlap | **Akruti** | `collide_*` / GJK — pure geometry |
-| Give an object color, path, or gradient | **Kalpana** | Paint, Paths, Backends |
-| Mix two colors like paint | **Kalpana** | `spectral::mix` uses Kubelka-Munk, not linear RGB |
-| Move at a *fixed rate* per second | **Gati** | Clock + fixed-step loop. Period. |
-| Order systems / share a frame budget | **Gati** | `DefaultSystems` schedule + `World` |
-| Animate a value from A to B, or with easing | **Spandana** | `tween` / `spring` timelines |
-| Spawn a just-in-time particle burst | **Spandana** | `particle_burst`, built-in scheduler/dependency inference |
-| Melt a frozen block as it heats | **Spandana** | Material thermodynamics + `apply_heat` |
-| Render a custom texture | **Kalpana** | `ImageNode` + backend |
+| I want to…                                  | …use this    | Because                                                           |
+|---------------------------------------------|--------------|-------------------------------------------------------------------|
+| Define the shape of a level                 | **Akruti**   | `Shape` has SDF/AABB/support, which is everything collision needs |
+| Test if two things overlap                  | **Akruti**   | `collide_*` / GJK — pure geometry                                 |
+| Give an object color, path, or gradient     | **Kalpana**  | Paint, Paths, Backends                                            |
+| Mix two colors like paint                   | **Kalpana**  | `spectral::mix` uses Kubelka-Munk, not linear RGB                 |
+| Move at a *fixed rate* per second           | **Gati**     | Clock + fixed-step loop. Period.                                  |
+| Order systems / share a frame budget        | **Gati**     | `DefaultSystems` schedule + `World`                               |
+| Animate a value from A to B, or with easing | **Spandana** | `tween` / `spring` timelines                                      |
+| Spawn a just-in-time particle burst         | **Spandana** | `particle_burst`, built-in scheduler/dependency inference         |
+| Melt a frozen block as it heats             | **Spandana** | Material thermodynamics + `apply_heat`                            |
+| Render a custom texture                     | **Kalpana**  | `ImageNode` + backend                                             |
 
-**The real rule:** *Functional state* (position, rotation, health) lives in your ECS components. *Transient presentation* (position during a tween, particle count, heat shimmer) is a Spandana-born idea. *Collision* is an Akruti question. *Timing* is a Gati decision. When in doubt, ask *"what is this property* **fundamentally**?"* and route it there.
+**The real rule:** *Functional state* (position, rotation, health) lives in your ECS components. *Transient
+presentation* (position during a tween, particle count, heat shimmer) is a Spandana-born idea. *Collision* is an Akruti
+question. *Timing* is a Gati decision. When in doubt, ask *"what is this property* **fundamentally**?"* and route it
+there.
 
 ---
 
 ## 9. Composition Rules of Thumb
 
-1. **The dependency arrow points down.** Game code → Spandana → (Gati, Akruti, Kalpana) → `pebble::math`/`ecs`/`pravaha`. Never make a leaf depend on a root.
-2. **No glue.** You never need to write "geometry adapter" code: Akruti outputs `pebble::math::vec2`; so does your renderer; so does your tween. Reuse, don't wrap.
-3. **Update the ECS, not the picture.** Move `Transform` components; let Kalpana read them. If you find yourself calling `setPosition()` on a renderable every frame, stop — you want an ECS component and a system that reads it.
-4. **Fixed-step for simulation, interpolate for render.** `game.update(dt)` at a fixed 60 Hz, `alpha` for smoothness; never the other way round.
-5. **The `macros` are compile-time;** the API is the same. `GATI_ENABLE_AKRUTI`, etc., add or skip whole systems; they never change call sites.
+1. **The dependency arrow points down.** Game code → Spandana → (Gati, Akruti, Kalpana) → `pebble::math`/`ecs`/
+   `pravaha`. Never make a leaf depend on a root.
+2. **No glue.** You never need to write "geometry adapter" code: Akruti outputs `pebble::math::vec2`; so does your
+   renderer; so does your tween. Reuse, don't wrap.
+3. **Update the ECS, not the picture.** Move `Transform` components; let Kalpana read them. If you find yourself calling
+   `setPosition()` on a renderable every frame, stop — you want an ECS component and a system that reads it.
+4. **Fixed-step for simulation, interpolate for render.** `game.update(dt)` at a fixed 60 Hz, `alpha` for smoothness;
+   never the other way round.
+5. **The `macros` are compile-time;** the API is the same. `GATI_ENABLE_AKRUTI`, etc., add or skip whole systems; they
+   never change call sites.
 
 And the meta-rule, the holistic one, the one this entire *tutorial* is about:
 
-> **Every system is a query over the world, and every world is a set of queries over components.** Akruti knows geometry, Kalpana knows art, Gati knows the clock, Spandana knows desire. Make your code say *what* the world is, and the engine — all four layers — will say *how*.
+> **Every system is a query over the world, and every world is a set of queries over components.** Akruti knows
+> geometry, Kalpana knows art, Gati knows the clock, Spandana knows desire. Make your code say *what* the world is, and
+> the engine — all four layers — will say *how*.
 
 ---
 
 ## 10. Cheat Sheet
 
-| Concern | Function / Type | Library |
-|---|---|---|
-| Include everything | `akruti/akruti.hpp` | Akruti |
-| A shape | `Circle`, `Box`, `OrientedBox`, `Capsule`, `Sector`, … | Akruti |
-| Signed distance | `shape.sdf(p)` | Akruti |
-| Overlap + manifold | `collide_obb_obb(a, b)`, `collide_gjk_warm_started(...)` | Akruti |
-| CSG (zero-alloc) | `a \| b`, `a & b`, `a - b` | Akruti |
-| Broadphase | `scene::Scene{}.broadphase_pairs()` | Akruti |
-| Include everything | `kalpana/kalpana.hpp` | Kalpana |
-| Path / shape | `Path::round_rect(...)`, `Path::add_circle(...)` | Kalpana |
-| Paint | `Paint::filled_outlined(...)`, `Paint::gradient(...)` | Kalpana |
-| Cheap realistic mixing | `spectral::mix(a, b, t)` | Kalpana |
-| Render | `Canvas<Backend>(w,h).render(scene)`, `.snapshot()` | Kalpana |
-| Run your game | `Game game; game.update(dt); game.alpha();` | Gati |
-| Fixed step clock | `game.clock().dt()`, `.total_steps()`, `.alpha()` | Gati |
-| ECS | `game.world().spawn()/add()/get()/view()` | Gati |
-| Include everything | `spandana/spandana.hpp` | Spandana |
-| Animate a value | `tween(prop).to(v).ease(...)`, `spring(prop).target(v)` | Spandana |
-| Particles / shake | `particle_burst()`, `shake_camera(cam).trauma(...)` | Spandana |
-| Change of state | `set_material(...)`, `apply_heat(...)`, `reaction(A, B)` | Spandana |
+| Concern                | Function / Type                                          | Library  |
+|------------------------|----------------------------------------------------------|----------|
+| Include everything     | `akruti/akruti.hpp`                                      | Akruti   |
+| A shape                | `Circle`, `Box`, `OrientedBox`, `Capsule`, `Sector`, …   | Akruti   |
+| Signed distance        | `shape.sdf(p)`                                           | Akruti   |
+| Overlap + manifold     | `collide_obb_obb(a, b)`, `collide_gjk_warm_started(...)` | Akruti   |
+| CSG (zero-alloc)       | `a \| b`, `a & b`, `a - b`                               | Akruti   |
+| Broadphase             | `scene::Scene{}.broadphase_pairs()`                      | Akruti   |
+| Include everything     | `kalpana/kalpana.hpp`                                    | Kalpana  |
+| Path / shape           | `Path::round_rect(...)`, `Path::add_circle(...)`         | Kalpana  |
+| Paint                  | `Paint::filled_outlined(...)`, `Paint::gradient(...)`    | Kalpana  |
+| Cheap realistic mixing | `spectral::mix(a, b, t)`                                 | Kalpana  |
+| Render                 | `Canvas<Backend>(w,h).render(scene)`, `.snapshot()`      | Kalpana  |
+| Run your game          | `Game game; game.update(dt); game.alpha();`              | Gati     |
+| Fixed step clock       | `game.clock().dt()`, `.total_steps()`, `.alpha()`        | Gati     |
+| ECS                    | `game.world().spawn()/add()/get()/view()`                | Gati     |
+| Include everything     | `spandana/spandana.hpp`                                  | Spandana |
+| Animate a value        | `tween(prop).to(v).ease(...)`, `spring(prop).target(v)`  | Spandana |
+| Particles / shake      | `particle_burst()`, `shake_camera(cam).trauma(...)`      | Spandana |
+| Change of state        | `set_material(...)`, `apply_heat(...)`, `reaction(A, B)` | Spandana |
 
 Go build the whole elephant. 🐘

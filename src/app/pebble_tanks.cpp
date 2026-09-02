@@ -218,7 +218,8 @@ struct PocketTanksApp {
 
     // Prakriti Multiphysics World
     TerrainObstacles terrain_obstacles;
-    std::unique_ptr<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, TankMechanics>> world;
+    std::unique_ptr<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, TankMechanics>>
+    world;
     prakriti::PhaseRuleEngine phase_engine;
 
     prakriti::MaterialId mat_soil{};
@@ -261,8 +262,8 @@ static PocketTanksApp g_app;
 static float eval_terrain_height(float x) {
     const float y_base = 530.0f;
     float h = y_base - 70.0f * std::sin(x * 0.0055f)
-                   + 40.0f * std::cos(x * 0.012f)
-                   - 25.0f * std::sin(x * 0.024f);
+        + 40.0f * std::cos(x * 0.012f)
+        - 25.0f * std::sin(x * 0.024f);
     return std::clamp(h, 280.0f, 640.0f);
 }
 
@@ -329,24 +330,35 @@ static void init_tanks_world() {
         )
     };
 
-    app.world = std::make_unique<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, TankMechanics>>(
+    app.world = std::make_unique<prakriti::World<
+        prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, TankMechanics>>(
         cfg, mechanics
     );
 
     // 5. Register Geological & Combat Materials
-    prakriti::MaterialParams topsoil_mat{.rest_density = 0.9f, .conductivity = 12.0f, .heat_capacity = 1.4f, .melt_temp = 650.0f};
+    prakriti::MaterialParams topsoil_mat{
+        .rest_density = 0.9f, .conductivity = 12.0f, .heat_capacity = 1.4f, .melt_temp = 650.0f
+    };
     app.mat_soil = app.world->materials().add(topsoil_mat);
 
-    prakriti::MaterialParams sandstone_mat{.rest_density = 1.4f, .conductivity = 22.0f, .heat_capacity = 1.0f, .melt_temp = 850.0f};
+    prakriti::MaterialParams sandstone_mat{
+        .rest_density = 1.4f, .conductivity = 22.0f, .heat_capacity = 1.0f, .melt_temp = 850.0f
+    };
     app.mat_sandstone = app.world->materials().add(sandstone_mat);
 
-    prakriti::MaterialParams granite_mat{.rest_density = 2.2f, .conductivity = 35.0f, .heat_capacity = 0.8f, .melt_temp = 1200.0f};
+    prakriti::MaterialParams granite_mat{
+        .rest_density = 2.2f, .conductivity = 35.0f, .heat_capacity = 0.8f, .melt_temp = 1200.0f
+    };
     app.mat_granite = app.world->materials().add(granite_mat);
 
-    prakriti::MaterialParams iron_ore_mat{.rest_density = 3.6f, .conductivity = 65.0f, .heat_capacity = 0.45f, .melt_temp = 1400.0f};
+    prakriti::MaterialParams iron_ore_mat{
+        .rest_density = 3.6f, .conductivity = 65.0f, .heat_capacity = 0.45f, .melt_temp = 1400.0f
+    };
     app.mat_iron_ore = app.world->materials().add(iron_ore_mat);
 
-    prakriti::MaterialParams armor_mat{.rest_density = 2.5f, .conductivity = 45.0f, .heat_capacity = 0.5f, .melt_temp = 950.0f};
+    prakriti::MaterialParams armor_mat{
+        .rest_density = 2.5f, .conductivity = 45.0f, .heat_capacity = 0.5f, .melt_temp = 950.0f
+    };
     app.mat_armor = app.world->materials().add(armor_mat);
 
     prakriti::MaterialParams fire_mat{.rest_density = 0.2f, .conductivity = 120.0f, .heat_capacity = 1.0f};
@@ -364,7 +376,8 @@ static void init_tanks_world() {
             prakriti::MaterialId mat = app.mat_soil;
             if (depth > 35.0f) {
                 mat = ((x / 28) % 5 == 0) ? app.mat_iron_ore : app.mat_granite;
-            } else if (depth > 12.0f) {
+            }
+            else if (depth > 12.0f) {
                 mat = app.mat_sandstone;
             }
             app.world->particles().add({
@@ -581,7 +594,8 @@ static void update_pocket_tanks_combat(float dt) {
         float target_ground_y = app.heightmap[tx_idx] - (tank.body_h * 0.5f);
         if (tank.y < target_ground_y) {
             tank.y += std::min(450.0f * dt, target_ground_y - tank.y);
-        } else {
+        }
+        else {
             tank.y = target_ground_y;
         }
 
@@ -616,7 +630,9 @@ static void update_pocket_tanks_combat(float dt) {
             tank.is_destroyed = true;
 
             // Spawn explosion wreck blast
-            app.blasts.push_back({.x = tank.x, .y = tank.y, .radius = 0.0f, .max_radius = 50.0f, .life = 1.0f, .team = tank.team});
+            app.blasts.push_back({
+                .x = tank.x, .y = tank.y, .radius = 0.0f, .max_radius = 50.0f, .life = 1.0f, .team = tank.team
+            });
             for (int k = 0; k < 18; ++k) {
                 app.embers.push_back({
                     .x = tank.x + (float(std::rand() % 20) - 10.0f),
@@ -671,7 +687,8 @@ static void update_pocket_tanks_combat(float dt) {
 
             if (dx < 0.0f) {
                 tank.target_turret_angle = -(std::numbers::pi_v<float> - theta);
-            } else {
+            }
+            else {
                 tank.target_turret_angle = -theta;
             }
 
@@ -779,7 +796,8 @@ static void update_pocket_tanks_combat(float dt) {
         }
 
         // Trigger Realistic Multi-Stage Bomb Explosion & Soil Fountain
-        if (hit_terrain || hit_tank || hit_building || shell.x < 10.0f || shell.x > FW - 10.0f || shell.y > FH - 10.0f) {
+        if (hit_terrain || hit_tank || hit_building || shell.x < 10.0f || shell.x > FW - 10.0f || shell.y > FH -
+            10.0f) {
             shell.active = false;
 
             // Phase 1: Supersonic Pressure Wave & Core Fireball Flash
@@ -878,7 +896,9 @@ static void update_pocket_tanks_combat(float dt) {
             // Phase 5: Rising Mushroom Cloud & Billowing Dark Smoke Column
             for (int k = 0; k < 28; ++k) {
                 bool is_dark_smoke = (k % 2 == 0);
-                float smoke_vy = is_dark_smoke ? -(140.0f + float(std::rand() % 160)) : -(80.0f + float(std::rand() % 180));
+                float smoke_vy = is_dark_smoke
+                                     ? -(140.0f + float(std::rand() % 160))
+                                     : -(80.0f + float(std::rand() % 180));
                 app.embers.push_back({
                     .x = shell.x + (float(std::rand() % 24) - 12.0f),
                     .y = shell.y,
@@ -986,7 +1006,9 @@ static void update_pocket_tanks_combat(float dt) {
 
         if (plane.hp <= 0.0f) {
             plane.is_destroyed = true;
-            app.blasts.push_back({.x = plane.x, .y = plane.y, .radius = 0.0f, .max_radius = 60.0f, .life = 1.0f, .team = plane.team});
+            app.blasts.push_back({
+                .x = plane.x, .y = plane.y, .radius = 0.0f, .max_radius = 60.0f, .life = 1.0f, .team = plane.team
+            });
         }
     }
 
@@ -1133,7 +1155,8 @@ static void build_tanks_scene(kalpana::Scene& scene) {
         for (uint32_t x = 4; x < W; x += 4) {
             subsoil_fill.line_to(float(x), app.heightmap[x]);
         }
-        scene.add(kalpana::Node::shape(subsoil_fill, kalpana::Paint::stroke(kalpana::Color{0.22f, 0.28f, 0.18f, 1.0f}, 12.0f)));
+        scene.add(kalpana::Node::shape(subsoil_fill,
+                                       kalpana::Paint::stroke(kalpana::Color{0.22f, 0.28f, 0.18f, 1.0f}, 12.0f)));
 
         // Surface Grass Crust
         kalpana::Path grass_crust;
@@ -1141,7 +1164,8 @@ static void build_tanks_scene(kalpana::Scene& scene) {
         for (uint32_t x = 4; x < W; x += 4) {
             grass_crust.line_to(float(x), app.heightmap[x]);
         }
-        scene.add(kalpana::Node::shape(grass_crust, kalpana::Paint::stroke(kalpana::Color{0.32f, 0.58f, 0.22f, 1.0f}, 4.0f)));
+        scene.add(kalpana::Node::shape(grass_crust,
+                                       kalpana::Paint::stroke(kalpana::Color{0.32f, 0.58f, 0.22f, 1.0f}, 4.0f)));
     }
 
     // 2b. Render Combustible Pine Trees (Normal, Burning, or Charred)
@@ -1167,8 +1191,8 @@ static void build_tanks_scene(kalpana::Scene& scene) {
         foliage.close();
 
         kalpana::Color foliage_col = tree.is_on_fire
-            ? kalpana::Color{0.95f, 0.38f, 0.08f, 1.0f} // Burning Orange
-            : kalpana::Color{0.18f, 0.44f, 0.14f, 1.0f}; // Pine Green
+                                         ? kalpana::Color{0.95f, 0.38f, 0.08f, 1.0f} // Burning Orange
+                                         : kalpana::Color{0.18f, 0.44f, 0.14f, 1.0f}; // Pine Green
 
         scene.add(kalpana::Node::shape(foliage, kalpana::Paint::fill(foliage_col)));
 
@@ -1194,10 +1218,11 @@ static void build_tanks_scene(kalpana::Scene& scene) {
         kalpana::Path facade;
         facade.rect(bldg.x - bldg.width * 0.5f, bldg.y - bldg.height, bldg.width, bldg.height);
         kalpana::Color facade_col = (bldg.team == Team::Red)
-            ? kalpana::Color{0.32f, 0.22f, 0.22f, 1.0f}
-            : kalpana::Color{0.20f, 0.26f, 0.35f, 1.0f};
+                                        ? kalpana::Color{0.32f, 0.22f, 0.22f, 1.0f}
+                                        : kalpana::Color{0.20f, 0.26f, 0.35f, 1.0f};
         scene.add(kalpana::Node::shape(facade, kalpana::Paint::fill(facade_col)));
-        scene.add(kalpana::Node::shape(facade, kalpana::Paint::stroke(kalpana::Color{0.10f, 0.12f, 0.15f, 1.0f}, 2.0f)));
+        scene.add(kalpana::Node::shape(
+            facade, kalpana::Paint::stroke(kalpana::Color{0.10f, 0.12f, 0.15f, 1.0f}, 2.0f)));
 
         // Illuminated Windows per Floor
         for (uint32_t f = 0; f < bldg.num_floors; ++f) {
@@ -1244,8 +1269,8 @@ static void build_tanks_scene(kalpana::Scene& scene) {
         jet.close();
 
         kalpana::Color plane_col = (plane.team == Team::Red)
-            ? kalpana::Color{0.92f, 0.30f, 0.25f, 1.0f}
-            : kalpana::Color{0.25f, 0.60f, 0.95f, 1.0f};
+                                       ? kalpana::Color{0.92f, 0.30f, 0.25f, 1.0f}
+                                       : kalpana::Color{0.25f, 0.60f, 0.95f, 1.0f};
 
         scene.add(kalpana::Node::shape(jet, kalpana::Paint::fill(plane_col)));
         scene.add(kalpana::Node::shape(jet, kalpana::Paint::stroke(kalpana::Color{0.95f, 0.95f, 0.98f, 1.0f}, 1.5f)));
@@ -1270,8 +1295,8 @@ static void build_tanks_scene(kalpana::Scene& scene) {
         }
 
         kalpana::Color body_col = (tank.team == Team::Red)
-            ? kalpana::Color{0.88f, 0.22f, 0.22f, 1.0f}
-            : kalpana::Color{0.22f, 0.55f, 0.92f, 1.0f};
+                                      ? kalpana::Color{0.88f, 0.22f, 0.22f, 1.0f}
+                                      : kalpana::Color{0.22f, 0.55f, 0.92f, 1.0f};
 
         if (tank.is_melting) {
             body_col = kalpana::Color{1.0f, 0.45f, 0.10f, 1.0f}; // Molten glow
@@ -1279,9 +1304,11 @@ static void build_tanks_scene(kalpana::Scene& scene) {
 
         // Tank Tread Chassis
         kalpana::Path chassis;
-        chassis.round_rect(tank.x - tank.body_w * 0.5f, tank.y - tank.body_h * 0.5f, tank.body_w, tank.body_h, 3.0f, 3.0f);
+        chassis.round_rect(tank.x - tank.body_w * 0.5f, tank.y - tank.body_h * 0.5f, tank.body_w, tank.body_h, 3.0f,
+                           3.0f);
         scene.add(kalpana::Node::shape(chassis, kalpana::Paint::fill(body_col)));
-        scene.add(kalpana::Node::shape(chassis, kalpana::Paint::stroke(kalpana::Color{0.08f, 0.08f, 0.10f, 1.0f}, 1.5f)));
+        scene.add(
+            kalpana::Node::shape(chassis, kalpana::Paint::stroke(kalpana::Color{0.08f, 0.08f, 0.10f, 1.0f}, 1.5f)));
 
         // Tank Turret Barrel
         float recoil_offset = tank.firing_recoil * 3.5f;
@@ -1292,7 +1319,8 @@ static void build_tanks_scene(kalpana::Scene& scene) {
         kalpana::Path barrel;
         barrel.move_to(tank.x, tank.y - 2.0f);
         barrel.line_to(muzzle_x, muzzle_y);
-        scene.add(kalpana::Node::shape(barrel, kalpana::Paint::stroke(kalpana::Color{0.85f, 0.88f, 0.92f, 1.0f}, 3.5f)));
+        scene.add(kalpana::Node::shape(
+            barrel, kalpana::Paint::stroke(kalpana::Color{0.85f, 0.88f, 0.92f, 1.0f}, 3.5f)));
 
         // Turret Cap Dome
         kalpana::Path dome;
@@ -1307,7 +1335,9 @@ static void build_tanks_scene(kalpana::Scene& scene) {
 
         kalpana::Path hp_fg;
         hp_fg.rect(tank.x - 14.0f, tank.y - 15.0f, 28.0f * hp_ratio, 3.0f);
-        kalpana::Color hp_col = hp_ratio > 0.5f ? kalpana::Color{0.2f, 0.85f, 0.3f, 1.0f} : kalpana::Color{0.9f, 0.2f, 0.2f, 1.0f};
+        kalpana::Color hp_col = hp_ratio > 0.5f
+                                    ? kalpana::Color{0.2f, 0.85f, 0.3f, 1.0f}
+                                    : kalpana::Color{0.9f, 0.2f, 0.2f, 1.0f};
         scene.add(kalpana::Node::shape(hp_fg, kalpana::Paint::fill(hp_col)));
     }
 
@@ -1316,8 +1346,8 @@ static void build_tanks_scene(kalpana::Scene& scene) {
         kalpana::Path shell_path;
         shell_path.circle(shell.x, shell.y, shell.radius);
         kalpana::Color shell_col = (shell.team == Team::Red)
-            ? kalpana::Color{1.0f, 0.85f, 0.20f, 1.0f}
-            : kalpana::Color{0.30f, 0.85f, 1.0f, 1.0f};
+                                       ? kalpana::Color{1.0f, 0.85f, 0.20f, 1.0f}
+                                       : kalpana::Color{0.30f, 0.85f, 1.0f, 1.0f};
         scene.add(kalpana::Node::shape(shell_path, kalpana::Paint::fill(shell_col)));
     }
 
@@ -1326,7 +1356,8 @@ static void build_tanks_scene(kalpana::Scene& scene) {
         kalpana::Path tracer;
         tracer.move_to(flak.x, flak.y);
         tracer.line_to(flak.x - flak.vx * 0.03f, flak.y - flak.vy * 0.03f);
-        scene.add(kalpana::Node::shape(tracer, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.95f, 0.50f, 0.95f}, 2.2f)));
+        scene.add(kalpana::Node::shape(
+            tracer, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.95f, 0.50f, 0.95f}, 2.2f)));
     }
 
     // 4b. Render Flying Shrapnel Shards
@@ -1335,7 +1366,8 @@ static void build_tanks_scene(kalpana::Scene& scene) {
         kalpana::Path streak;
         streak.move_to(shard.x, shard.y);
         streak.line_to(shard.x - shard.vx * 0.04f, shard.y - shard.vy * 0.04f);
-        scene.add(kalpana::Node::shape(streak, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.90f, 0.35f, 0.90f}, 1.8f)));
+        scene.add(kalpana::Node::shape(
+            streak, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.90f, 0.35f, 0.90f}, 1.8f)));
     }
 
     // 5. Render Expanding Explosive Shockwave Rings
@@ -1344,8 +1376,8 @@ static void build_tanks_scene(kalpana::Scene& scene) {
         ring.circle(blast.x, blast.y, blast.radius);
         float alpha = std::clamp(blast.life, 0.0f, 1.0f);
         kalpana::Color blast_col = (blast.team == Team::Red)
-            ? kalpana::Color{1.0f, 0.40f, 0.10f, alpha * 0.85f}
-            : kalpana::Color{0.20f, 0.70f, 1.0f, alpha * 0.85f};
+                                       ? kalpana::Color{1.0f, 0.40f, 0.10f, alpha * 0.85f}
+                                       : kalpana::Color{0.20f, 0.70f, 1.0f, alpha * 0.85f};
         scene.add(kalpana::Node::shape(ring, kalpana::Paint::stroke(blast_col, 4.0f * alpha)));
     }
 
@@ -1367,9 +1399,11 @@ static void build_tanks_scene(kalpana::Scene& scene) {
                 kalpana::Color p_col{0.55f, 0.42f, 0.28f, 0.90f}; // Topsoil brown
                 if (mat == app.mat_sandstone) {
                     p_col = {0.72f, 0.58f, 0.42f, 0.90f}; // Sandstone tan
-                } else if (mat == app.mat_granite) {
+                }
+                else if (mat == app.mat_granite) {
                     p_col = {0.35f, 0.38f, 0.42f, 0.95f}; // Granite slate gray
-                } else if (mat == app.mat_iron_ore) {
+                }
+                else if (mat == app.mat_iron_ore) {
                     p_col = {0.72f, 0.28f, 0.16f, 0.95f}; // Metallic iron ore rust
                 }
 
@@ -1387,9 +1421,11 @@ static void build_tanks_scene(kalpana::Scene& scene) {
         kalpana::Color col;
         if (em.is_smoke) {
             col = {0.45f, 0.48f, 0.52f, alpha * 0.40f};
-        } else if (em.temp > 1000.0f) {
+        }
+        else if (em.temp > 1000.0f) {
             col = {1.0f, 0.95f, 0.40f, alpha * 0.90f};
-        } else {
+        }
+        else {
             col = {1.0f, 0.40f, 0.08f, alpha * 0.85f};
         }
         app.instanced_particles.add_instance(em.x, em.y, em.size, col);
@@ -1400,7 +1436,8 @@ static void build_tanks_scene(kalpana::Scene& scene) {
         kalpana::Path hud_bg;
         hud_bg.rect(15.0f, 15.0f, FW - 30.0f, 48.0f);
         scene.add(kalpana::Node::shape(hud_bg, kalpana::Paint::fill(kalpana::Color{0.06f, 0.08f, 0.12f, 0.85f})));
-        scene.add(kalpana::Node::shape(hud_bg, kalpana::Paint::stroke(kalpana::Color{0.25f, 0.35f, 0.45f, 0.8f}, 1.5f)));
+        scene.add(kalpana::Node::shape(
+            hud_bg, kalpana::Paint::stroke(kalpana::Color{0.25f, 0.35f, 0.45f, 0.8f}, 1.5f)));
 
         // Red Score Status Indicator
         kalpana::Path red_ind;
@@ -1535,7 +1572,8 @@ static void event_cb(const sapp_event* ev) {
 }
 
 sapp_desc sokol_main(int argc, char* argv[]) {
-    (void)argc; (void)argv;
+    (void)argc;
+    (void)argv;
     sapp_desc app{};
     app.init_cb = init_cb;
     app.frame_cb = frame_cb;

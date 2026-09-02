@@ -81,7 +81,7 @@ namespace lang::telemetry {
                 std::get<outcome_field>(pulse.payload).value =
                     static_cast<std::uint8_t>(metric.outcome);
                 std::get<elapsed_field>(pulse.payload).value = metric.elapsed;
-                utils::nadi::route_pulse<Sink>(pulse);
+                utils::nadi::route_pulse < Sink > (pulse);
             }
         }
     };
@@ -112,13 +112,17 @@ namespace lang::telemetry {
     class basic_phase_scope<Observer, true> {
         using stage_field = utils::nadi::Field<"phase", std::uint8_t>;
         using unit_field = utils::nadi::Field<"unit", std::uint64_t>;
+
         struct no_trace_scope {
             constexpr no_trace_scope(stage_field, unit_field) noexcept {}
         };
+
         using trace_scope = std::conditional_t<Observer::nadi_sink::enabled,
-            utils::nadi::PulseScope<typename Observer::nadi_sink,
-                                    "language.phase", stage_field, unit_field>,
-            no_trace_scope>;
+                                               utils::nadi::PulseScope < typename Observer::nadi_sink,
+                                               "language.phase", stage_field, unit_field>
+        ,
+        no_trace_scope
+        >;
         using elapsed_field = utils::nadi::Field<"elapsed", std::uint64_t>;
         using outcome_field = utils::nadi::Field<"outcome", std::uint8_t>;
         using entities_field = utils::nadi::Field<"entities", std::uint32_t>;
@@ -156,7 +160,7 @@ namespace lang::telemetry {
                 std::get<elapsed_field>(pulse.payload).value = metric.elapsed;
                 std::get<outcome_field>(pulse.payload).value = static_cast<std::uint8_t>(outcome_);
                 std::get<entities_field>(pulse.payload).value = context_.entity_count;
-                utils::nadi::route_pulse<typename Observer::nadi_sink>(pulse);
+                utils::nadi::route_pulse < typename Observer::nadi_sink > (pulse);
             }
         }
 

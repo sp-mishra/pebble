@@ -8,7 +8,7 @@
 // Does NOT change vakya.hpp, lithe_core.hpp, or any existing Vākya surface.
 // New headers are opt-in; this file just pulls them all at once.
 
-// V2 type-system stack (unchanged)
+// Core type-system stack
 #include "vakya/types.hpp"            // type_node / type_ref / type_arena
 #include "vakya/unification.hpp"       // substitution / unify / apply / generalize / instantiate
 #include "vakya/constraints.hpp"       // constraint / constraint_solver / composite_solver / unification_solver
@@ -20,7 +20,7 @@
 #include "vakya/validation.hpp"        // validator / validation_report
 #include "vakya/diagnostics.hpp"       // diagnostic / diagnostic_sink / null_sink / collecting_sink
 
-// V3 constraint-reasoning stack (opt-in; each header is independently includable)
+// Constraint-reasoning stack (opt-in; each header is independently includable)
 #include "vakya/types/type_registry.hpp"    // runtime type-descriptor registry
 #include "vakya/types/capability.hpp"       // capability_descriptor + mask
 #include "vakya/types/effect.hpp"           // effect_descriptor + mask
@@ -32,3 +32,17 @@
 #include "vakya/type_rewrite.hpp"           // type-level rewriting via egraph
 #include "vakya/verify.hpp"                 // formal verification via SMT
 #include "vakya/query.hpp"                  // lazy semantic query engine
+
+// Semantic-optimization stack (opt-in; each header independently includable).
+// All are additive: they hang off the reasoning-layer leaves and cost nothing when unused.
+#include "vakya/types/opt_handles.hpp"     // fwd handle tags + enums for analysis_record
+#include "vakya/types/region.hpp"           // ownership/aliasing region algebra
+#include "vakya/alias.hpp"                  // disjointness constraint + may_alias
+#include "vakya/types/effect_row.hpp"       // effect polymorphism / effect rows
+#include "vakya/types/value_param.hpp"      // const-generic value params + SIMD/tile synthesis
+#include "vakya/types/typestate.hpp"        // affine typestate protocols
+#include "vakya/types/rw_summary.hpp"       // read/write summaries + conflict prediction
+#include "vakya/exec_affinity.hpp"          // capability-inferred scheduling affinity
+#include "vakya/cost.hpp"                   // compile-time cost lattice
+#include "vakya/types/refine.hpp"           // refinement subtyping + bounds-check elision
+#include "vakya/proof_carrying.hpp"         // proof-carrying optimization / certificates

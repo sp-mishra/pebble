@@ -23,12 +23,22 @@
 #include "compute/scalar_backend.hpp"
 #include "compute/highway_backend.hpp"
 #include "compute/pravaha_backend.hpp"
+#include "compute/backends.hpp"
 #include "solvers/kernels.hpp"
 #include "solvers/solver_base.hpp"
 #include "solvers/thermal.hpp"
 #include "solvers/xpbd.hpp"
 #include "solvers/density.hpp"
 #include "solvers/damage.hpp"
+
+// Muscle system
+#include "constraints/fatigue_policies.hpp"
+#include "constraints/fiber_models.hpp"
+#include "constraints/tendon_models.hpp"
+#include "constraints/muscle.hpp"
+#include "state/muscle_store.hpp"
+#include "solvers/muscle.hpp"
+
 #include "engine.hpp"
 
 // Optional akruti integration (rigid-obstacle contact + joints). Included only when akruti is on

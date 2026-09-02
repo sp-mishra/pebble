@@ -1,8 +1,8 @@
 # Tarka — Zero-Overhead Multi-Solver SMT Substrate
 
-**Status:** Implemented. Header-only, C++23, no virtual, no macros.
-**Layer:** Leaf substrate *below* Vākya/Lithe — they consume Tarka; Tarka has zero upward dependency.
-**Primary backend:** Z3 (already vendored, `HAS_Z3`); all other backends are compile-time-optional stubs behind
+**Status:** Implemented. Header-only, C++23, no virtual, no macros. **Layer:** Leaf substrate *below* Vākya/Lithe — they
+consume Tarka; Tarka has zero upward dependency. **Primary backend:** Z3 (already vendored, `HAS_Z3`); all other
+backends are compile-time-optional stubs behind
 `__has_include`.
 
 Tarka owns a value-semantic term algebra (hash-consed AST) and a solver-agnostic dispatch layer. It reuses the existing
@@ -109,36 +109,48 @@ against the target `Sort`.
 ### Backends
 
 - **`native_backend`** (`tarka/backends/native_backend.hpp`, zero external dependencies, header-only):
-  Production-grade native DPLL(T) SMT solver built entirely from first principles on Pebble internal algorithms:
-  - **Propositional Core (`cdcl_solver.hpp`)**:
-    - **2-Watched Literal Scheme**: Zero-scan Boolean constraint propagation ($O(1)$ backtrack time).
-    - **1UIP Conflict Analysis & Non-Chronological Backtracking**: Computes first Unique Implication Points to construct optimal asserting conflict clauses.
-    - **VSIDS (Variable State Independent Decaying Sum)**: Exponentially decayed variable activity heuristics for branch ordering.
-    - **Luby Sequence Restarts & Phase Saving**: Escapes search dead-ends with optimal restart cadence and polar phase persistence.
-  - **Theory of Uninterpreted Functions (`theory_uf.hpp` / `egraph.hpp`)**:
-    - Congruence closure using Pebble's union-find engine and structural hash-consing.
-    - Incremental merge, explain-trail, and deducing equalities across nested functions ($f(x) = f(y)$ if $x = y$).
-  - **Theory of Fixed-Size Bit-Vectors (`theory_bv.hpp`)**:
-    - Complete Tseitin bit-blaster into native CNF propositions:
-      - Full-adder chains for bitwise additions (`BvAdd`, `BvSub`).
-      - Booth/Wallace-tree style bitwise multiplication (`BvMul`), unsigned/signed division/modulo (`BvUDiv`, `BvURem`).
-      - Bitwise logic (`BvAnd`, `BvOr`, `BvXor`, `BvNot`, `BvShl`, `BvLShr`, `BvAShr`).
-      - Sub-vector extraction (`BvExtract`), concatenation (`BvConcat`), sign/zero extensions.
-      - Structural word-level equalities and order comparisons (`BvUlt`, `BvSlt`, `BvUle`, `BvSle`).
-  - **Linear Real & Integer Arithmetic (`theory_lra.hpp`, `theory_dl.hpp`)**:
-    - **Incremental Simplex Tableau**: Slack-variable augmented matrix with exact rational representation (`ExactRational`).
-    - **Bland's Anti-Cycling Rule**: Guaranteed termination on degenerate pivots.
-    - **Difference Logic (`theory_dl.hpp`)**: Bellman-Ford / Floyd-Warshall negative cycle detection on constraint graphs for $x - y \le k$ fast-path solving.
-  - **Theory of Arrays (`theory_array.hpp`)**:
-    - Extensional Array Theory ($QF\_AX$): Enforces McCarthy's read-over-write axioms ($Select(Store(A, i, v), i) = v$ and $i \ne j \implies Select(Store(A, i, v), j) = Select(A, j)$) with weak extensionality lemmas.
-  - **Nelson-Oppen Multi-Theory Combination (`theory_combination.hpp`)**:
-    - Cooperating DPLL(T) architecture: stably infinite theory arrangement, convex and non-convex interface equality propagation, and back-propagated conflict lemmas.
-  - **Simplification & Model Validation**:
-    - Pre-solve algebraic AST simplification (`simplifier.hpp`).
-    - Independent SAT/SMT model formatting and certificate verification (`model_validator.hpp`).
-- **`z3_backend`** (primary external, `#if defined(HAS_Z3) && __has_include(<z3++.h>)`): owns `z3::context`+`z3::solver`; lowers
+  Production-grade native DPLL (T) SMT solver built entirely from first principles on Pebble internal algorithms:
+    - **Propositional Core (`cdcl_solver.hpp`)**:
+        - **2-Watched Literal Scheme**: Zero-scan Boolean constraint propagation ($O (1)$ backtrack time).
+        - **1UIP Conflict Analysis & Non-Chronological Backtracking**: Computes first Unique Implication Points to
+          construct optimal asserting conflict clauses.
+        - **VSIDS (Variable State Independent Decaying Sum)**: Exponentially decayed variable activity heuristics for
+          branch ordering.
+        - **Luby Sequence Restarts & Phase Saving**: Escapes search dead-ends with optimal restart cadence and polar
+          phase persistence.
+    - **Theory of Uninterpreted Functions (`theory_uf.hpp` / `egraph.hpp`)**:
+        - Congruence closure using Pebble's union-find engine and structural hash-consing.
+        - Incremental merge, explain-trail, and deducing equalities across nested functions ($f (x) = f (y)$
+          if $x = y$).
+    - **Theory of Fixed-Size Bit-Vectors (`theory_bv.hpp`)**:
+        - Complete Tseitin bit-blaster into native CNF propositions:
+            - Full-adder chains for bitwise additions (`BvAdd`, `BvSub`).
+            - Booth/Wallace-tree style bitwise multiplication (`BvMul`), unsigned/signed division/modulo (`BvUDiv`,
+              `BvURem`).
+            - Bitwise logic (`BvAnd`, `BvOr`, `BvXor`, `BvNot`, `BvShl`, `BvLShr`, `BvAShr`).
+            - Sub-vector extraction (`BvExtract`), concatenation (`BvConcat`), sign/zero extensions.
+            - Structural word-level equalities and order comparisons (`BvUlt`, `BvSlt`, `BvUle`, `BvSle`).
+    - **Linear Real & Integer Arithmetic (`theory_lra.hpp`, `theory_dl.hpp`)**:
+        - **Incremental Simplex Tableau**: Slack-variable augmented matrix with exact rational representation
+          (`ExactRational`).
+        - **Bland's Anti-Cycling Rule**: Guaranteed termination on degenerate pivots.
+        - **Difference Logic (`theory_dl.hpp`)**: Bellman-Ford / Floyd-Warshall negative cycle detection on constraint
+          graphs for $x - y \le k$ fast-path solving.
+    - **Theory of Arrays (`theory_array.hpp`)**:
+        - Extensional Array Theory ($QF\_AX$): Enforces McCarthy's read-over-write axioms
+          ($Select (Store (A, i, v), i) = v$ and $i \ne j \implies Select (Store (A, i, v), j) = Select (A, j)$) with
+          weak extensionality lemmas.
+    - **Nelson-Oppen Multi-Theory Combination (`theory_combination.hpp`)**:
+        - Cooperating DPLL (T) architecture: stably infinite theory arrangement, convex and non-convex interface
+          equality propagation, and back-propagated conflict lemmas.
+    - **Simplification & Model Validation**:
+        - Pre-solve algebraic AST simplification (`simplifier.hpp`).
+        - Independent SAT/SMT model formatting and certificate verification (`model_validator.hpp`).
+- **`z3_backend`** (primary external, `#if defined(HAS_Z3) && __has_include(<z3++.h>)`): owns `z3::context`+
+  `z3::solver`; lowers
   `Term`→`z3::expr` via post-order walk cached in `ShardedCache<uint64_t, Z3_ast>` (shared-DAG subterms lower once).
-  Cancellation via `z3::context::interrupt()` wired to the `stop_token`. Used for differential testing and external oracle verification.
+  Cancellation via `z3::context::interrupt()` wired to the `stop_token`. Used for differential testing and external
+  oracle verification.
 - **`no_solver_backend`** (zero-cost default, always available): every op returns `deferred`/`Unknown`, mirroring
   `vakya::types::no_smt_backend`. `RouterEngine<>` defaults to it, so Tarka builds and its non-solver tests pass even
   with `BUILD_Z3=OFF`.
@@ -173,6 +185,26 @@ route(term):
   `(theory_family, backend_id, hardware_signature)`. The base router is stateless (static weights); feedback compiles in
   only when its header is included.
 
+### 5.1 Native CDCL core
+
+The native backend's SAT engine (`native/cdcl_solver.hpp`) is a modern CDCL solver built on reused Pebble containers (no
+virtual, no macros):
+
+- **Branching — order-heap VSIDS.** Variable selection uses the generic
+  `containers::associative::order_heap<Compare>` (max-heap keyed by an external mutable activity array) instead of the
+  previous linear `O(V)` scan. `pick_branch_var` pops until it finds an unassigned variable; `bump_var` calls
+  `increase`; backjumping re-inserts freed variables. A linear fallback is kept for very small variable counts so tiny
+  formulas keep their exact prior behavior.
+- **BCP — 2-watched literals + blocking literals.** Each watch stores a `{ClauseRef, Lit blocker}` pair; propagation
+  first tests the cached blocker's truth value and skips visiting the clause body when the blocker is already satisfied,
+  cutting cache misses on the hot path.
+- **Learning — LBD via `SparseSet`.** `compute_lbd` counts distinct decision levels in a learned clause using a
+  `sparseset::SparseSet` scratch instead of a 64-bit mask, so the glue value is exact for clauses spanning more than 64
+  levels (the old mask silently saturated).
+- **Clause DB — LBD tiers + reduce.** Learned clauses are tiered by LBD (core / mid / local); `reduce_db` keeps low-LBD
+  glue clauses and gives recently-used clauses a one-round reprieve, and `compact_db` reclaims arena space.
+- **Restarts.** Adaptive LBD-EMA (fast/slow exponential moving averages) with a Luby sequence fallback.
+
 ---
 
 ## 6. Equality saturation (opt-in)
@@ -184,8 +216,8 @@ route(term):
   `payload_hash = structural_payload_hash(node)`. Three overloads: 2-arg (local visited map), 3-arg (caller-provided
   visited map), 4-arg (+ `sort_map*` for sort-typed reconstruction). Passing `sort_map` enables full term reconstruction
   after saturation.
-- Reuses the generic `commutativity` / `associativity` / `identity_zero` rule packs parametrized on a Tarka `OpTraits` (
-  And/Or/Add/Mul ids); `is_commutative` sourced from `op_descriptor` (no second table).
+- Reuses the generic `commutativity` / `associativity` / `identity_zero` rule packs parametrized on a Tarka `OpTraits`
+  (And/Or/Add/Mul ids); `is_commutative` sourced from `op_descriptor` (no second table).
 - **`reconstruct_from_egraph(graph, root, extraction_result, sort_map, ctx)`** — iterative post-order walk over
   `extraction_result.best_nodes`; rebuilds each class's chosen e_node into a typed Tarka `Term` via `ctx.make_term`.
   Returns `std::nullopt` if any class lacks a best node or sort mapping. Sort map keys are re-compressed after
@@ -193,6 +225,10 @@ route(term):
 - **`egraph_optimize(Term, saturation_config)`** — intern (with sort tracking) → saturate (commutativity +
   associativity + identity_zero) → `extract_best<node_count_cost>` → reconstruct. Falls back to the original term if no
   node-count improvement or reconstruction fails.
+- **`egraph_node_count_dag(Term)`** — counts *distinct hash-consed* nodes by walking children through the inline
+  `reinterpret_cast<const Term*>(impl+1)` layout and deduplicating `const TermImpl*` in an `unordered_set`. The former
+  tree count double-counted every shared subterm, so `after_count ≥ before_count` always held and `egraph_optimize`
+  never accepted a rewrite; the DAG count makes the improvement test fire on genuinely smaller terms.
 
 ---
 
@@ -215,27 +251,28 @@ route(term):
 
 ## 8. Opt-in header matrix
 
-| Header                          | Pulls threads? | Pulls Z3? | Purpose                                                          |
-|---------------------------------|----------------|-----------|------------------------------------------------------------------|
-| `tarka/tarka.hpp`               | no             | no        | umbrella: term + context + backend concept + no_solver           |
-| `tarka/term.hpp`                | no             | no        | Term/Sort/Op handles + `op_descriptor`                           |
-| `tarka/context.hpp`             | no             | no        | arena + hash-consing/CSE                                         |
-| `tarka/backend.hpp`             | no             | no        | `SmtSolverBackend`/`CancelableBackend` concepts                  |
-| `tarka/backends/native_backend.hpp` | no         | no        | full zero-dependency native SMT solver (CDCL, EUF, BV, LRA, AX)  |
-| `tarka/backends/no_solver.hpp`  | no             | no        | zero-cost default backend                                        |
-| `tarka/backends/z3_backend.hpp` | no             | yes       | Z3 lowering + solve (guarded `HAS_Z3`)                           |
-| `tarka/native/simplifier.hpp`   | no             | no        | pre-encoding algebraic AST simplification pass                   |
-| `tarka/frontend/ir.hpp`         | no             | no        | frontend-neutral SMT script IR, spans, names, diagnostics         |
-| `tarka/frontend/smt2_lexy.hpp`  | yes            | no        | Lexy SMT-LIB2 syntax frontend → shared IR                         |
-| `tarka/frontend/smt2_samasa.hpp`| no            | no        | Samasa SMT-LIB2 scanner/event frontend → shared IR                |
-| `tarka/frontend/lower_to_tarka.hpp`| no          | no        | shared IR semantic lowering and RouterEngine execution            |
-| `tarka/frontend/smt2_printer.hpp`| no            | no        | SMT-LIB2 term, sort, and benchmark script serializer             |
-| `tarka/native/model_validator.hpp`| no           | no        | SAT model formatter and independent assertion validator          |
-| `tarka/native/theory_quant.hpp` | no             | no        | quantifier instantiation (E-matching & Skolemization)            |
-| `tarka/features.hpp`            | no             | no        | theory extractor + capability-mask router                        |
-| `tarka/egraph_opt.hpp`          | no             | no        | intern + reconstruct + `egraph_optimize` (sort-typed round-trip) |
-| `tarka/async.hpp`               | yes            | no        | `SmtTask` + worker pool                                          |
-| `tarka/portfolio.hpp`           | yes            | no        | competitive solving (no-hang)                                    |
+| Header                                  | Pulls threads? | Pulls Z3? | Purpose                                                          |
+|-----------------------------------------|----------------|-----------|------------------------------------------------------------------|
+| `tarka/tarka.hpp`                       | no             | no        | umbrella: term + context + backend concept + no_solver           |
+| `tarka/term.hpp`                        | no             | no        | Term/Sort/Op handles + `op_descriptor`                           |
+| `tarka/context.hpp`                     | no             | no        | arena + hash-consing/CSE                                         |
+| `tarka/backend.hpp`                     | no             | no        | `SmtSolverBackend`/`CancelableBackend` concepts                  |
+| `tarka/backends/native_backend.hpp`     | no             | no        | full zero-dependency native SMT solver (CDCL, EUF, BV, LRA, AX)  |
+| `tarka/backends/no_solver.hpp`          | no             | no        | zero-cost default backend                                        |
+| `tarka/backends/z3_backend.hpp`         | no             | yes       | Z3 lowering + solve (guarded `HAS_Z3`)                           |
+| `tarka/native/simplifier.hpp`           | no             | no        | pre-encoding algebraic AST simplification pass                   |
+| `tarka/frontend/ir.hpp`                 | no             | no        | frontend-neutral SMT script IR, spans, names, diagnostics        |
+| `tarka/frontend/smt2_lexy.hpp`          | yes            | no        | Lexy SMT-LIB2 syntax frontend → shared IR                        |
+| `tarka/frontend/smt2_samasa.hpp`        | no             | no        | Samasa SMT-LIB2 scanner/event frontend → shared IR               |
+| `tarka/frontend/lower_to_tarka.hpp`     | no             | no        | shared IR semantic lowering and RouterEngine execution           |
+| `tarka/frontend/smt2_printer.hpp`       | no             | no        | SMT-LIB2 term, sort, and benchmark script serializer             |
+| `tarka/native/model_validator.hpp`      | no             | no        | SAT model formatter and independent assertion validator          |
+| `tarka/native/theory_quant.hpp`         | no             | no        | quantifier instantiation (E-matching & Skolemization)            |
+| `tarka/features.hpp`                    | no             | no        | theory extractor + capability-mask router                        |
+| `tarka/egraph_opt.hpp`                  | no             | no        | intern + reconstruct + `egraph_optimize` (sort-typed round-trip) |
+| `containers/associative/order_heap.hpp` | no             | no        | generic mutable-key max-heap; backs native CDCL VSIDS branching  |
+| `tarka/async.hpp`                       | yes            | no        | `SmtTask` + worker pool                                          |
+| `tarka/portfolio.hpp`                   | yes            | no        | competitive solving (no-hang)                                    |
 
 ---
 
@@ -283,8 +320,8 @@ it**, and has no include into `vakya/` or `edsl/`, so the existing Vākya→Lith
   and extension kinds (≥ `kConstraintKindExtensionBase`) by reading a `tarka::Term*` (cast from `constraint.payload`).
   Zero overhead for other constraint kinds.
 
-**Construction:** both wrappers are **default-constructed in place** — required for backends owning non-movable state (
-e.g. `z3_backend` holds a `z3::context`, which z3++ marks non-copyable/non-movable). The by-value ctor that adopts a
+**Construction:** both wrappers are **default-constructed in place** — required for backends owning non-movable state
+(e.g. `z3_backend` holds a `z3::context`, which z3++ marks non-copyable/non-movable). The by-value ctor that adopts a
 preconfigured backend is constrained on `std::movable<TarkaBackend>`, so it participates only for movable backends and
 never breaks non-movable ones.
 
@@ -307,6 +344,64 @@ smt_solver.bridge().assert_tarka(f);
 auto status = smt_solver.bridge().check_sat();  // solve_status::solved / unsatisfiable / deferred
 ```
 
-**Choose Tarka** when you need solver-agnostic term construction + dispatch as a substrate below Vākya/Lithe. *
-*Choose `vakya::types::tarka_smt_backend`** when you want Z3 arithmetic constraint solving wired into the Vakya type
-system via Tarka. **Choose `vakya::types::smt_constraint_solver<no_smt_backend>`** when you only need the deferred stub.
+---
+
+## 11. Master End-to-End SMT Solving Examples
+
+### 11.1 BitVector Arithmetic & Overflow Verification
+
+```cpp
+#include "tarka/tarka.hpp"
+#include "tarka/backends/z3_backend.hpp"
+#include <iostream>
+
+int main() {
+    tarka::Context ctx;
+    auto bv32 = ctx.make_sort(tarka::SortKind::BitVec, {}, 32);
+
+    // Symbols
+    auto a = ctx.make_symbol("a", bv32);
+    auto b = ctx.make_symbol("b", bv32);
+    auto max_val = ctx.make_value(std::uint32_t{0xFFFFFFFF}, bv32);
+
+    // Formula: a > 0 && b > 0 && (a + b < a) [Checking for unsigned 32-bit addition overflow]
+    auto zero = ctx.make_value(std::uint32_t{0}, bv32);
+    tarka::Term overflow_condition = (a > zero) && (b > zero) && ((a + b) < a);
+
+    tarka::RouterEngine<tarka::backend::z3_backend> solver;
+    solver.assert_formula(overflow_condition);
+
+    auto result = solver.check_sat();
+    if (result && *result == tarka::SatResult::Sat) {
+        std::cout << "BitVector addition overflow is SATISFIABLE!\n";
+        auto model_a = solver.get_value(a);
+        auto model_b = solver.get_value(b);
+        std::cout << "Witness: a = " << model_a->as_uint64() << ", b = " << model_b->as_uint64() << "\n";
+    }
+}
+```
+
+### 11.2 Asynchronous Portfolio Solver Race
+
+```cpp
+#include "tarka/tarka.hpp"
+#include "tarka/portfolio.hpp"
+#include "tarka/backends/z3_backend.hpp"
+#include <iostream>
+
+void solve_async_portfolio(tarka::Term formula) {
+    // Spawns parallel solvers with cooperative stop tokens; first definitive result wins
+    tarka::PortfolioEngine<tarka::backend::z3_backend> portfolio;
+    
+    portfolio.assert_formula(formula);
+    auto future_result = portfolio.check_sat_async();
+
+    // Do other work while solvers race in background...
+    auto final_sat = future_result.get();
+    if (final_sat == tarka::SatResult::Sat) {
+        std::cout << "Portfolio solved: SAT\n";
+    } else if (final_sat == tarka::SatResult::Unsat) {
+        std::cout << "Portfolio solved: UNSAT\n";
+    }
+}
+```

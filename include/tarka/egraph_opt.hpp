@@ -25,9 +25,12 @@
 #include "tarka/context.hpp"
 #include "containers/graph/egraph.hpp"
 
+#include "containers/dynamic/SmallVector.hpp"
+
 #include <cstddef>
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace tarka {
@@ -52,6 +55,56 @@ namespace tarka {
     using TarkaEGraph = egraph::e_graph<std::size_t, std::size_t>;
 
     // =========================================================================
+    // payload_side_table — decouples egraph's numeric payload space from the
+    // term algebra's 64-bit payload_hash.
+    //
+    // egraph rule packs (identity_zero) compare a node's payload against the
+    // small sentinels TarkaOpTraits::zero_payload (0) / one_payload (1). Real
+    // literal payload_hashes are large arbitrary 64-bit values that would never
+    // match those sentinels, so the rules were dead. This table assigns each
+    // distinct payload a *dense id*, reserving id 0 for the integer literal `0`
+    // and id 1 for the integer literal `1`, so the generic identity rules fire.
+    // reconstruct then maps the id back to the true payload_hash — the egraph
+    // never sees, and can never corrupt, the real payload identity.
+    // =========================================================================
+
+    struct payload_side_table {
+        static constexpr std::size_t kZeroId = TarkaOpTraits::zero_payload; // 0
+        static constexpr std::size_t kOneId = TarkaOpTraits::one_payload; // 1
+
+        std::vector<std::uint64_t> id_to_payload{0, 0}; // slots 0,1 reserved
+        std::unordered_map<std::uint64_t, std::size_t> payload_to_id;
+
+        // Map a term's payload_hash to a dense egraph payload id.
+        [[nodiscard]] std::size_t intern_payload(Term t) {
+            const std::uint64_t ph = t.ptr()->payload_hash;
+            if (t.op() == Op::Lit) {
+                if (auto iv = t.ctx().int_literal(ph)) {
+                    if (*iv == 0) {
+                        id_to_payload[kZeroId] = ph;
+                        return kZeroId;
+                    }
+                    if (*iv == 1) {
+                        id_to_payload[kOneId] = ph;
+                        return kOneId;
+                    }
+                }
+            }
+            if (auto it = payload_to_id.find(ph); it != payload_to_id.end())
+                return it->second;
+            const std::size_t id = id_to_payload.size();
+            id_to_payload.push_back(ph);
+            payload_to_id.emplace(ph, id);
+            return id;
+        }
+
+        // Recover the true payload_hash from a dense id (0 if never interned).
+        [[nodiscard]] std::uint64_t payload_of(std::size_t id) const noexcept {
+            return id < id_to_payload.size() ? id_to_payload[id] : 0;
+        }
+    };
+
+    // =========================================================================
     // intern_into_egraph — post-order bridge
     //
     // 4-arg form: also populates sort_map with {canonical_class_id → Sort}
@@ -63,16 +116,17 @@ namespace tarka {
         TarkaEGraph& g,
         Term t,
         std::unordered_map<const TermImpl*, egraph::e_class_id>& visited,
-        std::unordered_map<egraph::e_class_id, Sort>* sort_map) {
+        std::unordered_map<egraph::e_class_id, Sort>* sort_map,
+        payload_side_table& payloads) {
         auto it = visited.find(t.ptr());
         if (it != visited.end()) return it->second;
 
         egraph::e_node<std::size_t, std::size_t> node;
         node.op = static_cast<std::size_t>(t.op());
-        node.payload = static_cast<std::size_t>(t.ptr()->payload_hash);
+        node.payload = payloads.intern_payload(t);
 
         for (const Term& c : t.children()) {
-            egraph::e_class_id cid = intern_into_egraph(g, c, visited, sort_map);
+            egraph::e_class_id cid = intern_into_egraph(g, c, visited, sort_map, payloads);
             node.children.push_back(cid);
         }
 
@@ -83,6 +137,17 @@ namespace tarka {
             sort_map->emplace(g.find(id), t.sort());
 
         return id;
+    }
+
+    // 4-arg legacy overload — self-contained side table (payload identity still
+    // preserved for reconstruction within this call).
+    inline egraph::e_class_id intern_into_egraph(
+        TarkaEGraph& g,
+        Term t,
+        std::unordered_map<const TermImpl*, egraph::e_class_id>& visited,
+        std::unordered_map<egraph::e_class_id, Sort>* sort_map) {
+        payload_side_table payloads;
+        return intern_into_egraph(g, t, visited, sort_map, payloads);
     }
 
     // 3-arg overload — no sort_map tracking
@@ -114,7 +179,8 @@ namespace tarka {
         egraph::e_class_id root_id,
         const ExtractionResult& result,
         const std::unordered_map<egraph::e_class_id, Sort>& sort_map,
-        Context& ctx) {
+        Context& ctx,
+        const payload_side_table& payloads) {
         std::unordered_map<egraph::e_class_id, Term> memo;
 
         struct Frame {
@@ -167,7 +233,7 @@ namespace tarka {
             Term rebuilt = ctx.make_term(
                 op, sort,
                 std::span<const Term>(child_terms.data(), child_terms.size()),
-                static_cast<std::uint64_t>(node.payload));
+                payloads.payload_of(node.payload));
 
             memo.emplace(cid, rebuilt);
             stack.pop_back();
@@ -188,22 +254,28 @@ namespace tarka {
     };
 
     // =========================================================================
-    // egraph_node_count — DAG-aware node count helper
+    // egraph_node_count_dag — DAG-aware unique-node count
+    //
+    // Counts *distinct* TermImpl nodes reachable from t. Hash-consing means a
+    // shared sub-term has one address, so this is the true DAG size. The old
+    // tree-count inflated shared formulae (1000 refs to 5 nodes → 1000), which
+    // made after_count >= before_count almost always true, so egraph_optimize
+    // never fired. Deduping fixes the comparison.
     // =========================================================================
 
-    [[nodiscard]] inline std::size_t egraph_node_count(Term t) noexcept {
-        std::size_t count = 0;
-        constexpr std::size_t kCap = 512;
-        const Term* buf[kCap];
-        std::size_t depth = 0;
-        buf[depth++] = &t;
-        while (depth > 0) {
-            ++count;
-            const Term* cur = buf[--depth];
-            for (const Term& c : cur->children())
-                if (depth < kCap) buf[depth++] = &c;
+    [[nodiscard]] inline std::size_t egraph_node_count_dag(Term t) {
+        std::unordered_set<const TermImpl*> seen;
+        seen.reserve(64);
+        containers::dynamic::SmallVector<const TermImpl*, 512 * sizeof(const TermImpl*)> stack;
+        if (t.valid()) stack.push_back(t.ptr());
+        while (!stack.empty()) {
+            const TermImpl* cur = stack.back();
+            stack.pop_back();
+            if (!seen.insert(cur).second) continue;
+            const Term* ch = reinterpret_cast<const Term*>(cur + 1);
+            for (std::uint16_t i = 0; i < cur->child_count; ++i) stack.push_back(ch[i].ptr());
         }
-        return count;
+        return seen.size();
     }
 
     // =========================================================================
@@ -221,8 +293,9 @@ namespace tarka {
 
         std::unordered_map<const TermImpl*, egraph::e_class_id> visited;
         std::unordered_map<egraph::e_class_id, Sort> sort_map;
+        payload_side_table payloads;
 
-        egraph::e_class_id root = intern_into_egraph(g, t, visited, &sort_map);
+        egraph::e_class_id root = intern_into_egraph(g, t, visited, &sort_map, payloads);
 
         // Compress sort_map keys after initial union-find path compression
         auto compress_sort_map = [&] {
@@ -251,7 +324,7 @@ namespace tarka {
         auto extraction = egraph::extract_best(g, root);
 
         // Compare node counts
-        const std::size_t before_count = egraph_node_count(t);
+        const std::size_t before_count = egraph_node_count_dag(t);
         const std::size_t after_count = [&] {
             std::size_t c = 0;
             for (const auto& n : extraction.best_nodes)
@@ -262,7 +335,7 @@ namespace tarka {
         if (after_count >= before_count) return t;
 
         Context& ctx = t.ctx();
-        auto rebuilt = reconstruct_from_egraph(g, root, extraction, sort_map, ctx);
+        auto rebuilt = reconstruct_from_egraph(g, root, extraction, sort_map, ctx, payloads);
         return rebuilt.value_or(t);
     }
 } // namespace tarka

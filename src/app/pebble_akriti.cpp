@@ -95,54 +95,54 @@ static kalpana::Path make_shape(ShapeType type, float x, float y, float r) {
     using namespace kalpana;
     Path p;
     switch (type) {
-        case ShapeType::Circle:
-            p = circle(x, y, r);
-            break;
-        case ShapeType::Rect:
-            p = rect(x - r * 0.9f, y - r * 0.9f, r * 1.8f, r * 1.8f);
-            break;
-        case ShapeType::RoundRect:
-            p = round_rect(x - r, y - r * 0.75f, r * 2.0f, r * 1.5f, r * 0.35f, r * 0.35f);
-            break;
-        case ShapeType::Star:
-            p = star(x, y, r, r * 0.45f, 5);
-            break;
-        case ShapeType::Triangle:
-            p = star(x, y, r, r * 0.5f, 3);
-            break;
-        case ShapeType::Hexagon:
-            p = star(x, y, r, r * 0.866f, 6);
-            break;
-        case ShapeType::Capsule: {
-            const float cap_len = r * 0.75f;
-            const float cap_r = r * 0.45f;
-            p.move_to(x - cap_len, y - cap_r);
-            p.line_to(x + cap_len, y - cap_r);
-            p.line_to(x + cap_len, y + cap_r);
-            p.line_to(x - cap_len, y + cap_r);
-            p.close();
-            break;
-        }
-        case ShapeType::Sector:
-            p = arc(x, y, r, -0.9f, 1.8f);
-            p.line_to(x, y);
-            p.close();
-            break;
-        case ShapeType::Diamond:
-            p.move_to(x, y - r);
-            p.line_to(x + r * 0.8f, y);
-            p.line_to(x, y + r);
-            p.line_to(x - r * 0.8f, y);
-            p.close();
-            break;
-        case ShapeType::NotchedBox:
-            p.move_to(x - r * 0.9f, y - r * 0.9f);
-            p.line_to(x, y - r * 0.3f);
-            p.line_to(x + r * 0.9f, y - r * 0.9f);
-            p.line_to(x + r * 0.9f, y + r * 0.9f);
-            p.line_to(x - r * 0.9f, y + r * 0.9f);
-            p.close();
-            break;
+    case ShapeType::Circle:
+        p = circle(x, y, r);
+        break;
+    case ShapeType::Rect:
+        p = rect(x - r * 0.9f, y - r * 0.9f, r * 1.8f, r * 1.8f);
+        break;
+    case ShapeType::RoundRect:
+        p = round_rect(x - r, y - r * 0.75f, r * 2.0f, r * 1.5f, r * 0.35f, r * 0.35f);
+        break;
+    case ShapeType::Star:
+        p = star(x, y, r, r * 0.45f, 5);
+        break;
+    case ShapeType::Triangle:
+        p = star(x, y, r, r * 0.5f, 3);
+        break;
+    case ShapeType::Hexagon:
+        p = star(x, y, r, r * 0.866f, 6);
+        break;
+    case ShapeType::Capsule: {
+        const float cap_len = r * 0.75f;
+        const float cap_r = r * 0.45f;
+        p.move_to(x - cap_len, y - cap_r);
+        p.line_to(x + cap_len, y - cap_r);
+        p.line_to(x + cap_len, y + cap_r);
+        p.line_to(x - cap_len, y + cap_r);
+        p.close();
+        break;
+    }
+    case ShapeType::Sector:
+        p = arc(x, y, r, -0.9f, 1.8f);
+        p.line_to(x, y);
+        p.close();
+        break;
+    case ShapeType::Diamond:
+        p.move_to(x, y - r);
+        p.line_to(x + r * 0.8f, y);
+        p.line_to(x, y + r);
+        p.line_to(x - r * 0.8f, y);
+        p.close();
+        break;
+    case ShapeType::NotchedBox:
+        p.move_to(x - r * 0.9f, y - r * 0.9f);
+        p.line_to(x, y - r * 0.3f);
+        p.line_to(x + r * 0.9f, y - r * 0.9f);
+        p.line_to(x + r * 0.9f, y + r * 0.9f);
+        p.line_to(x - r * 0.9f, y + r * 0.9f);
+        p.close();
+        break;
     }
     return p;
 }
@@ -165,72 +165,104 @@ static void init_overlap_gallery() {
     // 16 Key Subtractive Color Theory Combinations (Primary, Secondary & Color Wheel pairs)
     const std::vector<PigmentPairSpec> specs = {
         // Row 1: The Iconic Primary Painter Pairs (Blue + Yellow -> Green, etc.)
-        { Color{0.00f, 0.25f, 0.95f, 1.0f}, "Cobalt Blue",
-          Color{1.00f, 0.90f, 0.00f, 1.0f}, "Cadmium Yellow",
-          ShapeType::Circle, ShapeType::Star },
+        {
+            Color{0.00f, 0.25f, 0.95f, 1.0f}, "Cobalt Blue",
+            Color{1.00f, 0.90f, 0.00f, 1.0f}, "Cadmium Yellow",
+            ShapeType::Circle, ShapeType::Star
+        },
 
-        { Color{0.00f, 0.85f, 0.98f, 1.0f}, "Cyan",
-          Color{1.00f, 0.90f, 0.00f, 1.0f}, "Yellow",
-          ShapeType::RoundRect, ShapeType::Triangle },
+        {
+            Color{0.00f, 0.85f, 0.98f, 1.0f}, "Cyan",
+            Color{1.00f, 0.90f, 0.00f, 1.0f}, "Yellow",
+            ShapeType::RoundRect, ShapeType::Triangle
+        },
 
-        { Color{0.95f, 0.05f, 0.60f, 1.0f}, "Process Magenta",
-          Color{1.00f, 0.90f, 0.00f, 1.0f}, "Yellow",
-          ShapeType::Hexagon, ShapeType::Circle },
+        {
+            Color{0.95f, 0.05f, 0.60f, 1.0f}, "Process Magenta",
+            Color{1.00f, 0.90f, 0.00f, 1.0f}, "Yellow",
+            ShapeType::Hexagon, ShapeType::Circle
+        },
 
-        { Color{0.00f, 0.85f, 0.98f, 1.0f}, "Cyan",
-          Color{0.95f, 0.05f, 0.60f, 1.0f}, "Process Magenta",
-          ShapeType::Capsule, ShapeType::Star },
+        {
+            Color{0.00f, 0.85f, 0.98f, 1.0f}, "Cyan",
+            Color{0.95f, 0.05f, 0.60f, 1.0f}, "Process Magenta",
+            ShapeType::Capsule, ShapeType::Star
+        },
 
         // Row 2: Secondary Wheel & Gradient Pairs
-        { Color{0.00f, 0.25f, 0.95f, 1.0f}, "Cobalt Blue",
-          Color{0.95f, 0.08f, 0.08f, 1.0f}, "Cadmium Red",
-          ShapeType::Circle, ShapeType::RoundRect },
+        {
+            Color{0.00f, 0.25f, 0.95f, 1.0f}, "Cobalt Blue",
+            Color{0.95f, 0.08f, 0.08f, 1.0f}, "Cadmium Red",
+            ShapeType::Circle, ShapeType::RoundRect
+        },
 
-        { Color{0.95f, 0.08f, 0.08f, 1.0f}, "Cadmium Red",
-          Color{1.00f, 0.90f, 0.00f, 1.0f}, "Cadmium Yellow",
-          ShapeType::Star, ShapeType::Hexagon },
+        {
+            Color{0.95f, 0.08f, 0.08f, 1.0f}, "Cadmium Red",
+            Color{1.00f, 0.90f, 0.00f, 1.0f}, "Cadmium Yellow",
+            ShapeType::Star, ShapeType::Hexagon
+        },
 
-        { Color{0.00f, 0.85f, 0.35f, 1.0f}, "Emerald Green",
-          Color{1.00f, 0.90f, 0.00f, 1.0f}, "Cadmium Yellow",
-          ShapeType::Triangle, ShapeType::Capsule },
+        {
+            Color{0.00f, 0.85f, 0.35f, 1.0f}, "Emerald Green",
+            Color{1.00f, 0.90f, 0.00f, 1.0f}, "Cadmium Yellow",
+            ShapeType::Triangle, ShapeType::Capsule
+        },
 
-        { Color{0.00f, 0.85f, 0.35f, 1.0f}, "Emerald Green",
-          Color{0.00f, 0.85f, 0.98f, 1.0f}, "Cyan",
-          ShapeType::RoundRect, ShapeType::Circle },
+        {
+            Color{0.00f, 0.85f, 0.35f, 1.0f}, "Emerald Green",
+            Color{0.00f, 0.85f, 0.98f, 1.0f}, "Cyan",
+            ShapeType::RoundRect, ShapeType::Circle
+        },
 
         // Row 3: Complementary & Cross-Wheel Mixtures
-        { Color{0.00f, 0.25f, 0.95f, 1.0f}, "Cobalt Blue",
-          Color{1.00f, 0.50f, 0.00f, 1.0f}, "Cadmium Orange",
-          ShapeType::Diamond, ShapeType::Circle },
+        {
+            Color{0.00f, 0.25f, 0.95f, 1.0f}, "Cobalt Blue",
+            Color{1.00f, 0.50f, 0.00f, 1.0f}, "Cadmium Orange",
+            ShapeType::Diamond, ShapeType::Circle
+        },
 
-        { Color{0.00f, 0.85f, 0.35f, 1.0f}, "Emerald Green",
-          Color{0.95f, 0.08f, 0.08f, 1.0f}, "Cadmium Red",
-          ShapeType::Circle, ShapeType::Triangle },
+        {
+            Color{0.00f, 0.85f, 0.35f, 1.0f}, "Emerald Green",
+            Color{0.95f, 0.08f, 0.08f, 1.0f}, "Cadmium Red",
+            ShapeType::Circle, ShapeType::Triangle
+        },
 
-        { Color{0.60f, 0.10f, 0.95f, 1.0f}, "Cobalt Violet",
-          Color{1.00f, 0.90f, 0.00f, 1.0f}, "Cadmium Yellow",
-          ShapeType::Hexagon, ShapeType::Star },
+        {
+            Color{0.60f, 0.10f, 0.95f, 1.0f}, "Cobalt Violet",
+            Color{1.00f, 0.90f, 0.00f, 1.0f}, "Cadmium Yellow",
+            ShapeType::Hexagon, ShapeType::Star
+        },
 
-        { Color{0.10f, 0.70f, 0.98f, 1.0f}, "Sky Cerulean",
-          Color{1.00f, 0.15f, 0.65f, 1.0f}, "Hot Pink",
-          ShapeType::Capsule, ShapeType::RoundRect },
+        {
+            Color{0.10f, 0.70f, 0.98f, 1.0f}, "Sky Cerulean",
+            Color{1.00f, 0.15f, 0.65f, 1.0f}, "Hot Pink",
+            ShapeType::Capsule, ShapeType::RoundRect
+        },
 
         // Row 4: Bright Light & Pastel Spectral Tints
-        { Color{0.92f, 0.98f, 0.10f, 1.0f}, "Bright Lemon",
-          Color{0.00f, 0.25f, 0.95f, 1.0f}, "Cobalt Blue",
-          ShapeType::Star, ShapeType::Diamond },
+        {
+            Color{0.92f, 0.98f, 0.10f, 1.0f}, "Bright Lemon",
+            Color{0.00f, 0.25f, 0.95f, 1.0f}, "Cobalt Blue",
+            ShapeType::Star, ShapeType::Diamond
+        },
 
-        { Color{1.00f, 0.50f, 0.00f, 1.0f}, "Cadmium Orange",
-          Color{0.00f, 0.85f, 0.98f, 1.0f}, "Cyan",
-          ShapeType::RoundRect, ShapeType::Hexagon },
+        {
+            Color{1.00f, 0.50f, 0.00f, 1.0f}, "Cadmium Orange",
+            Color{0.00f, 0.85f, 0.98f, 1.0f}, "Cyan",
+            ShapeType::RoundRect, ShapeType::Hexagon
+        },
 
-        { Color{1.00f, 0.15f, 0.65f, 1.0f}, "Hot Pink",
-          Color{1.00f, 0.90f, 0.00f, 1.0f}, "Cadmium Yellow",
-          ShapeType::Circle, ShapeType::Capsule },
+        {
+            Color{1.00f, 0.15f, 0.65f, 1.0f}, "Hot Pink",
+            Color{1.00f, 0.90f, 0.00f, 1.0f}, "Cadmium Yellow",
+            ShapeType::Circle, ShapeType::Capsule
+        },
 
-        { Color{0.60f, 0.10f, 0.95f, 1.0f}, "Cobalt Violet",
-          Color{0.00f, 0.85f, 0.35f, 1.0f}, "Emerald Green",
-          ShapeType::Triangle, ShapeType::Star }
+        {
+            Color{0.60f, 0.10f, 0.95f, 1.0f}, "Cobalt Violet",
+            Color{0.00f, 0.85f, 0.35f, 1.0f}, "Emerald Green",
+            ShapeType::Triangle, ShapeType::Star
+        }
     };
 
     // 4 Columns x 4 Rows = 16 Large Prominent Cards
@@ -238,8 +270,8 @@ static void init_overlap_gallery() {
     constexpr int kRows = 4;
     const float start_x = 160.0f;
     const float start_y = 150.0f;
-    const float step_x  = 290.0f;
-    const float step_y  = 165.0f;
+    const float step_x = 290.0f;
+    const float step_y = 165.0f;
 
     for (std::size_t i = 0; i < specs.size(); ++i) {
         int r = int(i) / kCols;
@@ -319,23 +351,23 @@ static void build_scene(kalpana::Scene& scene) {
     // ── Background Precision Grid ──────────────────────────────────────────
     for (int x = 0; x <= W; x += 40) {
         scene << shape(line(float(x), 0.0f, float(x), FH))
-                     .stroke(Color{0.06f, 0.09f, 0.14f, 0.35f}, 1.0f);
+            .stroke(Color{0.06f, 0.09f, 0.14f, 0.35f}, 1.0f);
     }
     for (int y = 0; y <= H; y += 40) {
         scene << shape(line(0.0f, float(y), FW, float(y)))
-                     .stroke(Color{0.06f, 0.09f, 0.14f, 0.35f}, 1.0f);
+            .stroke(Color{0.06f, 0.09f, 0.14f, 0.35f}, 1.0f);
     }
 
     // ── Main Header ─────────────────────────────────────────────────────────
     scene << text("Kubelka-Munk Spectral Pigment Mixing Showcase: Subtractive Overlaps")
-                 .fill(colors::cyan())
-                 .font_size(17.0f)
-                 .position(40.0f, 32.0f)
-                 .effect(glow(4.0f, colors::cyan()))
-          << text("Shape A (Left) + Shape B (Right) -> Intersecting Center: Physical 38-Band Kubelka-Munk Absorption")
-                 .fill(Color{0.65f, 0.80f, 0.95f, 1.0f})
-                 .font_size(12.0f)
-                 .position(40.0f, 52.0f);
+             .fill(colors::cyan())
+             .font_size(17.0f)
+             .position(40.0f, 32.0f)
+             .effect(glow(4.0f, colors::cyan()))
+        << text("Shape A (Left) + Shape B (Right) -> Intersecting Center: Physical 38-Band Kubelka-Munk Absorption")
+           .fill(Color{0.65f, 0.80f, 0.95f, 1.0f})
+           .font_size(12.0f)
+           .position(40.0f, 52.0f);
 
     // ── Render 16 Large Overlapping Pairs with True Kubelka-Munk Center Mix ──
     for (const auto& p : app.pairs) {
@@ -343,24 +375,24 @@ static void build_scene(kalpana::Scene& scene) {
 
         // Sleek dark card backdrop for visual contrast
         scene << shape(round_rect(p.cx - 130.0f, p.cy - 68.0f, 260.0f, 136.0f, 12.0f, 12.0f))
-                     .fill(Color{0.035f, 0.05f, 0.08f, 1.0f})
-                     .stroke(Color{0.18f, 0.24f, 0.35f, 0.9f}, 1.2f);
+                 .fill(Color{0.035f, 0.05f, 0.08f, 1.0f})
+                 .stroke(Color{0.18f, 0.24f, 0.35f, 0.9f}, 1.2f);
 
         // 1. Left Shape in Pigment A
         Path path_a = make_shape(p.shape_a, p.cx - offset, p.cy - 8.0f, p.r);
         Color col_a = p.col_a;
         scene << shape(std::move(path_a))
-                     .fill(col_a)
-                     .stroke(colors::white(), 1.5f)
-                     .opacity(0.95f);
+                 .fill(col_a)
+                 .stroke(colors::white(), 1.5f)
+                 .opacity(0.95f);
 
         // 2. Right Shape in Pigment B
         Path path_b = make_shape(p.shape_b, p.cx + offset, p.cy - 8.0f, p.r);
         Color col_b = p.col_b;
         scene << shape(std::move(path_b))
-                     .fill(col_b)
-                     .stroke(colors::white(), 1.5f)
-                     .opacity(0.95f);
+                 .fill(col_b)
+                 .stroke(colors::white(), 1.5f)
+                 .opacity(0.95f);
 
         // 3. Center Subtractive Kubelka-Munk Pigment Mixture
         Color km_color = spectral::mix(col_a, col_b, 0.5f);
@@ -369,16 +401,16 @@ static void build_scene(kalpana::Scene& scene) {
         float overlap_w = (p.r * 2.0f - offset * 2.0f) * 0.95f;
         float overlap_h = p.r * 1.55f;
         scene << shape(ellipse(p.cx, p.cy - 8.0f, overlap_w * 0.5f, overlap_h * 0.5f))
-                     .fill(km_color)
-                     .stroke(colors::white(), 1.8f)
-                     .effect(glow(6.0f, km_color));
+                 .fill(km_color)
+                 .stroke(colors::white(), 1.8f)
+                 .effect(glow(6.0f, km_color));
 
         // Subtractive Pair Label at bottom of card
         std::string label = std::string(p.label_a) + " + " + std::string(p.label_b);
         scene << text(label)
-                     .fill(Color{0.80f, 0.88f, 0.95f, 0.9f})
-                     .font_size(11.0f)
-                     .position(p.cx - float(label.length()) * 3.1f, p.cy + 54.0f);
+                 .fill(Color{0.80f, 0.88f, 0.95f, 0.9f})
+                 .font_size(11.0f)
+                 .position(p.cx - float(label.length()) * 3.1f, p.cy + 54.0f);
     }
 }
 

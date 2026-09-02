@@ -24,22 +24,31 @@ namespace {
 
         friend consteval auto reflect_members(meta::type_tag<AnnotatedUser>) {
             return meta::make_sequence(
-                meta::annotated_field<0, &AnnotatedUser::id, "id">(
-                    meta::attribute<"primary_key">{}
-                ),
-                meta::annotated_field<1, &AnnotatedUser::username, "username">(
-                    meta::attribute<"indexed">{}
-                ),
-                meta::annotated_field<2, &AnnotatedUser::password_hash, "password_hash">(
-                    meta::attribute<"sensitive">{},
-                    meta::attribute<"json_ignore">{}
-                )
+                meta::annotated_field < 0, &AnnotatedUser::id, "id" > (
+                    meta::attribute < "primary_key" >
+            {}
+            ),
+            meta::annotated_field < 1, &AnnotatedUser::username, "username" > (
+                meta::attribute < "indexed" >
+            {}
+            ),
+            meta::annotated_field < 2, &AnnotatedUser::password_hash, "password_hash" > (
+                meta::attribute < "sensitive" >
+            {},
+            meta::attribute < "json_ignore" >
+            {}
+            )
             );
         }
     };
 } // namespace
 
-TEST_CASE("meta C++26: Feature detection and pack indexing", "[cxx26][meta]") {
+TEST_CASE (
+"meta C++26: Feature detection and pack indexing"
+,
+"[cxx26][meta]"
+)
+ {
     using MyList = meta::TypeList<int, double, char, float>;
     STATIC_REQUIRE(std::same_as<MyList::element<0>, int>);
     STATIC_REQUIRE(std::same_as<MyList::element<1>, double>);
@@ -53,7 +62,12 @@ TEST_CASE("meta C++26: Feature detection and pack indexing", "[cxx26][meta]") {
     STATIC_REQUIRE(MyValues::get<3>() == 40);
 }
 
-TEST_CASE("meta C++26: Method and function introspection", "[cxx26][meta]") {
+TEST_CASE (
+"meta C++26: Method and function introspection"
+,
+"[cxx26][meta]"
+)
+ {
     constexpr auto m_add = meta::method<0, &Calculator::add, "add">();
     STATIC_REQUIRE(m_add.name() == "add");
     STATIC_REQUIRE(m_add.arity() == 2);
@@ -73,7 +87,12 @@ TEST_CASE("meta C++26: Method and function introspection", "[cxx26][meta]") {
     REQUIRE(m_compute.invoke(calc, 3.5) == 7.0);
 }
 
-TEST_CASE("meta C++26: Compile-time field annotations and attributes", "[cxx26][meta]") {
+TEST_CASE (
+"meta C++26: Compile-time field annotations and attributes"
+,
+"[cxx26][meta]"
+)
+ {
     using Seq = meta::reflect_t<AnnotatedUser>;
     STATIC_REQUIRE(Seq::size == 3);
 
@@ -89,7 +108,12 @@ TEST_CASE("meta C++26: Compile-time field annotations and attributes", "[cxx26][
     STATIC_REQUIRE_FALSE(F2::has_attribute<"primary_key">());
 }
 
-TEST_CASE("meta C++26: Structure-of-Arrays (SoA) layout transform", "[cxx26][meta]") {
+TEST_CASE (
+"meta C++26: Structure-of-Arrays (SoA) layout transform"
+,
+"[cxx26][meta]"
+)
+ {
     meta::soa_storage<Vector3D, 16> soa;
     REQUIRE(soa.empty());
 

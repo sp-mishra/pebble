@@ -15,19 +15,18 @@
 #include "../core/source_view.hpp"
 
 namespace lang::samasa {
-
     enum class trivia_kind : std::uint8_t {
-        whitespace          = 0,
-        newline             = 1,
-        line_comment        = 2,
-        block_comment       = 3,
+        whitespace = 0,
+        newline = 1,
+        line_comment = 2,
+        block_comment = 3,
         synthetic_separator = 4, // inserted by line_policy
-        skipped             = 5, // recovery-skipped chars
+        skipped = 5, // recovery-skipped chars
     };
 
     struct trivia {
         trivia_kind kind = trivia_kind::whitespace;
-        byte_span   span;
+        byte_span span;
     };
 
     // token<TK> — compact, trivially copyable.
@@ -36,16 +35,16 @@ namespace lang::samasa {
     // flags: reserved for future language-specific bits (doc-comment, synthetic, etc.).
     template <class TokenKind>
     struct token {
-        TokenKind     kind         = {};
-        std::uint32_t offset       = 0;
-        std::uint32_t length       = 0; // uint32 — supports large literals/blobs
+        TokenKind kind = {};
+        std::uint32_t offset = 0;
+        std::uint32_t length = 0; // uint32 — supports large literals/blobs
         std::uint32_t trivia_start = 0; // index into trivia arena; 0 = no trivia
         std::uint16_t trivia_count = 0;
-        std::uint16_t flags        = 0;
+        std::uint16_t flags = 0;
 
         [[nodiscard]] constexpr byte_span span() const noexcept { return {offset, length}; }
-        [[nodiscard]] constexpr bool empty()     const noexcept { return length == 0; }
+        [[nodiscard]] constexpr bool empty() const noexcept { return length == 0; }
     };
-    static_assert(std::is_trivially_copyable_v<token<std::uint32_t>>);
 
+    static_assert(std::is_trivially_copyable_v<token<std::uint32_t>>);
 } // namespace lang::samasa

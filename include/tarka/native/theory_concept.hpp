@@ -38,6 +38,27 @@ namespace tarka::native {
         bool value; // true == atom asserted positively
     };
 
+    // Opaque handle a theory hands back with each propagated literal so it can
+    // later reconstruct that literal's explanation lazily (Simplex bound row, UF
+    // congruence path, ...). The driver treats it as an uninterpreted token.
+    enum class TheoryReasonId : std::uint32_t { none = 0 };
+
+    // ---- optional (duck-typed) theory-propagation interface --------------------
+    //
+    // A theory MAY additionally provide, and the DPLL(T) driver detects each with
+    // `if constexpr (requires ...)` — theories without them still satisfy
+    // TheorySolver and pay nothing:
+    //
+    //   t_propagate(sat)                    — after assert_lit, push theory-implied
+    //                                          literals onto the SAT trail (eager
+    //                                          theory propagation). Returns void.
+    //   explain(TheoryReasonId) -> span<const Lit>
+    //                                       — lazily materialize the reason clause
+    //                                          for a previously propagated literal.
+    //
+    // These are additive: keeping them out of the required concept below means
+    // the five shipped theories compile unchanged until they opt in (item 35).
+
     // The static interface every native theory must provide.
     //
     //   attach(reg)        — bind to the atom_registry (once, before solving).

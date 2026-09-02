@@ -16,12 +16,11 @@
 #include "../core/result.hpp"
 
 namespace lang::samasa {
-
     template <akshara::fixed_string Name, class Pattern>
     struct rule {
-        static constexpr auto name      = Name;
-        static constexpr auto name_sv   = static_cast<std::string_view>(Name);
-        using pattern_type              = Pattern;  // used by grammar IR / validation
+        static constexpr auto name = Name;
+        static constexpr auto name_sv = static_cast<std::string_view>(Name);
+        using pattern_type = Pattern; // used by grammar IR / validation
 
         Pattern pattern;
 
@@ -57,5 +56,4 @@ namespace lang::samasa {
     [[nodiscard]] constexpr rule<Name, Pattern> make_rule(Pattern p) {
         return {std::move(p)};
     }
-
 } // namespace lang::samasa

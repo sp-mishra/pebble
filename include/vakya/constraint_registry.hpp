@@ -1,7 +1,7 @@
 #pragma once
 
 // =============================================================================
-// vakya/constraint_registry.hpp — descriptor-routed constraint registry (V3)
+// vakya/constraint_registry.hpp — descriptor-routed constraint registry (opt-in)
 //
 // C++23, header-only, no virtual, no macros.
 // Namespace: vakya::types
@@ -122,6 +122,25 @@ namespace vakya::types {
 
         // SMT / Tarka bridge (user + higher ext-band)
         add(constraint_kind::user, solver_class::smt, kTheoryArithmetic | kTheoryEquality, 50, "user");
+
+        // --------------------------------------------------------------------
+        // Semantic-optimization kinds (ext band +20..+26). Each is seeded here
+        // for a cheap fast-path solver class; anything the fast path can't decide
+        // falls through to the SMT band (ext-band kinds route to the Tarka bridge
+        // with zero extra solver code). Kind constants are DEFINED in their owning
+        // headers (single source of truth); the registry only routes them. The
+        // offsets are mirrored here to avoid a registry→phase-header dependency.
+        // --------------------------------------------------------------------
+        auto ext = [](int off) {
+            return static_cast<constraint_kind>(kConstraintKindExtensionBase + off);
+        };
+        add(ext(20), solver_class::graph, kTheoryEquality | kTheoryArrays, 12, "disjoint"); // alias.hpp
+        add(ext(21), solver_class::rule, kTheoryEquality, 6, "effect_subsume"); // effect_row.hpp
+        add(ext(22), solver_class::unify, kTheoryEquality | kTheoryArithmetic, 4, "value_eq"); // value_param.hpp
+        add(ext(23), solver_class::rule, kTheoryEquality, 6, "transition"); // typestate.hpp
+        add(ext(24), solver_class::graph, kTheoryEquality | kTheoryArrays, 12, "no_conflict"); // rw_summary.hpp
+        add(ext(25), solver_class::smt, kTheoryArithmetic | kTheoryEquality, 40, "refine_sub"); // refine.hpp
+        add(ext(26), solver_class::egraph, kTheoryEquality, 20, "equiv_cert"); // proof_carrying.hpp
 
         return reg;
     }

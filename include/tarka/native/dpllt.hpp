@@ -90,8 +90,14 @@ namespace tarka::native {
 
         // Push or pop the theory trail so it matches the SAT decision level.
         void sync_levels(std::uint32_t sat_level) {
-            while (theory_level_ < sat_level) { theories_.push_level(); ++theory_level_; }
-            while (theory_level_ > sat_level) { theories_.pop_level(); --theory_level_; }
+            while (theory_level_ < sat_level) {
+                theories_.push_level();
+                ++theory_level_;
+            }
+            while (theory_level_ > sat_level) {
+                theories_.pop_level();
+                --theory_level_;
+            }
         }
 
         cdcl_solver& sat_;

@@ -19,29 +19,28 @@
 #include "precedence.hpp"
 
 namespace lang::samasa {
-
     template <akshara::fixed_string Symbol, auto TokenVal,
               std::uint8_t BP,
               associativity Assoc = associativity::left,
-              fixity Fix          = fixity::infix>
+              fixity Fix = fixity::infix>
     struct op {
-        static constexpr auto     symbol    = Symbol;
-        static constexpr auto     token     = TokenVal;
-        static constexpr std::uint8_t bp   = BP;
+        static constexpr auto symbol = Symbol;
+        static constexpr auto token = TokenVal;
+        static constexpr std::uint8_t bp = BP;
         static constexpr associativity assoc = Assoc;
-        static constexpr fixity    fix       = Fix;
+        static constexpr fixity fix = Fix;
     };
 
     template <class... Ops>
     struct operator_table {
-      private:
+    private:
         // Common token value type across all operators in this table.
         using token_type = std::common_type_t<decltype(Ops::token)...>;
 
         struct entry {
-            token_type     token{};
-            std::uint8_t   bp = 0;
-            associativity  assoc = associativity::left;
+            token_type token{};
+            std::uint8_t bp = 0;
+            associativity assoc = associativity::left;
         };
 
         // Build a constexpr array (sorted by token value) of the operators whose
@@ -60,8 +59,8 @@ namespace lang::samasa {
             return arr;
         }
 
-        static constexpr auto prefix_ops  = build_sorted<fixity::prefix>();
-        static constexpr auto infix_ops   = build_sorted<fixity::infix>();
+        static constexpr auto prefix_ops = build_sorted<fixity::prefix>();
+        static constexpr auto infix_ops = build_sorted<fixity::infix>();
         static constexpr auto postfix_ops = build_sorted<fixity::postfix>();
 
         template <std::size_t N>
@@ -72,7 +71,7 @@ namespace lang::samasa {
             return nullptr;
         }
 
-      public:
+    public:
         template <class TokenKind>
         [[nodiscard]] static constexpr std::optional<std::uint8_t>
         prefix_bp(TokenKind k) noexcept {
@@ -82,16 +81,16 @@ namespace lang::samasa {
         }
 
         template <class TokenKind>
-        [[nodiscard]] static constexpr std::optional<std::pair<std::uint8_t,std::uint8_t>>
+        [[nodiscard]] static constexpr std::optional<std::pair<std::uint8_t, std::uint8_t>>
         infix_bp(TokenKind k) noexcept {
             const entry* e = find(infix_ops, static_cast<token_type>(k));
             if (!e) return std::nullopt;
             const std::uint8_t lbp = e->bp;
             std::uint8_t rbp = lbp;
-            if (e->assoc == associativity::left)      rbp = lbp + 1;
+            if (e->assoc == associativity::left) rbp = lbp + 1;
             else if (e->assoc == associativity::none) rbp = lbp + 1;
             // right: rbp == lbp
-            return std::pair<std::uint8_t,std::uint8_t>{lbp, rbp};
+            return std::pair<std::uint8_t, std::uint8_t>{lbp, rbp};
         }
 
         template <class TokenKind>
@@ -104,5 +103,4 @@ namespace lang::samasa {
 
         static constexpr std::size_t size = sizeof...(Ops);
     };
-
 } // namespace lang::samasa

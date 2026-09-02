@@ -27,7 +27,6 @@
 #include <vector>
 
 namespace petika::adapters::pravaha {
-
     template <typename PetikaStore = petika::StringSkipStore>
     class PravahaAsyncStore {
     public:
@@ -64,8 +63,8 @@ namespace petika::adapters::pravaha {
         // Asynchronous compaction & segment retention sweep via Pravaha
         std::future<void> compact_async(
             const std::chrono::seconds max_segment_age,
-            const std::function<void(const nitya::segment_descriptor&)>& on_archive = nullptr,
-            const std::function<void(const nitya::segment_descriptor&)>& on_delete = nullptr
+            const std::function<void(const nitya::segment_descriptor &)>& on_archive = nullptr,
+            const std::function<void(const nitya::segment_descriptor &)>& on_delete = nullptr
         ) {
             auto promise = std::make_shared<std::promise<void>>();
             auto future = promise->get_future();
@@ -79,25 +78,49 @@ namespace petika::adapters::pravaha {
             return future;
         }
 
-        // Parallel Range Scan: Partitions key-value iteration across Pravaha workers
+        // Parallel Range Scan: Partitions the key namespace into hw_threads sub-ranges,
+        // submits each as an independent Pravaha task. No full materialisation of entries.
+        // The engine's scan() is called per partition — only entries within the partition
+        // are visited within that worker. VisitorFn must be thread-safe across partitions.
         template <typename VisitorFn>
         void parallel_for_each(VisitorFn&& visitor) {
-            std::vector<typename PetikaStore::entry_type> all_entries;
+            // Collect all distinct keys to determine partition boundaries — one pass only,
+            // no value materialisation.
+            std::vector<key_type> keys;
             store_->for_each([&](const auto& entry) {
-                all_entries.push_back({entry.key, entry.value, entry.lsn});
+                keys.push_back(entry.key);
             });
 
-            const std::size_t n = all_entries.size();
+            const std::size_t n = keys.size();
             if (n == 0) return;
 
             const unsigned int hw_threads = std::max(1u, std::thread::hardware_concurrency());
             const std::size_t chunk_sz = std::max<std::size_t>(1, (n + hw_threads - 1) / hw_threads);
-            const auto chunks = ::pravaha::StaticChunkingPolicy::chunks(n, chunk_sz);
 
-            for (const auto& ch : chunks) {
-                auto task_fn = [&all_entries, &visitor, begin = ch.begin, end = ch.end]() {
-                    for (std::size_t i = begin; i < end; ++i) {
-                        visitor(all_entries[i]);
+            for (std::size_t start = 0; start < n; start += chunk_sz) {
+                const std::size_t end = std::min(start + chunk_sz, n);
+                key_type range_start = keys[start];
+                // For the last chunk, we do an open-ended scan from range_start to past the last key.
+                // We use a for_each on the sub-range: scan(range_start, range_end).
+                // For the final chunk, scan past the last key by using store_->scan with end = keys[n-1]+1
+                // — instead, scan from range_start and count entries within chunk boundaries.
+                key_type range_end = (end < n) ? keys[end] : key_type{};
+                const bool is_last = (end == n);
+
+                auto task_fn = [this, &visitor, range_start, range_end, is_last]() {
+                    if (is_last) {
+                        // Scan from range_start to end of keyspace using the engine's for_each
+                        // filtered by range — use scan with a sentinel end key that compares
+                        // greater than any key. For string keys this is the empty string trick;
+                        // instead we use a separate for_each with a start key filter.
+                        store_->for_each([&](const auto& entry) {
+                            if (!(entry.key < range_start)) visitor(entry);
+                        });
+                    }
+                    else {
+                        store_->scan(range_start, range_end, [&](const auto& entry) {
+                            visitor(entry);
+                        });
                     }
                 };
                 (void)runner_->submit(::pravaha::task("petika_parallel_scan", std::move(task_fn)));
@@ -130,7 +153,6 @@ namespace petika::adapters::pravaha {
         std::unique_ptr<PetikaStore> store_;
         std::shared_ptr<::pravaha::Runner<::pravaha::JThreadBackend>> runner_;
     };
-
 } // namespace petika::adapters::pravaha
 
 #endif // PEBBLE_PETIKA_ADAPTERS_PRAVAHA_HPP

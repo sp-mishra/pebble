@@ -16,7 +16,7 @@
 4. [Error Handling](#4-error-handling)
 5. [API Reference](#5-api-reference)
 6. [SYMTAB_ENABLE_HIGHWAY Flag](#6-symtab_enable_highway-flag)
-7. [clear() Invalidation Warning](#7-clear-invalidation-warning)
+7. [clear () Invalidation Warning](#7-clear-invalidation-warning)
 8. [Usage Examples](#8-usage-examples)
 9. [Performance Characteristics](#9-performance-characteristics)
 10. [Design Notes](#10-design-notes)

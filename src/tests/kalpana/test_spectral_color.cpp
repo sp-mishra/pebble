@@ -1,7 +1,12 @@
 #include "catch_amalgamated.hpp"
 #include "kalpana/kalpana.hpp"
 
-TEST_CASE("Kalpana: SpectralColor and Kubelka-Munk Mixing", "[kalpana][color][spectral]") {
+TEST_CASE (
+"Kalpana: SpectralColor and Kubelka-Munk Mixing"
+,
+"[kalpana][color][spectral]"
+)
+ {
     using namespace kalpana;
     using namespace kalpana::spectral;
 
@@ -51,7 +56,12 @@ TEST_CASE("Kalpana: SpectralColor and Kubelka-Munk Mixing", "[kalpana][color][sp
     }
 }
 
-TEST_CASE("Kalpana: Pigment Catalog & Extensible Registry", "[kalpana][color][pigments]") {
+TEST_CASE (
+"Kalpana: Pigment Catalog & Extensible Registry"
+,
+"[kalpana][color][pigments]"
+)
+ {
     using namespace kalpana;
     using namespace kalpana::pigments;
 

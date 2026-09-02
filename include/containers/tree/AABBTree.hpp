@@ -137,7 +137,7 @@ namespace containers {
 
         static bool contains_box(const AABB& outer, const AABB& inner) noexcept {
             return get_x(outer.lo) <= get_x(inner.lo) && get_y(outer.lo) <= get_y(inner.lo) &&
-                   get_x(outer.hi) >= get_x(inner.hi) && get_y(outer.hi) >= get_y(inner.hi);
+                get_x(outer.hi) >= get_x(inner.hi) && get_y(outer.hi) >= get_y(inner.hi);
         }
 
         static bool ray_hits(const AABB& b, const Vec& o, const Vec& inv, Scalar tmax) noexcept {

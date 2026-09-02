@@ -5,7 +5,12 @@ using namespace ts;
 using namespace ts::edsl;
 using namespace ts::edsl::literals;
 
-TEST_CASE("Tensor EDSL: Level 1 One-Shot Evaluation with _p scalar literals", "[tensor_edsl][l1][scalar]") {
+TEST_CASE (
+"Tensor EDSL: Level 1 One-Shot Evaluation with _p scalar literals"
+,
+"[tensor_edsl][l1][scalar]"
+)
+ {
     SECTION("Basic polynomial evaluation: x^2 + 2x + 1") {
         auto x = "x"_p;
         auto expr = (x * x) + (2.0f * x) + 1.0f;
@@ -28,7 +33,12 @@ TEST_CASE("Tensor EDSL: Level 1 One-Shot Evaluation with _p scalar literals", "[
     }
 }
 
-TEST_CASE("Tensor EDSL: Symbolic Tensor Leaves and Shape Inference", "[tensor_edsl][shapes]") {
+TEST_CASE (
+"Tensor EDSL: Symbolic Tensor Leaves and Shape Inference"
+,
+"[tensor_edsl][shapes]"
+)
+ {
     SECTION("2D Matrix Multiplication Shape Propagation") {
         auto W = sym_tensor<2>("W", {4, 8});
         auto x = sym_tensor<2>("x", {8, 1});
@@ -64,7 +74,12 @@ TEST_CASE("Tensor EDSL: Symbolic Tensor Leaves and Shape Inference", "[tensor_ed
     }
 }
 
-TEST_CASE("Tensor EDSL: Level 1 Concrete Tensor Expression Evaluation", "[tensor_edsl][l1][tensor]") {
+TEST_CASE (
+"Tensor EDSL: Level 1 Concrete Tensor Expression Evaluation"
+,
+"[tensor_edsl][l1][tensor]"
+)
+ {
     SECTION("Linear Layer: y = relu(X * W + b)") {
         ts::tensor<float> X({2, 3}, {
             1.0f, -2.0f, 3.0f,
@@ -113,7 +128,12 @@ TEST_CASE("Tensor EDSL: Level 1 Concrete Tensor Expression Evaluation", "[tensor
     }
 }
 
-TEST_CASE("Tensor EDSL: Level 2 Compile Once, Run Many", "[tensor_edsl][l2][compile]") {
+TEST_CASE (
+"Tensor EDSL: Level 2 Compile Once, Run Many"
+,
+"[tensor_edsl][l2][compile]"
+)
+ {
     auto X = sym_tensor<2>("X", {2, 2});
     auto W = sym_tensor<2>("W", {2, 2});
     auto formula = ts::edsl::matmul(X, W) * "scale"_p;
@@ -137,7 +157,7 @@ TEST_CASE("Tensor EDSL: Level 2 Compile Once, Run Many", "[tensor_edsl][l2][comp
 }
 
 #if __has_include(<mlx/mlx.h>)
-TEST_CASE("Tensor EDSL: Level 2 Apple Silicon MLX GPU Target", "[tensor_edsl][gpu][mlx]") {
+TEST_CASE ("Tensor EDSL: Level 2 Apple Silicon MLX GPU Target", "[tensor_edsl][gpu][mlx]") {
     auto A = sym_tensor<2>("A", {2, 2});
     auto B = sym_tensor<2>("B", {2, 2});
     auto graph = ts::edsl::matmul(A, B) + "bias"_p;

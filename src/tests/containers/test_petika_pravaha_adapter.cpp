@@ -9,7 +9,12 @@
 using namespace petika;
 using namespace petika::adapters::pravaha;
 
-TEST_CASE("Petika Pravaha Adapter: Async Commit & Parallel Range Scan", "[petika][adapter][pravaha]") {
+TEST_CASE (
+"Petika Pravaha Adapter: Async Commit & Parallel Range Scan"
+,
+"[petika][adapter][pravaha]"
+)
+ {
     const std::filesystem::path test_dir = "./test_petika_pravaha_adapter_db";
     std::filesystem::remove_all(test_dir);
 

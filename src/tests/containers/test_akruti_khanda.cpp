@@ -10,14 +10,22 @@ using namespace akruti;
 using namespace akruti::khanda;
 
 namespace {
-Poly unit_square() {
-    Poly p;
-    p.push_back({0, 0}); p.push_back({1, 0}); p.push_back({1, 1}); p.push_back({0, 1});
-    return p;
-}
+    Poly unit_square() {
+        Poly p;
+        p.push_back({0, 0});
+        p.push_back({1, 0});
+        p.push_back({1, 1});
+        p.push_back({0, 1});
+        return p;
+    }
 } // namespace
 
-TEST_CASE("akruti: khanda Voronoi shatter conserves area", "[akruti][khanda]") {
+TEST_CASE (
+"akruti: khanda Voronoi shatter conserves area"
+,
+"[akruti][khanda]"
+)
+ {
     Poly outer = unit_square();
     std::vector<Vec> sites = {{0.25f, 0.25f}, {0.75f, 0.3f}, {0.4f, 0.8f}, {0.8f, 0.75f}, {0.5f, 0.5f}};
     auto shards = fracture_voronoi(outer, std::span<const Vec>(sites));
@@ -29,7 +37,12 @@ TEST_CASE("akruti: khanda Voronoi shatter conserves area", "[akruti][khanda]") {
     REQUIRE(shards.size() <= sites.size());
 }
 
-TEST_CASE("akruti: khanda shards are convex-decomposed", "[akruti][khanda]") {
+TEST_CASE (
+"akruti: khanda shards are convex-decomposed"
+,
+"[akruti][khanda]"
+)
+ {
     Poly outer = unit_square();
     std::vector<Vec> sites = {{0.25f, 0.25f}, {0.75f, 0.3f}, {0.4f, 0.8f}, {0.8f, 0.75f}};
     auto shards = fracture_voronoi(outer, std::span<const Vec>(sites));
@@ -38,7 +51,12 @@ TEST_CASE("akruti: khanda shards are convex-decomposed", "[akruti][khanda]") {
             REQUIRE(is_convex_ccw(pc, 1e-4f));
 }
 
-TEST_CASE("akruti: khanda triangulation area matches shard", "[akruti][khanda]") {
+TEST_CASE (
+"akruti: khanda triangulation area matches shard"
+,
+"[akruti][khanda]"
+)
+ {
     Poly outer = unit_square();
     std::vector<Vec> sites = {{0.3f, 0.3f}, {0.7f, 0.7f}, {0.5f, 0.2f}};
     auto shards = fracture_voronoi(outer, std::span<const Vec>(sites));
@@ -54,7 +72,12 @@ TEST_CASE("akruti: khanda triangulation area matches shard", "[akruti][khanda]")
     }
 }
 
-TEST_CASE("akruti: khanda respects holes", "[akruti][khanda]") {
+TEST_CASE (
+"akruti: khanda respects holes"
+,
+"[akruti][khanda]"
+)
+ {
     Poly outer = unit_square();
     Poly hole; // CW inner square [0.4,0.6]^2, area 0.04
     hole.push_back({0.4f, 0.4f}); hole.push_back({0.4f, 0.6f});
@@ -68,7 +91,12 @@ TEST_CASE("akruti: khanda respects holes", "[akruti][khanda]") {
     REQUIRE(sum == Catch::Approx(1.0 - 0.04).margin(3e-3));
 }
 
-TEST_CASE("akruti: khanda polar moment of inertia", "[akruti][khanda]") {
+TEST_CASE (
+"akruti: khanda polar moment of inertia"
+,
+"[akruti][khanda]"
+)
+ {
     // Unit square centered at origin: analytic polar J = 1/6 (unit density).
     Poly sq;
     sq.push_back({-0.5f, -0.5f}); sq.push_back({0.5f, -0.5f});
@@ -80,7 +108,12 @@ TEST_CASE("akruti: khanda polar moment of inertia", "[akruti][khanda]") {
     REQUIRE(mp.inertia == Catch::Approx(1.0 / 6.0).margin(1e-3));
 }
 
-TEST_CASE("akruti: khanda impact-biased Poisson densifies near impact", "[akruti][khanda]") {
+TEST_CASE (
+"akruti: khanda impact-biased Poisson densifies near impact"
+,
+"[akruti][khanda]"
+)
+ {
     AABB<Scalar> b{{0, 0}, {4, 4}};
     Vec center{2, 2};
     Scalar r = 0.8f;
@@ -94,7 +127,12 @@ TEST_CASE("akruti: khanda impact-biased Poisson densifies near impact", "[akruti
     REQUIRE(near(biased) > near(uniform));
 }
 
-TEST_CASE("akruti: khanda recursive re-fracture conserves area", "[akruti][khanda]") {
+TEST_CASE (
+"akruti: khanda recursive re-fracture conserves area"
+,
+"[akruti][khanda]"
+)
+ {
     Poly outer = unit_square();
     std::vector<Vec> sites = {{0.3f, 0.3f}, {0.7f, 0.7f}, {0.3f, 0.7f}};
     auto shards = fracture_voronoi(outer, std::span<const Vec>(sites));

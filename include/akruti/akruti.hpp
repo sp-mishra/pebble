@@ -36,12 +36,14 @@
 #include "csg.hpp"
 #include "ccd.hpp"
 #include "fracture.hpp"
+#include "poly_ops.hpp"
 #include "khanda.hpp"
 #include "joint.hpp"
 #include "spline.hpp"
 #include "morph.hpp"
 #include "deform.hpp"
 #include "body.hpp"
+#include "layout.hpp"
 
 // Scene layer
 #include "scene/parallel.hpp"

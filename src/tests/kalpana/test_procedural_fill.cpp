@@ -1,7 +1,12 @@
 #include "catch_amalgamated.hpp"
 #include "kalpana/kalpana.hpp"
 
-TEST_CASE("Kalpana: Procedural Noise and Fills", "[kalpana][fill][noise]") {
+TEST_CASE (
+"Kalpana: Procedural Noise and Fills"
+,
+"[kalpana][fill][noise]"
+)
+ {
     using namespace kalpana;
     using namespace kalpana::noise;
 

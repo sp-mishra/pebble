@@ -4,7 +4,12 @@
 
 using namespace pebble::math;
 
-TEST_CASE("MathVector: Construction, static_tensor storage & constexpr", "[math_vector][constexpr]") {
+TEST_CASE (
+"MathVector: Construction, static_tensor storage & constexpr"
+,
+"[math_vector][constexpr]"
+)
+ {
     SECTION("constexpr vec2, vec3, vec4, mat2, mat4 initialization") {
         constexpr vec2 v2(1.0f, 2.0f);
         static_assert(v2.shape()[0] == 2);
@@ -41,7 +46,12 @@ TEST_CASE("MathVector: Construction, static_tensor storage & constexpr", "[math_
     }
 }
 
-TEST_CASE("MathVector: 3D Vector Geometry & Arithmetic", "[math_vector][geometry]") {
+TEST_CASE (
+"MathVector: 3D Vector Geometry & Arithmetic"
+,
+"[math_vector][geometry]"
+)
+ {
     SECTION("Dot product, Cross product, Length, Normalization") {
         constexpr vec3 right(1.0f, 0.0f, 0.0f);
         constexpr vec3 up(0.0f, 1.0f, 0.0f);
@@ -94,7 +104,12 @@ TEST_CASE("MathVector: 3D Vector Geometry & Arithmetic", "[math_vector][geometry
     }
 }
 
-TEST_CASE("MathVector: Physics Optics (Ray Reflection & Snell Refraction)", "[math_vector][physics]") {
+TEST_CASE (
+"MathVector: Physics Optics (Ray Reflection & Snell Refraction)"
+,
+"[math_vector][physics]"
+)
+ {
     SECTION("Ray Surface Reflection") {
         vec3 incoming(1.0f, -1.0f, 0.0f);
         vec3 surface_normal(0.0f, 1.0f, 0.0f);
@@ -117,7 +132,12 @@ TEST_CASE("MathVector: Physics Optics (Ray Reflection & Snell Refraction)", "[ma
     }
 }
 
-TEST_CASE("MathVector: Matrix Transforms, Camera View & Perspective Projection", "[math_vector][transforms]") {
+TEST_CASE (
+"MathVector: Matrix Transforms, Camera View & Perspective Projection"
+,
+"[math_vector][transforms]"
+)
+ {
     SECTION("Translation and Scale Affine Transforms") {
         mat4 T = translation(vec3(10.0f, -5.0f, 20.0f));
         vec3 p(1.0f, 2.0f, 3.0f);
@@ -161,7 +181,12 @@ TEST_CASE("MathVector: Matrix Transforms, Camera View & Perspective Projection",
     }
 }
 
-TEST_CASE("MathVector: Quaternion Orientations & Slerp", "[math_vector][quaternion]") {
+TEST_CASE (
+"MathVector: Quaternion Orientations & Slerp"
+,
+"[math_vector][quaternion]"
+)
+ {
     SECTION("Axis-Angle Quaternion Generation and Vector Rotation") {
         // Rotate (1, 0, 0) by 90 degrees around Z axis -> (0, 1, 0)
         quat q = quat_axis_angle(vec3(0.0f, 0.0f, 1.0f), static_cast<float>(M_PI / 2.0));

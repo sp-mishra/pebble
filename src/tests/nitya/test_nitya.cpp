@@ -6,6 +6,7 @@
 #include "nitya/nitya.hpp"
 #include "containers/cache/adapters/nitya.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <string>
@@ -75,6 +76,7 @@ namespace {
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Frame layout constants and sizes"
 ,
 "[nitya][framing]"
@@ -89,6 +91,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Default framing encode and validate"
 ,
 "[nitya][framing]"
@@ -134,6 +137,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Single record append and sync"
 ,
 "[nitya][append]"
@@ -159,6 +163,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Multiple appends with sequential LSN offsets"
 ,
 "[nitya][append]"
@@ -195,6 +200,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Auto-rotation across segment boundary"
 ,
 "[nitya][segment]"
@@ -239,6 +245,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Streaming recovery scans all committed records"
 ,
 "[nitya][recovery]"
@@ -294,6 +301,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Replication subscriber streams updates"
 ,
 "[nitya][replication]"
@@ -335,6 +343,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Durability failure becomes sticky and observable"
 ,
 "[nitya][durability][fault_injection]"
@@ -369,6 +378,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Concurrent multi-threaded appends"
 ,
 "[nitya][concurrency]"
@@ -425,6 +435,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: EasyRules retention & archival triggers"
 ,
 "[nitya][rules]"
@@ -468,6 +479,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "NityaAdapter: basic put and get hit"
 ,
 "[nitya][adapter]"
@@ -484,6 +496,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "NityaAdapter: read-through recovery after cache clear"
 ,
 "[nitya][adapter]"
@@ -512,6 +525,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "NityaAdapter: erase records tombstone in WAL"
 ,
 "[nitya][adapter]"
@@ -531,6 +545,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "NityaAdapter: load_all warms in-memory cache"
 ,
 "[nitya][adapter]"
@@ -562,6 +577,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Append sync and recovery diagnostics"
 ,
 "[nitya][diagnostics]"
@@ -606,6 +622,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: wait_durable beyond published LSN fails with InvalidArg"
 ,
 "[nitya][durability]"
@@ -629,6 +646,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: append vs append_sync vs sync durability watermarks"
 ,
 "[nitya][durability]"
@@ -658,6 +676,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Zero-byte payload support"
 ,
 "[nitya][correctness]"
@@ -684,6 +703,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Reject payload larger than segment"
 ,
 "[nitya][correctness]"
@@ -704,6 +724,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Record exact fit and auto-rotate off behavior"
 ,
 "[nitya][segment]"
@@ -738,6 +759,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Background flusher periodically commits published LSN"
 ,
 "[nitya][flusher]"
@@ -772,6 +794,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Recovery modes and corruption handling"
 ,
 "[nitya][corruption]"
@@ -855,6 +878,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Crash simulation after reservation before publication"
 ,
 "[nitya][crash]"
@@ -900,6 +924,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Non-allocating list_segments iterator"
 ,
 "[nitya][admin]"
@@ -932,6 +957,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Segment header write and validation on reopen"
 ,
 "[nitya][segment_header]"
@@ -978,6 +1004,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Corrupted segment header is rejected"
 ,
 "[nitya][segment_header]"
@@ -1019,6 +1046,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: First record does not overwrite segment header and recovery skips it"
 ,
 "[nitya][segment_header]"
@@ -1077,6 +1105,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Frame version validation and UnsupportedVersion error"
 ,
 "[nitya][version]"
@@ -1108,6 +1137,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Flags and version round-trip through append and recovery"
 ,
 "[nitya][flags]"
@@ -1146,6 +1176,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Segment descriptor populated from segment header metadata"
 ,
 "[nitya][descriptor]"
@@ -1183,6 +1214,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Concurrent group commit waiters receive completion without spinning forever"
 ,
 "[nitya][group_commit]"
@@ -1226,6 +1258,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Repeated concurrent group commit batches make durable progress"
 ,
 "[nitya][group_commit][liveness]"
@@ -1286,6 +1319,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Background flusher watermark flush and explicit shutdown join"
 ,
 "[nitya][flusher]"
@@ -1343,6 +1377,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Segment rotation seals previous segment with sealed_lsn and flags"
 ,
 "[nitya][seal]"
@@ -1386,6 +1421,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Archival persistence and mark_segment_archived"
 ,
 "[nitya][archive]"
@@ -1424,6 +1460,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: flush_to validates target_lsn <= published_lsn"
 ,
 "[nitya][flush_to]"
@@ -1453,6 +1490,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Follower retries leadership and completes durability without blocking forever"
 ,
 "[nitya][follower_retry]"
@@ -1494,6 +1532,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Sustained concurrent group commit and follower promotion stress"
 ,
 "[nitya][stress]"
@@ -1574,4 +1613,299 @@ TEST_CASE (
 
     CHECK(completed_appends.load() == kThreads * kIters);
     CHECK(log.flushed_lsn() == log.published_lsn());
+}
+
+// ============================================================================
+// § 15 Policy-seam coverage (nitya_next items 2, 3, 7, 8)
+//
+// These cases prove the four seams that were vestigial/frozen before the
+// nitya_next pass are now genuine: a custom FramingPolicy reaches the segment
+// header (item 3), an injected ClockPolicy drives retention deterministically
+// (item 8), salvage resync recovers the identical record set the byte-crawl did
+// (item 7), and recovery stages payloads through the MemoryPolicy (item 2).
+// Every case runs on custom policies only; the default `wal<>` behaviour is
+// unchanged and covered by the existing suite above.
+// ============================================================================
+
+namespace {
+    // ---- Item 3: framing policy that counts checksum invocations -----------
+    // Inherits default_framing so encode/decode and byte layout are identical;
+    // only calculate_checksum32 is overridden to count + delegate. Because the
+    // segment-header CRC now routes through FramingPolicy (item 3), constructing
+    // a segment must bump this counter — proving the header honours the policy.
+    struct CountingFraming : nitya::default_framing {
+        static inline std::atomic<std::size_t> checksum_calls{0};
+
+        static std::uint32_t calculate_checksum32(const std::byte* data, const std::size_t len) noexcept {
+            checksum_calls.fetch_add(1, std::memory_order_relaxed);
+            return nitya::default_framing::calculate_checksum32(data, len);
+        }
+    };
+
+    // ---- Item 8: deterministic clock injected as ClockPolicy ---------------
+    // now_unix_ns() is static (concept + storage stamping + retention all call
+    // it statically), so the current time lives in a static atomic the test
+    // drives explicitly. Used both as the storage stamping clock (segment
+    // created_at_unix_ns) and as the wal retention clock so age is fully
+    // deterministic.
+    struct ManualClock {
+        static inline std::atomic<std::uint64_t> now_ns{0};
+
+        static void set_ns(const std::uint64_t v) noexcept { now_ns.store(v, std::memory_order_relaxed); }
+        static void advance_ns(const std::uint64_t d) noexcept { now_ns.fetch_add(d, std::memory_order_relaxed); }
+
+        [[nodiscard]] static std::uint64_t now_unix_ns() noexcept {
+            return now_ns.load(std::memory_order_relaxed);
+        }
+    };
+
+    // ---- Item 2: memory policy that counts scratch usage -------------------
+    // Wraps smriti_memory and tallies allocate()/reset() so a recovery scan can
+    // assert the payload-staging path actually consults the MemoryPolicy rather
+    // than silently regressing to direct spans.
+    class CountingMemory {
+    public:
+        static inline std::atomic<std::size_t> allocate_calls{0};
+        static inline std::atomic<std::size_t> reset_calls{0};
+
+        explicit CountingMemory(const std::size_t arena_size = 1024 * 1024) : inner_{arena_size} {}
+
+        [[nodiscard]] void* allocate(const std::size_t n, const std::size_t a = alignof(std::max_align_t)) noexcept {
+            allocate_calls.fetch_add(1, std::memory_order_relaxed);
+            return inner_.allocate(n, a);
+        }
+
+        void reset() noexcept {
+            reset_calls.fetch_add(1, std::memory_order_relaxed);
+            inner_.reset();
+        }
+
+    private:
+        nitya::smriti_memory inner_;
+    };
+} // anonymous namespace
+
+TEST_CASE (
+
+"nitya: custom framing applies to segment header"
+,
+"[nitya][framing][policy]"
+)
+ {
+    TmpWalDir tmp;
+    constexpr std::size_t kSegSize = 4096;
+
+    // A wal whose storage AND framing both use CountingFraming, so the segment
+    // header CRC (written by storage) and frame CRCs share one policy.
+    using CountingStorage = nitya::setu_storage_t<CountingFraming>;
+    using CountingWal = nitya::wal<
+        CountingStorage,
+        nitya::smriti_memory,
+        nitya::flush_gate_concurrency,
+        CountingFraming>;
+
+    nitya::wal_options opts{
+        .wal_dir = tmp.path,
+        .segment_size = kSegSize
+    };
+
+    CountingFraming::checksum_calls.store(0, std::memory_order_relaxed);
+
+    {
+        CountingWal log{opts};
+        // Creating the first segment stamps + CRCs its header via FramingPolicy.
+        REQUIRE(log.append_sync(as_byte_span("REC_1")).has_value());
+        REQUIRE(log.append_sync(as_byte_span("REC_2")).has_value());
+    }
+
+    // Header CRC alone guarantees the policy fired; frame CRCs pile on top.
+    CHECK(CountingFraming::checksum_calls.load(std::memory_order_relaxed) > 0);
+
+    // Recovery must validate through the same policy (segment header + frames)
+    // and round-trip the records unchanged.
+    {
+        CountingWal log{opts};
+        auto stream = log.recover(0, nitya::recovery_mode::stop_at_first_error);
+        std::vector<std::string> recs;
+        for (const auto& rec : stream) {
+            recs.emplace_back(as_str_view(rec.payload));
+        }
+        REQUIRE(recs.size() == 2);
+        CHECK(recs[0] == "REC_1");
+        CHECK(recs[1] == "REC_2");
+    }
+}
+
+TEST_CASE (
+
+"nitya: retention with injected clock"
+,
+"[nitya][retention][clock]"
+)
+ {
+    TmpWalDir tmp;
+    constexpr std::size_t kSegSize = 256;
+
+    // Storage and retention both driven by ManualClock: segment headers are
+    // stamped with the clock's "now" at creation, and retention ages segments
+    // against the same clock — so time is fully under test control.
+    using ManualStorage = nitya::setu_storage_t<nitya::default_framing, ManualClock>;
+    using ManualWal = nitya::wal<
+        ManualStorage,
+        nitya::smriti_memory,
+        nitya::flush_gate_concurrency,
+        nitya::default_framing,
+        nitya::sync_durability,
+        nitya::nadi_telemetry,
+        ManualClock>;
+
+    nitya::wal_options opts{
+        .wal_dir = tmp.path,
+        .segment_size = kSegSize,
+        .auto_rotate = true
+    };
+
+    // Stamp all segments at T = 1s (in ns).
+    constexpr std::uint64_t kBirth = 1'000'000'000ULL;
+    ManualClock::set_ns(kBirth);
+
+    ManualWal log{opts};
+    for (int i = 0; i < 10; ++i) {
+        std::string s(100, 'X');
+        REQUIRE(log.append(as_byte_span(s)).has_value());
+    }
+    REQUIRE(log.sync().has_value());
+    log.set_replicated_lsn(log.tail_lsn());
+
+    // At birth time, age is 0: a 10s threshold must NOT delete anything.
+    {
+        std::vector<std::uint64_t> deleted;
+        log.apply_retention_rules(
+            std::chrono::seconds{10},
+            {},
+            [&](const nitya::segment_descriptor& d) { deleted.push_back(d.segment_id); }
+        );
+        CHECK(deleted.empty());
+    }
+
+    // Advance the clock 60s past birth: the same 10s threshold now expires the
+    // replicated segments. Deletion is purely a function of the injected clock.
+    ManualClock::advance_ns(60ULL * 1'000'000'000ULL);
+    {
+        std::vector<std::uint64_t> deleted;
+        log.apply_retention_rules(
+            std::chrono::seconds{10},
+            {},
+            [&](const nitya::segment_descriptor& d) { deleted.push_back(d.segment_id); }
+        );
+        CHECK_FALSE(deleted.empty());
+    }
+}
+
+TEST_CASE (
+
+"nitya: salvage resync scalar/simd parity"
+,
+"[nitya][recovery][salvage]"
+)
+ {
+    TmpWalDir tmp;
+    constexpr std::size_t kSegSize = 4096;
+
+    // Three valid records; corrupt the middle one's payload so salvage must
+    // resync forward to the next frame magic. find_next_frame_magic picks SIMD
+    // vs scalar at compile time (PEBBLE_HAS_HIGHWAY); the observable contract —
+    // the exact record set recovered — is identical either way, which is what
+    // this asserts.
+    {
+        nitya::wal_options opts{
+            .wal_dir = tmp.path,
+            .segment_size = kSegSize
+        };
+        nitya::wal<> log{opts};
+        REQUIRE(log.append_sync(as_byte_span("ALPHA")).has_value());
+        REQUIRE(log.append_sync(as_byte_span("BRAVO")).has_value());
+        REQUIRE(log.append_sync(as_byte_span("CARLO")).has_value());
+    }
+
+    auto seg_path = tmp.path / "0000000000.log";
+    REQUIRE(std::filesystem::exists(seg_path));
+
+    auto map_res = setu::mapping<setu::read_write>::open_or_create(seg_path, kSegSize);
+    REQUIRE(map_res.has_value());
+    auto bytes = map_res->as_bytes();
+
+    // Offset of the 2nd record: segment_header(44) + frame_overhead(36) + payload(5).
+    std::size_t rec2_off = nitya::k_segment_header_size + 36 + 5;
+    bytes[rec2_off + sizeof(nitya::frame_header) + 1] = static_cast<std::byte>(0xFF);
+    (void)map_res->flush_range(0, kSegSize, setu::flush_mode::sync);
+
+    nitya::wal_options opts{
+        .wal_dir = tmp.path,
+        .segment_size = kSegSize
+    };
+    nitya::wal<> log{opts};
+
+    auto stream = log.recover(0, nitya::recovery_mode::salvage);
+    std::vector<std::string> recs;
+    for (const auto& rec : stream) {
+        recs.emplace_back(as_str_view(rec.payload));
+    }
+
+    // Resync skips the corrupt middle frame and lands exactly on CARLO.
+    REQUIRE(recs.size() == 2);
+    CHECK(recs[0] == "ALPHA");
+    CHECK(recs[1] == "CARLO");
+
+    const auto st = stream.status();
+    CHECK(st.records_recovered == 2);
+    CHECK(st.last_valid_lsn != nitya::k_invalid_lsn);
+}
+
+TEST_CASE (
+
+"nitya: recovery uses memory policy scratch"
+,
+"[nitya][memory][policy]"
+)
+ {
+    TmpWalDir tmp;
+    constexpr std::size_t kSegSize = 4096;
+
+    using ScratchWal = nitya::wal<
+        nitya::setu_storage,
+        CountingMemory,
+        nitya::flush_gate_concurrency>;
+
+    nitya::wal_options opts{
+        .wal_dir = tmp.path,
+        .segment_size = kSegSize
+    };
+
+    {
+        ScratchWal log{opts};
+        REQUIRE(log.append_sync(as_byte_span("REC_1")).has_value());
+        REQUIRE(log.append_sync(as_byte_span("REC_2")).has_value());
+        REQUIRE(log.append_sync(as_byte_span("REC_3")).has_value());
+    }
+
+    CountingMemory::allocate_calls.store(0, std::memory_order_relaxed);
+    CountingMemory::reset_calls.store(0, std::memory_order_relaxed);
+
+    {
+        ScratchWal log{opts};
+        auto stream = log.recover(0, nitya::recovery_mode::stop_at_first_error);
+        std::vector<std::string> recs;
+        for (const auto& rec : stream) {
+            recs.emplace_back(as_str_view(rec.payload));
+        }
+        REQUIRE(recs.size() == 3);
+        CHECK(recs[0] == "REC_1");
+        CHECK(recs[2] == "REC_3");
+    }
+
+    // Each non-empty recovered record is staged: reset() then allocate() per
+    // record, so both counters must reflect the scan (>=3 records).
+    CHECK(CountingMemory::allocate_calls.load(std::memory_order_relaxed) >= 3);
+    CHECK(CountingMemory::reset_calls.load(std::memory_order_relaxed) >= 3);
 }

@@ -2,7 +2,12 @@
 #include "spandana/spandana.hpp"
 #include <cmath>
 
-TEST_CASE("Spandana: Easing Functions", "[spandana][easing]") {
+TEST_CASE (
+"Spandana: Easing Functions"
+,
+"[spandana][easing]"
+)
+ {
     using namespace pebble::spandana::ease;
 
     REQUIRE(linear(0.0f) == 0.0f);
@@ -16,7 +21,12 @@ TEST_CASE("Spandana: Easing Functions", "[spandana][easing]") {
     REQUIRE(std::abs(out_bounce(1.0f) - 1.0f) < 1e-4f);
 }
 
-TEST_CASE("Spandana: Analytical Spring Damper Stability", "[spandana][spring]") {
+TEST_CASE (
+"Spandana: Analytical Spring Damper Stability"
+,
+"[spandana][spring]"
+)
+ {
     pebble::spandana::AnalyticalSpringDamper spring(180.0f, 12.0f);
 
     float pos = 0.0f;
@@ -34,7 +44,12 @@ TEST_CASE("Spandana: Analytical Spring Damper Stability", "[spandana][spring]") 
     REQUIRE(std::abs(pos - target) < 1.0f);
 }
 
-TEST_CASE("Spandana: TwoBoneIK Reach Solver", "[spandana][ik]") {
+TEST_CASE (
+"Spandana: TwoBoneIK Reach Solver"
+,
+"[spandana][ik]"
+)
+ {
     pebble::spandana::TwoBoneIK ik(10.0f, 10.0f);
 
     pebble::math::vec2 root(0.0f, 0.0f);
@@ -44,7 +59,12 @@ TEST_CASE("Spandana: TwoBoneIK Reach Solver", "[spandana][ik]") {
     REQUIRE(result.reachable);
 }
 
-TEST_CASE("Spandana: Automatic Dependency & Parallelism Inference Timeline", "[spandana][timeline]") {
+TEST_CASE (
+"Spandana: Automatic Dependency & Parallelism Inference Timeline"
+,
+"[spandana][timeline]"
+)
+ {
     using namespace pebble::spandana::edsl;
 
     pebble::spandana::Timeline timeline;
@@ -84,7 +104,12 @@ TEST_CASE("Spandana: Automatic Dependency & Parallelism Inference Timeline", "[s
     REQUIRE(callback_count == 1);
 }
 
-TEST_CASE("Spandana: Camera Shake Trauma Decay", "[spandana][procedural]") {
+TEST_CASE (
+"Spandana: Camera Shake Trauma Decay"
+,
+"[spandana][procedural]"
+)
+ {
     pebble::spandana::ScreenShake2D shake;
 
     shake.add_trauma(0.8f);
@@ -94,7 +119,12 @@ TEST_CASE("Spandana: Camera Shake Trauma Decay", "[spandana][procedural]") {
     REQUIRE(shake.trauma() < 0.8f);
 }
 
-TEST_CASE("Spandana: Spline Path Following and Tangent Orientation", "[spandana][spline]") {
+TEST_CASE (
+"Spandana: Spline Path Following and Tangent Orientation"
+,
+"[spandana][spline]"
+)
+ {
     using namespace pebble::spandana::edsl;
 
     akruti::CubicBezierCurve bezier{
@@ -123,12 +153,18 @@ TEST_CASE("Spandana: Spline Path Following and Tangent Orientation", "[spandana]
     REQUIRE(pos[1] == 0.0f);
 }
 
-TEST_CASE("Spandana: Particle Burst Emitter", "[spandana][particles]") {
+TEST_CASE (
+"Spandana: Particle Burst Emitter"
+,
+"[spandana][particles]"
+)
+ {
     using namespace pebble::spandana::edsl;
 
     pebble::spandana::Timeline timeline;
+    containers::static_vector<Particle, 32> particle_buffer;
     timeline.add(
-        particle_burst().at({50.0f, 50.0f}).count(16).speed(100.0f, 200.0f).lifetime(0.4f)
+        particle_burst(particle_buffer).at({50.0f, 50.0f}).count(16).speed(100.0f, 200.0f).lifetime(0.4f)
     );
 
     timeline.update(0.2f);
@@ -139,7 +175,12 @@ TEST_CASE("Spandana: Particle Burst Emitter", "[spandana][particles]") {
     REQUIRE(timeline.is_finished());
 }
 
-TEST_CASE("Spandana: Verlet Secondary Cloth Dynamics", "[spandana][cloth]") {
+TEST_CASE (
+"Spandana: Verlet Secondary Cloth Dynamics"
+,
+"[spandana][cloth]"
+)
+ {
     pebble::spandana::VerletCloth2D cloth(4, 5.0f);
 
     pebble::math::vec2 anchor(0.0f, 100.0f);
@@ -161,6 +202,68 @@ TEST_CASE("Spandana: Verlet Secondary Cloth Dynamics", "[spandana][cloth]") {
     REQUIRE(chain.verts.size() == 5);
     REQUIRE(chain.radius == 0.5f);
     REQUIRE_FALSE(chain.is_loop);
+}
+
+// ============================================================================
+// Additive Phase-1: RectSpring / AnalyticalSpringDamperN used by drishya reflow.
+// Existing cases above are untouched.
+// ============================================================================
+
+namespace {
+    struct TestRect {
+        float x = 0.0f, y = 0.0f, w = 0.0f, h = 0.0f;
+    };
+} // namespace
+
+TEST_CASE (
+"Spandana: RectSpring first step snaps, then converges to target"
+,
+"[spandana][spring]"
+)
+ {
+    using namespace pebble::spandana;
+
+    RectSpring<TestRect> spring;
+    const TestRect target{100.0f, 100.0f, 50.0f, 50.0f};
+
+    // First step snaps (no spring-in from origin).
+    TestRect r = spring.step(target, 0.016f);
+    REQUIRE(r.x == Catch::Approx(100.0f).margin(0.001f));
+
+    // Move the target; integrate a fixed budget. settled() only inspects
+    // velocity, so it reads true right after a snap (zero velocity) even though
+    // position has not yet reached the new target — drive an explicit step count
+    // rather than gating the loop on settled().
+    const TestRect moved{200.0f, 100.0f, 50.0f, 50.0f};
+    for (int i = 0; i < 4000; ++i) {
+        r = spring.step(moved, 0.016f);
+    }
+    CHECK(spring.settled());
+    CHECK(r.x == Catch::Approx(200.0f).margin(1.0f));
+    CHECK(r.h == Catch::Approx(50.0f).margin(1.0f));
+}
+
+TEST_CASE (
+"Spandana: AnalyticalSpringDamperN steps components independently"
+,
+"[spandana][spring]"
+)
+ {
+    using namespace pebble::spandana;
+
+    AnalyticalSpringDamperN<3> spring;
+    std::array<float, 3> pos{0.0f, 0.0f, 0.0f};
+    std::array<float, 3> vel{0.0f, 0.0f, 0.0f};
+    const std::array<float, 3> target{10.0f, -5.0f, 3.0f};
+
+    for (int i = 0; i < 4000; ++i) {
+        auto [p, v] = spring.step(pos, vel, target, 0.016f);
+        pos = p;
+        vel = v;
+    }
+    CHECK(pos[0] == Catch::Approx(10.0f).margin(0.05f));
+    CHECK(pos[1] == Catch::Approx(-5.0f).margin(0.05f));
+    CHECK(pos[2] == Catch::Approx(3.0f).margin(0.05f));
 }
 
 

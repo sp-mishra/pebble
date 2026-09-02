@@ -116,8 +116,8 @@ int main() {
 }
 ```
 
-When compiled with `-DLG_LOG_ENABLED=0`, the `lg::...` calls are compiled to no-ops and will not emit logging output (
-arguments are still evaluated). If you need zero argument evaluation, wrap calls like:
+When compiled with `-DLG_LOG_ENABLED=0`, the `lg::...` calls are compiled to no-ops and will not emit logging output
+(arguments are still evaluated). If you need zero argument evaluation, wrap calls like:
 
 ```cpp
 if (should_log) lg::info("Expensive: {}", compute_expensive());

@@ -27,7 +27,9 @@
 #include "vakya/vakya.hpp"
 #include "observability/nadi.hpp"
 
-namespace pravaha { namespace lithe = ::vakya; }
+namespace pravaha {
+    namespace lithe = ::vakya;
+}
 
 // ============================================================================
 // Section 2: Compute value types
@@ -44,15 +46,15 @@ namespace pravaha::compute {
         tiled_2d = 2,
         packed_simd = 3,
         host_coherent = 4,
-        sparse_csc = 5,   // Compressed Sparse Column: [values, col_ptr, row_ind]
-        sparse_csr = 6,   // Compressed Sparse Row:    [values, row_ptr, col_ind]
-        sparse_coo = 7,   // Coordinate format:        [values, row_ind, col_ind]
+        sparse_csc = 5, // Compressed Sparse Column: [values, col_ptr, row_ind]
+        sparse_csr = 6, // Compressed Sparse Row:    [values, row_ptr, col_ind]
+        sparse_coo = 7, // Coordinate format:        [values, row_ind, col_ind]
     };
 
     [[nodiscard]] constexpr bool is_sparse_layout(memory_layout l) noexcept {
         return l == memory_layout::sparse_csc ||
-               l == memory_layout::sparse_csr ||
-               l == memory_layout::sparse_coo;
+            l == memory_layout::sparse_csr ||
+            l == memory_layout::sparse_coo;
     }
 
     enum class data_element_type : std::uint8_t {
@@ -613,8 +615,7 @@ namespace pravaha::hetero {
     inline void emit_backend_selected(compute_domain d, std::uint64_t hash,
                                       std::size_t bytes) noexcept {
         using P = utils::nadi::Pulse<"pravaha.hetero.backend_selected",
-                                     utils::nadi::Field < "domain", std::uint8_t>
-        ,
+                                     utils::nadi::Field < "domain", std::uint8_t>,
         utils::nadi::Field < "hash", std::uint64_t >,
             utils::nadi::Field<"bytes", std::uint64_t> >;
         utils::nadi::route_pulse<hetero_sink>(P{

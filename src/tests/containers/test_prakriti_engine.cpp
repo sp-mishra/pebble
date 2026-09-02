@@ -9,7 +9,12 @@
 
 using namespace prakriti;
 
-TEST_CASE("free particle falls under gravity", "[prakriti][engine]") {
+TEST_CASE (
+"free particle falls under gravity"
+,
+"[prakriti][engine]"
+)
+ {
     WorldConfig cfg;
     cfg.bounds = {{-100.0f, 0.0f}, {100.0f, 100.0f}}; // floor at y=0
     World<> w(cfg);
@@ -23,7 +28,12 @@ TEST_CASE("free particle falls under gravity", "[prakriti][engine]") {
     REQUIRE(w.particles().vel_v(p)[1] < 0);         // downward velocity
 }
 
-TEST_CASE("particle settles on floor (boundary containment)", "[prakriti][engine]") {
+TEST_CASE (
+"particle settles on floor (boundary containment)"
+,
+"[prakriti][engine]"
+)
+ {
     WorldConfig cfg;
     cfg.bounds = {{-100.0f, 0.0f}, {100.0f, 100.0f}};
     World<> w(cfg);
@@ -36,7 +46,12 @@ TEST_CASE("particle settles on floor (boundary containment)", "[prakriti][engine
     REQUIRE(w.particles().pos_v(p)[1] <= 5.0f);
 }
 
-TEST_CASE("rigid bar keeps length under gravity", "[prakriti][engine]") {
+TEST_CASE (
+"rigid bar keeps length under gravity"
+,
+"[prakriti][engine]"
+)
+ {
     WorldConfig cfg;
     cfg.bounds = {{-100.0f, -100.0f}, {100.0f, 100.0f}};
     World<> w(cfg);
@@ -54,7 +69,12 @@ TEST_CASE("rigid bar keeps length under gravity", "[prakriti][engine]") {
     REQUIRE(len == Catch::Approx(L0).margin(0.3f));
 }
 
-TEST_CASE("fluid column spreads horizontally (dam break)", "[prakriti][engine]") {
+TEST_CASE (
+"fluid column spreads horizontally (dam break)"
+,
+"[prakriti][engine]"
+)
+ {
     WorldConfig cfg;
     cfg.cell_size = 1.0f;
     cfg.bounds = {{-50.0f, 0.0f}, {50.0f, 100.0f}};

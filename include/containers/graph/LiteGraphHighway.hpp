@@ -146,9 +146,7 @@ namespace litegraph::highway { namespace detail {
 
 
 
-double
-                )
-                d;
+double) d;
                 const std::size_t lanes = hwy::Lanes(d);
                 const auto vs = hwy::Set(d, source_distance);
 
@@ -219,6 +217,14 @@ double
         result.ranks = rank;
 
         const double d = options.damping_factor;
+
+        // Gather (pull) path: read-only per-node reduction over the reverse CSR.
+        // Contributions are precomputed with SIMD; the indexed sum is scalar but
+        // reads a contiguous slice of in_sources per node.
+        const bool gather = g.has_incoming();
+        std::vector<double> contrib;
+        if (gather) contrib.assign(n, 0.0);
+
         for (std::size_t iter = 0; iter < options.max_iterations; ++iter) {
             double dangling_mass = 0.0;
             for (std::size_t u = 0; u < n; ++u) {
@@ -228,19 +234,42 @@ double
             }
 
             const double teleport = (1.0 - d) / static_cast<double>(n);
-            detail::fill_vector(next_rank, teleport);
 
-            if (dangling_mass != 0.0) {
-                detail::add_scaled(next_rank, ones, d * dangling_mass / static_cast<double>(n));
+            if (gather) {
+                const auto& in_offsets = g.in_offsets();
+                const auto& in_sources = g.in_sources();
+                const double base = teleport + d * dangling_mass / static_cast<double>(n);
+
+                // contrib[u] = d * rank[u] / out_degree(u), 0 for dangling nodes.
+                for (std::size_t u = 0; u < n; ++u) {
+                    const std::size_t out_degree = offsets[u + 1] - offsets[u];
+                    contrib[u] = out_degree == 0
+                                     ? 0.0
+                                     : d * rank[u] / static_cast<double>(out_degree);
+                }
+                for (std::size_t v = 0; v < n; ++v) {
+                    double acc = base;
+                    for (std::size_t k = in_offsets[v]; k < in_offsets[v + 1]; ++k) {
+                        acc += contrib[in_sources[k].value];
+                    }
+                    next_rank[v] = acc;
+                }
             }
+            else {
+                detail::fill_vector(next_rank, teleport);
 
-            for (std::size_t u = 0; u < n; ++u) {
-                const std::size_t out_degree = offsets[u + 1] - offsets[u];
-                if (out_degree == 0) continue;
+                if (dangling_mass != 0.0) {
+                    detail::add_scaled(next_rank, ones, d * dangling_mass / static_cast<double>(n));
+                }
 
-                const double contrib = d * rank[u] / static_cast<double>(out_degree);
-                for (std::size_t i = offsets[u]; i < offsets[u + 1]; ++i) {
-                    next_rank[targets[i].value] += contrib;
+                for (std::size_t u = 0; u < n; ++u) {
+                    const std::size_t out_degree = offsets[u + 1] - offsets[u];
+                    if (out_degree == 0) continue;
+
+                    const double contrib_u = d * rank[u] / static_cast<double>(out_degree);
+                    for (std::size_t i = offsets[u]; i < offsets[u + 1]; ++i) {
+                        next_rank[targets[i].value] += contrib_u;
+                    }
                 }
             }
 

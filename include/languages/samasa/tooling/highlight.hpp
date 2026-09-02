@@ -10,17 +10,16 @@
 #include <cstdint>
 
 namespace lang::samasa {
-
     enum class highlight_class : std::uint8_t {
-        none       = 0,
-        keyword    = 1,
+        none = 0,
+        keyword = 1,
         identifier = 2,
-        literal    = 3,
-        operator_  = 4,
-        comment    = 5,
-        punctuation= 6,
-        type_name  = 7,
-        builtin    = 8,
+        literal = 3,
+        operator_ = 4,
+        comment = 5,
+        punctuation = 6,
+        type_name = 7,
+        builtin = 8,
     };
 
     // Placeholder: language-specific specialisations return a consteval
@@ -29,5 +28,4 @@ namespace lang::samasa {
     [[nodiscard]] consteval highlight_class highlight_for(typename G::token_kind) {
         return highlight_class::none;
     }
-
 } // namespace lang::samasa

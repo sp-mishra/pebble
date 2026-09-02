@@ -75,6 +75,8 @@ namespace lithe::features {
 #endif
 
 #include <cstddef>
+#include <unordered_set>
+#include "containers/dynamic/SmallVector.hpp"
 
 namespace tarka::features {
     // =========================================================================
@@ -91,16 +93,46 @@ namespace tarka::features {
             std::size_t bv_ops = 0, lra_ops = 0, lia_ops = 0, nra_ops = 0, nia_ops = 0;
             std::size_t quant_depth = 0, array_ops = 0, uf_ops = 0;
 
-            // Post-order walk — count ops and theory bits
-            constexpr std::size_t kStackCap = 512;
-            const Term* stack_buf[kStackCap];
-            std::size_t depth = 0;
-            stack_buf[depth++] = &root;
+            // Single DAG walk, deduping on interned identity (TermImpl*). One
+            // visited set feeds both the theory-op tallies and the DAG-compression
+            // ratio, so a shared sub-term is counted once — the old code walked the
+            // tree twice and double-counted shared nodes in the op tallies.
+            std::unordered_set<const TermImpl*> seen;
+            seen.reserve(256);
+            std::size_t unique_nodes = 0;
+            std::size_t revisit_count = 0;
 
-            while (depth > 0) {
-                const Term* cur = stack_buf[--depth];
+            containers::dynamic::SmallVector<const Term*, 512 * sizeof(const Term*)> stack;
+            stack.push_back(&root);
+
+            while (!stack.empty()) {
+                const Term* cur = stack.back();
+                stack.pop_back();
                 ++total_nodes;
-                const theory_mask bits = get_op_info(cur->op()).theory_bits;
+                if (!seen.insert(cur->ptr()).second) {
+                    ++revisit_count;
+                    continue; // already tallied this interned node
+                }
+                ++unique_nodes;
+
+                const Op op = cur->op();
+                theory_mask bits = get_op_info(op).theory_bits;
+
+                // Structural nonlinearity: a product/quotient whose operands are
+                // *both* non-constant is genuinely (N)NRA/NIA. Opcode metadata only
+                // carries the linear bits (see term.hpp), so we add the nonlinear
+                // bit here where the operands are visible.
+                if (op == Op::Mul || op == Op::Div) {
+                    std::size_t non_const = 0;
+                    for (const Term& c : cur->children())
+                        if (c.op() != Op::Lit) ++non_const;
+                    if (non_const >= 2) {
+                        const bool real_sort = cur->sort().kind() == SortKind::Real;
+                        bits |= real_sort
+                                    ? theory_bit(theory_family::nra)
+                                    : theory_bit(theory_family::nia);
+                    }
+                }
 
                 if (bits & theory_bit(theory_family::bv)) ++bv_ops;
                 if (bits & theory_bit(theory_family::lra)) ++lra_ops;
@@ -110,16 +142,12 @@ namespace tarka::features {
                 if (bits & theory_bit(theory_family::array)) ++array_ops;
                 if (bits & theory_bit(theory_family::uf)) ++uf_ops;
 
-                const Op op = cur->op();
                 if (op == Op::Forall || op == Op::Exists) ++quant_depth;
 
-                for (const Term& c : cur->children()) {
-                    if (depth < kStackCap)
-                        stack_buf[depth++] = &c;
-                }
+                for (const Term& c : cur->children()) stack.push_back(&c);
             }
 
-            const float n = total_nodes > 0 ? static_cast<float>(total_nodes) : 1.0f;
+            const float n = unique_nodes > 0 ? static_cast<float>(unique_nodes) : 1.0f;
             fv.append(static_cast<float>(bv_ops) / n); // bv_ratio
             fv.append(static_cast<float>(lra_ops) / n); // lra_ratio
             fv.append(static_cast<float>(lia_ops) / n); // lia_ratio
@@ -129,59 +157,12 @@ namespace tarka::features {
             fv.append(array_ops > 0 ? 1.0f : 0.0f); // array_flag
             fv.append(uf_ops > 0 ? 1.0f : 0.0f); // uf_flag
 
-            // dag_compression_ratio: unique ptr count / total walk visits.
-            {
-                constexpr std::size_t kVisitCap = 512;
-                const TermImpl* visit_buf[kVisitCap];
-                std::size_t vdepth = 0;
-                std::size_t unique_nodes = 0;
-                std::size_t revisit_count = 0;
-
-                constexpr std::size_t kSetSize = 512;
-                const TermImpl* seen[kSetSize] = {};
-
-                auto seen_contains = [&](const TermImpl* p) -> bool {
-                    std::size_t idx = (reinterpret_cast<std::size_t>(p) >> 3u) & (kSetSize - 1u);
-                    for (std::size_t probe = 0; probe < kSetSize; ++probe) {
-                        std::size_t slot = (idx + probe) & (kSetSize - 1u);
-                        if (seen[slot] == nullptr) return false;
-                        if (seen[slot] == p) return true;
-                    }
-                    return false;
-                };
-                auto seen_insert = [&](const TermImpl* p) {
-                    std::size_t idx = (reinterpret_cast<std::size_t>(p) >> 3u) & (kSetSize - 1u);
-                    for (std::size_t probe = 0; probe < kSetSize; ++probe) {
-                        std::size_t slot = (idx + probe) & (kSetSize - 1u);
-                        if (seen[slot] == nullptr || seen[slot] == p) {
-                            seen[slot] = p;
-                            return;
-                        }
-                    }
-                };
-
-                visit_buf[vdepth++] = root.ptr();
-                while (vdepth > 0) {
-                    const TermImpl* cur = visit_buf[--vdepth];
-                    if (seen_contains(cur)) {
-                        ++revisit_count;
-                        continue;
-                    }
-                    seen_insert(cur);
-                    ++unique_nodes;
-                    const Term* ch_ptr = reinterpret_cast<const Term*>(cur + 1);
-                    for (std::uint16_t ci = 0; ci < cur->child_count; ++ci) {
-                        if (vdepth < kVisitCap)
-                            visit_buf[vdepth++] = ch_ptr[ci].ptr();
-                    }
-                }
-
-                const std::size_t walk_total = unique_nodes + revisit_count;
-                const float ratio = walk_total > 0
-                                        ? static_cast<float>(unique_nodes) / static_cast<float>(walk_total)
-                                        : 1.0f;
-                fv.append(ratio); // dag_compression_ratio
-            }
+            // dag_compression_ratio: unique interned nodes / total walk visits.
+            const std::size_t walk_total = unique_nodes + revisit_count;
+            const float ratio = walk_total > 0
+                                    ? static_cast<float>(unique_nodes) / static_cast<float>(walk_total)
+                                    : 1.0f;
+            fv.append(ratio); // dag_compression_ratio
             return fv;
         }
     };
@@ -222,13 +203,23 @@ namespace tarka {
 
         // Returns index of selected backend (0-based)
         [[nodiscard]] std::size_t route(Term t) const {
-            features::theory_extractor extractor;
-            const auto fv = extractor.extract(t);
-            const theory_mask sig = features::mask_from_features(fv);
+            auto& store = lithe::features::feature_store::global();
 
-            // Cache in feature_store by term hash
-            [[maybe_unused]] auto& store = lithe::features::feature_store::global();
-            store.put(t.hash(), fv, lithe::features::feature_source::custom);
+            // Reuse a cached feature vector when the same formula was routed
+            // before (incremental pushes, portfolio); extract only on a miss.
+            // Key on the interned identity (TermImpl*), not the 64-bit structural
+            // hash: interning is permanent, so the pointer is a collision-free key
+            // — keying on the hash could alias two distinct formulas and mis-route.
+            const auto key = reinterpret_cast<std::uint64_t>(t.ptr());
+            lithe::features::feature_vector fv;
+            if (auto cached = store.get(key)) {
+                fv = *cached;
+            }
+            else {
+                fv = features::theory_extractor{}.extract(t);
+                store.put(key, fv, lithe::features::feature_source::custom);
+            }
+            const theory_mask sig = features::mask_from_features(fv);
 
             // Capability filter: keep backends whose caps ⊇ sig
             constexpr theory_mask caps[kNumBackends] = {Backends::capabilities()...};

@@ -17,7 +17,12 @@ using simd_tensor = ts::tensor<float, ts::highway_storage_policy, ts::highway_co
 using gpu_tensor_f32 = ts::gpu_tensor<float>;
 #endif
 
-TEST_CASE("tensor: CPU tensor basic ops", "[tensor][cpu][basic]") {
+TEST_CASE (
+"tensor: CPU tensor basic ops"
+,
+"[tensor][cpu][basic]"
+)
+ {
     SECTION("Addition, multiplication, sum, mean, max") {
         std::vector<size_t> shape = {4, 4};
         cpu_tensor t1(shape), t2(shape);
@@ -49,7 +54,12 @@ TEST_CASE("tensor: CPU tensor basic ops", "[tensor][cpu][basic]") {
     }
 }
 
-TEST_CASE("tensor: SIMD tensor elementwise ops", "[tensor][simd][elementwise]") {
+TEST_CASE (
+"tensor: SIMD tensor elementwise ops"
+,
+"[tensor][simd][elementwise]"
+)
+ {
     SECTION("Addition and division") {
         std::vector<size_t> shape = {8};
         simd_tensor t1(shape), t2(shape);
@@ -84,7 +94,12 @@ TEST_CASE("tensor: SIMD tensor elementwise ops", "[tensor][simd][elementwise]") 
     }
 }
 
-TEST_CASE("tensor: Dot product (CPU & SIMD)", "[tensor][cpu][dot][matmul]") {
+TEST_CASE (
+"tensor: Dot product (CPU & SIMD)"
+,
+"[tensor][cpu][dot][matmul]"
+)
+ {
     SECTION("Matrix-matrix dot") {
         std::vector<size_t> shapeA = {2, 3};
         std::vector<size_t> shapeB = {3, 2};
@@ -124,7 +139,12 @@ TEST_CASE("tensor: Dot product (CPU & SIMD)", "[tensor][cpu][dot][matmul]") {
     }
 }
 
-TEST_CASE("tensor: C++23 indexing and views", "[tensor][indexing][views]") {
+TEST_CASE (
+"tensor: C++23 indexing and views"
+,
+"[tensor][indexing][views]"
+)
+ {
     SECTION("Multidimensional operator[]") {
         ts::static_tensor<int, ts::default_storage_policy, ts::default_computation_policy, 2, 3> st = {
             1, 2, 3,
@@ -150,7 +170,12 @@ TEST_CASE("tensor: C++23 indexing and views", "[tensor][indexing][views]") {
     }
 }
 
-TEST_CASE("tensor: Mathematical functions and statistics", "[tensor][math][stats]") {
+TEST_CASE (
+"tensor: Mathematical functions and statistics"
+,
+"[tensor][math][stats]"
+)
+ {
     SECTION("Normalize, std_dev, variance") {
         cpu_tensor t({4}, {2.0f, 4.0f, 4.0f, 2.0f});
         float m = ts::mean(t);
@@ -187,7 +212,12 @@ TEST_CASE("tensor: Mathematical functions and statistics", "[tensor][math][stats
     }
 }
 
-TEST_CASE("tensor: Arrow-style string storage", "[tensor][arrow][strings]") {
+TEST_CASE (
+"tensor: Arrow-style string storage"
+,
+"[tensor][arrow][strings]"
+)
+ {
     ts::arrow_string_storage strings({"hello", "modern", "pebble", "tensor"});
     REQUIRE(strings.size() == 4);
     REQUIRE(strings[0] == "hello");
@@ -203,7 +233,12 @@ TEST_CASE("tensor: Arrow-style string storage", "[tensor][arrow][strings]") {
     REQUIRE(collected[2] == "pebble");
 }
 
-TEST_CASE("tensor: Cross-policy assignment", "[tensor][cross][policy]") {
+TEST_CASE (
+"tensor: Cross-policy assignment"
+,
+"[tensor][cross][policy]"
+)
+ {
     std::vector<size_t> shape = {3};
     cpu_tensor cpu(shape);
     simd_tensor simd(shape);
@@ -218,13 +253,18 @@ TEST_CASE("tensor: Cross-policy assignment", "[tensor][cross][policy]") {
     for (size_t i = 0; i < 3; ++i) REQUIRE(simd2.data()[i] == Catch::Approx(cpu.data()[i]));
 }
 
-TEST_CASE("tensor: SmallTensor and Smriti Arena integration", "[tensor][small][smriti]") {
+TEST_CASE (
+"tensor: SmallTensor and Smriti Arena integration"
+,
+"[tensor][small][smriti]"
+)
+ {
     SECTION("SmallTensor inline buffer (SBO)") {
         // Fits within 64-byte inline budget (16 floats)
         ts::small_tensor<float, 64> st({2, 4});
         REQUIRE(st.size() == 8);
         for (size_t i = 0; i < st.size(); ++i) st.data()[i] = static_cast<float>(i + 1);
-        
+
         auto st2 = st * 2.0f;
         REQUIRE(st2.size() == 8);
         REQUIRE(st2({0, 0}) == Catch::Approx(2.0f));
@@ -248,7 +288,7 @@ TEST_CASE("tensor: SmallTensor and Smriti Arena integration", "[tensor][small][s
 }
 
 #if __has_include(<mlx/mlx.h>)
-TEST_CASE("tensor: MLX Apple Silicon GPU execution", "[tensor][mlx][gpu]") {
+TEST_CASE ("tensor: MLX Apple Silicon GPU execution", "[tensor][mlx][gpu]") {
     SECTION("MLX GPU array creation, addition, and reductions") {
         gpu_tensor_f32 g1({4}, {1.0f, 2.0f, 3.0f, 4.0f});
         gpu_tensor_f32 g2({4}, {10.0f, 20.0f, 30.0f, 40.0f});
@@ -268,7 +308,12 @@ TEST_CASE("tensor: MLX Apple Silicon GPU execution", "[tensor][mlx][gpu]") {
 }
 #endif
 
-TEST_CASE("tensor: constexpr static_tensor evaluation", "[tensor][static][constexpr]") {
+TEST_CASE (
+"tensor: constexpr static_tensor evaluation"
+,
+"[tensor][static][constexpr]"
+)
+ {
     SECTION("constexpr static_tensor construction and element access") {
         constexpr ts::static_tensor<float, ts::default_storage_policy, ts::default_computation_policy, 2, 2> mat(
             1.0f, 2.0f,
@@ -291,7 +336,12 @@ struct Particle {
     int id;
 };
 
-TEST_CASE("tensor: Structure-of-Arrays (SoA) Reflection Storage", "[tensor][soa]") {
+TEST_CASE (
+"tensor: Structure-of-Arrays (SoA) Reflection Storage"
+,
+"[tensor][soa]"
+)
+ {
     SECTION("SoA column layout and reconstruction") {
         meta::soa_storage<Particle, 16> soa;
         soa.push_back(Particle{1.0f, 2.0f, 3.0f, 0.1f, 0.2f, 0.3f, 42});

@@ -2,7 +2,12 @@
 #include "akruti/mpr.hpp"
 #include <cmath>
 
-TEST_CASE("Akruti: MPR Distance Oracle", "[akruti][mpr]") {
+TEST_CASE (
+"Akruti: MPR Distance Oracle"
+,
+"[akruti][mpr]"
+)
+ {
     akruti::Circle c1{{0, 0}, 1.0f};
     akruti::Circle c2{{3, 0}, 1.0f};
 

@@ -2,7 +2,12 @@
 #include "akruti/akruti.hpp"
 #include "akruti/body.hpp"
 
-TEST_CASE("Akruti: DynamicBody 6-DOF Kinematics & SDF Transformation", "[akruti][body]") {
+TEST_CASE (
+"Akruti: DynamicBody 6-DOF Kinematics & SDF Transformation"
+,
+"[akruti][body]"
+)
+ {
     akruti::Box box{{0.0f, 0.0f}, {10.0f, 10.0f}};
     akruti::DynamicBody body{box, 2.0f, 10.0f};
 

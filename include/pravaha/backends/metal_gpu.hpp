@@ -17,7 +17,10 @@
 #include <utility>
 #include <iomanip>
 #include <cassert>
-namespace pravaha::backends { namespace lithe = ::vakya; }
+
+namespace pravaha::backends {
+    namespace lithe = ::vakya;
+}
 
 // ============================================================================
 // MSL emitter — platform-independent (pure string generation, no Metal calls).
@@ -347,8 +350,10 @@ namespace pravaha::backends::metal {
         explicit metal_submission(MTL::CommandBuffer* value) noexcept : command_buffer(value) {}
         metal_submission(const metal_submission&) = delete;
         metal_submission& operator=(const metal_submission&) = delete;
+
         metal_submission(metal_submission&& other) noexcept
             : command_buffer(std::exchange(other.command_buffer, nullptr)) {}
+
         metal_submission& operator=(metal_submission&& other) noexcept {
             if (this != std::addressof(other)) {
                 reset();
@@ -356,6 +361,7 @@ namespace pravaha::backends::metal {
             }
             return *this;
         }
+
         ~metal_submission() { reset(); }
 
         [[nodiscard]] explicit operator bool() const noexcept { return command_buffer != nullptr; }
@@ -437,7 +443,7 @@ namespace pravaha::backends::metal {
         }
 
         [[nodiscard]] Outcome<void> download(const std::span<T> destination,
-                                              const std::size_t count) const {
+                                             const std::size_t count) const {
             if (count > capacity || destination.size() < count)
                 return std::unexpected(PravahaError::make(
                     ErrorKind::InternalError, "metal: output span is shorter than dispatch domain"));
@@ -534,7 +540,7 @@ namespace pravaha::backends::metal {
             const auto n = static_cast<std::uint32_t>(count);
             encoder->setBytes(&n, sizeof(n), K + 1);
             const auto threads = std::min<NS::UInteger>(pso->maxTotalThreadsPerThreadgroup(),
-                grid.local_size[0] ? grid.local_size[0] : 256);
+                                                        grid.local_size[0] ? grid.local_size[0] : 256);
             encoder->dispatchThreads(MTL::Size(n, 1, 1), MTL::Size(threads, 1, 1));
             encoder->endEncoding();
             command_buffer->commit();
@@ -563,7 +569,7 @@ namespace pravaha::backends::metal {
             const auto n = static_cast<std::uint32_t>(count);
             encoder->setBytes(&n, sizeof(n), K + 1);
             const auto threads = std::min<NS::UInteger>(pso->maxTotalThreadsPerThreadgroup(),
-                grid.local_size[0] ? grid.local_size[0] : 256);
+                                                        grid.local_size[0] ? grid.local_size[0] : 256);
             encoder->dispatchThreads(MTL::Size(n, 1, 1), MTL::Size(threads, 1, 1));
             encoder->endEncoding();
             command_buffer->commit();
@@ -1246,18 +1252,16 @@ namespace pravaha::backends::metal {
 // ============================================================================
 
 namespace pravaha::compute {
-using default_backend_set =
-backend_set<pravaha::backends::metal::MetalGpuBackend,
-            pravaha::backends::HostSimdBackend>;
+    using default_backend_set =
+    backend_set<pravaha::backends::metal::MetalGpuBackend,
+                pravaha::backends::HostSimdBackend>;
 } // namespace pravaha::compute
 
 namespace pravaha::hetero {
-
-
-using default_hetero_executor =
-basic_hetero_executor<pravaha::backends::metal::MetalGpuBackend,
-                      pravaha::backends::HostSimdBackend>;
-using hetero_executor = default_hetero_executor;
+    using default_hetero_executor =
+    basic_hetero_executor<pravaha::backends::metal::MetalGpuBackend,
+                          pravaha::backends::HostSimdBackend>;
+    using hetero_executor = default_hetero_executor;
 } // namespace pravaha::hetero
 
 #endif // __APPLE__ && HAS_METAL_CPP

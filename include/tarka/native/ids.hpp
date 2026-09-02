@@ -96,6 +96,7 @@ namespace std {
             return tarka::native::var_index(v);
         }
     };
+
     template <>
     struct hash<tarka::native::Lit> {
         [[nodiscard]] std::size_t operator()(tarka::native::Lit l) const noexcept {

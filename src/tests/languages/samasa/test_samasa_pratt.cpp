@@ -7,83 +7,105 @@
 #include "languages/samasa/samasa.hpp"
 
 namespace {
+    enum class SK : std::uint8_t { root };
 
-enum class SK : std::uint8_t { root };
+    // Token kinds: eof, num (primary), plus (left, bp=10), caret (right, bp=20),
+    //              bang (postfix, bp=30), eq (non-assoc, bp=5).
+    enum class TK : std::uint8_t { eof, num, plus, caret, bang, eq };
 
-// Token kinds: eof, num (primary), plus (left, bp=10), caret (right, bp=20),
-//              bang (postfix, bp=30), eq (non-assoc, bp=5).
-enum class TK : std::uint8_t { eof, num, plus, caret, bang, eq };
+    using namespace lang::samasa;
 
-using namespace lang::samasa;
+    // Operator table
+    using MyOps = operator_table<
+        op < "+", TK::plus, 10, associativity::left, fixity::infix>
+    ,
+    op<"^", TK::caret, 20, associativity::right, fixity::infix>
+    ,
+    op<"!", TK::bang, 30, associativity::left, fixity::postfix>
+    ,
+    op<"=", TK::eq, 5, associativity::none, fixity::infix>
+    >;
 
-// Operator table
-using MyOps = operator_table<
-    op<"+", TK::plus,  10, associativity::left,  fixity::infix>,
-    op<"^", TK::caret, 20, associativity::right, fixity::infix>,
-    op<"!", TK::bang,  30, associativity::left,  fixity::postfix>,
-    op<"=", TK::eq,     5, associativity::none,  fixity::infix>
->;
-
-// Primary rule: matches a single TK::num token.
-struct num_rule {
-    template <class Ctx>
-    [[nodiscard]] auto match(Ctx& ctx) const {
-        return tok<TK::num>{}.match(ctx);
-    }
-};
-
-using MyPratt = pratt_expression<MyOps, num_rule>;
-
-// Build a minimal parse_context from a token sequence.
-struct PrattCtx {
-    token_buffer<TK>                      buf;
-    token_stream<TK>                      stream;
-    event_stream<SK>                      events;
-    lang::collecting_sink<diagnostic>     sink;
-    lang::parse_tree_stats                stats;
-    std::optional<parse_context<SK, TK>>  ctx;
-
-    parse_context<SK, TK>& operator*() { return *ctx; }
-
-    explicit PrattCtx(std::initializer_list<TK> kinds) {
-        std::uint32_t off = 0;
-        for (TK k : kinds) {
-            buf.data.push_back({k, off, 1, 0, 0});
-            ++off;
+    // Primary rule: matches a single TK::num token.
+    struct num_rule {
+        template <class Ctx>
+        [[nodiscard]] auto match(Ctx& ctx) const {
+            return tok < TK::num >
+            {}.match(ctx);
         }
-        buf.data.push_back({TK::eof, off, 0, 0, 0});
-        stream = buf.view();
-        ctx.emplace(stream, std::string_view{}, events, sink, stats);
-    }
-};
+    };
 
+    using MyPratt = pratt_expression<MyOps, num_rule>;
+
+    // Build a minimal parse_context from a token sequence.
+    struct PrattCtx {
+        token_buffer<TK> buf;
+        token_stream<TK> stream;
+        event_stream<SK> events;
+        lang::collecting_sink<diagnostic> sink;
+        lang::parse_tree_stats stats;
+        std::optional<parse_context<SK, TK>> ctx;
+
+        parse_context<SK, TK>& operator*() { return *ctx; }
+
+        explicit PrattCtx(std::initializer_list<TK> kinds) {
+            std::uint32_t off = 0;
+            for (TK k : kinds) {
+                buf.data.push_back({k, off, 1, 0, 0});
+                ++off;
+            }
+            buf.data.push_back({TK::eof, off, 0, 0, 0});
+            stream = buf.view();
+            ctx.emplace(stream, std::string_view{}, events, sink, stats);
+        }
+    };
 } // anonymous namespace
 
 // ============================================================================
 // Operator table static properties
 // ============================================================================
 
-TEST_CASE("pratt: infix_bp left assoc returns (bp, bp+1)", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: infix_bp left assoc returns (bp, bp+1)"
+,
+"[samasa][pratt]"
+)
+ {
     const auto bp = MyOps::infix_bp(TK::plus);
     REQUIRE(bp.has_value());
     CHECK(bp->first  == 10);   // left bp
     CHECK(bp->second == 11);   // right bp = left+1 for left-assoc
 }
 
-TEST_CASE("pratt: infix_bp right assoc returns (bp, bp)", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: infix_bp right assoc returns (bp, bp)"
+,
+"[samasa][pratt]"
+)
+ {
     const auto bp = MyOps::infix_bp(TK::caret);
     REQUIRE(bp.has_value());
     CHECK(bp->first  == 20);
     CHECK(bp->second == 20);   // same → right-assoc
 }
 
-TEST_CASE("pratt: postfix_bp returns binding power", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: postfix_bp returns binding power"
+,
+"[samasa][pratt]"
+)
+ {
     const auto bp = MyOps::postfix_bp(TK::bang);
     REQUIRE(bp.has_value());
     CHECK(*bp == 30);
 }
 
-TEST_CASE("pratt: non-assoc infix returns (bp, bp+1)", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: non-assoc infix returns (bp, bp+1)"
+,
+"[samasa][pratt]"
+)
+ {
     // none assoc uses rbp = lbp+1 just like left-assoc (prevents chaining).
     const auto bp = MyOps::infix_bp(TK::eq);
     REQUIRE(bp.has_value());
@@ -91,7 +113,12 @@ TEST_CASE("pratt: non-assoc infix returns (bp, bp+1)", "[samasa][pratt]") {
     CHECK(bp->second == 6);
 }
 
-TEST_CASE("pratt: infix_bp returns nullopt for non-operator token", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: infix_bp returns nullopt for non-operator token"
+,
+"[samasa][pratt]"
+)
+ {
     const auto bp = MyOps::infix_bp(TK::num);
     CHECK(!bp.has_value());
 }
@@ -100,7 +127,12 @@ TEST_CASE("pratt: infix_bp returns nullopt for non-operator token", "[samasa][pr
 // Runtime Pratt parsing
 // ============================================================================
 
-TEST_CASE("pratt: single primary succeeds", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: single primary succeeds"
+,
+"[samasa][pratt]"
+)
+ {
     PrattCtx pc{TK::num};
     MyPratt p{};
     auto r = p.match(*pc.ctx);
@@ -108,7 +140,12 @@ TEST_CASE("pratt: single primary succeeds", "[samasa][pratt]") {
     CHECK(pc.ctx->cursor().pos == 1);
 }
 
-TEST_CASE("pratt: left-assoc chain a+b+c consumes all tokens", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: left-assoc chain a+b+c consumes all tokens"
+,
+"[samasa][pratt]"
+)
+ {
     // num + num + num
     PrattCtx pc{TK::num, TK::plus, TK::num, TK::plus, TK::num};
     MyPratt p{};
@@ -117,7 +154,12 @@ TEST_CASE("pratt: left-assoc chain a+b+c consumes all tokens", "[samasa][pratt]"
     CHECK(pc.ctx->cursor().pos == 5);
 }
 
-TEST_CASE("pratt: right-assoc chain a^b^c consumes all tokens", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: right-assoc chain a^b^c consumes all tokens"
+,
+"[samasa][pratt]"
+)
+ {
     // num ^ num ^ num  — right assoc: same rbp allows deeper recursion
     PrattCtx pc{TK::num, TK::caret, TK::num, TK::caret, TK::num};
     MyPratt p{};
@@ -126,7 +168,12 @@ TEST_CASE("pratt: right-assoc chain a^b^c consumes all tokens", "[samasa][pratt]
     CHECK(pc.ctx->cursor().pos == 5);
 }
 
-TEST_CASE("pratt: postfix operator consumed after primary", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: postfix operator consumed after primary"
+,
+"[samasa][pratt]"
+)
+ {
     // num !
     PrattCtx pc{TK::num, TK::bang};
     MyPratt p{};
@@ -135,7 +182,12 @@ TEST_CASE("pratt: postfix operator consumed after primary", "[samasa][pratt]") {
     CHECK(pc.ctx->cursor().pos == 2);
 }
 
-TEST_CASE("pratt: non-assoc a=b stops before second =", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: non-assoc a=b stops before second ="
+,
+"[samasa][pratt]"
+)
+ {
     // num = num = num — non-assoc: rbp=lbp+1 prevents the second = from being
     // consumed as the rhs of the first = (recursive call uses min_bp=6, rejects lbp=5).
     // The outer loop (min_bp=0) still consumes the second =.
@@ -147,7 +199,12 @@ TEST_CASE("pratt: non-assoc a=b stops before second =", "[samasa][pratt]") {
     CHECK(pc.ctx->cursor().pos == 5);
 }
 
-TEST_CASE("pratt: higher precedence ^ binds tighter than +", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: higher precedence ^ binds tighter than +"
+,
+"[samasa][pratt]"
+)
+ {
     // num + num ^ num — ^ consumed in recursive call from +
     PrattCtx pc{TK::num, TK::plus, TK::num, TK::caret, TK::num};
     MyPratt p{};
@@ -160,7 +217,12 @@ TEST_CASE("pratt: higher precedence ^ binds tighter than +", "[samasa][pratt]") 
 // New tests [R11]: default action emits CST token events (not AST construction)
 // ============================================================================
 
-TEST_CASE("pratt: default cst_pratt_action emits token events into event_stream", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: default cst_pratt_action emits token events into event_stream"
+,
+"[samasa][pratt]"
+)
+ {
     // Parse num + num: expect token events for both num tokens and the + token.
     PrattCtx pc{TK::num, TK::plus, TK::num};
     const auto events_before = pc.events.event_count();
@@ -171,7 +233,12 @@ TEST_CASE("pratt: default cst_pratt_action emits token events into event_stream"
     CHECK(pc.events.event_count() > events_before);
 }
 
-TEST_CASE("pratt: cst_pratt_action is default — no explicit action type needed", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: cst_pratt_action is default — no explicit action type needed"
+,
+"[samasa][pratt]"
+)
+ {
     // Verify the default template argument compiles and produces the same result
     // as explicitly naming cst_pratt_action.
     using ExplicitType = pratt_expression<MyOps, num_rule, cst_pratt_action>;
@@ -179,7 +246,12 @@ TEST_CASE("pratt: cst_pratt_action is default — no explicit action type needed
     STATIC_REQUIRE(std::is_same_v<ExplicitType, DefaultType>);
 }
 
-TEST_CASE("pratt: token events count matches tokens consumed in a+b*c parse", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: token events count matches tokens consumed in a+b*c parse"
+,
+"[samasa][pratt]"
+)
+ {
     // num + num ^ num (5 tokens consumed) → 5 token events expected in stream.
     PrattCtx pc{TK::num, TK::plus, TK::num, TK::caret, TK::num};
     const auto events_before = pc.events.event_count();
@@ -198,13 +270,23 @@ TEST_CASE("pratt: token events count matches tokens consumed in a+b*c parse", "[
 // Syntax kinds for structured Pratt tests
 enum class PSK : std::uint8_t { root, binary_expr, prefix_expr, postfix_expr };
 
-TEST_CASE("pratt: flat_pratt_action is default — same as cst_pratt_action alias", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: flat_pratt_action is default — same as cst_pratt_action alias"
+,
+"[samasa][pratt]"
+)
+ {
     using ExplicitFlat = pratt_expression<MyOps, num_rule, flat_pratt_action>;
     using DefaultType  = pratt_expression<MyOps, num_rule>;
     STATIC_REQUIRE(std::is_same_v<ExplicitFlat, DefaultType>);
 }
 
-TEST_CASE("pratt: flat_pratt_action emits no begin/end node events", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: flat_pratt_action emits no begin/end node events"
+,
+"[samasa][pratt]"
+)
+ {
     // With flat action, only token events are emitted — no begin_node/end_node.
     using namespace lang::samasa;
     token_buffer<TK>                      buf;
@@ -235,7 +317,12 @@ TEST_CASE("pratt: flat_pratt_action emits no begin/end node events", "[samasa][p
     CHECK(!has_node_event);
 }
 
-TEST_CASE("pratt: structured_pratt_action emits begin_node events for binary ops", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: structured_pratt_action emits begin_node events for binary ops"
+,
+"[samasa][pratt]"
+)
+ {
     // structured_pratt_action::begin_infix() calls events.begin(BinaryKind).
     // For num + num, we expect at least one begin_node event.
     using namespace lang::samasa;
@@ -268,7 +355,12 @@ TEST_CASE("pratt: structured_pratt_action emits begin_node events for binary ops
     CHECK(has_binary_begin);
 }
 
-TEST_CASE("pratt: structured_pratt_action — num+num has more events than flat", "[samasa][pratt]") {
+TEST_CASE (
+"pratt: structured_pratt_action — num+num has more events than flat"
+,
+"[samasa][pratt]"
+)
+ {
     // Structured emits begin_node in addition to token events, so event count > flat count.
     using namespace lang::samasa;
 
@@ -313,30 +405,38 @@ TEST_CASE("pratt: structured_pratt_action — num+num has more events than flat"
 
 // Helper: build a token sequence and run structured Pratt, return event list.
 namespace {
-using SEvt = parse_event<PSK>;
+    using SEvt = parse_event<PSK>;
 
-std::vector<SEvt> run_structured_pratt(std::initializer_list<TK> kinds) {
-    using SA = structured_pratt_action<PSK::binary_expr, PSK::prefix_expr, PSK::postfix_expr>;
+    std::vector<SEvt> run_structured_pratt(std::initializer_list<TK> kinds) {
+        using SA = structured_pratt_action<PSK::binary_expr, PSK::prefix_expr, PSK::postfix_expr>;
 
-    token_buffer<TK>                  buf;
-    std::uint32_t off = 0;
-    for (TK k : kinds) { buf.data.push_back({k, off, 1, 0, 0}); ++off; }
-    buf.data.push_back({TK::eof, off, 0, 0, 0});
+        token_buffer<TK> buf;
+        std::uint32_t off = 0;
+        for (TK k : kinds) {
+            buf.data.push_back({k, off, 1, 0, 0});
+            ++off;
+        }
+        buf.data.push_back({TK::eof, off, 0, 0, 0});
 
-    token_stream<TK>                      stream = buf.view();
-    event_stream<PSK>                     events;
-    lang::collecting_sink<diagnostic>     sink;
-    lang::parse_tree_stats                stats;
-    parse_context<PSK, TK>               ctx{stream, std::string_view{}, events, sink, stats};
+        token_stream<TK> stream = buf.view();
+        event_stream<PSK> events;
+        lang::collecting_sink<diagnostic> sink;
+        lang::parse_tree_stats stats;
+        parse_context<PSK, TK> ctx{stream, std::string_view{}, events, sink, stats};
 
-    pratt_expression<MyOps, num_rule, SA> p{};
-    (void)p.match(ctx);
+        pratt_expression<MyOps, num_rule, SA> p{};
+        (void)p.match(ctx);
 
-    return std::vector<SEvt>(events.all().begin(), events.all().end());
-}
+        return std::vector<SEvt>(events.all().begin(), events.all().end());
+    }
 } // anonymous namespace
 
-TEST_CASE("pratt: structured — binary 'num + num' event order: begin, tok(num), tok(plus), tok(num), end", "[samasa][pratt][conformance]") {
+TEST_CASE (
+"pratt: structured — binary 'num + num' event order: begin, tok(num), tok(plus), tok(num), end"
+,
+"[samasa][pratt][conformance]"
+)
+ {
     // a + b: begin_node wraps both operands (Stage 5 left-wrap fix).
     // Actual order: begin_node(binary_expr), tok(a), tok(+), tok(b), end_node.
     const auto evts = run_structured_pratt({TK::num, TK::plus, TK::num});
@@ -351,7 +451,12 @@ TEST_CASE("pratt: structured — binary 'num + num' event order: begin, tok(num)
     CHECK(evts[4].kind == event_kind::end_node);        // end binary_expr
 }
 
-TEST_CASE("pratt: structured — 'num + num * num' precedence nesting", "[samasa][pratt][conformance]") {
+TEST_CASE (
+"pratt: structured — 'num + num * num' precedence nesting"
+,
+"[samasa][pratt][conformance]"
+)
+ {
     // a + b ^ c (caret bp=20 > plus bp=10):
     // begin(+), tok(a), tok(+), begin(^), tok(b), tok(^), tok(c), end(^), end(+)
     const auto evts = run_structured_pratt({TK::num, TK::plus, TK::num, TK::caret, TK::num});
@@ -371,7 +476,12 @@ TEST_CASE("pratt: structured — 'num + num * num' precedence nesting", "[samasa
     CHECK(evts[8].kind == event_kind::end_node);      // end binary_expr (plus)
 }
 
-TEST_CASE("pratt: structured — postfix 'num !' event order", "[samasa][pratt][conformance]") {
+TEST_CASE (
+"pratt: structured — postfix 'num !' event order"
+,
+"[samasa][pratt][conformance]"
+)
+ {
     // a!: begin(postfix_expr), tok(a), tok(!), end(postfix_expr)
     const auto evts = run_structured_pratt({TK::num, TK::bang});
 
@@ -395,50 +505,59 @@ TEST_CASE("pratt: structured — postfix 'num !' event order", "[samasa][pratt][
 // ============================================================================
 
 namespace {
+    // Extend TK with a minus for prefix tests.
+    enum class TK5 : std::uint8_t { eof, num, plus, caret, bang, minus };
 
-// Extend TK with a minus for prefix tests.
-enum class TK5 : std::uint8_t { eof, num, plus, caret, bang, minus };
+    // Operator table with prefix minus (bp=25), infix +/^ and postfix !.
+    using Ops5 = operator_table<
+        op < "+", TK5::plus, 10, associativity::left, fixity::infix>
+    ,
+    op<"^", TK5::caret, 20, associativity::right, fixity::infix>
+    ,
+    op<"!", TK5::bang, 30, associativity::left, fixity::postfix>
+    ,
+    op<"-", TK5::minus, 25, associativity::left, fixity::prefix>
+    >;
 
-// Operator table with prefix minus (bp=25), infix +/^ and postfix !.
-using Ops5 = operator_table<
-    op<"+",  TK5::plus,  10, associativity::left,  fixity::infix>,
-    op<"^",  TK5::caret, 20, associativity::right, fixity::infix>,
-    op<"!",  TK5::bang,  30, associativity::left,  fixity::postfix>,
-    op<"-",  TK5::minus, 25, associativity::left,  fixity::prefix>
->;
+    struct num5_rule {
+        template <class Ctx>
+        [[nodiscard]] auto match(Ctx& ctx) const {
+            return tok < TK5::num >
+            {}.match(ctx);
+        }
+    };
 
-struct num5_rule {
-    template <class Ctx>
-    [[nodiscard]] auto match(Ctx& ctx) const {
-        return tok<TK5::num>{}.match(ctx);
+    using SA5 = structured_pratt_action<PSK::binary_expr, PSK::prefix_expr, PSK::postfix_expr>;
+
+    // Build context from a token list and run structured Pratt; return event vector.
+    std::vector<SEvt> run_s5(std::initializer_list<TK5> kinds) {
+        token_buffer<TK5> buf;
+        std::uint32_t off = 0;
+        for (TK5 k : kinds) {
+            buf.data.push_back({k, off, 1, 0, 0});
+            ++off;
+        }
+        buf.data.push_back({TK5::eof, off, 0, 0, 0});
+
+        token_stream<TK5> stream = buf.view();
+        event_stream<PSK> events;
+        lang::collecting_sink<diagnostic> sink;
+        lang::parse_tree_stats stats;
+        parse_context<PSK, TK5> ctx{stream, std::string_view{}, events, sink, stats};
+
+        pratt_expression<Ops5, num5_rule, SA5> p{};
+        (void)p.match(ctx);
+
+        return std::vector<SEvt>(events.all().begin(), events.all().end());
     }
-};
-
-using SA5 = structured_pratt_action<PSK::binary_expr, PSK::prefix_expr, PSK::postfix_expr>;
-
-// Build context from a token list and run structured Pratt; return event vector.
-std::vector<SEvt> run_s5(std::initializer_list<TK5> kinds) {
-    token_buffer<TK5>                  buf;
-    std::uint32_t off = 0;
-    for (TK5 k : kinds) { buf.data.push_back({k, off, 1, 0, 0}); ++off; }
-    buf.data.push_back({TK5::eof, off, 0, 0, 0});
-
-    token_stream<TK5>                      stream = buf.view();
-    event_stream<PSK>                      events;
-    lang::collecting_sink<diagnostic>      sink;
-    lang::parse_tree_stats                 stats;
-    parse_context<PSK, TK5>               ctx{stream, std::string_view{}, events, sink, stats};
-
-    pratt_expression<Ops5, num5_rule, SA5> p{};
-    (void)p.match(ctx);
-
-    return std::vector<SEvt>(events.all().begin(), events.all().end());
-}
-
 } // anonymous namespace (stage5)
 
-TEST_CASE("pratt stage5: structured — left-wrap: binary node encloses left operand",
-          "[samasa][pratt][stage5]") {
+TEST_CASE (
+"pratt stage5: structured — left-wrap: binary node encloses left operand"
+,
+"[samasa][pratt][stage5]"
+)
+ {
     // num + num: begin wraps BOTH operands (left-wrap fix).
     // Expected event order: begin_node, tok(0/num), tok(1/+), tok(2/num), end_node
     const auto evts = run_s5({TK5::num, TK5::plus, TK5::num});
@@ -453,8 +572,12 @@ TEST_CASE("pratt stage5: structured — left-wrap: binary node encloses left ope
     CHECK(evts[4].syntax == PSK::binary_expr);
 }
 
-TEST_CASE("pratt stage5: structured — exact span: binary num+num covers whole expression",
-          "[samasa][pratt][stage5]") {
+TEST_CASE (
+"pratt stage5: structured — exact span: binary num+num covers whole expression"
+,
+"[samasa][pratt][stage5]"
+)
+ {
     // Tokens: num@{0,1} plus@{1,1} num@{2,1}
     // Expected binary_expr span = hull({0,1}, {2,1}) = {0, 3}
     const auto evts = run_s5({TK5::num, TK5::plus, TK5::num});
@@ -466,8 +589,12 @@ TEST_CASE("pratt stage5: structured — exact span: binary num+num covers whole 
     CHECK(end_ev.span.length == 3);  // covers "a + b"
 }
 
-TEST_CASE("pratt stage5: structured — precedence nesting: num+num^num tree shape",
-          "[samasa][pratt][stage5]") {
+TEST_CASE (
+"pratt stage5: structured — precedence nesting: num+num^num tree shape"
+,
+"[samasa][pratt][stage5]"
+)
+ {
     // num(0) +(1) num(2) ^(3) num(4)
     // Expected tree (^ has higher bp=20 than +=10):
     //   begin binary_expr (+)         ← wraps all 5 tokens
@@ -493,8 +620,12 @@ TEST_CASE("pratt stage5: structured — precedence nesting: num+num^num tree sha
     CHECK(evts[8].kind == event_kind::end_node);      // end (+)
 }
 
-TEST_CASE("pratt stage5: structured — exact spans: num+num^num hull spans",
-          "[samasa][pratt][stage5]") {
+TEST_CASE (
+"pratt stage5: structured — exact spans: num+num^num hull spans"
+,
+"[samasa][pratt][stage5]"
+)
+ {
     // Tokens: num@{0,1} +@{1,1} num@{2,1} ^@{3,1} num@{4,1}
     // Outer (+) end_node span = hull({0,1},{4,1}) = {0,5}
     // Inner (^) end_node span = hull({2,1},{4,1}) = {2,3}
@@ -511,8 +642,12 @@ TEST_CASE("pratt stage5: structured — exact spans: num+num^num hull spans",
     CHECK(evts[8].span.length == 5);   // "a+b^c"
 }
 
-TEST_CASE("pratt stage5: structured — prefix '-a': correct tree and span",
-          "[samasa][pratt][stage5]") {
+TEST_CASE (
+"pratt stage5: structured — prefix '-a': correct tree and span"
+,
+"[samasa][pratt][stage5]"
+)
+ {
     // minus(0) num(1)
     // Expected: begin prefix_expr, tok(0/-), tok(1/num), end prefix_expr
     // Span: hull({0,1},{1,1}) = {0,2}
@@ -528,8 +663,12 @@ TEST_CASE("pratt stage5: structured — prefix '-a': correct tree and span",
     CHECK(evts[3].span.length == 2);   // "-a"
 }
 
-TEST_CASE("pratt stage5: structured — postfix 'a!': correct tree and span",
-          "[samasa][pratt][stage5]") {
+TEST_CASE (
+"pratt stage5: structured — postfix 'a!': correct tree and span"
+,
+"[samasa][pratt][stage5]"
+)
+ {
     // num(0) bang(1)
     // Expected: begin postfix_expr, tok(0/num), tok(1/!), end postfix_expr
     // Span: hull({0,1},{1,1}) = {0,2}
@@ -545,8 +684,12 @@ TEST_CASE("pratt stage5: structured — postfix 'a!': correct tree and span",
     CHECK(evts[3].span.length == 2);   // "a!"
 }
 
-TEST_CASE("pratt stage5: flat_pratt_action unchanged — same flat events as before fix",
-          "[samasa][pratt][stage5]") {
+TEST_CASE (
+"pratt stage5: flat_pratt_action unchanged — same flat events as before fix"
+,
+"[samasa][pratt][stage5]"
+)
+ {
     // flat_pratt_action for num+num^num must still emit exactly 5 token events,
     // no begin/end nodes — identical to pre-Stage-5 behavior.
     using FlatP = pratt_expression<Ops5, num5_rule, flat_pratt_action>;

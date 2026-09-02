@@ -31,24 +31,23 @@
 #include <vector>
 
 namespace lang {
-
     // =========================================================================
     // severity
     // =========================================================================
 
     enum class severity : std::uint8_t {
-        note    = 0,
+        note = 0,
         warning = 1,
-        error   = 2,
-        fatal   = 3,
+        error = 2,
+        fatal = 3,
     };
 
     [[nodiscard]] constexpr std::string_view to_string(severity s) noexcept {
         switch (s) {
-        case severity::note:    return "note";
+        case severity::note: return "note";
         case severity::warning: return "warning";
-        case severity::error:   return "error";
-        case severity::fatal:   return "fatal";
+        case severity::error: return "error";
+        case severity::fatal: return "fatal";
         }
         return "unknown";
     }
@@ -62,14 +61,14 @@ namespace lang {
 
     template <class DiagKind>
     struct lang_diagnostic {
-        DiagKind    kind    = {};
-        std::string symbol;        // affected symbol / module name
-        std::string message;       // human-readable detail
-        severity    level   = severity::error;
+        DiagKind kind = {};
+        std::string symbol; // affected symbol / module name
+        std::string message; // human-readable detail
+        severity level = severity::error;
 
-        [[nodiscard]] bool is_error()   const noexcept { return level >= severity::error;   }
+        [[nodiscard]] bool is_error() const noexcept { return level >= severity::error; }
         [[nodiscard]] bool is_warning() const noexcept { return level == severity::warning; }
-        [[nodiscard]] bool is_fatal()   const noexcept { return level == severity::fatal;   }
+        [[nodiscard]] bool is_fatal() const noexcept { return level == severity::fatal; }
 
         [[nodiscard]] std::string_view code() const noexcept {
             return DiagKind::to_code(kind);
@@ -87,7 +86,7 @@ namespace lang {
 
         void on_diagnostic(Diag d) { entries.push_back(std::move(d)); }
 
-        [[nodiscard]] bool empty()      const noexcept { return entries.empty(); }
+        [[nodiscard]] bool empty() const noexcept { return entries.empty(); }
         [[nodiscard]] std::size_t size() const noexcept { return entries.size(); }
 
         [[nodiscard]] bool has_errors() const noexcept {
@@ -132,7 +131,7 @@ namespace lang {
         explicit diagnostic_view(const collecting_sink<Diag>& sink) noexcept
             : entries(sink.entries) {}
 
-        [[nodiscard]] bool empty()       const noexcept { return entries.empty(); }
+        [[nodiscard]] bool empty() const noexcept { return entries.empty(); }
         [[nodiscard]] std::size_t size() const noexcept { return entries.size(); }
 
         [[nodiscard]] bool has_errors() const noexcept {
@@ -142,7 +141,6 @@ namespace lang {
         }
 
         [[nodiscard]] auto begin() const noexcept { return entries.begin(); }
-        [[nodiscard]] auto end()   const noexcept { return entries.end();   }
+        [[nodiscard]] auto end() const noexcept { return entries.end(); }
     };
-
 } // namespace lang

@@ -82,6 +82,7 @@ TEST_CASE ("smriti: arena_scope rollback on scope exit without commit",
 
 TEST_CASE (
 
+
 "pravaha: replay_policy all-false → cannot retry"
 ,
 "[medha][adapters][pravaha]"
@@ -93,6 +94,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "pravaha: replay_policy all-true → can retry"
 ,
 "[medha][adapters][pravaha]"
@@ -103,6 +105,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "pravaha: scheduled_transaction with replay-safe body executes and commits"
 ,
@@ -123,6 +126,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "pravaha: scheduled_transaction without replay safety runs once"
 ,
@@ -152,6 +156,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "tarka: no SMT backend → all obligations deferred"
 ,
 "[medha][adapters][tarka]"
@@ -178,6 +183,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "tarka: discharge with empty obligations returns empty"
 ,
 "[medha][adapters][tarka]"
@@ -198,6 +204,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "tarka: proof_result default status is deferred"
 ,
 "[medha][adapters][tarka]"
@@ -208,6 +215,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "tarka: obligation_kind values are distinct"
 ,

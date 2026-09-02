@@ -17,12 +17,11 @@
 #include "meta/meta.hpp"
 
 namespace lang::samasa {
-
     // ---- grammar_rule_descriptor ----------------------------------------
 
     struct grammar_rule_descriptor {
-        std::string_view name;      // references rule::name_sv static storage
-        std::size_t      index = 0; // 0-based position in the grammar rule list
+        std::string_view name; // references rule::name_sv static storage
+        std::size_t index = 0; // 0-based position in the grammar rule list
     };
 
     // ---- grammar_description<G> -----------------------------------------
@@ -34,10 +33,10 @@ namespace lang::samasa {
 
         // Rule descriptors: one per rule in G::rules TypeList.
         // Built as a fixed array of grammar_rule_descriptor pointing to static rule names.
-        static constexpr auto rules = [](){
+        static constexpr auto rules = []() {
             constexpr std::size_t N = G::rules::size;
             std::array<grammar_rule_descriptor, N> arr{};
-            meta::for_each_index<typename G::rules>([&arr](auto idx, auto rule_instance) {
+            meta::for_each_index < typename G::rules > ([&arr](auto idx, auto rule_instance) {
                 using Rule = std::remove_cvref_t<decltype(rule_instance)>;
                 arr[idx.value] = grammar_rule_descriptor{Rule::name_sv, idx.value};
             });
@@ -62,30 +61,28 @@ namespace lang::samasa {
     // Implementation: two-pass — first compute total length, then fill.
 
     namespace detail {
-
         template <class G>
         consteval std::size_t describe_text_length() {
             std::size_t n = 0;
             // "grammar: " + root name + "\n"
             n += 9 + G::root_rule::name_sv.size() + 1;
-            meta::for_each<typename G::rules>([&n](auto rule_instance) {
+            meta::for_each < typename G::rules > ([&n](auto rule_instance) {
                 using Rule = std::remove_cvref_t<decltype(rule_instance)>;
                 n += 8 + Rule::name_sv.size() + 1; // "  rule: " + name + "\n"
             });
             return n;
         }
-
     } // namespace detail
 
     template <class G>
     [[nodiscard]] consteval auto describe_text() {
         constexpr std::size_t kLen = detail::describe_text_length<G>();
         constexpr std::size_t kCap = kLen + 1; // +1 for builder internal sizing
-        akshara::ct_string_builder<kCap> sb;
+        akshara::ct_string_builder < kCap > sb;
         sb.append("grammar: ");
         sb.append(G::root_rule::name_sv);
         sb.append("\n");
-        meta::for_each<typename G::rules>([&sb](auto rule_instance) {
+        meta::for_each < typename G::rules > ([&sb](auto rule_instance) {
             using Rule = std::remove_cvref_t<decltype(rule_instance)>;
             sb.append("  rule: ");
             sb.append(Rule::name_sv);
@@ -93,5 +90,4 @@ namespace lang::samasa {
         });
         return sb.template build<kLen>();
     }
-
 } // namespace lang::samasa

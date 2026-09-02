@@ -2,7 +2,12 @@
 #include "akruti/shape_store.hpp"
 #include <cmath>
 
-TEST_CASE("Akruti: ShapeStore", "[akruti][shape_store]") {
+TEST_CASE (
+"Akruti: ShapeStore"
+,
+"[akruti][shape_store]"
+)
+ {
     akruti::Circle c{.center = {1, 2}, .radius = 3.0f};
     akruti::ShapeStore store(c);
 

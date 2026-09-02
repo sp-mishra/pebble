@@ -1,7 +1,7 @@
 #pragma once
 
 // =============================================================================
-// vakya/types/shape.hpp — formal shape algebra (V3, opt-in)
+// vakya/types/shape.hpp — formal shape algebra (opt-in)
 //
 // C++23, header-only, no virtual, no macros.
 // Namespace: vakya::types

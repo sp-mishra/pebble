@@ -57,12 +57,14 @@ namespace tarka::native {
                     if (value) {
                         // Equality: u == v
                         pending_equalities_.push_back(EqualityAssert{u, v, a, true});
-                    } else {
+                    }
+                    else {
                         // Disequality: u != v
                         disequalities_.push_back(Disequality{u, v, a, false, level_});
                     }
                 }
-            } else if (t.op() == Op::Distinct) {
+            }
+            else if (t.op() == Op::Distinct) {
                 auto ch = t.children();
                 if (value) {
                     // Distinct(a, b, c...) => pairwise disequalities
@@ -148,9 +150,9 @@ namespace tarka::native {
         struct Node {
             Term term;
             std::uint32_t parent; // Union-find parent
-            std::uint32_t rank;   // Union-find rank
+            std::uint32_t rank; // Union-find rank
             Op op;
-            std::vector<std::uint32_t> args;    // argument term IDs
+            std::vector<std::uint32_t> args; // argument term IDs
             std::vector<std::uint32_t> parents; // terms that have this node as argument
             // Proof tracking
             std::uint32_t proof_parent = 0;
@@ -309,7 +311,8 @@ namespace tarka::native {
                 if (sit != sig_table_.end() && sit->second != p) {
                     // Congruence found! p and sit->second have identical signatures
                     pending_equalities_.push_back(EqualityAssert{p, sit->second, reason_atom, reason_val});
-                } else {
+                }
+                else {
                     auto [it, ins] = sig_table_.try_emplace(new_sig, p);
                     if (ins) {
                         trail_.push_back(UndoEntry{UndoKind::SigTableInsert, p, 0, 0, new_sig, 0});
@@ -320,21 +323,21 @@ namespace tarka::native {
 
         void undo_step(const UndoEntry& e) {
             switch (e.kind) {
-                case UndoKind::Union: {
-                    nodes_[e.v].parent = e.v;
-                    nodes_[e.v].proof_parent = e.v;
-                    nodes_[e.v].proof_atom = kNullAtom;
-                    nodes_[e.u].rank = e.prev_rank;
-                    break;
-                }
-                case UndoKind::SigTableInsert: {
-                    sig_table_.erase(e.sig);
-                    break;
-                }
-                case UndoKind::SigTableOverwrite: {
-                    sig_table_[e.sig] = e.old_target;
-                    break;
-                }
+            case UndoKind::Union: {
+                nodes_[e.v].parent = e.v;
+                nodes_[e.v].proof_parent = e.v;
+                nodes_[e.v].proof_atom = kNullAtom;
+                nodes_[e.u].rank = e.prev_rank;
+                break;
+            }
+            case UndoKind::SigTableInsert: {
+                sig_table_.erase(e.sig);
+                break;
+            }
+            case UndoKind::SigTableOverwrite: {
+                sig_table_[e.sig] = e.old_target;
+                break;
+            }
             }
         }
 

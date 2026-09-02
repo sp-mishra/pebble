@@ -9,7 +9,12 @@
 
 using namespace prakriti;
 
-TEST_CASE("spatial hash finds same neighbors as brute force", "[prakriti][spatial]") {
+TEST_CASE (
+"spatial hash finds same neighbors as brute force"
+,
+"[prakriti][spatial]"
+)
+ {
     std::vector<Scalar> xs, ys;
     for (int i = 0; i < 10; ++i)
         for (int j = 0; j < 10; ++j) { xs.push_back(Scalar(i)); ys.push_back(Scalar(j)); }
@@ -34,7 +39,12 @@ TEST_CASE("spatial hash finds same neighbors as brute force", "[prakriti][spatia
     REQUIRE(!brute.empty());
 }
 
-TEST_CASE("spatial hash rebuild is stable", "[prakriti][spatial]") {
+TEST_CASE (
+"spatial hash rebuild is stable"
+,
+"[prakriti][spatial]"
+)
+ {
     std::vector<Scalar> xs{0, 0.5f, 5}, ys{0, 0.5f, 5};
     SpatialHash grid(1.0f);
     grid.build(xs, ys);

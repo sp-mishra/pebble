@@ -116,7 +116,7 @@ All operations validate:
 
 - **read_only mode**: `full_region()` returns `writable_=false` view; mutation prevents errors
 - **read_write mode**: `full_region()` returns `writable_=true` view; all operations permitted
-- **flush_range()**: Const method on read_only mapping; backend accepts const void* safely
+- **flush_range ()**: Const method on read_only mapping; backend accepts const void* safely
 
 **Review Fix**: const-cast in `flush_range()` is safe because backend signature is `flush(const void*, ...)`. flush
 operations don't modify data; const-correctness is preserved.

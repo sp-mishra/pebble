@@ -21,28 +21,31 @@
 #include "spans.hpp"
 
 namespace lang {
-
     // ---- event_kind --------------------------------------------------------
 
     enum class event_kind : std::uint8_t {
         begin_node = 0,
-        token      = 1,
-        end_node   = 2,
-        error      = 3,
-        tombstone  = 4,  // rolled-back begin_node with committed tokens
+        token = 1,
+        end_node = 2,
+        error = 3,
+        tombstone = 4, // rolled-back begin_node with committed tokens
     };
 
     // ---- parse_event -------------------------------------------------------
 
     template <class KindEnum, class DiagCode = std::uint16_t>
     struct parse_event {
-        event_kind  kind        = event_kind::tombstone;
+        event_kind kind = event_kind::tombstone;
         // node_kind and syntax are the same storage — samasa uses .syntax;
         // generic users use .node_kind. Both valid: same offset, same type.
-        union { KindEnum node_kind{}; KindEnum syntax; };
-        std::uint32_t token_index = 0;         // token event
-        byte_span   span        = {};          // error / end_node
-        DiagCode    diag_code   = {};          // error events
+        union {
+            KindEnum node_kind{};
+            KindEnum syntax;
+        };
+
+        std::uint32_t token_index = 0; // token event
+        byte_span span = {}; // error / end_node
+        DiagCode diag_code = {}; // error events
     };
 
     // ---- event_log ---------------------------------------------------------
@@ -71,16 +74,18 @@ namespace lang {
 
         void error(DiagCode code, byte_span span) {
             event_type ev{};
-            ev.kind       = event_kind::error;
-            ev.span       = span;
-            ev.diag_code  = code;
+            ev.kind = event_kind::error;
+            ev.span = span;
+            ev.diag_code = code;
             events_.push_back(ev);
         }
 
         void end(marker m, byte_span span = {}) {
             if (depth_ > 0) --depth_;
-            events_.push_back({event_kind::end_node,
-                               events_[m.event_index].node_kind, 0, span, {}});
+            events_.push_back({
+                event_kind::end_node,
+                events_[m.event_index].node_kind, 0, span, {}
+            });
         }
 
         // Insert a begin_node event at the position recorded in m (retroactive open).
@@ -101,7 +106,8 @@ namespace lang {
             if (!committed) {
                 events_.resize(m.event_index);
                 token_count_ = m.token_count;
-            } else {
+            }
+            else {
                 events_[m.event_index].kind = event_kind::tombstone;
             }
             if (depth_ > 0) --depth_;
@@ -111,18 +117,19 @@ namespace lang {
             return {static_cast<std::uint32_t>(events_.size()), token_count_};
         }
 
-        [[nodiscard]] std::uint32_t depth()       const noexcept { return depth_; }
-        [[nodiscard]] std::uint32_t event_count()  const noexcept {
+        [[nodiscard]] std::uint32_t depth() const noexcept { return depth_; }
+
+        [[nodiscard]] std::uint32_t event_count() const noexcept {
             return static_cast<std::uint32_t>(events_.size());
         }
+
         [[nodiscard]] const std::vector<event_type>& all() const noexcept { return events_; }
 
         void reserve(std::uint32_t n) { events_.reserve(n); }
 
     private:
         std::vector<event_type> events_;
-        std::uint32_t           depth_       = 0;
-        std::uint32_t           token_count_ = 0;
+        std::uint32_t depth_ = 0;
+        std::uint32_t token_count_ = 0;
     };
-
 } // namespace lang

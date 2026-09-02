@@ -8,7 +8,12 @@ using namespace ts;
 using namespace ts::edsl;
 using namespace ts::edsl::literals;
 
-TEST_CASE("Tensor EDSL: Fused Elementwise Parallel Compilation Target", "[tensor][edsl][fused]") {
+TEST_CASE (
+"Tensor EDSL: Fused Elementwise Parallel Compilation Target"
+,
+"[tensor][edsl][fused]"
+)
+ {
     SECTION("Small Tensor Fused Expression (N = 8)") {
         auto A = sym_tensor<2>("A", {2, 4});
         auto B = sym_tensor<2>("B", {2, 4});

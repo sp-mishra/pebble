@@ -15,69 +15,93 @@
 #include "languages/samasa/tree/incremental.hpp"
 
 namespace {
+    using namespace lang::samasa;
 
-using namespace lang::samasa;
+    // ---- Shared grammar -------------------------------------------------------
 
-// ---- Shared grammar -------------------------------------------------------
+    enum class SK : std::uint8_t { root, stmt, expr, name, number, eof_node };
 
-enum class SK : std::uint8_t { root, stmt, expr, name, number, eof_node };
-enum class TK : std::uint8_t { eof, ident, number_lit, kw_let, op_eq, semi };
+    enum class TK : std::uint8_t { eof, ident, number_lit, kw_let, op_eq, semi };
 
-// Token kind descriptor: maps scanner categories to enum values.
-inline scan_token_kinds<TK> make_tk_kinds() {
-    return { TK::eof, TK::ident, TK::number_lit, TK::number_lit, TK::ident, TK::ident };
-}
+    // Token kind descriptor: maps scanner categories to enum values.
+    inline scan_token_kinds<TK> make_tk_kinds() {
+        return {TK::eof, TK::ident, TK::number_lit, TK::number_lit, TK::ident, TK::ident};
+    }
 
-// Keyword table: "let" → kw_let.
-using TestKWTable = keyword_table<keyword<"let", TK::kw_let>>;
+    // Keyword table: "let" → kw_let.
+    using TestKWTable = keyword_table<keyword<"let", TK::kw_let>>;
 
-// Operator trie: "=" → op_eq, ";" → semi.
-using TestOpTrie  = operator_trie<operator_token<"=", TK::op_eq>, operator_token<";", TK::semi>>;
+    // Operator trie: "=" → op_eq, ";" → semi.
+    using TestOpTrie = operator_trie<operator_token < "=", TK::op_eq>
+    ,
+    operator_token<";", TK::semi>
+    >;
 
-// Grammar: root → stmt*;  stmt → "let" ident "=" ident ";"
-using name_rule  = rule<"name",  tok<TK::ident>>;
-using num_rule   = rule<"num",   tok<TK::number_lit>>;
-using stmt_rule  = rule<"stmt",  seq_t<tok<TK::kw_let>,
-                                       tok<TK::ident>,
-                                       tok<TK::op_eq>,
-                                       tok<TK::ident>,
-                                       tok<TK::semi>>>;
-using root_rule  = rule<"root",  many_t<stmt_rule>>;
+    // Grammar: root → stmt*;  stmt → "let" ident "=" ident ";"
+    using name_rule = rule<"name", tok<TK::ident>>;
+    using num_rule = rule<"num", tok<TK::number_lit>>;
+    using stmt_rule = rule<"stmt", seq_t < tok < TK::kw_let>
+    ,
+    tok<TK::ident>
+    ,
+    tok<TK::op_eq>
+    ,
+    tok<TK::ident>
+    ,
+    tok<TK::semi>
+    >
+    >;
+    using root_rule = rule<"root", many_t<stmt_rule>>;
 
-struct TestGrammar {
-    using syntax_kind = SK;
-    using token_kind  = TK;
-    using root_rule   = ::root_rule;
-};
+    struct TestGrammar {
+        using syntax_kind = SK;
+        using token_kind = TK;
+        using root_rule = ::root_rule;
+    };
 
-// Helper: parse with correct scan configuration.
-inline auto test_parse(std::string_view src) {
-    return parse<TestGrammar, TestKWTable, TestOpTrie>(src, {}, make_tk_kinds());
-}
+    // Helper: parse with correct scan configuration.
+    inline auto test_parse(std::string_view src) {
+        return parse<TestGrammar, TestKWTable, TestOpTrie>(src, {}, make_tk_kinds());
+    }
 
-// Minimal single-statement source.
-constexpr std::string_view kSrc1 = "let x = y ;";
-// Two statements.
-constexpr std::string_view kSrc2 = "let a = b ; let c = d ;";
+    // Minimal single-statement source.
+    constexpr std::string_view kSrc1 = "let x = y ;";
+    // Two statements.
+    constexpr std::string_view kSrc2 = "let a = b ; let c = d ;";
 
-// ============================================================================
-// token_range_for_span
-// ============================================================================
+    // ============================================================================
+    // token_range_for_span
+    // ============================================================================
 
-TEST_CASE("token_range_for_span: empty tokens → empty range", "[samasa][incremental][trsf]") {
+    TEST_CASE (
+    "token_range_for_span: empty tokens → empty range"
+    ,
+    "[samasa][incremental][trsf]"
+    )
+ {
     lang::samasa::token_buffer<TK> buf;
     const auto tr = token_range_for_span(buf.view(), {0, 5});
     CHECK(tr.empty());
 }
 
-TEST_CASE("token_range_for_span: empty span → empty range", "[samasa][incremental][trsf]") {
+    TEST_CASE (
+    "token_range_for_span: empty span → empty range"
+    ,
+    "[samasa][incremental][trsf]"
+    )
+ {
     auto out = test_parse(kSrc1);
     REQUIRE(out.success);
     const auto tr = token_range_for_span(out.tokens.view(), {3, 0});
     CHECK(tr.empty());
 }
 
-TEST_CASE("token_range_for_span: span covering first token", "[samasa][incremental][trsf]") {
+    TEST_CASE (
+    "token_range_for_span: span covering first token"
+    ,
+    "[samasa][incremental][trsf]"
+    )
+ {
     auto out = test_parse(kSrc1);
     REQUIRE(out.success);
     // kSrc1 = "let x = y ;"  → first token 'let' at offset 0, length 3.
@@ -86,7 +110,12 @@ TEST_CASE("token_range_for_span: span covering first token", "[samasa][increment
     CHECK(tr.end >= 1u);
 }
 
-TEST_CASE("token_range_for_span: span past end → empty", "[samasa][incremental][trsf]") {
+    TEST_CASE (
+    "token_range_for_span: span past end → empty"
+    ,
+    "[samasa][incremental][trsf]"
+    )
+ {
     auto out = test_parse(kSrc1);
     REQUIRE(out.success);
     const std::uint32_t far = static_cast<std::uint32_t>(kSrc1.size()) + 100;
@@ -94,7 +123,12 @@ TEST_CASE("token_range_for_span: span past end → empty", "[samasa][incremental
     CHECK(tr.empty());
 }
 
-TEST_CASE("token_range_for_span: span covering whole source", "[samasa][incremental][trsf]") {
+    TEST_CASE (
+    "token_range_for_span: span covering whole source"
+    ,
+    "[samasa][incremental][trsf]"
+    )
+ {
     auto out = test_parse(kSrc1);
     REQUIRE(out.success);
     const auto n = static_cast<std::uint32_t>(kSrc1.size());
@@ -104,11 +138,16 @@ TEST_CASE("token_range_for_span: span covering whole source", "[samasa][incremen
     CHECK(tr.size() >= 4u);
 }
 
-// ============================================================================
-// find_affected_root
-// ============================================================================
+    // ============================================================================
+    // find_affected_root
+    // ============================================================================
 
-TEST_CASE("find_affected_root: edit inside a leaf → affected node found", "[samasa][incremental][far]") {
+    TEST_CASE (
+    "find_affected_root: edit inside a leaf → affected node found"
+    ,
+    "[samasa][incremental][far]"
+    )
+ {
     auto out = test_parse(kSrc1);
     REQUIRE(out.success);
 
@@ -125,7 +164,12 @@ TEST_CASE("find_affected_root: edit inside a leaf → affected node found", "[sa
     CHECK(result.span.end()  >= ed.offset + ed.removed_length);
 }
 
-TEST_CASE("find_affected_root: empty tree → null result", "[samasa][incremental][far]") {
+    TEST_CASE (
+    "find_affected_root: empty tree → null result"
+    ,
+    "[samasa][incremental][far]"
+    )
+ {
     green_tree<SK> empty;
     text_edit ed{0, 1, "x"};
     default_reparse_boundary_policy<SK> pol;
@@ -133,13 +177,18 @@ TEST_CASE("find_affected_root: empty tree → null result", "[samasa][incrementa
     CHECK(r.id == k_null_green);
 }
 
-// Policy that always expands to root.
-template <class SyntaxKind>
-struct always_expand_policy {
-    static constexpr bool should_expand([[maybe_unused]] SyntaxKind) noexcept { return true; }
-};
+    // Policy that always expands to root.
+    template <class SyntaxKind>
+    struct always_expand_policy {
+        static constexpr bool should_expand([[maybe_unused]] SyntaxKind) noexcept { return true; }
+    };
 
-TEST_CASE("find_affected_root: always-expand policy → returns root", "[samasa][incremental][far]") {
+    TEST_CASE (
+    "find_affected_root: always-expand policy → returns root"
+    ,
+    "[samasa][incremental][far]"
+    )
+ {
     auto out = test_parse(kSrc1);
     REQUIRE(out.success);
 
@@ -150,12 +199,15 @@ TEST_CASE("find_affected_root: always-expand policy → returns root", "[samasa]
     CHECK(result.id == out.tree.root());
 }
 
-// ============================================================================
-// splice_subtree / recompute_ancestor_hashes
-// ============================================================================
+    // ============================================================================
+    // splice_subtree / recompute_ancestor_hashes
+    // ============================================================================
 
-TEST_CASE("splice_subtree + recompute_ancestor_hashes: spliced tree hashes == full rebuild",
-          "[samasa][incremental][splice]")
+    TEST_CASE (
+    "splice_subtree + recompute_ancestor_hashes: spliced tree hashes == full rebuild"
+    ,
+    "[samasa][incremental][splice]"
+    )
 {
     // Parse source A, parse source B, splice B's subtree into A's tree at root.
     // recompute_ancestor_hashes. The root hash should equal B's root hash.
@@ -181,20 +233,25 @@ TEST_CASE("splice_subtree + recompute_ancestor_hashes: spliced tree hashes == fu
     CHECK(arenaA[arenaA.root()].structural_hash == hash_b_root);
 }
 
-// ============================================================================
-// partial == full equivalence (core correctness gate)
-// ============================================================================
+    // ============================================================================
+    // partial == full equivalence (core correctness gate)
+    // ============================================================================
 
-// Helper: tree structural equality by node-for-node hash comparison.
-template <class SK2>
-bool trees_equal(const green_tree<SK2>& a, const green_tree<SK2>& b) {
-    if (a.size() != b.size()) return false;
-    if (a.empty() && b.empty()) return true;
-    // Compare structural_hash at root — sufficient because the hash is recursive.
-    return a[a.root()].structural_hash == b[b.root()].structural_hash;
-}
+    // Helper: tree structural equality by node-for-node hash comparison.
+    template <class SK2>
+    bool trees_equal(const green_tree<SK2>& a, const green_tree<SK2>& b) {
+        if (a.size() != b.size()) return false;
+        if (a.empty() && b.empty()) return true;
+        // Compare structural_hash at root — sufficient because the hash is recursive.
+        return a[a.root()].structural_hash == b[b.root()].structural_hash;
+    }
 
-TEST_CASE("partial == full: insert mid-identifier", "[samasa][incremental][equiv]") {
+    TEST_CASE (
+    "partial == full: insert mid-identifier"
+    ,
+    "[samasa][incremental][equiv]"
+    )
+ {
     const std::string src  = "let x = y ;";
     // Replace 'x' (offset 4, len 1) with 'xy'.
     const text_edit   edit{4, 1, "xy"};
@@ -214,7 +271,12 @@ TEST_CASE("partial == full: insert mid-identifier", "[samasa][incremental][equiv
     CHECK(trees_equal(partial.tree, full.tree));
 }
 
-TEST_CASE("partial == full: delete identifier", "[samasa][incremental][equiv]") {
+    TEST_CASE (
+    "partial == full: delete identifier"
+    ,
+    "[samasa][incremental][equiv]"
+    )
+ {
     const std::string src  = "let abc = xyz ;";
     // Delete 'abc' (offset 4, len 3) → replace with 'q'.
     const text_edit   edit{4, 3, "q"};
@@ -231,7 +293,12 @@ TEST_CASE("partial == full: delete identifier", "[samasa][incremental][equiv]") 
     CHECK(trees_equal(partial.tree, full.tree));
 }
 
-TEST_CASE("partial == full: replace identifier at node boundary", "[samasa][incremental][equiv]") {
+    TEST_CASE (
+    "partial == full: replace identifier at node boundary"
+    ,
+    "[samasa][incremental][equiv]"
+    )
+ {
     const std::string src  = "let a = b ;";
     // Replace 'b' (offset 8, len 1) with 'bbb'.
     const text_edit   edit{8, 1, "bbb"};
@@ -248,7 +315,12 @@ TEST_CASE("partial == full: replace identifier at node boundary", "[samasa][incr
     CHECK(trees_equal(partial.tree, full.tree));
 }
 
-TEST_CASE("partial == full: edit at start of source", "[samasa][incremental][equiv]") {
+    TEST_CASE (
+    "partial == full: edit at start of source"
+    ,
+    "[samasa][incremental][equiv]"
+    )
+ {
     const std::string src  = "let x = y ;";
     // Replace 'let' (offset 0, len 3) — stays 'let' for syntactic validity.
     const text_edit   edit{0, 3, "let"};
@@ -265,12 +337,15 @@ TEST_CASE("partial == full: edit at start of source", "[samasa][incremental][equ
     CHECK(trees_equal(partial.tree, full.tree));
 }
 
-// ============================================================================
-// incremental_stats: localized edit rebuilds strict subset
-// ============================================================================
+    // ============================================================================
+    // incremental_stats: localized edit rebuilds strict subset
+    // ============================================================================
 
-TEST_CASE("incremental_stats: localized edit does not full-reparse when subtree found",
-          "[samasa][incremental][stats]")
+    TEST_CASE (
+    "incremental_stats: localized edit does not full-reparse when subtree found"
+    ,
+    "[samasa][incremental][stats]"
+    )
 {
     // Two-statement source; edit inside second statement only.
     const std::string src  = std::string(kSrc2);
@@ -298,7 +373,12 @@ TEST_CASE("incremental_stats: localized edit does not full-reparse when subtree 
     }
 }
 
-TEST_CASE("incremental_stats: full_reparse set on root-wide edit", "[samasa][incremental][stats]") {
+    TEST_CASE (
+    "incremental_stats: full_reparse set on root-wide edit"
+    ,
+    "[samasa][incremental][stats]"
+    )
+ {
     const std::string src = std::string(kSrc1);
     // Edit covering the entire source.
     const text_edit edit{0, static_cast<std::uint32_t>(src.size()), "let z = w ;"};

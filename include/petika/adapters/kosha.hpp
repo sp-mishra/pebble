@@ -92,11 +92,12 @@ namespace kosha::adapter {
             return {};
         }
 
-        // Warms in-memory cache from Petika store
+        // Warms in-memory cache from Petika store, loading at most min(max_keys, cache capacity) entries.
         std::size_t load_all(std::size_t max_keys = std::numeric_limits<std::size_t>::max()) {
+            const std::size_t limit = std::min(max_keys, cache_.capacity());
             std::size_t loaded = 0;
             store_->for_each([&](const auto& entry) {
-                if (loaded < max_keys) {
+                if (loaded < limit) {
                     (void)cache_.put(entry.key, entry.value);
                     ++loaded;
                 }

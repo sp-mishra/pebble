@@ -15,6 +15,7 @@ using namespace pravaha::hetero;
 TEST_CASE (
 
 
+
 "canonicalize_apply collapses x+lit(0) to same hash as x"
 ,
 "[canon][phase1]"
@@ -93,6 +94,7 @@ TEST_CASE ("get_or_compile cache does not grow on same canonical expr", "[canon]
 TEST_CASE (
 
 
+
 "BackendExpr concept holds for canonicalized eDSL expressions"
 ,
 "[canon][phase1]"
@@ -128,6 +130,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "with_canon identity path leaves expression unchanged"
 ,
 "[canon][phase1]"
@@ -155,6 +158,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "canonicalized expr produces same numeric output as raw"
@@ -199,6 +203,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "is_simd_capable: supported vs unsupported trees"
 ,
 "[canon][impl6]"
@@ -221,6 +226,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "input_slot_count: max slot + 1"
 ,
 "[canon][impl6]"
@@ -234,6 +240,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "uses_input_leaves: detects input tags"

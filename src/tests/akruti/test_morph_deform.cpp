@@ -3,7 +3,12 @@
 #include "akruti/morph.hpp"
 #include "akruti/deform.hpp"
 
-TEST_CASE("Akruti: Continuous SDF Shape Morphing", "[akruti][morph]") {
+TEST_CASE (
+"Akruti: Continuous SDF Shape Morphing"
+,
+"[akruti][morph]"
+)
+ {
     akruti::Circle circle{{0.0f, 0.0f}, 10.0f};
     akruti::Box box{{0.0f, 0.0f}, {10.0f, 10.0f}};
 
@@ -22,7 +27,12 @@ TEST_CASE("Akruti: Continuous SDF Shape Morphing", "[akruti][morph]") {
     REQUIRE(d > 0.0f);
 }
 
-TEST_CASE("Akruti: Geometric Space Deformations (Bend, Taper, SquashStretch)", "[akruti][deform]") {
+TEST_CASE (
+"Akruti: Geometric Space Deformations (Bend, Taper, SquashStretch)"
+,
+"[akruti][deform]"
+)
+ {
     akruti::Box box{{0.0f, 0.0f}, {10.0f, 10.0f}};
 
     // 1. Bent Shape

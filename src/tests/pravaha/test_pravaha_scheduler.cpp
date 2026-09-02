@@ -45,6 +45,7 @@ static_assert(
 TEST_CASE (
 
 
+
 "fifo_scheduler_policy returns tasks in insertion order"
 ,
 "[pravaha][scheduler][fifo]"
@@ -80,6 +81,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "fifo_scheduler_policy returns nullopt when queue is empty"
 ,
 "[pravaha][scheduler][fifo]"
@@ -90,6 +92,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "fifo_scheduler_policy on_task_complete is a no-op"
@@ -112,6 +115,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "priority_scheduler_policy returns High before Normal before Low"
@@ -147,6 +151,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "priority_scheduler_policy respects insertion order within the same priority"
 ,
 "[pravaha][scheduler][priority]"
@@ -170,6 +175,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "priority_scheduler_policy returns nullopt when queue is empty"
 ,
 "[pravaha][scheduler][priority]"
@@ -184,6 +190,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "critical_path_scheduler_policy defaults are sane after default construction"
@@ -201,6 +208,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "critical_path_scheduler_policy can enqueue and dequeue without a DAG"
@@ -230,6 +238,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "critical_path_scheduler_policy breaks depth ties with priority"
 ,
 "[pravaha][scheduler][critical_path]"
@@ -250,6 +259,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "critical_path_scheduler_policy returns nullopt when queue is empty"
 ,
 "[pravaha][scheduler][critical_path]"
@@ -264,6 +274,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "work_stealing_scheduler_policy dispatches tasks round-robin across workers"
@@ -293,6 +304,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "work_stealing_scheduler_policy steals from busy worker"
@@ -326,6 +338,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "work_stealing_scheduler_policy returns nullopt when all queues are empty"
 ,
 "[pravaha][scheduler][work_stealing]"
@@ -337,6 +350,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "work_stealing_scheduler_policy defaults to at-least-one worker"
@@ -358,6 +372,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "profiling_scheduler_policy concept check"
 ,
 "[pravaha][profiler]"
@@ -371,6 +386,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "profiling_scheduler_policy records execution_ns for each completed task"
@@ -421,6 +437,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "profiling_scheduler_policy take_report clears samples"
 ,
 "[pravaha][profiler]"
@@ -448,6 +465,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "profiling_scheduler_policy total_wall_ns is positive after work"
 ,
 "[pravaha][profiler]"
@@ -469,6 +487,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "with_profiling factory wraps a policy and satisfies SchedulerPolicy"
@@ -493,6 +512,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "profiling_scheduler_policy record_steal increments tasks_stolen"
 ,
 "[pravaha][profiler]"
@@ -510,6 +530,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "profiling_scheduler_policy invokes the sink once per drained sample"

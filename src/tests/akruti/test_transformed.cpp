@@ -3,7 +3,12 @@
 #include "akruti/primitives.hpp"
 #include <cmath>
 
-TEST_CASE("Akruti: TransformedShape", "[akruti][transformed]") {
+TEST_CASE (
+"Akruti: TransformedShape"
+,
+"[akruti][transformed]"
+)
+ {
     akruti::Box box{.center = {0, 0}, .half = {2, 1}};
     akruti::TransformedShape ts{box, akruti::Vec{10, 5}, 0.0f};
 

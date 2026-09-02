@@ -508,12 +508,13 @@ namespace disjointset {
         // Union a range of elements into a single equivalence class.
         // Returns the final root, or the first error encountered.
         template <std::ranges::input_range R>
-            requires std::same_as<std::ranges::range_value_t<R>
+            requires std::same_as < std::ranges::range_value_t < R >
 
 
-                                  ,
-                                  Elem
-            >
+
+        ,
+        Elem
+        >
         [[nodiscard]] std::expected<ElementId, DSError> unite_all(R&& range) {
             auto it = std::ranges::begin(range);
             auto end = std::ranges::end(range);
@@ -534,12 +535,13 @@ namespace disjointset {
 
         // Insert a range of elements without connecting them.
         template <std::ranges::input_range R>
-            requires std::same_as<std::ranges::range_value_t<R>
+            requires std::same_as < std::ranges::range_value_t < R >
 
 
-                                  ,
-                                  Elem
-            >
+
+        ,
+        Elem
+        >
         void insert_all(R&& range) {
             for (const auto& elem : range)
                 insert_or_get(elem);
@@ -744,9 +746,9 @@ namespace disjointset {
 
     // Build a DisjointSet from a range, inserting every element independently.
     template <std::ranges::input_range R,
-        typename ElemMeta = std::monostate,
-        typename SetMeta = std::monostate,
-        typename Strategy = KeepRootMeta>
+              typename ElemMeta = std::monostate,
+              typename SetMeta = std::monostate,
+              typename Strategy = KeepRootMeta>
         requires DSElement<std::ranges::range_value_t<R>>
     [[nodiscard]] auto make_disjoint_set(R&& range,
                                          Strategy strategy = Strategy{}) {

@@ -1,10 +1,9 @@
 # Smriti — Universal Memory Resource Framework
 
-**Status:** Implemented. Header-only, C++23, no virtual, no macros, no RTTI.
-**Layer:** Leaf substrate. Higher layers (Tarka `Context`, Vākya, Lithe codegen, Kosha) consume Smriti; Smriti has zero
-upward dependency.
-**Headers:** `include/mem/smriti.hpp` (core), `include/mem/arena.hpp` (arena pools), `include/mem/buddy.hpp` (buddy
-allocator), `include/mem/mmap_domain.hpp` (mmap & NUMA domains).
+**Status:** Implemented. Header-only, C++23, no virtual, no macros, no RTTI. **Layer:** Leaf substrate. Higher layers
+(Tarka `Context`, Vākya, Lithe codegen, Kosha) consume Smriti; Smriti has zero upward dependency. **Headers:**
+`include/mem/smriti.hpp` (core), `include/mem/arena.hpp` (arena pools), `include/mem/buddy.hpp` (buddy allocator),
+`include/mem/mmap_domain.hpp` (mmap & NUMA domains).
 
 Smriti is a compositional allocator kernel. Instead of one monolithic allocator it exposes a **layered algebra of
 orthogonal concerns** — *where* bytes come from (Domain), *how* they are carved (Pool), *what invariants* wrap each
@@ -51,8 +50,8 @@ you compose.
 **Design forces.** Every layer is a *concept*, not a base class — no vtable, no `dynamic_cast`. Composition is by
 template parameter, so the full type of a resource (e.g.
 `ManagedResource<SystemRAMDomain, ThreadSafePolicy<BumpPool<SystemRAMDomain>>, LRUCacheManager>`) is known at compile
-time and fully inlinable. Fallible operations return `std::expected` / `std::optional`; no exceptions on the hot path (
-the sole `throw` is `SmritiAllocator::allocate`, mandated by the standard allocator contract).
+time and fully inlinable. Fallible operations return `std::expected` / `std::optional`; no exceptions on the hot path
+(the sole `throw` is `SmritiAllocator::allocate`, mandated by the standard allocator contract).
 
 ---
 
@@ -116,7 +115,7 @@ allocate(n,a):
 ```
 
 `deallocate` is a no-op; reclamation is all-or-nothing via `reset()`. Exposes `atomic_offset()` so `LinearArena` can
-implement checkpoint/rollback. O(1) amortized, wait-free-ish under low contention.
+implement checkpoint/rollback. O (1) amortized, wait-free-ish under low contention.
 
 ### 4.2 FixedPool `<BlockSize, Domain>` (`BlockSize ≥ sizeof(void*)`)
 
@@ -168,7 +167,7 @@ deallocate(p, n):
   push p onto free_list[L]
 ```
 
-The XOR-buddy identity gives O(1) sibling lookup; coalescing is O(levels). External fragmentation is bounded by the
+The XOR-buddy identity gives O (1) sibling lookup; coalescing is O (levels). External fragmentation is bounded by the
 power-of-two rounding; internal fragmentation ≤ 2× worst case.
 
 ---
@@ -340,7 +339,7 @@ Because every layer is a concept satisfied structurally, a new type drops into `
   domain.
 - `AsyncMigrationManager` migration tasks carry `size == 0` from `on_access`, so `migrate_page` (guarded by `size > 0`)
   is not yet exercised end-to-end — page size must be threaded from the table before migration is live.
-- `BuddyPool::fl_remove` performs a linear free-list scan; fine for shallow lists but O(list length) on hot coalescing
+- `BuddyPool::fl_remove` performs a linear free-list scan; fine for shallow lists but O (list length) on hot coalescing
   paths.
 - `LinearArena::rollback` is single-writer only; it is not a concurrent free.
 - `NumaDomain` is `mmap`-based placement on macOS; true `mbind`/NUMA-node binding on Linux is a drop-in extension point.

@@ -24,16 +24,15 @@
 #include "../recovery/recovery.hpp"
 
 namespace lang::samasa {
-
     // -------------------------------------------------------------------------
     // Nullable predicate — a rule R is nullable iff its pattern can match ε.
     // Structural evaluation over the pattern type hierarchy.
     // -------------------------------------------------------------------------
 
     namespace detail {
-
         // Forward declaration for mutual recursion.
-        template <class Pattern> struct is_nullable;
+        template <class Pattern>
+        struct is_nullable;
 
         // Terminal matchers are NOT nullable.
         template <auto Kind>
@@ -73,10 +72,10 @@ namespace lang::samasa {
 
         // sep_by is nullable (zero iterations).
         template <class A, class Sep>
-        struct is_nullable<sep_by_t<A,Sep>> : std::true_type {};
+        struct is_nullable<sep_by_t<A, Sep>> : std::true_type {};
 
         template <class A, class Sep>
-        struct is_nullable<sep_by1_t<A,Sep>> : is_nullable<A> {};
+        struct is_nullable<sep_by1_t<A, Sep>> : is_nullable<A> {};
 
         // lookahead / not_followed_by are nullable (no consumption).
         template <class M>
@@ -95,16 +94,15 @@ namespace lang::samasa {
 
         // rule delegates to its pattern.
         template <akshara::fixed_string Name, class Pattern>
-        struct is_nullable<rule<Name,Pattern>> : is_nullable<Pattern> {};
+        struct is_nullable<rule<Name, Pattern>> : is_nullable<Pattern> {};
 
         // node delegates to its pattern.
         template <auto Kind, class Pattern>
-        struct is_nullable<node_t<Kind,Pattern>> : is_nullable<Pattern> {};
+        struct is_nullable<node_t<Kind, Pattern>> : is_nullable<Pattern> {};
 
         // recover_with is nullable iff Pattern is nullable.
         template <class Pattern, class Recovery>
-        struct is_nullable<recover_with<Pattern,Recovery>> : is_nullable<Pattern> {};
-
+        struct is_nullable<recover_with<Pattern, Recovery>> : is_nullable<Pattern> {};
     } // namespace detail
 
     template <class Pattern>
@@ -117,13 +115,12 @@ namespace lang::samasa {
     template <class G>
     struct grammar_ir {
         using syntax_kind = typename G::syntax_kind;
-        using token_kind  = typename G::token_kind;
-        using rules       = typename G::rules;
+        using token_kind = typename G::token_kind;
+        using rules = typename G::rules;
 
         static constexpr std::size_t rule_count = G::rule_count;
 
         template <class Rule>
         static constexpr bool nullable = nullable_v<typename Rule::pattern_type>;
     };
-
 } // namespace lang::samasa

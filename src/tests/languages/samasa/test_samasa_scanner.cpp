@@ -7,49 +7,54 @@
 #include "languages/samasa/samasa.hpp"
 
 namespace {
+    enum class TK : std::uint8_t {
+        eof,
+        ident,
+        kw_let,
+        op_eq,
+        op_eqeq,
+        op_arrow,
+        int_lit,
+        str_lit,
+        unknown_,
+    };
 
-enum class TK : std::uint8_t {
-    eof,
-    ident,
-    kw_let,
-    op_eq,
-    op_eqeq,
-    op_arrow,
-    int_lit,
-    str_lit,
-    unknown_,
-};
+    using MyKW = lang::samasa::keyword_table<
+        lang::samasa::keyword<"let", TK::kw_let>
+    >;
 
-using MyKW = lang::samasa::keyword_table<
-    lang::samasa::keyword<"let", TK::kw_let>
->;
+    using MyOps = lang::samasa::operator_trie<
+        lang::samasa::operator_token < "=>", TK::op_arrow>
+    ,
+    lang::samasa::operator_token<"==", TK::op_eqeq>
+    ,
+    lang::samasa::operator_token<"=", TK::op_eq>
+    >;
 
-using MyOps = lang::samasa::operator_trie<
-    lang::samasa::operator_token<"=>",  TK::op_arrow>,
-    lang::samasa::operator_token<"==",  TK::op_eqeq>,
-    lang::samasa::operator_token<"=",   TK::op_eq>
->;
+    using lang::samasa::no_line_sensitivity;
+    using lang::samasa::scan;
+    using lang::samasa::scan_token_kinds;
 
-using lang::samasa::no_line_sensitivity;
-using lang::samasa::scan;
-using lang::samasa::scan_token_kinds;
+    constexpr scan_token_kinds<TK> kinds{
+        TK::eof, TK::ident, TK::int_lit, TK::eof /*float — unused*/, TK::str_lit, TK::unknown_
+    };
 
-constexpr scan_token_kinds<TK> kinds{
-    TK::eof, TK::ident, TK::int_lit, TK::eof /*float — unused*/, TK::str_lit, TK::unknown_
-};
-
-auto do_scan(std::string_view src) {
-    lang::collecting_sink<lang::samasa::diagnostic> sink;
-    no_line_sensitivity<TK> lp;
-    auto buf = scan<MyKW, MyOps, no_line_sensitivity<TK>, TK>(src, kinds, lp, sink);
-    return std::make_pair(std::move(buf), std::move(sink));
-}
-
+    auto do_scan(std::string_view src) {
+        lang::collecting_sink<lang::samasa::diagnostic> sink;
+        no_line_sensitivity<TK> lp;
+        auto buf = scan<MyKW, MyOps, no_line_sensitivity<TK>, TK>(src, kinds, lp, sink);
+        return std::make_pair(std::move(buf), std::move(sink));
+    }
 } // anonymous namespace
 
 // ============================================================================
 
-TEST_CASE("scanner: identifier vs keyword", "[samasa][scanner]") {
+TEST_CASE (
+"scanner: identifier vs keyword"
+,
+"[samasa][scanner]"
+)
+ {
     auto [buf, sink] = do_scan("let foo");
     REQUIRE(sink.entries.empty());
     // tokens: kw_let, ident, eof
@@ -59,7 +64,12 @@ TEST_CASE("scanner: identifier vs keyword", "[samasa][scanner]") {
     CHECK(buf.data[2].kind == TK::eof);
 }
 
-TEST_CASE("scanner: identifier text span correct", "[samasa][scanner]") {
+TEST_CASE (
+"scanner: identifier text span correct"
+,
+"[samasa][scanner]"
+)
+ {
     std::string_view src = "myVar";
     auto [buf, sink] = do_scan(src);
     REQUIRE(buf.data.size() >= 2);
@@ -70,7 +80,12 @@ TEST_CASE("scanner: identifier text span correct", "[samasa][scanner]") {
     CHECK(src.substr(tok.offset, tok.length) == "myVar");
 }
 
-TEST_CASE("scanner: operator longest-match — => vs == vs =", "[samasa][scanner]") {
+TEST_CASE (
+"scanner: operator longest-match — => vs == vs ="
+,
+"[samasa][scanner]"
+)
+ {
     auto [buf, _] = do_scan("=> == =");
     REQUIRE(buf.data.size() == 4); // op_arrow, op_eqeq, op_eq, eof
     CHECK(buf.data[0].kind == TK::op_arrow);
@@ -82,7 +97,12 @@ TEST_CASE("scanner: operator longest-match — => vs == vs =", "[samasa][scanner
     CHECK(buf.data[3].kind == TK::eof);
 }
 
-TEST_CASE("scanner: integer literal", "[samasa][scanner]") {
+TEST_CASE (
+"scanner: integer literal"
+,
+"[samasa][scanner]"
+)
+ {
     auto [buf, sink] = do_scan("42");
     REQUIRE(sink.entries.empty());
     REQUIRE(buf.data.size() == 2);
@@ -90,7 +110,12 @@ TEST_CASE("scanner: integer literal", "[samasa][scanner]") {
     CHECK(buf.data[0].length == 2);
 }
 
-TEST_CASE("scanner: trivia arena populated for whitespace", "[samasa][scanner]") {
+TEST_CASE (
+"scanner: trivia arena populated for whitespace"
+,
+"[samasa][scanner]"
+)
+ {
     auto [buf, sink] = do_scan("a  b");
     // trivia arena must have at least one whitespace entry
     REQUIRE(!buf.trivia_arena.empty());
@@ -98,7 +123,12 @@ TEST_CASE("scanner: trivia arena populated for whitespace", "[samasa][scanner]")
     CHECK(tv.kind == lang::samasa::trivia_kind::whitespace);
 }
 
-TEST_CASE("scanner: unterminated string emits diagnostic", "[samasa][scanner]") {
+TEST_CASE (
+"scanner: unterminated string emits diagnostic"
+,
+"[samasa][scanner]"
+)
+ {
     auto [buf, sink] = do_scan("\"hello");
     REQUIRE(sink.has_errors());
     bool found = false;
@@ -111,7 +141,12 @@ TEST_CASE("scanner: unterminated string emits diagnostic", "[samasa][scanner]") 
     CHECK(buf.data[0].kind == TK::str_lit);
 }
 
-TEST_CASE("scanner: unknown character emits diagnostic", "[samasa][scanner]") {
+TEST_CASE (
+"scanner: unknown character emits diagnostic"
+,
+"[samasa][scanner]"
+)
+ {
     auto [buf, sink] = do_scan("@");
     REQUIRE(sink.has_errors());
     bool found = false;
@@ -122,7 +157,12 @@ TEST_CASE("scanner: unknown character emits diagnostic", "[samasa][scanner]") {
     CHECK(buf.data[0].kind == TK::unknown_);
 }
 
-TEST_CASE("scanner: line comment is trivia, not token", "[samasa][scanner]") {
+TEST_CASE (
+"scanner: line comment is trivia, not token"
+,
+"[samasa][scanner]"
+)
+ {
     auto [buf, sink] = do_scan("a // this is a comment\nb");
     REQUIRE(sink.entries.empty());
     // tokens: ident(a), ident(b), eof
@@ -137,7 +177,12 @@ TEST_CASE("scanner: line comment is trivia, not token", "[samasa][scanner]") {
     CHECK(has_comment);
 }
 
-TEST_CASE("scanner: eof token at end", "[samasa][scanner]") {
+TEST_CASE (
+"scanner: eof token at end"
+,
+"[samasa][scanner]"
+)
+ {
     auto [buf, sink] = do_scan("");
     REQUIRE(buf.data.size() == 1);
     CHECK(buf.data[0].kind == TK::eof);
@@ -148,15 +193,30 @@ TEST_CASE("scanner: eof token at end", "[samasa][scanner]") {
 // New tests [R4]: token layout invariants
 // ============================================================================
 
-TEST_CASE("token: trivially copyable for uint32_t kind", "[samasa][scanner]") {
+TEST_CASE (
+"token: trivially copyable for uint32_t kind"
+,
+"[samasa][scanner]"
+)
+ {
     STATIC_REQUIRE(std::is_trivially_copyable_v<lang::samasa::token<std::uint32_t>>);
 }
 
-TEST_CASE("token: trivially copyable for TK enum kind", "[samasa][scanner]") {
+TEST_CASE (
+"token: trivially copyable for TK enum kind"
+,
+"[samasa][scanner]"
+)
+ {
     STATIC_REQUIRE(std::is_trivially_copyable_v<lang::samasa::token<TK>>);
 }
 
-TEST_CASE("token: uint32_t length supports values > 65535 (no overflow)", "[samasa][scanner]") {
+TEST_CASE (
+"token: uint32_t length supports values > 65535 (no overflow)"
+,
+"[samasa][scanner]"
+)
+ {
     // length is uint32_t — must hold values well above the old uint16_t max.
     lang::samasa::token<TK> t{};
     t.length = 100000u;
@@ -184,7 +244,12 @@ struct HashPolicy : lang::samasa::scanner_policy<HTK> {
     }
 };
 
-TEST_CASE("scanner_policy: default policy produces same results as no-policy overload", "[samasa][scanner]") {
+TEST_CASE (
+"scanner_policy: default policy produces same results as no-policy overload"
+,
+"[samasa][scanner]"
+)
+ {
     // Scanning "let foo" with explicit default policy must match the standard path.
     using namespace lang::samasa;
     lang::collecting_sink<diagnostic> sink1, sink2;
@@ -202,7 +267,12 @@ TEST_CASE("scanner_policy: default policy produces same results as no-policy ove
 // New tests [design.md]: block comment, newline_terminates line policy
 // ============================================================================
 
-TEST_CASE("scanner: block comment is trivia, not token", "[samasa][scanner]") {
+TEST_CASE (
+"scanner: block comment is trivia, not token"
+,
+"[samasa][scanner]"
+)
+ {
     auto [buf, sink] = do_scan("a /* block */ b");
     REQUIRE(sink.entries.empty());
     // tokens: ident(a), ident(b), eof
@@ -217,7 +287,12 @@ TEST_CASE("scanner: block comment is trivia, not token", "[samasa][scanner]") {
     CHECK(has_block);
 }
 
-TEST_CASE("scanner: unterminated block comment emits diagnostic", "[samasa][scanner]") {
+TEST_CASE (
+"scanner: unterminated block comment emits diagnostic"
+,
+"[samasa][scanner]"
+)
+ {
     auto [buf, sink] = do_scan("/* unterminated");
     REQUIRE(sink.has_errors());
     bool found = false;
@@ -227,7 +302,12 @@ TEST_CASE("scanner: unterminated block comment emits diagnostic", "[samasa][scan
     CHECK(found);
 }
 
-TEST_CASE("scanner: newline_terminates — newline after ident emits separator token", "[samasa][scanner]") {
+TEST_CASE (
+"scanner: newline_terminates — newline after ident emits separator token"
+,
+"[samasa][scanner]"
+)
+ {
     // Use enum with a newline_sep token and specialise statement_ending.
     using namespace lang::samasa;
     enum class LTK : std::uint8_t { eof, ident, newline_sep, unknown_ };

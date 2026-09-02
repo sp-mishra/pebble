@@ -10,26 +10,34 @@
 #include "languages/samasa/samasa.hpp"
 
 namespace {
+    using namespace lang::samasa;
 
-using namespace lang::samasa;
+    enum class SK : std::uint8_t { root, item };
 
-enum class SK : std::uint8_t { root, item };
-enum class TK : std::uint8_t { eof, tok_a, tok_b, tok_c };
+    enum class TK : std::uint8_t { eof, tok_a, tok_b, tok_c };
 
-template <class TokenKind>
-token_buffer<TokenKind> make_tokens(std::initializer_list<TokenKind> kinds) {
-    token_buffer<TokenKind> buf;
-    std::uint32_t off = 0;
-    for (auto k : kinds) { buf.data.push_back({k, off, 1, 0, 0}); ++off; }
-    buf.data.push_back({TokenKind{}, off, 0, 0, 0});
-    return buf;
-}
+    template <class TokenKind>
+    token_buffer<TokenKind> make_tokens(std::initializer_list<TokenKind> kinds) {
+        token_buffer<TokenKind> buf;
+        std::uint32_t off = 0;
+        for (auto k : kinds) {
+            buf.data.push_back({k, off, 1, 0, 0});
+            ++off;
+        }
+        buf.data.push_back({TokenKind{}, off, 0, 0, 0});
+        return buf;
+    }
 
-// ============================================================================
-// checkpoint/rollback restores cursor
-// ============================================================================
+    // ============================================================================
+    // checkpoint/rollback restores cursor
+    // ============================================================================
 
-TEST_CASE("checkpoint: rollback restores cursor position", "[samasa][conformance][checkpoint]") {
+    TEST_CASE (
+    "checkpoint: rollback restores cursor position"
+    ,
+    "[samasa][conformance][checkpoint]"
+    )
+ {
     auto buf = make_tokens<TK>({TK::tok_a, TK::tok_b, TK::tok_c});
     event_stream<SK> events;
     lang::collecting_sink<diagnostic> sink;
@@ -49,7 +57,12 @@ TEST_CASE("checkpoint: rollback restores cursor position", "[samasa][conformance
     CHECK(ctx.cursor().peek().kind == TK::tok_a);
 }
 
-TEST_CASE("checkpoint: rollback restores event count", "[samasa][conformance][checkpoint]") {
+    TEST_CASE (
+    "checkpoint: rollback restores event count"
+    ,
+    "[samasa][conformance][checkpoint]"
+    )
+ {
     auto buf = make_tokens<TK>({TK::tok_a, TK::tok_b});
     event_stream<SK> events;
     lang::collecting_sink<diagnostic> sink;
@@ -73,12 +86,15 @@ TEST_CASE("checkpoint: rollback restores event count", "[samasa][conformance][ch
     CHECK(ctx.cursor().peek().kind == TK::tok_a);
 }
 
-// ============================================================================
-// Nested checkpoints unwind in correct order
-// ============================================================================
+    // ============================================================================
+    // Nested checkpoints unwind in correct order
+    // ============================================================================
 
-TEST_CASE("checkpoint: nested rollback restores intermediate position",
-          "[samasa][conformance][checkpoint]")
+    TEST_CASE (
+    "checkpoint: nested rollback restores intermediate position"
+    ,
+    "[samasa][conformance][checkpoint]"
+    )
 {
     auto buf = make_tokens<TK>({TK::tok_a, TK::tok_b, TK::tok_c});
     event_stream<SK> events;

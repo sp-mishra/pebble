@@ -42,8 +42,8 @@ A **graph** is places plus connections.
 - An **edge** is a connection (a ferry, a trail, “must happen before”).
 - **Directed** means one-way (`Harbor → Cove`). **Undirected** means you can walk either way.
 
-LiteGraph stores both as data you choose: strings for names, `int`/`double` for minutes or tickets. IDs are strong
-types (`NodeId`, `EdgeId`) so you cannot mix up a dock with a route.
+LiteGraph stores both as data you choose: strings for names, `int`/`double` for minutes or tickets. IDs are strong types
+(`NodeId`, `EdgeId`) so you cannot mix up a dock with a route.
 
 ---
 
@@ -342,7 +342,7 @@ std::cout << "Remapped Harbor index: " << harbor2.value << "\n";
 
 From here, use `harbor2` (and remapped Cove / Lighthouse). Do not call `island.node_data(harbor)`.
 
-**What you just learned:** delete is O(1) marking. Compact rebuilds storage and returns old→new maps. This is the
+**What you just learned:** delete is O (1) marking. Compact rebuilds storage and returns old→new maps. This is the
 physical vs logical split described in the reference.
 
 **Try:** `island.get_stats()` and print `load_factor` before and after compact.
