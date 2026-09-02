@@ -89,10 +89,11 @@ namespace manas::ml {
                 }
                 float best_lbl = 0.0f;
                 int best_cnt = 0;
-                for (auto& [lbl, cnt] : votes) if (cnt > best_cnt) {
-                    best_cnt = cnt;
-                    best_lbl = lbl;
-                }
+                for (auto& [lbl, cnt] : votes)
+                    if (cnt > best_cnt) {
+                        best_cnt = cnt;
+                        best_lbl = lbl;
+                    }
                 out({i}) = best_lbl;
             }
             return out;

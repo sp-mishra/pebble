@@ -595,8 +595,11 @@ namespace kalpa {
 
                 // reduced (negated) (1,1) block  M = −(H + X⁻¹Z)
                 ga::Matrix<T> M(n, n, T{0});
-                if (H.rows() == n) for (std::size_t i = 0; i < n; ++i) for (std::size_t j = 0; j < n; ++j) M(i, j) = -
-                    H(i, j);
+                if (H.rows() == n)
+                    for (std::size_t i = 0; i < n; ++i)
+                        for (std::size_t j = 0; j < n; ++j)
+                            M(i, j) = -
+                                H(i, j);
                 for (std::size_t i = 0; i < n; ++i) M(i, i) -= z[i] / x[i];
                 // Primal regularization: for a pure LP (H = 0) the barrier term
                 // X⁻¹Z is the entire diagonal, and as the iterate nears a vertex

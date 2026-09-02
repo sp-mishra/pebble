@@ -332,7 +332,8 @@ namespace medha {
             const auto object = static_cast<void*>(&resource);
             if (std::ranges::any_of(participants_, [object](const participant& p) {
                 return p.object == object;
-            })) return;
+            }))
+                return;
             participants_.push_back({
                 object,
                 [](void* p, transaction_context& c) { return tx_validate(*static_cast<R*>(p), c); },

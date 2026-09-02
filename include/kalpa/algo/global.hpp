@@ -345,8 +345,9 @@ namespace kalpa {
                 // eigendecomposition C = B diag(d²) Bᵀ
                 auto es = ga::eig_sym(C);
                 std::vector<T> d(n);
-                for (std::size_t i = 0; i < n; ++i) d[i] =
-                    std::sqrt(std::max(es.eigenvalues[i], static_cast<T>(1e-20)));
+                for (std::size_t i = 0; i < n; ++i)
+                    d[i] =
+                        std::sqrt(std::max(es.eigenvalues[i], static_cast<T>(1e-20)));
                 const auto& B = es.eigenvectors;
 
                 // sample λ offspring  x = mean + σ B d z

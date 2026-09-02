@@ -69,10 +69,11 @@ namespace manas::ml {
                 for (int t = 0; t < kk; ++t) votes[dists[t].second]++;
                 float best_label = dists[0].second;
                 int best_cnt = 0;
-                for (auto& [lbl, cnt] : votes) if (cnt > best_cnt) {
-                    best_cnt = cnt;
-                    best_label = lbl;
-                }
+                for (auto& [lbl, cnt] : votes)
+                    if (cnt > best_cnt) {
+                        best_cnt = cnt;
+                        best_label = lbl;
+                    }
                 out({qi}) = best_label;
             }
             return out;

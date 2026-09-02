@@ -143,6 +143,7 @@ namespace litegraph::highway { namespace detail {
 #ifdef LITEGRAPH_ENABLE_HIGHWAY
             std::vector<double> candidates(clamped_end - edge_begin); {
                 const HWY_FULL (
+
 double) d;
                 const std::size_t lanes = hwy::Lanes(d);
                 const auto vs = hwy::Set(d, source_distance);

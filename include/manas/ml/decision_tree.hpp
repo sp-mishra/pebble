@@ -61,10 +61,11 @@ namespace manas::ml {
             for (float v : labels) counts[v]++;
             float best = labels[0];
             int best_cnt = 0;
-            for (auto& [k, c] : counts) if (c > best_cnt) {
-                best_cnt = c;
-                best = k;
-            }
+            for (auto& [k, c] : counts)
+                if (c > best_cnt) {
+                    best_cnt = c;
+                    best = k;
+                }
             return best;
         }
 

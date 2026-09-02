@@ -39,6 +39,7 @@ namespace prakriti {
               runner_(backend_) {}
 #else
         explicit MuscleSolver (
+
         unsigned=
         0
         ,

@@ -143,7 +143,8 @@ namespace kalpana {
 
                 auto blend_pixel = [&](int x, int y, Color src, float coverage) {
                     if (coverage <= 0.0f || x < 0 || x >= static_cast<int>(width_) || y < 0 || y >= static_cast<int>(
-                        height_)) return;
+                        height_))
+                        return;
                     const std::size_t idx = static_cast<std::size_t>(y) * width_ + static_cast<std::size_t>(x);
                     if (coverage >= 0.999f && src.a >= 0.999f) {
                         pixels_[idx] = src.to_argb8888();

@@ -542,9 +542,10 @@ namespace anukrama {
 
             [[nodiscard]] result<Value> get(const Key& key) {
                 for (auto it = mutations_.rbegin(); it != mutations_.rend(); ++it) {
-                    if (equivalent(it->key, key)) return it->value
-                                                             ? result<Value>{*it->value}
-                                                             : std::unexpected(error::not_found);
+                    if (equivalent(it->key, key))
+                        return it->value
+                                   ? result<Value>{*it->value}
+                                   : std::unexpected(error::not_found);
                 }
                 auto guard = owner_->sync_.read_lock();
                 observe_locked(key);
@@ -566,12 +567,14 @@ namespace anukrama {
                 if (finished_) return std::unexpected(error::transaction_finished);
                 auto guard = owner_->sync_.commit_lock(mutations_);
                 for (const auto& write : mutations_)
-                    if (owner_->head_stamp_locked(write.key) > snapshot_.boundary_) return std::unexpected(
-                        error::conflict);
+                    if (owner_->head_stamp_locked(write.key) > snapshot_.boundary_)
+                        return std::unexpected(
+                            error::conflict);
                 if constexpr (ConflictPolicy::validate_reads)
                     for (const auto& read : reads_)
-                        if (owner_->head_stamp_locked(read.key) != read.head_stamp) return std::unexpected(
-                            error::conflict);
+                        if (owner_->head_stamp_locked(read.key) != read.head_stamp)
+                            return std::unexpected(
+                                error::conflict);
 
                 const auto committed = owner_->clock_.next();
                 if (auto applied = owner_->publish_writes(mutations_, committed); !applied)
@@ -606,7 +609,8 @@ namespace anukrama {
             void observe_locked(const Key& key) {
                 if (std::ranges::any_of(reads_, [this, &key](const observed_key& read) {
                     return equivalent(read.key, key);
-                })) return;
+                }))
+                    return;
                 reads_.push_back({key, owner_->head_stamp_locked(key)});
             }
 

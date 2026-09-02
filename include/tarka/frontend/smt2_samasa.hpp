@@ -60,8 +60,9 @@ namespace tarka::frontend { namespace samasa_smt2 {
         auto checked = lang::samasa::parse<samasa_smt2::grammar, lang::samasa::keyword_table<>,
                                            samasa_smt2::punctuation>(source, {}, samasa_smt2::kinds);
         auto result = detail::decode_smt2(source);
-        if (!checked.success) ir::error(result, ir::diagnostic_code::syntax, {},
-                                        "Samasa rejected SMT-LIB token stream");
+        if (!checked.success)
+            ir::error(result, ir::diagnostic_code::syntax, {},
+                      "Samasa rejected SMT-LIB token stream");
         return result;
     }
 }

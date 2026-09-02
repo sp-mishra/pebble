@@ -83,14 +83,16 @@ namespace manas::nn {
                                     const Tensor& g) {
                                         if (a_id != Tape::kNoGrad) {
                                             Tensor ga(g.shape());
-                                            for (size_t i = 0; i < g.size(); ++i) ga.data()[i] = g.data()[i] * b_copy.
-                                                data()[i];
+                                            for (size_t i = 0; i < g.size(); ++i)
+                                                ga.data()[i] = g.data()[i] * b_copy.
+                                                    data()[i];
                                             tape.accumulate_grad(a_id, ga);
                                         }
                                         if (b_id != Tape::kNoGrad) {
                                             Tensor gb(g.shape());
-                                            for (size_t i = 0; i < g.size(); ++i) gb.data()[i] = g.data()[i] * a_copy.
-                                                data()[i];
+                                            for (size_t i = 0; i < g.size(); ++i)
+                                                gb.data()[i] = g.data()[i] * a_copy.
+                                                    data()[i];
                                             tape.accumulate_grad(b_id, gb);
                                         }
                                     });
@@ -234,8 +236,9 @@ namespace manas::nn {
                                     [&tape, a_id, m = std::move(mask)](const Tensor& g) {
                                         if (a_id != Tape::kNoGrad) {
                                             Tensor ga(g.shape());
-                                            for (size_t i = 0; i < g.size(); ++i) ga.data()[i] = g.data()[i] * m.data()[
-                                                i];
+                                            for (size_t i = 0; i < g.size(); ++i)
+                                                ga.data()[i] = g.data()[i] * m.data()[
+                                                    i];
                                             tape.accumulate_grad(a_id, ga);
                                         }
                                     });

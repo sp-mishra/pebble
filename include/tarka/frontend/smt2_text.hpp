@@ -36,7 +36,8 @@ namespace tarka::frontend::detail {
 
         std::string_view next() {
             while (pos_ < source_.size() && (source_[pos_] == ' ' || source_[pos_] == '\n' || source_[pos_] == '\r' ||
-                source_[pos_] == '\t'))++pos_;
+                source_[pos_] == '\t'))
+                ++pos_;
             if (pos_ < source_.size() && source_[pos_] == ';') {
                 while (pos_ < source_.size() && source_[pos_] != '\n')++pos_;
                 return next();
@@ -48,7 +49,8 @@ namespace tarka::frontend::detail {
             auto b = pos_++;
             if (source_[b] == '(' || source_[b] == ')')return token_ = source_.substr(b, 1);
             while (pos_ < source_.size() && !std::isspace(static_cast<unsigned char>(source_[pos_])) && source_[pos_] !=
-                '(' && source_[pos_] != ')')++pos_;
+                '(' && source_[pos_] != ')')
+                ++pos_;
             return token_ = source_.substr(b, pos_ - b);
         }
 
@@ -84,8 +86,9 @@ namespace tarka::frontend::detail {
         }
 
         ir::node_id term_with(std::string_view t) {
-            if (t == "true" || t == "false")return ir::append(out_, ir::kind::bool_literal, {}, 0,
-                                                              {{std::uint32_t(t == "true")}});
+            if (t == "true" || t == "false")
+                return ir::append(out_, ir::kind::bool_literal, {}, 0,
+                                  {{std::uint32_t(t == "true")}});
             if (!t.empty() && t[0] == '#') {
                 std::uint64_t v{};
                 auto p = t.substr(2);
@@ -96,8 +99,9 @@ namespace tarka::frontend::detail {
             }
             std::int64_t i{};
             auto [e,ec] = std::from_chars(t.data(), t.data() + t.size(), i);
-            if (ec == std::errc{} && e == t.data() + t.size())return ir::append(
-                out_, ir::kind::int_literal, {}, 0, {{i}});
+            if (ec == std::errc{} && e == t.data() + t.size())
+                return ir::append(
+                    out_, ir::kind::int_literal, {}, 0, {{i}});
             if (t == "(") {
                 auto op = next();
                 std::vector<ir::node_id> kids;

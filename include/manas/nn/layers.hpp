@@ -182,9 +182,10 @@ namespace manas::nn {
                                                     Tensor dg({f});
                                                     for (size_t j = 0; j < f; ++j) dg.data()[j] = 0.0f;
                                                     for (size_t i = 0; i < n; ++i)
-                                                        for (size_t j = 0; j < f; ++j) dg.data()[j] += g({i, j}) * xh({
-                                                            i, j
-                                                        });
+                                                        for (size_t j = 0; j < f; ++j)
+                                                            dg.data()[j] += g({i, j}) * xh({
+                                                                i, j
+                                                            });
                                                     tape.accumulate_grad(g_id, dg);
                                                 }
                                                 // d(x) = gamma / (N * std) * (N * g - sum_g - x_hat * sum(g * x_hat))
@@ -285,8 +286,9 @@ namespace manas::nn {
                                                 Tensor dg({f});
                                                 for (size_t j = 0; j < f; ++j) dg.data()[j] = 0.0f;
                                                 for (size_t i = 0; i < n; ++i)
-                                                    for (size_t j = 0; j < f; ++j) dg.data()[j] += g_upstream({i, j}) *
-                                                        xh({i, j});
+                                                    for (size_t j = 0; j < f; ++j)
+                                                        dg.data()[j] += g_upstream({i, j}) *
+                                                            xh({i, j});
                                                 tape.accumulate_grad(g_id, dg);
                                             }
                                             if (x_id != Tape::kNoGrad) {

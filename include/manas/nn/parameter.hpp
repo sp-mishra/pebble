@@ -34,8 +34,9 @@ namespace manas::nn {
                                                [this](const Tensor& g) {
                                                    // Accumulate into our own grad buffer
                                                    if (grad_.shape() == g.shape()) {
-                                                       for (size_t i = 0; i < g.size(); ++i) grad_.data()[i] += g.data()
-                                                           [i];
+                                                       for (size_t i = 0; i < g.size(); ++i)
+                                                           grad_.data()[i] += g.data()
+                                                               [i];
                                                    }
                                                    else {
                                                        grad_ = g;

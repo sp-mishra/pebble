@@ -40,12 +40,15 @@ namespace vakya::tarka_frontend {
         template <class E>
         smt::node_id lower(smt::script& out, const E& e) {
             using D = std::decay_t<E>;
-            if constexpr (std::same_as<D, symbol>) return smt::append(out, smt::kind::symbol, {},
-                                                                      out.symbols.intern(e.name));
-            else if constexpr (std::same_as<D, bool>) return smt::append(
-                out, smt::kind::bool_literal, {}, 0, {{std::uint32_t(e)}});
-            else if constexpr (std::integral<D>) return smt::append(out, smt::kind::int_literal, {}, 0,
-                                                                    {{std::int64_t(e)}});
+            if constexpr (std::same_as<D, symbol>)
+                return smt::append(out, smt::kind::symbol, {},
+                                   out.symbols.intern(e.name));
+            else if constexpr (std::same_as<D, bool>)
+                return smt::append(
+                    out, smt::kind::bool_literal, {}, 0, {{std::uint32_t(e)}});
+            else if constexpr (std::integral<D>)
+                return smt::append(out, smt::kind::int_literal, {}, 0,
+                                   {{std::int64_t(e)}});
             else if constexpr (Expression<D>) {
                 std::vector<smt::node_id> kids;
                 std::apply([&](const auto&... x) { (kids.push_back(lower(out, x)), ...); }, e.children);

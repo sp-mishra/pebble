@@ -59,8 +59,9 @@ namespace tarka::frontend {
                 return std::unexpected("unknown symbol: " + std::string(script.symbols.get(n.name)));
             }
             if (n.kind == ir::kind::bool_literal) return ctx.make_bool(std::get<std::uint32_t>(n.ext.value) != 0);
-            if (n.kind == ir::kind::int_literal) return ctx.make_int(std::get<std::int64_t>(n.ext.value),
-                                                                     ctx.int_sort());
+            if (n.kind == ir::kind::int_literal)
+                return ctx.make_int(std::get<std::int64_t>(n.ext.value),
+                                    ctx.int_sort());
             if (n.kind == ir::kind::bv_literal) {
                 auto v = std::get<ir::bit_vector>(n.ext.value);
                 return ctx.make_value(v.bits, ctx.bv_sort(v.width));
@@ -77,8 +78,9 @@ namespace tarka::frontend {
                 Sort result = ctx.bool_sort();
                 if (*builtin == Op::Add || *builtin == Op::Sub || *builtin == Op::Mul || *builtin == Op::Div || *builtin
                     == Op::Mod || *builtin == Op::BvAdd || *builtin == Op::BvSub || *builtin == Op::BvMul || *builtin ==
-                    Op::BvAnd || *builtin == Op::BvOr || *builtin == Op::BvXor || *builtin == Op::Store) result =
-                    args.empty() ? ctx.bool_sort() : args.front().sort();
+                    Op::BvAnd || *builtin == Op::BvOr || *builtin == Op::BvXor || *builtin == Op::Store)
+                    result =
+                        args.empty() ? ctx.bool_sort() : args.front().sort();
                 return ctx.make_term(*builtin, result, args);
             }
             auto it = symbols.find(n.name);

@@ -9,7 +9,9 @@
 
 namespace manas {
     using SelectionPolicy = std::function<std::vector<BrainGenome>(const std::vector<BrainGenome> &,
- const std::vector<FitnessMetrics> &)>;
+                                          const std::vector<FitnessMetrics>&
+    )
+    >;
 
     // Tournament Selection: Randomly choose k candidates and pick the one with highest fitness.
     struct TournamentSelection {
