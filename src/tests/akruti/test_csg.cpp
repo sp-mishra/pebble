@@ -3,7 +3,12 @@
 #include "akruti/csg.hpp"
 #include <cmath>
 
-TEST_CASE("Akruti: CSG Expression Tree Auto-Diff Normals", "[akruti][csg]") {
+TEST_CASE (
+"Akruti: CSG Expression Tree Auto-Diff Normals"
+,
+"[akruti][csg]"
+)
+ {
     using namespace akruti::expr;
 
     akruti::Circle c{{0.0f, 0.0f}, 2.0f};
@@ -23,7 +28,12 @@ TEST_CASE("Akruti: CSG Expression Tree Auto-Diff Normals", "[akruti][csg]") {
     REQUIRE(norm_top.y == Catch::Approx(1.0f).margin(1e-3f));
 }
 
-TEST_CASE("akruti: csg_smooth_subtract yields negative sdf inside carved region", "[akruti][csg][smooth]") {
+TEST_CASE (
+"akruti: csg_smooth_subtract yields negative sdf inside carved region"
+,
+"[akruti][csg][smooth]"
+)
+ {
     using namespace akruti::expr;
 
     akruti::Circle base{{0.0f, 0.0f}, 3.0f};
@@ -42,7 +52,12 @@ TEST_CASE("akruti: csg_smooth_subtract yields negative sdf inside carved region"
     REQUIRE(sdf_outside > 0.0f);
 }
 
-TEST_CASE("akruti: csg_smooth_intersect boundary continuity", "[akruti][csg][smooth]") {
+TEST_CASE (
+"akruti: csg_smooth_intersect boundary continuity"
+,
+"[akruti][csg][smooth]"
+)
+ {
     using namespace akruti::expr;
 
     akruti::Circle a{{-0.5f, 0.0f}, 2.0f};
@@ -62,7 +77,12 @@ TEST_CASE("akruti: csg_smooth_intersect boundary continuity", "[akruti][csg][smo
     REQUIRE(std::fabs(s2 - s1) < 0.5f); // smooth, not a step
 }
 
-TEST_CASE("akruti: Shape centroid contract satisfied by all primitives", "[akruti][concept][centroid]") {
+TEST_CASE (
+"akruti: Shape centroid contract satisfied by all primitives"
+,
+"[akruti][concept][centroid]"
+)
+ {
     static_assert(akruti::Shape<akruti::Circle>);
     static_assert(akruti::Shape<akruti::Box>);
     static_assert(akruti::Shape<akruti::Capsule>);

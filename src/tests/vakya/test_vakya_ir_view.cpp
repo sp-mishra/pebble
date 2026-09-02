@@ -47,7 +47,12 @@ static_assert(
     "handle_store<type_tag> node_handle must be type_ref"
 );
 
-TEST_CASE("type_ref == generational_handle<type_tag,uint32_t>", "[vakya][ir_view][static]") {
+TEST_CASE (
+"type_ref == generational_handle<type_tag,uint32_t>"
+,
+"[vakya][ir_view][static]"
+)
+ {
     // Runtime complement to the static_asserts above.
     type_ref null_ref;
     REQUIRE(null_ref.is_null());
@@ -59,7 +64,12 @@ TEST_CASE("type_ref == generational_handle<type_tag,uint32_t>", "[vakya][ir_view
 // Test 2 — as_ir_module_view() parity: node count + child adjacency
 // ============================================================================
 
-TEST_CASE("as_ir_module_view: node count and child adjacency match native", "[vakya][ir_view]") {
+TEST_CASE (
+"as_ir_module_view: node count and child adjacency match native"
+,
+"[vakya][ir_view]"
+)
+ {
     type_arena arena;
     type_var_generator gen;
 
@@ -103,7 +113,12 @@ TEST_CASE("as_ir_module_view: node count and child adjacency match native", "[va
 // Test 3 — as_egraph_view() round-trip: adjacency consistent across both views
 // ============================================================================
 
-TEST_CASE("as_egraph_view: adjacency consistent with as_ir_module_view", "[vakya][ir_view]") {
+TEST_CASE (
+"as_egraph_view: adjacency consistent with as_ir_module_view"
+,
+"[vakya][ir_view]"
+)
+ {
     type_arena arena;
 
     // Build: Optional<Bool>
@@ -139,8 +154,11 @@ TEST_CASE("as_egraph_view: adjacency consistent with as_ir_module_view", "[vakya
 // Test 4 — kosha_dedup_adapter intern parity
 // ============================================================================
 
-TEST_CASE("kosha_dedup_adapter: interning same type yields same ref via Dedup seam",
-          "[vakya][ir_view][dedup]")
+TEST_CASE (
+"kosha_dedup_adapter: interning same type yields same ref via Dedup seam"
+,
+"[vakya][ir_view][dedup]"
+)
 {
     type_arena arena;
 

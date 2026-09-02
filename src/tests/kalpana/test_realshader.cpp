@@ -5,7 +5,12 @@
 #include "kalpana/color/spectral.hpp"
 #include "containers/numeric/math_vector.hpp"
 
-TEST_CASE("RealShaderPass: shade_cell on empty field returns canvas color", "[kalpana][realshader]") {
+TEST_CASE (
+"RealShaderPass: shade_cell on empty field returns canvas color"
+,
+"[kalpana][realshader]"
+)
+ {
     using namespace kalpana;
     PaintField<> f(8, 8, 1.0f);
     RealShaderPass<> shader;
@@ -18,7 +23,12 @@ TEST_CASE("RealShaderPass: shade_cell on empty field returns canvas color", "[ka
     REQUIRE(result.color.a == Catch::Approx(1.0f).margin(0.01f));
 }
 
-TEST_CASE("RealShaderPass: metallic preset boosts specular over matte", "[kalpana][realshader]") {
+TEST_CASE (
+"RealShaderPass: metallic preset boosts specular over matte"
+,
+"[kalpana][realshader]"
+)
+ {
     using namespace kalpana;
     PaintField<> f(8, 8, 1.0f);
 
@@ -43,7 +53,12 @@ TEST_CASE("RealShaderPass: metallic preset boosts specular over matte", "[kalpan
     REQUIRE(differs);
 }
 
-TEST_CASE("PaintMaterial: presets have expected metallic/roughness values", "[kalpana][material]") {
+TEST_CASE (
+"PaintMaterial: presets have expected metallic/roughness values"
+,
+"[kalpana][material]"
+)
+ {
     using namespace kalpana;
     REQUIRE(PaintMaterial::preset_matte().metallic    == Catch::Approx(0.0f));
     REQUIRE(PaintMaterial::preset_matte().roughness   == Catch::Approx(0.9f));

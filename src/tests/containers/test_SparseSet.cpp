@@ -791,7 +791,12 @@ TEST_CASE (
     REQUIRE(m.get(1u)->get() == "after");
 }
 
-TEST_CASE("SparseSet: smriti arena allocator integration", "[SparseSet][mem][arena]") {
+TEST_CASE (
+"SparseSet: smriti arena allocator integration"
+,
+"[SparseSet][mem][arena]"
+)
+ {
     using Resource = smriti::ManagedResource<smriti::domains::SystemRAMDomain,
                                             smriti::pools::BumpPool<smriti::domains::SystemRAMDomain>>;
     Resource res{smriti::domains::SystemRAMDomain{},

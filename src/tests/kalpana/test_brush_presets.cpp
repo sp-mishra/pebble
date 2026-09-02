@@ -5,7 +5,12 @@
 #include "kalpana/color/paint_field.hpp"
 #include "containers/matrix/field.hpp"
 
-TEST_CASE("BrushPreset: original 5 presets unchanged", "[kalpana][brush_preset]") {
+TEST_CASE (
+"BrushPreset: original 5 presets unchanged"
+,
+"[kalpana][brush_preset]"
+)
+ {
     using namespace kalpana;
 
     SECTION("watercolor_wash") {
@@ -32,7 +37,12 @@ TEST_CASE("BrushPreset: original 5 presets unchanged", "[kalpana][brush_preset]"
     }
 }
 
-TEST_CASE("BrushPreset: new presets have correct material", "[kalpana][brush_preset]") {
+TEST_CASE (
+"BrushPreset: new presets have correct material"
+,
+"[kalpana][brush_preset]"
+)
+ {
     using namespace kalpana;
 
     SECTION("graphite_pencil") {
@@ -63,7 +73,12 @@ TEST_CASE("BrushPreset: new presets have correct material", "[kalpana][brush_pre
     }
 }
 
-TEST_CASE("DepositionParams: WatercolorBody opaque raises floor", "[kalpana][deposit]") {
+TEST_CASE (
+"DepositionParams: WatercolorBody opaque raises floor"
+,
+"[kalpana][deposit]"
+)
+ {
     using namespace kalpana::deposit;
 
     DepositionParams dp_transparent{
@@ -81,7 +96,12 @@ TEST_CASE("DepositionParams: WatercolorBody opaque raises floor", "[kalpana][dep
     REQUIRE(opaque >= transp);
 }
 
-TEST_CASE("DepositionParams: deposit_to_field writes km and height", "[kalpana][deposit]") {
+TEST_CASE (
+"DepositionParams: deposit_to_field writes km and height"
+,
+"[kalpana][deposit]"
+)
+ {
     using namespace kalpana;
     using namespace kalpana::deposit;
 

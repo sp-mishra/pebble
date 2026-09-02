@@ -5,7 +5,12 @@
 #include "spandana/spandana.hpp"
 #include "gati/gati.hpp"
 
-TEST_CASE("Spandana: Procedural Voronoi Polygon Shattering & Mass Properties", "[spandana][destruction]") {
+TEST_CASE (
+"Spandana: Procedural Voronoi Polygon Shattering & Mass Properties"
+,
+"[spandana][destruction]"
+)
+ {
     akruti::Poly box_poly{
         akruti::Vec{-20.0f, -20.0f},
         akruti::Vec{20.0f, -20.0f},
@@ -40,7 +45,12 @@ TEST_CASE("Spandana: Procedural Voronoi Polygon Shattering & Mass Properties", "
     REQUIRE(std::abs(total_area - 1600.0f) < 5.0f);
 }
 
-TEST_CASE("Spandana: World Entity Shattering", "[spandana][destruction][ecs]") {
+TEST_CASE (
+"Spandana: World Entity Shattering"
+,
+"[spandana][destruction][ecs]"
+)
+ {
     pebble::ecs::World world;
 
     auto entity = world.spawn();
@@ -66,7 +76,12 @@ TEST_CASE("Spandana: World Entity Shattering", "[spandana][destruction][ecs]") {
     REQUIRE(shard_shapes >= 3);
 }
 
-TEST_CASE("Spandana: Parametric 2D Directional Blend Space", "[spandana][blend_space]") {
+TEST_CASE (
+"Spandana: Parametric 2D Directional Blend Space"
+,
+"[spandana][blend_space]"
+)
+ {
     pebble::spandana::FlipbookClip idle_clip{.name = "idle"};
     pebble::spandana::FlipbookClip walk_fwd_clip{.name = "walk_fwd"};
     pebble::spandana::FlipbookClip walk_back_clip{.name = "walk_back"};

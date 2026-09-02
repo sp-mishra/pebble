@@ -3,7 +3,12 @@
 
 #include <string>
 
-TEST_CASE("Medha Anukrama adapter: commits a typed staged batch", "[medha][anukrama][adapter]") {
+TEST_CASE (
+"Medha Anukrama adapter: commits a typed staged batch"
+,
+"[medha][anukrama][adapter]"
+)
+ {
     anukrama::store<std::string, std::string> values;
     medha::adapters::anukrama_resource<std::string, std::string> resource{values};
     medha::resource_handle handle{resource, medha::resource_id{1, 1}};
@@ -14,7 +19,12 @@ TEST_CASE("Medha Anukrama adapter: commits a typed staged batch", "[medha][anukr
     CHECK(values.get("account") == "100");
 }
 
-TEST_CASE("Medha Anukrama adapter: rejects a stale staged write", "[medha][anukrama][adapter][conflict]") {
+TEST_CASE (
+"Medha Anukrama adapter: rejects a stale staged write"
+,
+"[medha][anukrama][adapter][conflict]"
+)
+ {
     anukrama::store<std::string, std::string> values;
     REQUIRE(values.begin().put("account", "100").commit().has_value());
     medha::adapters::anukrama_resource<std::string, std::string> resource{values};

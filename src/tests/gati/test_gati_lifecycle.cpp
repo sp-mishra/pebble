@@ -2,7 +2,12 @@
 #include "gati/gati.hpp"
 #include <cmath>
 
-TEST_CASE("Gati: ContactStateTracker Enter, Stay and Exit Lifecycle", "[gati][lifecycle]") {
+TEST_CASE (
+"Gati: ContactStateTracker Enter, Stay and Exit Lifecycle"
+,
+"[gati][lifecycle]"
+)
+ {
     gati::EventBus bus;
     gati::ContactStateTracker tracker;
 

@@ -16,7 +16,12 @@ namespace w = pebble::drishya::widgets;
 using M = MonospaceMetrics;
 using P = DefaultPainter;
 
-TEST_CASE("layout_bridge: root fills the viewport", "[drishya][layout]") {
+TEST_CASE (
+"layout_bridge: root fills the viewport"
+,
+"[drishya][layout]"
+)
+ {
     M m;
     App<M, P> app(m);
     auto root_stack = w::vstack();
@@ -32,7 +37,12 @@ TEST_CASE("layout_bridge: root fills the viewport", "[drishya][layout]") {
     CHECK(r.h == Catch::Approx(300.0f));
 }
 
-TEST_CASE("layout_bridge: vstack children stack vertically", "[drishya][layout]") {
+TEST_CASE (
+"layout_bridge: vstack children stack vertically"
+,
+"[drishya][layout]"
+)
+ {
     M m;
     App<M, P> app(m);
 
@@ -60,7 +70,12 @@ TEST_CASE("layout_bridge: vstack children stack vertically", "[drishya][layout]"
     CHECK(rb.y >= ra.y + ra.h - 0.001f);
 }
 
-TEST_CASE("layout_bridge: hit test finds the top node at a point", "[drishya][layout]") {
+TEST_CASE (
+"layout_bridge: hit test finds the top node at a point"
+,
+"[drishya][layout]"
+)
+ {
     M m;
     App<M, P> app(m);
     auto root_stack = w::vstack();

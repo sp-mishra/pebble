@@ -2,7 +2,12 @@
 #include "kalpana/kalpana.hpp"
 #include <vector>
 
-TEST_CASE("Kalpana: Multi-Stop Kubelka-Munk Spectral Gradient", "[kalpana][color][spectral]") {
+TEST_CASE (
+"Kalpana: Multi-Stop Kubelka-Munk Spectral Gradient"
+,
+"[kalpana][color][spectral]"
+)
+ {
     std::vector<std::pair<float, kalpana::Color>> stops = {
         {0.0f, kalpana::colors::blue()},
         {0.5f, kalpana::colors::yellow()},
@@ -22,7 +27,12 @@ TEST_CASE("Kalpana: Multi-Stop Kubelka-Munk Spectral Gradient", "[kalpana][color
     REQUIRE(c_end.r > 0.8f);
 }
 
-TEST_CASE("Kalpana: SpectralGradient SmallVector multi-stop", "[kalpana][color][spectral][smallvector]") {
+TEST_CASE (
+"Kalpana: SpectralGradient SmallVector multi-stop"
+,
+"[kalpana][color][spectral][smallvector]"
+)
+ {
     kalpana::spectral::SpectralGradient grad;
     (void)grad.stops.push_back({0.0f, kalpana::spectral::SpectralColor::from_color(kalpana::colors::blue())});
     (void)grad.stops.push_back({0.5f, kalpana::spectral::SpectralColor::from_color(kalpana::colors::yellow())});

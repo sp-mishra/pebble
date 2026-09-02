@@ -15,7 +15,12 @@ using M = MonospaceMetrics;
 using P = DefaultPainter;
 using Tree = WidgetTree<M, P>;
 
-TEST_CASE("dynamic_tree: build parent/child structure", "[drishya][tree]") {
+TEST_CASE (
+"dynamic_tree: build parent/child structure"
+,
+"[drishya][tree]"
+)
+ {
     Tree t;
     const NodeId root = t.set_root(w::vstack(8));
     const NodeId a = t.add_child(root, w::label("A"));
@@ -30,7 +35,12 @@ TEST_CASE("dynamic_tree: build parent/child structure", "[drishya][tree]") {
     CHECK(t.next_sibling(b) == kInvalidNode);
 }
 
-TEST_CASE("dynamic_tree: pre-order walk visits every node", "[drishya][tree]") {
+TEST_CASE (
+"dynamic_tree: pre-order walk visits every node"
+,
+"[drishya][tree]"
+)
+ {
     Tree t;
     const NodeId root = t.set_root(w::vstack());
     const NodeId a = t.add_child(root, w::hstack());
@@ -43,7 +53,12 @@ TEST_CASE("dynamic_tree: pre-order walk visits every node", "[drishya][tree]") {
     CHECK(order.front() == root); // root first in pre-order
 }
 
-TEST_CASE("dynamic_tree: stable handles resolve across inserts", "[drishya][tree]") {
+TEST_CASE (
+"dynamic_tree: stable handles resolve across inserts"
+,
+"[drishya][tree]"
+)
+ {
     Tree t;
     const NodeId root = t.set_root(w::vstack());
     const NodeId a = t.add_child(root, w::label("A"));
@@ -57,7 +72,12 @@ TEST_CASE("dynamic_tree: stable handles resolve across inserts", "[drishya][tree
     CHECK(t.resolve(h) == a);
 }
 
-TEST_CASE("dynamic_tree: remove unlinks a subtree", "[drishya][tree]") {
+TEST_CASE (
+"dynamic_tree: remove unlinks a subtree"
+,
+"[drishya][tree]"
+)
+ {
     Tree t;
     const NodeId root = t.set_root(w::vstack());
     const NodeId a = t.add_child(root, w::hstack());
@@ -70,7 +90,12 @@ TEST_CASE("dynamic_tree: remove unlinks a subtree", "[drishya][tree]") {
     CHECK(t.first_child(root) == b); // b is now the only child
 }
 
-TEST_CASE("dynamic_tree: dirty set merges and drains", "[drishya][tree]") {
+TEST_CASE (
+"dynamic_tree: dirty set merges and drains"
+,
+"[drishya][tree]"
+)
+ {
     Tree t;
     const NodeId root = t.set_root(w::vstack());
     const NodeId a = t.add_child(root, w::label("A"));
@@ -88,7 +113,12 @@ TEST_CASE("dynamic_tree: dirty set merges and drains", "[drishya][tree]") {
     CHECK_FALSE(t.any_dirty()); // drained
 }
 
-TEST_CASE("dynamic_tree: clear resets everything", "[drishya][tree]") {
+TEST_CASE (
+"dynamic_tree: clear resets everything"
+,
+"[drishya][tree]"
+)
+ {
     Tree t;
     const NodeId root = t.set_root(w::vstack());
     t.add_child(root, w::label("A"));

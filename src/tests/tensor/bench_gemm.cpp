@@ -12,18 +12,18 @@
 
 using namespace ts;
 
-template<typename TP>
+template <typename TP>
 static double elapsed_ms(TP start, TP end) {
     return std::chrono::duration<double, std::milli>(end - start).count();
 }
 
 // Returns GFLOP/s for M×K × K×N gemm
 static double measure_gemm_gflops(std::size_t M, std::size_t K, std::size_t N,
-                                   int reps = 5) {
-    DynamicTensor<float> A(TensorShape{M,K}), B(TensorShape{K,N}), C(TensorShape{M,N});
-    for (std::size_t i=0;i<M*K;++i) A.data()[i]=float(i%17+1)/17.f;
-    for (std::size_t i=0;i<K*N;++i) B.data()[i]=float(i%13+1)/13.f;
-    std::fill(C.data(), C.data()+M*N, 0.f);
+                                  int reps = 5) {
+    DynamicTensor<float> A(TensorShape{M, K}), B(TensorShape{K, N}), C(TensorShape{M, N});
+    for (std::size_t i = 0; i < M * K; ++i) A.data()[i] = float(i % 17 + 1) / 17.f;
+    for (std::size_t i = 0; i < K * N; ++i) B.data()[i] = float(i % 13 + 1) / 13.f;
+    std::fill(C.data(), C.data() + M * N, 0.f);
 
     // warm-up
     DefaultComputationPolicy::gemm<float>(1.f, A, B, 0.f, C);
@@ -38,7 +38,12 @@ static double measure_gemm_gflops(std::size_t M, std::size_t K, std::size_t N,
     return (flops / 1e9) / (ms / 1000.0);
 }
 
-TEST_CASE("bench_gemm: 128×128×128 throughput ≥ threshold", "[bench][gemm][perf]") {
+TEST_CASE (
+"bench_gemm: 128×128×128 throughput ≥ threshold"
+,
+"[bench][gemm][perf]"
+)
+ {
     constexpr std::size_t N = 128;
     double gflops = measure_gemm_gflops(N, N, N, 10);
     INFO("GEMM " << N << "×" << N << "×" << N << " = " << gflops << " GFLOP/s");
@@ -47,20 +52,35 @@ TEST_CASE("bench_gemm: 128×128×128 throughput ≥ threshold", "[bench][gemm][p
     CHECK(gflops > 0.5);
 }
 
-TEST_CASE("bench_gemm: 256×256×256 throughput measured", "[bench][gemm][perf]") {
+TEST_CASE (
+"bench_gemm: 256×256×256 throughput measured"
+,
+"[bench][gemm][perf]"
+)
+ {
     constexpr std::size_t N = 256;
     double gflops = measure_gemm_gflops(N, N, N, 5);
     INFO("GEMM " << N << "×" << N << "×" << N << " = " << gflops << " GFLOP/s");
     CHECK(gflops > 0.5);
 }
 
-TEST_CASE("bench_gemm: non-square 512×32×512 (typical attention)", "[bench][gemm][perf]") {
+TEST_CASE (
+"bench_gemm: non-square 512×32×512 (typical attention)"
+,
+"[bench][gemm][perf]"
+)
+ {
     double gflops = measure_gemm_gflops(512, 32, 512, 5);
     INFO("GEMM 512×32×512 = " << gflops << " GFLOP/s");
     CHECK(gflops > 0.1);
 }
 
-TEST_CASE("bench_gemm: axpy throughput", "[bench][blas][axpy][perf]") {
+TEST_CASE (
+"bench_gemm: axpy throughput"
+,
+"[bench][blas][axpy][perf]"
+)
+ {
     constexpr std::size_t N = 1 << 20;
     DynamicTensor<float> x(TensorShape{N}), y(TensorShape{N});
     for (std::size_t i=0;i<N;++i) { x.data()[i]=float(i%11+1); y.data()[i]=float(i%7+1); }

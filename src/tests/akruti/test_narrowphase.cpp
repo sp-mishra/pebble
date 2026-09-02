@@ -3,7 +3,12 @@
 #include "akruti/narrowphase.hpp"
 #include <cmath>
 
-TEST_CASE("Akruti: Capsule vs Capsule 2-Point Contact Manifold", "[akruti][narrowphase]") {
+TEST_CASE (
+"Akruti: Capsule vs Capsule 2-Point Contact Manifold"
+,
+"[akruti][narrowphase]"
+)
+ {
     // Two horizontal parallel capsules stacked vertically
     akruti::Capsule cap_a{
         .a = {-5.0f, 0.0f},
@@ -24,7 +29,12 @@ TEST_CASE("Akruti: Capsule vs Capsule 2-Point Contact Manifold", "[akruti][narro
     REQUIRE(m.points.size() == 2);
 }
 
-TEST_CASE("Akruti: Capsule vs OBB Manifold", "[akruti][narrowphase]") {
+TEST_CASE (
+"Akruti: Capsule vs OBB Manifold"
+,
+"[akruti][narrowphase]"
+)
+ {
     akruti::Capsule cap{
         .a = {-2.0f, 1.8f},
         .b = {2.0f, 1.8f},
@@ -39,7 +49,12 @@ TEST_CASE("Akruti: Capsule vs OBB Manifold", "[akruti][narrowphase]") {
     REQUIRE(m.points.size() >= 1);
 }
 
-TEST_CASE("Akruti: Direct Static Narrowphase Matrix & Warm-Started SimplexCache", "[akruti][narrowphase][matrix]") {
+TEST_CASE (
+"Akruti: Direct Static Narrowphase Matrix & Warm-Started SimplexCache"
+,
+"[akruti][narrowphase][matrix]"
+)
+ {
     akruti::Circle circle{{0.0f, 0.0f}, 1.0f};
     akruti::Box box{{0.0f, 1.5f}, {1.0f, 1.0f}};
 

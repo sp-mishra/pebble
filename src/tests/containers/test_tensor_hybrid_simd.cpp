@@ -6,7 +6,12 @@
 
 using namespace ts;
 
-TEST_CASE("Hybrid SIMD + Pravaha: Basic Arithmetic Operations", "[tensor][hybrid][arithmetic]") {
+TEST_CASE (
+"Hybrid SIMD + Pravaha: Basic Arithmetic Operations"
+,
+"[tensor][hybrid][arithmetic]"
+)
+ {
     SECTION("Small Tensor Fast-Path (N < 2048)") {
         hybrid_tensor<float> A({2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
         hybrid_tensor<float> B({2, 4}, {2.0f, 1.0f, 0.5f, 3.0f, 1.0f, 2.0f, 0.5f, 1.0f});
@@ -48,7 +53,12 @@ TEST_CASE("Hybrid SIMD + Pravaha: Basic Arithmetic Operations", "[tensor][hybrid
     }
 }
 
-TEST_CASE("Hybrid SIMD + Pravaha: Unary Operations & Reductions", "[tensor][hybrid][reductions]") {
+TEST_CASE (
+"Hybrid SIMD + Pravaha: Unary Operations & Reductions"
+,
+"[tensor][hybrid][reductions]"
+)
+ {
     SECTION("Unary Sqrt, Abs, Square & Clip") {
         hybrid_tensor<float> A({4}, {4.0f, 9.0f, 16.0f, 25.0f});
         auto sq = ts::sqrt(A);
@@ -84,7 +94,12 @@ TEST_CASE("Hybrid SIMD + Pravaha: Unary Operations & Reductions", "[tensor][hybr
     }
 }
 
-TEST_CASE("Hybrid SIMD + Pravaha: Blocked Parallel Matrix Multiplication", "[tensor][hybrid][dot]") {
+TEST_CASE (
+"Hybrid SIMD + Pravaha: Blocked Parallel Matrix Multiplication"
+,
+"[tensor][hybrid][dot]"
+)
+ {
     constexpr size_t M = 128;
     constexpr size_t K = 64;
     constexpr size_t N = 128;

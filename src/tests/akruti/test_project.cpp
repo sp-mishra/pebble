@@ -7,7 +7,12 @@
 // Feasible point → unchanged; infeasible point → on boundary & feasible.
 // ===========================================================================
 
-TEST_CASE("Akruti: project leaves an interior point unchanged", "[akruti][project]") {
+TEST_CASE (
+"Akruti: project leaves an interior point unchanged"
+,
+"[akruti][project]"
+)
+ {
     akruti::Circle c{ .center = {0.0f, 0.0f}, .radius = 2.0f };
     akruti::Vec2<akruti::Scalar> p{0.5f, -0.3f};       // inside (‖p‖≈0.58 < 2)
     auto q = akruti::project(c, p);
@@ -16,7 +21,12 @@ TEST_CASE("Akruti: project leaves an interior point unchanged", "[akruti][projec
     CHECK(c.sdf(q) <= Catch::Approx(0.0f).margin(1e-4f));   // feasible
 }
 
-TEST_CASE("Akruti: project maps an outside point onto the boundary", "[akruti][project]") {
+TEST_CASE (
+"Akruti: project maps an outside point onto the boundary"
+,
+"[akruti][project]"
+)
+ {
     akruti::Circle c{ .center = {0.0f, 0.0f}, .radius = 2.0f };
     akruti::Vec2<akruti::Scalar> p{5.0f, 0.0f};        // outside (‖p‖=5 > 2)
     auto q = akruti::project(c, p);
@@ -26,7 +36,12 @@ TEST_CASE("Akruti: project maps an outside point onto the boundary", "[akruti][p
     CHECK(q.x > 0.0f);                                  // same side as p
 }
 
-TEST_CASE("Akruti: project onto a box clamps outside points", "[akruti][project]") {
+TEST_CASE (
+"Akruti: project onto a box clamps outside points"
+,
+"[akruti][project]"
+)
+ {
     akruti::Box b{ .center = {0.0f, 0.0f}, .half = {1.0f, 1.0f} };
     akruti::Vec2<akruti::Scalar> inside{0.2f, 0.9f};
     auto qi = akruti::project(b, inside);

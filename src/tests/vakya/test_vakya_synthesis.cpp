@@ -47,12 +47,22 @@ using namespace vakya::types;
 // 1-2. widened analysis_record
 // ============================================================================
 
-TEST_CASE("opt record: trivially copyable", "[opt][record]") {
+TEST_CASE (
+"opt record: trivially copyable"
+,
+"[opt][record]"
+)
+ {
     static_assert(std::is_trivially_copyable_v<analysis_record>);
     CHECK(std::is_trivially_copyable_v<analysis_record>);
 }
 
-TEST_CASE("opt record: zero defaults", "[opt][record]") {
+TEST_CASE (
+"opt record: zero defaults"
+,
+"[opt][record]"
+)
+ {
     analysis_record rec;
     CHECK(rec.region.is_null());
     CHECK(rec.effect_row.is_null());
@@ -69,25 +79,45 @@ TEST_CASE("opt record: zero defaults", "[opt][record]") {
 // 3-6. cost lattice
 // ============================================================================
 
-TEST_CASE("opt cost: join max monoid", "[opt][cost]") {
+TEST_CASE (
+"opt cost: join max monoid"
+,
+"[opt][cost]"
+)
+ {
     CHECK(cost_join(cost_class::tiny, cost_class::heavy) == cost_class::heavy);
     CHECK(cost_join(cost_class::unknown, cost_class::small) == cost_class::small);
     CHECK(cost_join(cost_class::moderate, cost_class::unknown) == cost_class::moderate);
     CHECK(cost_join(cost_class::small, cost_class::small) == cost_class::small);
 }
 
-TEST_CASE("opt cost: synthesize bands", "[opt][cost]") {
+TEST_CASE (
+"opt cost: synthesize bands"
+,
+"[opt][cost]"
+)
+ {
     CHECK(synthesize_cost(4u) == cost_class::tiny);
     CHECK(synthesize_cost(64u) == cost_class::small);
     CHECK(synthesize_cost(1024u) == cost_class::moderate);
     CHECK(synthesize_cost(1u << 20) == cost_class::heavy);
 }
 
-TEST_CASE("opt cost: zero work unknown", "[opt][cost]") {
+TEST_CASE (
+"opt cost: zero work unknown"
+,
+"[opt][cost]"
+)
+ {
     CHECK(synthesize_cost(0u) == cost_class::unknown);
 }
 
-TEST_CASE("opt cost: shape product band", "[opt][cost]") {
+TEST_CASE (
+"opt cost: shape product band"
+,
+"[opt][cost]"
+)
+ {
     type_arena arena;
     // Build a shape<4,4> where dims carry literal extents in payload_hash.
     type_node d;
@@ -105,31 +135,56 @@ TEST_CASE("opt cost: shape product band", "[opt][cost]") {
 // 7-11. execution affinity
 // ============================================================================
 
-TEST_CASE("opt affinity: pure", "[opt][affinity]") {
+TEST_CASE (
+"opt affinity: pure"
+,
+"[opt][affinity]"
+)
+ {
     analysis_record rec; // no effects, null rw
     CHECK(synthesize_affinity(rec) == execution_affinity::pure);
 }
 
-TEST_CASE("opt affinity: io_bound", "[opt][affinity]") {
+TEST_CASE (
+"opt affinity: io_bound"
+,
+"[opt][affinity]"
+)
+ {
     analysis_record rec;
     rec.effects = kEffectMaskIO;
     CHECK(synthesize_affinity(rec) == execution_affinity::io_bound);
 }
 
-TEST_CASE("opt affinity: sequential on exception", "[opt][affinity]") {
+TEST_CASE (
+"opt affinity: sequential on exception"
+,
+"[opt][affinity]"
+)
+ {
     analysis_record rec;
     rec.effects = kEffectMaskException;
     CHECK(synthesize_affinity(rec) == execution_affinity::sequential);
 }
 
-TEST_CASE("opt affinity: cpu_bound heavy pure", "[opt][affinity]") {
+TEST_CASE (
+"opt affinity: cpu_bound heavy pure"
+,
+"[opt][affinity]"
+)
+ {
     analysis_record rec;
     rec.effects = 0;
     rec.cost = cost_class::heavy;
     CHECK(synthesize_affinity(rec) == execution_affinity::cpu_bound);
 }
 
-TEST_CASE("opt affinity: reads effect row", "[opt][affinity]") {
+TEST_CASE (
+"opt affinity: reads effect row"
+,
+"[opt][affinity]"
+)
+ {
     effect_row_arena rows;
     const effect_row_var tail = rows.fresh_tail();
     const effect_row_ref open = rows.intern_open_row(0, tail); // polymorphic tail
@@ -149,24 +204,40 @@ namespace {
     struct never_same {
         bool operator()(std::uint64_t, std::uint64_t) const noexcept { return false; }
     };
+
     struct always_same {
         bool operator()(std::uint64_t, std::uint64_t) const noexcept { return true; }
     };
 } // namespace
 
-TEST_CASE("opt cert: proven on identical hash", "[opt][cert]") {
+TEST_CASE (
+"opt cert: proven on identical hash"
+,
+"[opt][cert]"
+)
+ {
     egraph_equivalence_checker<never_same> checker{never_same{}};
     const rewrite_certificate cert = certify_rewrite(0x99, 0x99, 0, checker);
     CHECK(cert.status == proof_status::proven); // identical → proven
 }
 
-TEST_CASE("opt cert: deferred when not same class", "[opt][cert]") {
+TEST_CASE (
+"opt cert: deferred when not same class"
+,
+"[opt][cert]"
+)
+ {
     egraph_equivalence_checker<never_same> checker{never_same{}};
     const rewrite_certificate cert = certify_rewrite(0x1, 0x2, 0, checker);
     CHECK(cert.status == proof_status::deferred);
 }
 
-TEST_CASE("opt cert: arena round-trip", "[opt][cert]") {
+TEST_CASE (
+"opt cert: arena round-trip"
+,
+"[opt][cert]"
+)
+ {
     certificate_arena arena;
     rewrite_certificate cert;
     cert.lhs_hash = 0xAA;
@@ -184,7 +255,12 @@ TEST_CASE("opt cert: arena round-trip", "[opt][cert]") {
 // 15-18. verified_rewrite_engine
 // ============================================================================
 
-TEST_CASE("opt engine: proven applies", "[opt][cert]") {
+TEST_CASE (
+"opt engine: proven applies"
+,
+"[opt][cert]"
+)
+ {
     certificate_arena arena;
     verified_rewrite_engine engine(arena, rewrite_policy::proven_only);
     egraph_equivalence_checker<always_same> checker{always_same{}};
@@ -197,7 +273,12 @@ TEST_CASE("opt engine: proven applies", "[opt][cert]") {
     CHECK(d.status == proof_status::proven);
 }
 
-TEST_CASE("opt engine: deferred blocked under proven_only", "[opt][cert]") {
+TEST_CASE (
+"opt engine: deferred blocked under proven_only"
+,
+"[opt][cert]"
+)
+ {
     certificate_arena arena;
     verified_rewrite_engine engine(arena, rewrite_policy::proven_only);
     egraph_equivalence_checker<never_same> checker{never_same{}};
@@ -212,7 +293,12 @@ TEST_CASE("opt engine: deferred blocked under proven_only", "[opt][cert]") {
     REQUIRE(arena.get(d.cert) != nullptr);
 }
 
-TEST_CASE("opt engine: deferred applies under allow_deferred", "[opt][cert]") {
+TEST_CASE (
+"opt engine: deferred applies under allow_deferred"
+,
+"[opt][cert]"
+)
+ {
     certificate_arena arena;
     verified_rewrite_engine engine(arena, rewrite_policy::allow_deferred);
     egraph_equivalence_checker<never_same> checker{never_same{}};
@@ -224,7 +310,12 @@ TEST_CASE("opt engine: deferred applies under allow_deferred", "[opt][cert]") {
     CHECK(d.status == proof_status::deferred);
 }
 
-TEST_CASE("opt engine: refuted never applies", "[opt][cert]") {
+TEST_CASE (
+"opt engine: refuted never applies"
+,
+"[opt][cert]"
+)
+ {
     certificate_arena arena;
     verified_rewrite_engine engine(arena, rewrite_policy::allow_deferred);
 

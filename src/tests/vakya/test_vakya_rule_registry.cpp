@@ -30,6 +30,7 @@ using namespace vakya;
 TEST_CASE (
 
 
+
 "rule_registry: category to_string"
 ,
 "[vakya][rule_registry]"
@@ -45,6 +46,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "rule_registry: rule_pack apply_first fires wrapped set"
@@ -67,6 +69,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "rule_registry: register_pack + find"
@@ -92,6 +95,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "rule_registry: by_category filters"
 ,
 "[vakya][rule_registry]"
@@ -111,6 +115,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "rule_registry: discover lists entries"
 ,
 "[vakya][rule_registry]"
@@ -128,6 +133,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "rule_registry: apply by name drives registered pack"
@@ -150,6 +156,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "rule_registry: selective load registers only chosen packs"

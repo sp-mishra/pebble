@@ -5,7 +5,12 @@
 #include <string>
 #include <vector>
 
-TEST_CASE("Anukrama: snapshots retain the version visible at acquisition", "[anukrama][mvcc][snapshot]") {
+TEST_CASE (
+"Anukrama: snapshots retain the version visible at acquisition"
+,
+"[anukrama][mvcc][snapshot]"
+)
+ {
     anukrama::store<std::string, std::string> values;
     REQUIRE(values.begin().put("theme", "light").commit().has_value());
     auto stable = values.snapshot_at_current();
@@ -14,7 +19,12 @@ TEST_CASE("Anukrama: snapshots retain the version visible at acquisition", "[anu
     CHECK(values.get("theme") == "dark");
 }
 
-TEST_CASE("Anukrama: concurrent same-key writers conflict", "[anukrama][mvcc][conflict]") {
+TEST_CASE (
+"Anukrama: concurrent same-key writers conflict"
+,
+"[anukrama][mvcc][conflict]"
+)
+ {
     anukrama::store<std::string, int> values;
     REQUIRE(values.begin().put("counter", 1).commit().has_value());
     auto first = values.begin();
@@ -26,7 +36,12 @@ TEST_CASE("Anukrama: concurrent same-key writers conflict", "[anukrama][mvcc][co
     CHECK(values.get("counter") == 2);
 }
 
-TEST_CASE("Anukrama: tombstones retain historical visibility while a snapshot is live", "[anukrama][mvcc][tombstone]") {
+TEST_CASE (
+"Anukrama: tombstones retain historical visibility while a snapshot is live"
+,
+"[anukrama][mvcc][tombstone]"
+)
+ {
     anukrama::store<std::string, int> values;
     REQUIRE(values.begin().put("answer", 42).commit().has_value());
     auto before_delete = values.snapshot_at_current();
@@ -37,7 +52,12 @@ TEST_CASE("Anukrama: tombstones retain historical visibility while a snapshot is
     CHECK(before_delete.get("answer") == 42);
 }
 
-TEST_CASE("Anukrama: point-read validation is an opt-in policy", "[anukrama][mvcc][policy]") {
+TEST_CASE (
+"Anukrama: point-read validation is an opt-in policy"
+,
+"[anukrama][mvcc][policy]"
+)
+ {
     using strict_store = anukrama::store<std::string, int, std::less<>,
                                          anukrama::skip_list_index,
                                          anukrama::atomic_clock,
@@ -51,7 +71,12 @@ TEST_CASE("Anukrama: point-read validation is an opt-in policy", "[anukrama][mvc
     CHECK_FALSE(reader.commit().has_value());
 }
 
-TEST_CASE("Anukrama: a transaction has one terminal commit", "[anukrama][mvcc][transaction]") {
+TEST_CASE (
+"Anukrama: a transaction has one terminal commit"
+,
+"[anukrama][mvcc][transaction]"
+)
+ {
     anukrama::store<std::string, int> values;
     auto tx = values.begin();
     tx.put("once", 1);
@@ -61,7 +86,12 @@ TEST_CASE("Anukrama: a transaction has one terminal commit", "[anukrama][mvcc][t
     CHECK(second_commit.error() == anukrama::error::transaction_finished);
 }
 
-TEST_CASE("Anukrama: externally ordered durable commits and snapshot scans", "[anukrama][mvcc][durable][scan]") {
+TEST_CASE (
+"Anukrama: externally ordered durable commits and snapshot scans"
+,
+"[anukrama][mvcc][durable][scan]"
+)
+ {
     anukrama::store<std::string, int> values;
     std::vector<anukrama::store<std::string, int>::write> first{{"a", 1}, {"b", 2}};
     REQUIRE(values.apply_at(first, 100).has_value());
@@ -77,7 +107,12 @@ TEST_CASE("Anukrama: externally ordered durable commits and snapshot scans", "[a
     CHECK_FALSE(values.apply_at(second, 100).has_value());
 }
 
-TEST_CASE("Anukrama: coordinator validation and publication share one critical section", "[anukrama][mvcc][coordinator]") {
+TEST_CASE (
+"Anukrama: coordinator validation and publication share one critical section"
+,
+"[anukrama][mvcc][coordinator]"
+)
+ {
     anukrama::store<std::string, int> values;
     REQUIRE(values.begin().put("source", 1).commit().has_value());
     const auto observed = values.version_of("source");
@@ -98,7 +133,12 @@ TEST_CASE("Anukrama: coordinator validation and publication share one critical s
 #include <atomic>
 #include <thread>
 
-TEST_CASE("anukrama: smriti_node_pool version parity", "[anukrama][policy][smriti]") {
+TEST_CASE (
+"anukrama: smriti_node_pool version parity"
+,
+"[anukrama][policy][smriti]"
+)
+ {
     using arena_store = anukrama::store<std::string, std::string, std::less<>,
                                         anukrama::skip_list_index,
                                         anukrama::atomic_clock,
@@ -136,7 +176,12 @@ TEST_CASE("anukrama: smriti_node_pool version parity", "[anukrama][policy][smrit
 // Current striped_lock contract: correctness-first locking for commit/publish paths.
 // Disjoint-key parallel commit is intentionally conservative until the backing index
 // supports concurrent structural mutation without global commit serialization.
-TEST_CASE("anukrama: striped_lock disjoint-key concurrency", "[anukrama][concurrency]") {
+TEST_CASE (
+"anukrama: striped_lock disjoint-key concurrency"
+,
+"[anukrama][concurrency]"
+)
+ {
     using striped_store = anukrama::store<int, int, std::less<>,
                                           anukrama::skip_list_index,
                                           anukrama::atomic_clock,
@@ -169,7 +214,12 @@ TEST_CASE("anukrama: striped_lock disjoint-key concurrency", "[anukrama][concurr
     CHECK(values.get(100) == 2);
 }
 
-TEST_CASE("anukrama: prune retains min-active-visible version", "[anukrama][prune]") {
+TEST_CASE (
+"anukrama: prune retains min-active-visible version"
+,
+"[anukrama][prune]"
+)
+ {
     anukrama::store<std::string, int> values;
     REQUIRE(values.begin().put("k", 1).commit().has_value());
 

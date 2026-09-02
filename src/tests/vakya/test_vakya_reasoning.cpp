@@ -89,6 +89,7 @@ namespace {
 
 TEST_CASE (
 
+
 "descriptor_registry: register and find by id"
 ,
 "[reasoning][registry]"
@@ -115,6 +116,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "descriptor_registry: find_by_name"
 ,
 "[reasoning][registry]"
@@ -140,6 +142,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "descriptor_registry: by_category"
 ,
@@ -168,6 +171,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "descriptor_registry: duplicate stable_id overwrites"
 ,
@@ -202,6 +206,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "type_registry: make_builtin_type_registry discovers primitives"
 ,
 "[reasoning][type_registry]"
@@ -228,6 +233,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "capability_registry: 5 builtin capabilities"
 ,
 "[reasoning][capability]"
@@ -248,6 +254,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "capability_mask: has_capability / add_capability"
 ,
 "[reasoning][capability]"
@@ -266,6 +273,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "effect_registry: 5 builtin effects"
 ,
@@ -286,6 +294,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "effect_mask: has_effect / add_effect"
 ,
 "[reasoning][effect]"
@@ -304,6 +313,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "constraint_registry: same_type routes to unify"
 ,
@@ -325,6 +335,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "constraint_registry: equivalent routes to egraph"
 ,
 "[reasoning][constraint_registry]"
@@ -343,6 +354,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "solve_batch: routes constraints and returns solved status"
 ,
@@ -383,6 +395,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "analysis_store: update and find"
 ,
 "[reasoning][analysis_store]"
@@ -410,6 +423,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "analysis_store: update_for expr-keyed"
 ,
 "[reasoning][analysis_store]"
@@ -435,6 +449,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "analysis_store: discover_impl iterates"
 ,
 "[reasoning][analysis_store]"
@@ -458,6 +473,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "shape: intern_shape and shape_rank"
 ,
@@ -483,6 +499,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "shape: make_matmul_constraints inner dim constraint"
 ,
@@ -518,6 +535,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "type_rewrite_engine: Optional idempotence"
 ,
 "[reasoning][type_rewrite]"
@@ -551,6 +569,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "type_rewrite_engine: normalize is idempotent"
 ,
 "[reasoning][type_rewrite]"
@@ -573,6 +592,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "typed_pattern: typed<> combinator basic"
 ,
@@ -612,6 +632,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "typed_pattern: trait<> combinator"
 ,
 "[reasoning][typed_pattern]"
@@ -644,6 +665,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "verify: no_smt_backend returns deferred"
 ,
 "[reasoning][verify]"
@@ -668,6 +690,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "verify: all_proven false for deferred report"
 ,
 "[reasoning][verify]"
@@ -691,6 +714,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "query: effect_pred filters correctly"
 ,
@@ -722,6 +746,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "query: capability_pred filters correctly"
 ,
 "[reasoning][query]"
@@ -746,6 +771,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "query: proven_pred filters correctly"
 ,
@@ -772,6 +798,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "query: composed predicates filter correctly"
 ,
@@ -809,6 +836,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "analyze: inferred type stored in analysis_store"
 ,

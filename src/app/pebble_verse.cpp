@@ -68,12 +68,12 @@ static constexpr float FH = static_cast<float>(H);
 static constexpr float DT = 1.0f / 60.0f;
 
 // Tunable Cosmic Parameters
-static constexpr float GRAVITATIONAL_G   = 18000.0f; // Vigorous mutual N-body attraction
-static constexpr float PLUMMER_SOFTENING = 3.5f;     // Tight softening allows strong close-range pull
-static constexpr float MAX_GRAV_FORCE    = 35000.0f; // Maximum acceleration clamp
-static constexpr float MAX_SPEED_CAP     = 95.0f;    // Maximum dynamic orbital speed (px/s)
-static constexpr float SIM_SPEED_FACTOR  = 0.85f;    // Dynamic observable physical time scaling
-static constexpr int   INITIAL_DUST_COUNT = 650;     // Number of in-situ dust particles
+static constexpr float GRAVITATIONAL_G = 18000.0f; // Vigorous mutual N-body attraction
+static constexpr float PLUMMER_SOFTENING = 3.5f; // Tight softening allows strong close-range pull
+static constexpr float MAX_GRAV_FORCE = 35000.0f; // Maximum acceleration clamp
+static constexpr float MAX_SPEED_CAP = 95.0f; // Maximum dynamic orbital speed (px/s)
+static constexpr float SIM_SPEED_FACTOR = 0.85f; // Dynamic observable physical time scaling
+static constexpr int INITIAL_DUST_COUNT = 650; // Number of in-situ dust particles
 
 static auto VS_METAL =
     "#include <metal_stdlib>\nusing namespace metal;\n"
@@ -102,100 +102,100 @@ enum class CelestialType : std::uint8_t {
 
 struct PlanetBody {
     pebble::ecs::Entity ent{};
-    pebble::math::vec2  pos{0.0f, 0.0f};
-    pebble::math::vec2  prev_pos{0.0f, 0.0f};
-    pebble::math::vec2  vel{0.0f, 0.0f};
-    pebble::math::vec2  acc{0.0f, 0.0f};
-    float               angle = 0.0f;       // Rotation angle (radians)
-    float               omega = 0.0f;       // Angular velocity / spin (rad/s)
-    float               angular_momentum = 0.0f; // L = I * omega
-    float               mass = 100.0f;
-    float               density = 2800.0f; // kg/m^3
-    float               radius = 2.5f;     // Primary spec/circle radius (pixels)
-    float               temperature = 20.0f; // Celsius
+    pebble::math::vec2 pos{0.0f, 0.0f};
+    pebble::math::vec2 prev_pos{0.0f, 0.0f};
+    pebble::math::vec2 vel{0.0f, 0.0f};
+    pebble::math::vec2 acc{0.0f, 0.0f};
+    float angle = 0.0f; // Rotation angle (radians)
+    float omega = 0.0f; // Angular velocity / spin (rad/s)
+    float angular_momentum = 0.0f; // L = I * omega
+    float mass = 100.0f;
+    float density = 2800.0f; // kg/m^3
+    float radius = 2.5f; // Primary spec/circle radius (pixels)
+    float temperature = 20.0f; // Celsius
     prakriti::MaterialParams mat_params;
-    CelestialType       type = CelestialType::SilicateRock;
-    kalpana::Color      base_color{0.6f, 0.5f, 0.4f, 1.0f};
-    bool                alive = true;
-    bool                is_singularity = false;   // Collapsed black hole state
-    bool                is_neutron_star = false; // Dense pulsar state
-    bool                is_strange_star = false; // Deconfined Quark-Gluon Plasma state
-    float               atmosphere_mass = 0.0f;  // Volatile gaseous envelope
-    float               ocean_fraction = 0.0f;   // Liquid surface water coverage (0.0 to 1.0)
-    float               crust_solid = 1.0f;      // Solid lithosphere plate coverage
+    CelestialType type = CelestialType::SilicateRock;
+    kalpana::Color base_color{0.6f, 0.5f, 0.4f, 1.0f};
+    bool alive = true;
+    bool is_singularity = false; // Collapsed black hole state
+    bool is_neutron_star = false; // Dense pulsar state
+    bool is_strange_star = false; // Deconfined Quark-Gluon Plasma state
+    float atmosphere_mass = 0.0f; // Volatile gaseous envelope
+    float ocean_fraction = 0.0f; // Liquid surface water coverage (0.0 to 1.0)
+    float crust_solid = 1.0f; // Solid lithosphere plate coverage
 
     // Gradual Contact Binary / Dumbbell Coalescence
     // When 2 bodies merge, they start as a contact binary joined at their tips.
     // Over time (driven by angular momentum, viscosity & thermal ductility), they relax into a single circle.
-    bool                is_merging = false;
-    float               merge_progress = 1.0f; // 0.0 = initial contact dumbbell -> 1.0 = fully relaxed sphere
-    float               merge_duration = 2.5f; // Duration of gradual coalescence (seconds)
-    float               lobe2_radius = 0.0f;   // Secondary attached lobe radius
-    float               lobe2_mass = 0.0f;     // Secondary lobe mass (can break during violent impact!)
-    pebble::math::vec2  lobe2_offset{0.0f, 0.0f}; // Local displacement vector from center
+    bool is_merging = false;
+    float merge_progress = 1.0f; // 0.0 = initial contact dumbbell -> 1.0 = fully relaxed sphere
+    float merge_duration = 2.5f; // Duration of gradual coalescence (seconds)
+    float lobe2_radius = 0.0f; // Secondary attached lobe radius
+    float lobe2_mass = 0.0f; // Secondary lobe mass (can break during violent impact!)
+    pebble::math::vec2 lobe2_offset{0.0f, 0.0f}; // Local displacement vector from center
 
     // Accretion halo & orbital trail history ring buffer
     static constexpr int kMaxTrail = 8;
     pebble::math::vec2 trail_history[kMaxTrail]{};
-    int                trail_head = 0;
-    int                trail_count = 0;
-    float              trail_timer = 0.0f;
+    int trail_head = 0;
+    int trail_count = 0;
+    float trail_timer = 0.0f;
 };
 
 // Evaporated / boiled nebula gas cloud particle
 struct NebulaGasParticle {
     pebble::math::vec2 pos{0.0f, 0.0f};
     pebble::math::vec2 vel{0.0f, 0.0f};
-    float              radius = 1.0f;
-    float              life = 1.0f;
-    float              max_life = 1.0f;
-    kalpana::Color     color{0.3f, 0.8f, 1.0f, 0.4f};
+    float radius = 1.0f;
+    float life = 1.0f;
+    float max_life = 1.0f;
+    kalpana::Color color{0.3f, 0.8f, 1.0f, 0.4f};
 };
 
 // Fire / Spark explosion particle
 struct SparkParticle {
     pebble::math::vec2 pos{0.0f, 0.0f};
     pebble::math::vec2 vel{0.0f, 0.0f};
-    float              radius = 1.2f;
-    float              life = 0.4f;
-    float              max_life = 0.4f;
-    kalpana::Color     color{1.0f, 0.6f, 0.1f, 1.0f};
+    float radius = 1.2f;
+    float life = 0.4f;
+    float max_life = 0.4f;
+    kalpana::Color color{1.0f, 0.6f, 0.1f, 1.0f};
 };
 
 // Relativistic Polar Matter Jet Particle
 struct RelativisticJetParticle {
     pebble::math::vec2 pos{0.0f, 0.0f};
     pebble::math::vec2 vel{0.0f, 0.0f};
-    float              radius = 1.4f;
-    float              life = 0.5f;
-    float              max_life = 0.5f;
-    kalpana::Color     color{0.4f, 0.85f, 1.0f, 0.9f};
+    float radius = 1.4f;
+    float life = 0.5f;
+    float max_life = 0.5f;
+    kalpana::Color color{0.4f, 0.85f, 1.0f, 0.9f};
 };
 
 // Relativistic Gravitational Wave Space-time Ripple
 struct GravitationalWaveRipple {
     pebble::math::vec2 center{0.0f, 0.0f};
-    float              radius = 2.0f;
-    float              max_radius = 280.0f;
-    float              expansion_speed = 190.0f;
-    float              amplitude = 1.0f;
-    float              life = 1.0f;
-    float              max_life = 1.0f;
+    float radius = 2.0f;
+    float max_radius = 280.0f;
+    float expansion_speed = 190.0f;
+    float amplitude = 1.0f;
+    float life = 1.0f;
+    float max_life = 1.0f;
 };
 
 // Relativistic Accretion Disk Flare (ISCO Infall Burst)
 struct AccretionFlare {
     pebble::math::vec2 pos{0.0f, 0.0f};
-    float              radius = 2.0f;
-    float              life = 0.35f;
-    float              max_life = 0.35f;
-    kalpana::Color     color{1.0f, 0.95f, 0.5f, 1.0f};
+    float radius = 2.0f;
+    float life = 0.35f;
+    float max_life = 0.35f;
+    kalpana::Color color{1.0f, 0.95f, 0.5f, 1.0f};
 };
 
 enum class SpectralViewMode : std::uint8_t {
-    OpticalRGB,      // Natural true-color material and incandescence
+    OpticalRGB, // Natural true-color material and incandescence
     ThermalInfrared, // Temperature-dominant thermal gradient
-    RadioXRay        // High-energy magnetic & relativistic radiation (Pulsars & Singularities)
+    RadioXRay // High-energy magnetic & relativistic radiation (Pulsars & Singularities)
 };
 
 // Interactive slingshot launcher state
@@ -231,31 +231,32 @@ struct PebbleVerseApp {
         .max_force = MAX_GRAV_FORCE
     };
 
-    std::vector<PlanetBody>                     planets;
-    std::vector<SparkParticle>                  sparks;
-    std::vector<NebulaGasParticle>              nebulae;
-    std::vector<RelativisticJetParticle>        jets;
-    std::vector<GravitationalWaveRipple>        gw_ripples;
-    std::vector<AccretionFlare>                 flares;
+    std::vector<PlanetBody> planets;
+    std::vector<SparkParticle> sparks;
+    std::vector<NebulaGasParticle> nebulae;
+    std::vector<RelativisticJetParticle> jets;
+    std::vector<GravitationalWaveRipple> gw_ripples;
+    std::vector<AccretionFlare> flares;
     std::vector<prakriti::celestial::SedovTaylorBlast> snr_blasts;
-    std::vector<prakriti::celestial::MHDFluxTube>      mhd_tubes;
-    pebble::spandana::ScreenShake2D             camera_shake;
-    SlingshotLauncher                           slingshot;
+    std::vector<prakriti::celestial::MHDFluxTube> mhd_tubes;
+    pebble::spandana::ScreenShake2D camera_shake;
+    SlingshotLauncher slingshot;
 
     // Initial Simulation Startup Config Modal State
     bool in_startup_modal = true; // Displays startup config screen until ENTER is pressed
-    int  config_selected_row = 0; // 0=Dust Count, 1=Gravitational G, 2=Initial Distribution, 3=Barnes-Hut Theta, 4=Show Overlays
-    int  config_initial_dust_count = 650; // Range: 150 to 1500
-    float config_grav_g = 18000.0f;       // Range: 5000 to 45000
-    int  config_dist_mode = 0;            // 0=Uniform Cosmic Field, 1=Barycentric Cluster, 2=Dual Infall Cloud
-    float config_bh_theta = 0.5f;         // 0.3 to 0.8
+    int config_selected_row = 0;
+    // 0=Dust Count, 1=Gravitational G, 2=Initial Distribution, 3=Barnes-Hut Theta, 4=Show Overlays
+    int config_initial_dust_count = 650; // Range: 150 to 1500
+    float config_grav_g = 18000.0f; // Range: 5000 to 45000
+    int config_dist_mode = 0; // 0=Uniform Cosmic Field, 1=Barycentric Cluster, 2=Dual Infall Cloud
+    float config_bh_theta = 0.5f; // 0.3 to 0.8
     bool show_analytics_overlays = false; // Background auxiliary overlays toggle (Grid, H-R, Jacobi, MHD)
 
     // Multi-Tier Sector Streaming & Out-of-Core Caching
     prakriti::celestial::SectorCacheManager sector_manager{128};
-    prakriti::celestial::SectorKey          current_sector{0, 0};
-    std::unordered_set<std::uint64_t>       visited_sectors;
-    std::uint64_t                           cosmic_seed = 13371337ULL;
+    prakriti::celestial::SectorKey current_sector{0, 0};
+    std::unordered_set<std::uint64_t> visited_sectors;
+    std::uint64_t cosmic_seed = 13371337ULL;
 
     // Multi-Spectral View & Cosmic Nucleosynthesis
     SpectralViewMode view_mode = SpectralViewMode::OpticalRGB;
@@ -264,10 +265,10 @@ struct PebbleVerseApp {
 
     // Spawner & External Inflow Parameters
     float spawn_timer = 0.0f;
-    float spawn_interval = 0.22f;      // Smooth periodic entry
-    float inflow_timer = 0.0f;         // External galaxy/star/comet inflow timer
-    float inflow_interval = 4.5f;      // Next cosmic entity ingress (seconds)
-    std::size_t inflow_count = 0;      // Total external entities arrived
+    float spawn_interval = 0.22f; // Smooth periodic entry
+    float inflow_timer = 0.0f; // External galaxy/star/comet inflow timer
+    float inflow_interval = 4.5f; // Next cosmic entity ingress (seconds)
+    std::size_t inflow_count = 0; // Total external entities arrived
     std::mt19937 rng{1337};
 
     // Telemetry & Metrics
@@ -281,13 +282,13 @@ struct PebbleVerseApp {
     std::size_t gas_particles_count = 0;
 
     // Dynamic Lagrangian Tracking & Open-World Camera
-    int                tracked_planet_index = -1; // -1 = Free / Manual, >=0 = Target Body Index
+    int tracked_planet_index = -1; // -1 = Free / Manual, >=0 = Target Body Index
     pebble::math::vec2 camera_pos{FW * 0.5f, FH * 0.5f};
     pebble::math::vec2 target_cam_pos{FW * 0.5f, FH * 0.5f};
-    float              camera_zoom = 1.0f;
-    float              target_zoom = 1.0f;
-    bool               middle_mouse_down = false;
-    bool               right_mouse_down = false;
+    float camera_zoom = 1.0f;
+    float target_zoom = 1.0f;
+    bool middle_mouse_down = false;
+    bool right_mouse_down = false;
     pebble::math::vec2 last_mouse_pos{0.0f, 0.0f};
 
     // Open Universe Radar Scale Mode (1x = Viewport, 2x = Neighborhood, 4x = Deep Cosmos)
@@ -296,13 +297,13 @@ struct PebbleVerseApp {
     // Interactive mouse & keyboard controls
     float mouse_x = 0.0f, mouse_y = 0.0f;
     bool mouse_down = false;
-    bool gravity_vortex = false;  // Left click / V key
-    bool heat_ray = false;        // H key
-    bool freeze_ray = false;      // C key
-    bool paused = false;          // Space key
-    float time_dilation = 1.0f;   // Time dilation factor (adjusted via - / + or [ / ])
-    int selected_mat_index = 2;   // 1=Ice, 2=Silicate, 3=Iron, 4=Magma/Plasma
-    bool terminal_mode = false;   // CLI flag
+    bool gravity_vortex = false; // Left click / V key
+    bool heat_ray = false; // H key
+    bool freeze_ray = false; // C key
+    bool paused = false; // Space key
+    float time_dilation = 1.0f; // Time dilation factor (adjusted via - / + or [ / ])
+    int selected_mat_index = 2; // 1=Ice, 2=Silicate, 3=Iron, 4=Magma/Plasma
+    bool terminal_mode = false; // CLI flag
     int frame = 0;
     float time = 0.0f;
 };
@@ -333,10 +334,12 @@ static kalpana::Color get_celestial_color(const PlanetBody& p, SpectralViewMode 
         if (t_norm < 0.25f) {
             const float f = t_norm / 0.25f;
             return kalpana::Color{0.1f + f * 0.4f, 0.05f, 0.4f + f * 0.4f, 1.0f};
-        } else if (t_norm < 0.60f) {
+        }
+        else if (t_norm < 0.60f) {
             const float f = (t_norm - 0.25f) / 0.35f;
             return kalpana::Color{0.5f + f * 0.5f, 0.1f + f * 0.35f, 0.8f * (1.0f - f), 1.0f};
-        } else {
+        }
+        else {
             const float f = (t_norm - 0.60f) / 0.40f;
             return kalpana::Color{1.0f, 0.45f + f * 0.55f, f * 0.9f, 1.0f};
         }
@@ -358,22 +361,28 @@ static kalpana::Color get_celestial_color(const PlanetBody& p, SpectralViewMode 
     // Check for Strange Quark Star (Deconfined Quark Matter)
     if (p.is_strange_star || p.type == CelestialType::StrangeQuarkStar) {
         base = kalpana::Color{0.75f, 0.15f, 1.0f, 1.0f}; // Deep Luminescent Violet
-    } else if (p.temperature > 1200.0f || p.mass >= 140.0f) {
+    }
+    else if (p.temperature > 1200.0f || p.mass >= 140.0f) {
         // Check for Morgan-Keenan (MK) Stellar Spectral Classification for hot stellar cores
         const auto mk = prakriti::celestial::evaluate_stellar_spectral_class(p.mass, p.temperature);
         base = kalpana::Color{mk.r, mk.g, mk.b, 1.0f};
-    } else {
+    }
+    else {
         // High-luminance, high-contrast primary celestial spectral colors for terrestrial planetoids
         if (p.ocean_fraction > 0.3f) {
             // Terraformed Habitable Planet with Surface Oceans
             base = kalpana::Color{0.15f, 0.55f, 0.95f, 1.0f}; // Earth-like Deep Azure Ocean
-        } else if (p.density < 1500.0f) {
+        }
+        else if (p.density < 1500.0f) {
             base = kalpana::Color{0.25f, 0.95f, 1.00f, 1.0f}; // Ultra-Bright Cyan / Ice Blue
-        } else if (p.density < 4500.0f) {
+        }
+        else if (p.density < 4500.0f) {
             base = kalpana::Color{1.00f, 0.90f, 0.25f, 1.0f}; // Radiant Solar Gold / Yellow (Silicate Rock)
-        } else if (p.density < 10000.0f) {
+        }
+        else if (p.density < 10000.0f) {
             base = kalpana::Color{1.00f, 0.60f, 0.15f, 1.0f}; // Intense Metallic Orange (Iron-Nickel)
-        } else {
+        }
+        else {
             base = kalpana::Color{0.95f, 0.30f, 1.00f, 1.0f}; // Vivid Hyperdense Singularity Magenta
         }
     }
@@ -397,7 +406,8 @@ static kalpana::Color get_celestial_color(const PlanetBody& p, SpectralViewMode 
             base.r = std::clamp(base.r * (1.0f - doppler * 0.4f), 0.0f, 1.0f);
             base.g = std::clamp(base.g * (1.0f + doppler * 0.2f), 0.0f, 1.0f);
             base.b = std::clamp(base.b + doppler * 0.45f, 0.0f, 1.0f);
-        } else {
+        }
+        else {
             const float rf = -doppler;
             base.r = std::clamp(base.r + rf * 0.45f, 0.0f, 1.0f);
             base.g = std::clamp(base.g * (1.0f - rf * 0.3f), 0.0f, 1.0f);
@@ -421,7 +431,8 @@ static void spawn_dust_particle(PebbleVerseApp& app, bool user_spawn = false, fl
 
     if (user_spawn) {
         p.pos = pebble::math::vec2{at_x, at_y};
-    } else {
+    }
+    else {
         // True Full-Grid Isotropic Matter Nucleation across all coordinates [12, FW - 12] x [12, FH - 12]
         p.pos = pebble::math::vec2{
             12.0f + dist01(app.rng) * (FW - 24.0f),
@@ -449,17 +460,20 @@ static void spawn_dust_particle(PebbleVerseApp& app, bool user_spawn = false, fl
         p.mat_params = prakriti::celestial::ice_crust();
         p.mass = 8.0f + dist01(app.rng) * 6.0f;
         p.temperature = -60.0f + dist01(app.rng) * 40.0f;
-    } else if (roll < std::max(0.45f, 0.80f - z_bias * 0.2f)) {
+    }
+    else if (roll < std::max(0.45f, 0.80f - z_bias * 0.2f)) {
         p.type = CelestialType::SilicateRock;
         p.mat_params = prakriti::celestial::silicate_rock();
         p.mass = 12.0f + dist01(app.rng) * 10.0f;
         p.temperature = 20.0f + dist01(app.rng) * 60.0f;
-    } else if (roll < 0.96f) {
+    }
+    else if (roll < 0.96f) {
         p.type = CelestialType::IronCore;
         p.mat_params = prakriti::celestial::iron_nickel_core();
         p.mass = 20.0f + dist01(app.rng) * 15.0f;
         p.temperature = 80.0f + dist01(app.rng) * 100.0f;
-    } else {
+    }
+    else {
         p.type = CelestialType::MoltenMagma;
         p.mat_params = prakriti::celestial::molten_magma();
         p.mass = 35.0f + dist01(app.rng) * 25.0f;
@@ -482,17 +496,20 @@ static void spawn_dust_particle(PebbleVerseApp& app, bool user_spawn = false, fl
 // ----------------------------------------------------------------------------
 static void spawn_external_inflow(PebbleVerseApp& app) {
     std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
-    
+
     // Choose entity type
     const float roll = dist01(app.rng);
     prakriti::celestial::InflowEntityType type;
     if (roll < 0.35f) {
         type = prakriti::celestial::InflowEntityType::RogueProtogalaxy;
-    } else if (roll < 0.65f) {
+    }
+    else if (roll < 0.65f) {
         type = prakriti::celestial::InflowEntityType::InterstellarComet;
-    } else if (roll < 0.88f) {
+    }
+    else if (roll < 0.88f) {
         type = prakriti::celestial::InflowEntityType::HypervelocityStar;
-    } else {
+    }
+    else {
         type = prakriti::celestial::InflowEntityType::RoguePulsarMagnetar;
     }
 
@@ -518,21 +535,24 @@ static void spawn_external_inflow(PebbleVerseApp& app) {
         core.radius = 2.6f;
         core.temperature = 6000.0f;
         core.omega = 45.0f;
-    } else if (type == prakriti::celestial::InflowEntityType::HypervelocityStar) {
+    }
+    else if (type == prakriti::celestial::InflowEntityType::HypervelocityStar) {
         core.type = CelestialType::SuperheatedPlasma;
         core.mat_params = prakriti::celestial::superheated_plasma();
         core.density = core.mat_params.rest_density;
         core.radius = std::clamp(std::cbrt(core.mass) * 0.75f, 3.5f, 9.0f);
         core.temperature = 2800.0f + dist01(app.rng) * 2200.0f;
         core.omega = (dist01(app.rng) - 0.5f) * 6.0f;
-    } else if (type == prakriti::celestial::InflowEntityType::InterstellarComet) {
+    }
+    else if (type == prakriti::celestial::InflowEntityType::InterstellarComet) {
         core.type = CelestialType::IceCrust;
         core.mat_params = prakriti::celestial::ice_crust();
         core.density = core.mat_params.rest_density;
         core.radius = std::clamp(std::cbrt(core.mass) * 0.6f, 1.4f, 2.8f);
         core.temperature = -120.0f + dist01(app.rng) * 40.0f; // Cryogenic deep space ice
         core.omega = (dist01(app.rng) - 0.5f) * 8.0f;
-    } else { // RogueProtogalaxy
+    }
+    else { // RogueProtogalaxy
         core.type = CelestialType::MoltenMagma;
         core.mat_params = prakriti::celestial::molten_magma();
         core.density = core.mat_params.rest_density;
@@ -548,38 +568,43 @@ static void spawn_external_inflow(PebbleVerseApp& app) {
     for (int k = 0; k < cfg.satellite_count; ++k) {
         PlanetBody sat;
         sat.ent = app.world.spawn();
-        
+
         const float sat_angle = dist01(app.rng) * 6.2831853f;
         const float sat_r = (type == prakriti::celestial::InflowEntityType::InterstellarComet)
-            ? (6.0f + dist01(app.rng) * 16.0f)
-            : (18.0f + dist01(app.rng) * 75.0f);
+                                ? (6.0f + dist01(app.rng) * 16.0f)
+                                : (18.0f + dist01(app.rng) * 75.0f);
 
         sat.pos = core.pos + pebble::math::vec2{std::cos(sat_angle), std::sin(sat_angle)} * sat_r;
         sat.prev_pos = sat.pos;
 
         // Circular orbital velocity around core: v = \sqrt{G * M_core / r}
-        const float v_circ = std::sqrt(std::max(1.0f, (app.gravity_policy.G * core.mass) / std::max(sat_r, 10.0f))) * 0.75f;
+        const float v_circ = std::sqrt(std::max(1.0f, (app.gravity_policy.G * core.mass) / std::max(sat_r, 10.0f))) *
+            0.75f;
         const pebble::math::vec2 sat_tangent{-std::sin(sat_angle), std::cos(sat_angle)};
-        sat.vel = core.vel + sat_tangent * v_circ + pebble::math::vec2{dist01(app.rng) - 0.5f, dist01(app.rng) - 0.5f} * 2.0f;
+        sat.vel = core.vel + sat_tangent * v_circ + pebble::math::vec2{dist01(app.rng) - 0.5f, dist01(app.rng) - 0.5f} *
+            2.0f;
 
         if (type == prakriti::celestial::InflowEntityType::InterstellarComet) {
             sat.type = CelestialType::IceCrust;
             sat.mat_params = prakriti::celestial::ice_crust();
             sat.mass = 4.0f + dist01(app.rng) * 8.0f;
             sat.temperature = -130.0f + dist01(app.rng) * 30.0f;
-        } else {
+        }
+        else {
             const float m_roll = dist01(app.rng);
             if (m_roll < 0.4f) {
                 sat.type = CelestialType::SilicateRock;
                 sat.mat_params = prakriti::celestial::silicate_rock();
                 sat.mass = 12.0f + dist01(app.rng) * 18.0f;
                 sat.temperature = 20.0f + dist01(app.rng) * 60.0f;
-            } else if (m_roll < 0.75f) {
+            }
+            else if (m_roll < 0.75f) {
                 sat.type = CelestialType::IronCore;
                 sat.mat_params = prakriti::celestial::iron_nickel_core();
                 sat.mass = 18.0f + dist01(app.rng) * 25.0f;
                 sat.temperature = 100.0f + dist01(app.rng) * 120.0f;
-            } else {
+            }
+            else {
                 sat.type = CelestialType::IceCrust;
                 sat.mat_params = prakriti::celestial::ice_crust();
                 sat.mass = 8.0f + dist01(app.rng) * 10.0f;
@@ -617,10 +642,14 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
     const float active_max_y = app.camera_pos[1] + FH * 0.5f;
 
     // Identify all spatial tiles (320x200 px) covering the active viewport
-    const std::int32_t min_tile_x = static_cast<std::int32_t>(std::floor(active_min_x / prakriti::celestial::kSectorWidth));
-    const std::int32_t max_tile_x = static_cast<std::int32_t>(std::floor(active_max_x / prakriti::celestial::kSectorWidth));
-    const std::int32_t min_tile_y = static_cast<std::int32_t>(std::floor(active_min_y / prakriti::celestial::kSectorHeight));
-    const std::int32_t max_tile_y = static_cast<std::int32_t>(std::floor(active_max_y / prakriti::celestial::kSectorHeight));
+    const std::int32_t min_tile_x = static_cast<std::int32_t>(std::floor(
+        active_min_x / prakriti::celestial::kSectorWidth));
+    const std::int32_t max_tile_x = static_cast<std::int32_t>(std::floor(
+        active_max_x / prakriti::celestial::kSectorWidth));
+    const std::int32_t min_tile_y = static_cast<std::int32_t>(std::floor(
+        active_min_y / prakriti::celestial::kSectorHeight));
+    const std::int32_t max_tile_y = static_cast<std::int32_t>(std::floor(
+        active_max_y / prakriti::celestial::kSectorHeight));
 
     // A. Freezing: Freeze any bodies that have slid outside the active simulation window into their sector tiles
     std::unordered_map<std::uint64_t, prakriti::celestial::SectorData> freezing_sectors;
@@ -630,13 +659,15 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
     for (const auto& p : app.planets) {
         if (!p.alive) continue;
         const bool inside_active = (p.pos[0] >= active_min_x && p.pos[0] <= active_max_x &&
-                                    p.pos[1] >= active_min_y && p.pos[1] <= active_max_y);
+            p.pos[1] >= active_min_y && p.pos[1] <= active_max_y);
         if (inside_active) {
             remaining_active_planets.push_back(p);
-        } else {
+        }
+        else {
             // Compress into dormant sector record
             const std::int32_t tx = static_cast<std::int32_t>(std::floor(p.pos[0] / prakriti::celestial::kSectorWidth));
-            const std::int32_t ty = static_cast<std::int32_t>(std::floor(p.pos[1] / prakriti::celestial::kSectorHeight));
+            const std::int32_t ty = static_cast<std::int32_t>(
+                std::floor(p.pos[1] / prakriti::celestial::kSectorHeight));
             const prakriti::celestial::SectorKey sk{tx, ty};
             const std::uint64_t hid = prakriti::celestial::hash_sector_key(sk);
 
@@ -646,10 +677,14 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
             auto& sec = freezing_sectors[hid];
             sec.key = sk;
             prakriti::celestial::CompactBodyRecord b;
-            b.x = p.pos[0]; b.y = p.pos[1];
-            b.vx = p.vel[0]; b.vy = p.vel[1];
-            b.mass = p.mass; b.radius = p.radius;
-            b.temperature = p.temperature; b.omega = p.omega;
+            b.x = p.pos[0];
+            b.y = p.pos[1];
+            b.vx = p.vel[0];
+            b.vy = p.vel[1];
+            b.mass = p.mass;
+            b.radius = p.radius;
+            b.temperature = p.temperature;
+            b.omega = p.omega;
             b.type = static_cast<std::uint8_t>(p.type);
             sec.bodies.push_back(b);
         }
@@ -707,7 +742,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                 auto sec_data = app.sector_manager.get_or_generate_sector(sk, app.cosmic_seed);
                 sec_data.discovery_tick = static_cast<std::uint64_t>(app.frame + 1);
                 app.sector_manager.mark_sector_active(sk);
-            } else if (app.sector_manager.dormant_macro_nodes().contains(hid)) {
+            }
+            else if (app.sector_manager.dormant_macro_nodes().contains(hid)) {
                 // Re-entering previously visited tile: wake up dormant frozen bodies!
                 auto sec_data = app.sector_manager.get_or_generate_sector(sk, app.cosmic_seed);
                 app.sector_manager.mark_sector_active(sk);
@@ -724,11 +760,14 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                     p.type = static_cast<CelestialType>(b.type);
                     if (p.type == CelestialType::IceCrust) {
                         p.mat_params = prakriti::celestial::ice_crust();
-                    } else if (p.type == CelestialType::SilicateRock) {
+                    }
+                    else if (p.type == CelestialType::SilicateRock) {
                         p.mat_params = prakriti::celestial::silicate_rock();
-                    } else if (p.type == CelestialType::IronCore) {
+                    }
+                    else if (p.type == CelestialType::IronCore) {
                         p.mat_params = prakriti::celestial::iron_nickel_core();
-                    } else {
+                    }
+                    else {
                         p.mat_params = prakriti::celestial::molten_magma();
                     }
                     p.density = p.mat_params.rest_density;
@@ -828,8 +867,9 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
 
         // Interactive thermal injection / freeze ray
         if (app.heat_ray || app.freeze_ray) {
-            if (const pebble::math::vec2 d = pebble::math::vec2{app.mouse_x, app.mouse_y} - app.planets[i].pos; pebble::math::length_sq(d) <= 60.0f * 60.0f) {
-                if (app.heat_ray)   app.planets[i].temperature += 800.0f * sim_dt;
+            if (const pebble::math::vec2 d = pebble::math::vec2{app.mouse_x, app.mouse_y} - app.planets[i].pos;
+                pebble::math::length_sq(d) <= 60.0f * 60.0f) {
+                if (app.heat_ray) app.planets[i].temperature += 800.0f * sim_dt;
                 if (app.freeze_ray) app.planets[i].temperature -= 600.0f * sim_dt;
             }
         }
@@ -847,7 +887,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
         if (p.is_singularity || p.type == CelestialType::BlackHoleSingularity) {
             for (std::size_t j = i + 1; j < app.planets.size(); ++j) {
                 auto& other = app.planets[j];
-                if (!other.alive || (!other.is_singularity && other.type != CelestialType::BlackHoleSingularity)) continue;
+                if (!other.alive || (!other.is_singularity && other.type != CelestialType::BlackHoleSingularity))
+                    continue;
                 const pebble::math::vec2 d = other.pos - p.pos;
                 const float dist = std::sqrt(d[0] * d[0] + d[1] * d[1]);
                 const float r_isco = (p.radius + other.radius) * 1.5f;
@@ -873,7 +914,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                 if (dist > 180.0f || dist <= p.radius + host.radius) continue;
 
                 // 1. Roche Lobe Overflow Mass Siphoning
-                const auto rlof = prakriti::celestial::evaluate_roche_lobe_overflow(p.mass, p.radius, host.mass, dist, sim_dt);
+                const auto rlof = prakriti::celestial::evaluate_roche_lobe_overflow(
+                    p.mass, p.radius, host.mass, dist, sim_dt);
                 if (rlof.is_overflowing && p.mass > 5.0f) {
                     p.mass -= rlof.mass_transfer_rate;
                     host.mass += rlof.mass_transfer_rate * 0.85f; // Mass accretion efficiency
@@ -920,7 +962,7 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
             // Hotter/molten bodies relax faster into a circle; colder bodies hold dumbbell shape longer
             const float viscosity_rate = (p.temperature > 900.0f) ? 0.65f : 0.30f;
             p.merge_progress += (sim_dt / p.merge_duration) * viscosity_rate;
-            
+
             // Orbit the secondary lobe around the core while pulling it in
             const float d_theta = p.omega * sim_dt;
             const float cos_t = std::cos(d_theta);
@@ -936,7 +978,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                 p.lobe2_offset = pebble::math::vec2{0.0f, 0.0f};
                 p.lobe2_radius = 0.0f;
                 p.lobe2_mass = 0.0f;
-            } else {
+            }
+            else {
                 // Inward orbital decay towards center of mass
                 p.lobe2_offset = rotated_offset * (1.0f - sim_dt * 1.8f * viscosity_rate);
             }
@@ -975,9 +1018,11 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                 }
                 app.camera_shake.add_trauma(0.35f);
             }
-        } else {
-            const auto evol = prakriti::celestial::evaluate_stellar_evolution(p.mass, p.density, p.temperature, p.radius, sim_dt);
-            
+        }
+        else {
+            const auto evol = prakriti::celestial::evaluate_stellar_evolution(
+                p.mass, p.density, p.temperature, p.radius, sim_dt);
+
             p.temperature += evol.fusion_heat_rate;
             p.density += evol.core_compression_rate;
 
@@ -1012,7 +1057,9 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                         .radius = 2.4f + dist01(app.rng) * 2.2f,
                         .life = 1.2f + dist01(app.rng) * 0.6f,
                         .max_life = 1.8f,
-                        .color = (s % 2 == 0) ? kalpana::Color{1.0f, 0.95f, 0.5f, 1.0f} : kalpana::Color{0.4f, 0.85f, 1.0f, 1.0f}
+                        .color = (s % 2 == 0)
+                                     ? kalpana::Color{1.0f, 0.95f, 0.5f, 1.0f}
+                                     : kalpana::Color{0.4f, 0.85f, 1.0f, 1.0f}
                     });
                 }
                 // Shell 2: Dense expanding fireball nebula cloud
@@ -1029,19 +1076,21 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                     });
                 }
                 app.camera_shake.add_trauma(0.85f); // Visceral cosmic camera recoil
-            } else if (evol.phase == prakriti::celestial::StellarPhase::NeutronStar && !p.is_neutron_star) {
+            }
+            else if (evol.phase == prakriti::celestial::StellarPhase::NeutronStar && !p.is_neutron_star) {
                 p.is_neutron_star = true;
                 p.type = CelestialType::NeutronStar;
                 p.mat_params = prakriti::celestial::neutron_star();
                 p.density = p.mat_params.rest_density;
                 p.radius = evol.event_horizon_radius;
                 p.temperature = 5500.0f;
-                
+
                 // ── Pulsar Conservation of Angular Momentum ($I_1 \omega_1 = I_2 \omega_2$) ──
                 // As the star compresses from $R \approx 12\text{px}$ down to $2.2\text{px}$, $\omega \propto (R_1/R_2)^2 \approx 30\times$ spinup!
                 const float prev_r = std::max(p.radius, 4.0f);
                 const float spin_factor = (prev_r * prev_r) / (evol.event_horizon_radius * evol.event_horizon_radius);
-                p.omega = std::clamp(p.omega * spin_factor * 1.5f + 35.0f, 35.0f, 75.0f); // High-speed millisecond pulsar spin (rad/s)
+                p.omega = std::clamp(p.omega * spin_factor * 1.5f + 35.0f, 35.0f, 75.0f);
+                // High-speed millisecond pulsar spin (rad/s)
 
                 // ── Radiant Pulsar Magnetar Core-Collapse Flash ──
                 for (int s = 0; s < 36; ++s) {
@@ -1057,7 +1106,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                     });
                 }
                 app.camera_shake.add_trauma(0.40f);
-            } else if (evol.phase == prakriti::celestial::StellarPhase::MainSequenceStar) {
+            }
+            else if (evol.phase == prakriti::celestial::StellarPhase::MainSequenceStar) {
                 p.type = CelestialType::SuperheatedPlasma;
             }
         }
@@ -1075,7 +1125,7 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
 
             // Relativistic Doppler Beaming: Jet approaching viewer is blue-boosted, receding jet is dimmed
             const float doppler_blue = 1.0f + std::max(0.0f, beam_dir1[0]) * 0.35f;
-            const float doppler_red  = 1.0f - std::max(0.0f, beam_dir2[0]) * 0.25f;
+            const float doppler_red = 1.0f - std::max(0.0f, beam_dir2[0]) * 0.25f;
 
             app.jets.push_back(RelativisticJetParticle{
                 .pos = p.pos + beam_dir1 * (p.radius + 1.0f),
@@ -1083,7 +1133,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                 .radius = 1.2f * doppler_blue,
                 .life = 0.35f,
                 .max_life = 0.35f,
-                .color = kalpana::Color{0.3f * doppler_blue, 0.95f * doppler_blue, 1.0f, 0.85f} // Doppler Blue-Shifted Jet
+                .color = kalpana::Color{0.3f * doppler_blue, 0.95f * doppler_blue, 1.0f, 0.85f}
+                // Doppler Blue-Shifted Jet
             });
             app.jets.push_back(RelativisticJetParticle{
                 .pos = p.pos + beam_dir2 * (p.radius + 1.0f),
@@ -1091,7 +1142,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                 .radius = 1.0f * doppler_red,
                 .life = 0.35f,
                 .max_life = 0.35f,
-                .color = kalpana::Color{0.5f * doppler_red, 0.75f * doppler_red, 0.95f, 0.60f}  // Doppler Red-Shifted Jet
+                .color = kalpana::Color{0.5f * doppler_red, 0.75f * doppler_red, 0.95f, 0.60f}
+                // Doppler Red-Shifted Jet
             });
         }
 
@@ -1108,7 +1160,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                     if (sph_strip.is_stripping && dist01(app.rng) < 0.35f) {
                         const pebble::math::vec2 dir_to_host = (other.pos - p.pos) * (1.0f / dist);
                         const pebble::math::vec2 tangent{-dir_to_host[1], dir_to_host[0]};
-                        const pebble::math::vec2 stream_vel = dir_to_host * sph_strip.stream_velocity + tangent * (p.omega * 0.5f);
+                        const pebble::math::vec2 stream_vel = dir_to_host * sph_strip.stream_velocity + tangent * (p.
+                            omega * 0.5f);
 
                         // SPH Fluid Siphoned Gas Particle
                         app.nebulae.push_back(NebulaGasParticle{
@@ -1130,8 +1183,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
             const float a = dist01(app.rng) * 6.2831853f;
             const float spd = 4.0f + dist01(app.rng) * 12.0f;
             kalpana::Color gas_col = (p.type == CelestialType::IceCrust)
-                ? kalpana::Color{0.4f, 0.85f, 1.0f, 0.35f}  // Ionized water vapor
-                : kalpana::Color{1.0f, 0.45f, 0.15f, 0.35f}; // Silicate/iron vapor
+                                         ? kalpana::Color{0.4f, 0.85f, 1.0f, 0.35f} // Ionized water vapor
+                                         : kalpana::Color{1.0f, 0.45f, 0.15f, 0.35f}; // Silicate/iron vapor
             app.nebulae.push_back(NebulaGasParticle{
                 .pos = p.pos,
                 .vel = p.vel * 0.4f + pebble::math::vec2{std::cos(a) * spd, std::sin(a) * spd},
@@ -1155,19 +1208,23 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
         );
 
         // Thermal phase transitions
-        if (p.temperature > 1100.0f && p.type != CelestialType::MoltenMagma && p.type != CelestialType::SuperheatedPlasma) {
+        if (p.temperature > 1100.0f && p.type != CelestialType::MoltenMagma && p.type !=
+            CelestialType::SuperheatedPlasma) {
             p.type = CelestialType::MoltenMagma;
             p.mat_params = prakriti::celestial::molten_magma();
-        } else if (p.temperature > 3800.0f && p.type != CelestialType::SuperheatedPlasma) {
+        }
+        else if (p.temperature > 3800.0f && p.type != CelestialType::SuperheatedPlasma) {
             p.type = CelestialType::SuperheatedPlasma;
             p.mat_params = prakriti::celestial::superheated_plasma();
-        } else if (p.temperature < 750.0f && p.type == CelestialType::MoltenMagma) {
+        }
+        else if (p.temperature < 750.0f && p.type == CelestialType::MoltenMagma) {
             p.type = CelestialType::SilicateRock;
             p.mat_params = prakriti::celestial::silicate_rock();
         }
 
         // Critical mass gravitational collapse (density scaling)
-        if (constexpr float kCriticalMass = 1000.0f; p.mass > kCriticalMass && p.type != CelestialType::DegenerateDense) {
+        if (constexpr float kCriticalMass = 1000.0f; p.mass > kCriticalMass && p.type !=
+            CelestialType::DegenerateDense) {
             p.type = CelestialType::DegenerateDense;
             p.mat_params = prakriti::celestial::degenerate_dense_matter();
             p.density = p.mat_params.rest_density;
@@ -1175,7 +1232,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
 
         // Strange Quark Star Phase Transition (Witten Strange Matter Hypothesis)
         if (p.is_neutron_star && !p.is_strange_star) {
-            const auto strange_trans = prakriti::celestial::evaluate_strange_star_transition(p.mass, p.is_neutron_star, 220.0f);
+            const auto strange_trans = prakriti::celestial::evaluate_strange_star_transition(
+                p.mass, p.is_neutron_star, 220.0f);
             if (strange_trans.triggers_strange_star) {
                 p.is_strange_star = true;
                 p.type = CelestialType::StrangeQuarkStar;
@@ -1217,12 +1275,16 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
             );
             if (escape.retains_atmosphere) {
                 p.atmosphere_mass = std::min(p.atmosphere_mass + 0.05f * sim_dt, p.mass * 0.08f);
-            } else {
-                p.atmosphere_mass = std::max(0.0f, p.atmosphere_mass - (escape.jeans_loss_rate + escape.wind_stripping_rate));
+            }
+            else {
+                p.atmosphere_mass = std::max(
+                    0.0f, p.atmosphere_mass - (escape.jeans_loss_rate + escape.wind_stripping_rate));
             }
 
             // 2. Surface Hydrology & Ocean Condensation
-            const float water_volatile_fraction = (p.type == CelestialType::IceCrust) ? 0.8f : (p.atmosphere_mass / std::max(p.mass, 1.0f));
+            const float water_volatile_fraction = (p.type == CelestialType::IceCrust)
+                                                      ? 0.8f
+                                                      : (p.atmosphere_mass / std::max(p.mass, 1.0f));
             const auto hydro = prakriti::celestial::evaluate_surface_hydrology_phase(
                 p.temperature, water_volatile_fraction, p.mass
             );
@@ -1234,11 +1296,14 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
         // Pure dust is ~0.8-1.2px, accumulating asteroids ~2-3px, large planets ~4-6px, stars and giants ~8-16px!
         if (p.is_singularity || p.type == CelestialType::BlackHoleSingularity) {
             p.radius = std::clamp(p.mass * 0.0035f + 2.8f, 3.0f, 12.0f);
-        } else if (p.is_strange_star || p.type == CelestialType::StrangeQuarkStar) {
+        }
+        else if (p.is_strange_star || p.type == CelestialType::StrangeQuarkStar) {
             p.radius = std::clamp(std::cbrt(p.mass) * 0.45f, 1.8f, 3.2f); // Ultra-dense Quark star
-        } else if (p.is_neutron_star || p.type == CelestialType::NeutronStar) {
+        }
+        else if (p.is_neutron_star || p.type == CelestialType::NeutronStar) {
             p.radius = std::clamp(std::cbrt(p.mass) * 0.55f, 2.2f, 4.5f); // Compact degenerate core
-        } else {
+        }
+        else {
             // General planetary & stellar volume scaling (r \propto (M/\rho)^{1/3})
             p.radius = std::clamp(std::cbrt(p.mass) * 0.65f, 0.75f, 18.0f);
         }
@@ -1255,7 +1320,9 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                     const float tail_spd = comet_sub.tail_velocity_mag + (dist01(app.rng) - 0.5f) * 15.0f;
                     const float spread = (dist01(app.rng) - 0.5f) * 0.25f;
                     const pebble::math::vec2 t_dir = pebble::math::normalize(
-                        comet_sub.tail_direction + pebble::math::vec2{-comet_sub.tail_direction[1], comet_sub.tail_direction[0]} * spread
+                        comet_sub.tail_direction + pebble::math::vec2{
+                            -comet_sub.tail_direction[1], comet_sub.tail_direction[0]
+                        } * spread
                     );
 
                     app.nebulae.push_back(NebulaGasParticle{
@@ -1265,8 +1332,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                         .life = 0.65f + dist01(app.rng) * 0.45f,
                         .max_life = 1.1f,
                         .color = comet_sub.is_ion_plasma
-                            ? kalpana::Color{0.3f, 0.9f, 1.0f, 0.65f}   // Radiant Cyan Ion Plasma Tail (Type I)
-                            : kalpana::Color{0.9f, 0.85f, 0.7f, 0.45f}  // Diffuse Golden Dust Tail (Type II)
+                                     ? kalpana::Color{0.3f, 0.9f, 1.0f, 0.65f} // Radiant Cyan Ion Plasma Tail (Type I)
+                                     : kalpana::Color{0.9f, 0.85f, 0.7f, 0.45f} // Diffuse Golden Dust Tail (Type II)
                     });
                     break;
                 }
@@ -1321,7 +1388,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
 
                 // Relative velocity
                 const pebble::math::vec2 dv = app.planets[i].vel - app.planets[j].vel;
-                const float vn = dv[0] * normal[0] + dv[1] * normal[1]; // Normal velocity component (< 0 means approaching)
+                const float vn = dv[0] * normal[0] + dv[1] * normal[1];
+                // Normal velocity component (< 0 means approaching)
                 const float vt = dv[0] * tangent[0] + dv[1] * tangent[1]; // Tangential shear velocity
 
                 // Inelastic heat conversion from Prakriti celestial impact thermodynamics
@@ -1344,8 +1412,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                     const float a = dist01(app.rng) * 6.2831853f;
                     const float spd = 20.0f + dist01(app.rng) * 45.0f;
                     kalpana::Color spark_col = (dist01(app.rng) > 0.4f)
-                        ? kalpana::Color{1.0f, 0.95f, 0.35f, 1.0f}
-                        : kalpana::Color{1.0f, 0.45f, 0.15f, 1.0f};
+                                                   ? kalpana::Color{1.0f, 0.95f, 0.35f, 1.0f}
+                                                   : kalpana::Color{1.0f, 0.45f, 0.15f, 1.0f};
 
                     app.sparks.push_back(SparkParticle{
                         .pos = impact_pos,
@@ -1359,8 +1427,10 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
 
                 // Thermodynamic parameters & Collision Regime Evaluation via Prakriti Celestial Engine
                 const float avg_temp = (app.planets[i].temperature + app.planets[j].temperature) * 0.5f;
-                const bool is_molten_1 = (app.planets[i].temperature > 850.0f) || (app.planets[i].type == CelestialType::MoltenMagma);
-                const bool is_molten_2 = (app.planets[j].temperature > 850.0f) || (app.planets[j].type == CelestialType::MoltenMagma);
+                const bool is_molten_1 = (app.planets[i].temperature > 850.0f) || (app.planets[i].type ==
+                    CelestialType::MoltenMagma);
+                const bool is_molten_2 = (app.planets[j].temperature > 850.0f) || (app.planets[j].type ==
+                    CelestialType::MoltenMagma);
                 const float rel_speed = std::sqrt(v_rel2);
 
                 const auto decision = prakriti::celestial::evaluate_collision_regime(
@@ -1378,7 +1448,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                         torn_lobe.mass = app.planets[i].lobe2_mass;
                         torn_lobe.density = app.planets[i].density;
                         constexpr float kRadiusScale = 2.4f;
-                        torn_lobe.radius = std::clamp(kRadiusScale * std::sqrt(torn_lobe.mass / torn_lobe.density), 0.75f, 2.0f);
+                        torn_lobe.radius = std::clamp(kRadiusScale * std::sqrt(torn_lobe.mass / torn_lobe.density),
+                                                      0.75f, 2.0f);
                         torn_lobe.pos = app.planets[i].pos + app.planets[i].lobe2_offset;
                         torn_lobe.vel = app.planets[i].vel + pebble::math::vec2{normal[1], -normal[0]} * 25.0f;
                         torn_lobe.temperature = app.planets[i].temperature + 100.0f;
@@ -1391,30 +1462,38 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                         app.planets[i].lobe2_radius = 0.0f;
                         app.planets[i].lobe2_offset = pebble::math::vec2{0.0f, 0.0f};
                     }
-                } else if (decision.regime == prakriti::celestial::CollisionRegime::DuctileMerge) {
+                }
+                else if (decision.regime == prakriti::celestial::CollisionRegime::DuctileMerge) {
                     // ========================================================
                     // 1. GRADUAL CONTACT BINARY ACCRETION (Joined at tips -> Sphere)
                     // ========================================================
                     app.fusions_count++;
                     const float m_total = app.planets[i].mass + app.planets[j].mass;
-                    const pebble::math::vec2 v_cm = (app.planets[i].vel * app.planets[i].mass + app.planets[j].vel * app.planets[j].mass) * (1.0f / m_total);
-                    const pebble::math::vec2 p_cm = (app.planets[i].pos * app.planets[i].mass + app.planets[j].pos * app.planets[j].mass) * (1.0f / m_total);
+                    const pebble::math::vec2 v_cm = (app.planets[i].vel * app.planets[i].mass + app.planets[j].vel * app
+                        .planets[j].mass) * (1.0f / m_total);
+                    const pebble::math::vec2 p_cm = (app.planets[i].pos * app.planets[i].mass + app.planets[j].pos * app
+                        .planets[j].mass) * (1.0f / m_total);
 
                     // Conservation of Angular Momentum: L_total = L_spin1 + L_spin2 + L_orbital
                     const float l_spin1 = app.planets[i].angular_momentum;
                     const float l_spin2 = app.planets[j].angular_momentum;
                     const pebble::math::vec2 r1 = app.planets[i].pos - p_cm;
                     const pebble::math::vec2 r2 = app.planets[j].pos - p_cm;
-                    const float l_orb1 = app.planets[i].mass * (r1[0] * app.planets[i].vel[1] - r1[1] * app.planets[i].vel[0]);
-                    const float l_orb2 = app.planets[j].mass * (r2[0] * app.planets[j].vel[1] - r2[1] * app.planets[j].vel[0]);
+                    const float l_orb1 = app.planets[i].mass * (r1[0] * app.planets[i].vel[1] - r1[1] * app.planets[i].
+                        vel[0]);
+                    const float l_orb2 = app.planets[j].mass * (r2[0] * app.planets[j].vel[1] - r2[1] * app.planets[j].
+                        vel[0]);
                     const float l_total = l_spin1 + l_spin2 + l_orb1 + l_orb2;
 
-                    const float d_mixed = (app.planets[i].density * app.planets[i].mass + app.planets[j].density * app.planets[j].mass) / m_total;
-                    const float t_mixed = (app.planets[i].temperature * app.planets[i].mass + app.planets[j].temperature * app.planets[j].mass) / m_total + 60.0f;
+                    const float d_mixed = (app.planets[i].density * app.planets[i].mass + app.planets[j].density * app.
+                        planets[j].mass) / m_total;
+                    const float t_mixed = (app.planets[i].temperature * app.planets[i].mass + app.planets[j].temperature
+                        * app.planets[j].mass) / m_total + 60.0f;
 
                     // Compute contact dumbbell geometry (joined at the touching tips)
                     const pebble::math::vec2 touch_vector = app.planets[j].pos - app.planets[i].pos;
-                    const float touch_dist = std::max(0.5f, std::sqrt(touch_vector[0] * touch_vector[0] + touch_vector[1] * touch_vector[1]));
+                    const float touch_dist = std::max(
+                        0.5f, std::sqrt(touch_vector[0] * touch_vector[0] + touch_vector[1] * touch_vector[1]));
 
                     app.planets[i].pos = p_cm;
                     app.planets[i].vel = v_cm;
@@ -1459,7 +1538,9 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                                 .radius = 3.0f + dist01(app.rng) * 2.5f,
                                 .life = 2.0f + dist01(app.rng) * 1.0f,
                                 .max_life = 3.0f,
-                                .color = (k_idx % 2 == 0) ? kalpana::Color{1.0f, 0.85f, 0.2f, 0.75f} : kalpana::Color{0.7f, 0.3f, 1.0f, 0.70f}
+                                .color = (k_idx % 2 == 0)
+                                             ? kalpana::Color{1.0f, 0.85f, 0.2f, 0.75f}
+                                             : kalpana::Color{0.7f, 0.3f, 1.0f, 0.70f}
                             });
                         }
 
@@ -1498,7 +1579,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                     }
 
                     // ── Gravitational Radiation Chirp Emission (Only for Extreme Relativistic Mergers) ──
-                    const auto gw = prakriti::celestial::compute_gravitational_wave_emission(app.planets[i].mass, app.planets[j].mass, touch_dist, rel_speed);
+                    const auto gw = prakriti::celestial::compute_gravitational_wave_emission(
+                        app.planets[i].mass, app.planets[j].mass, touch_dist, rel_speed);
                     if (gw.emits_wave && m_total >= 950.0f) {
                         app.gw_ripples.push_back(GravitationalWaveRipple{
                             .center = p_cm,
@@ -1515,8 +1597,9 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                     // ── Relativistic ISCO Accretion Flares (when black holes or pulsars consume matter) ──
                     if (app.planets[i].is_singularity || app.planets[i].type == CelestialType::BlackHoleSingularity ||
                         app.planets[j].is_singularity || app.planets[j].type == CelestialType::BlackHoleSingularity) {
-                        
-                        const float bh_r = app.planets[i].is_singularity ? app.planets[i].radius : app.planets[j].radius;
+                        const float bh_r = app.planets[i].is_singularity
+                                               ? app.planets[i].radius
+                                               : app.planets[j].radius;
                         const auto isco = prakriti::celestial::evaluate_isco_accretion(touch_dist, m_total, bh_r);
                         if (isco.triggers_flare) {
                             app.flares.push_back(AccretionFlare{
@@ -1538,8 +1621,12 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                         for (int j_idx = 0; j_idx < 14; ++j_idx) {
                             const float j_spd = 130.0f + dist01(app.rng) * 190.0f; // Ultra-relativistic speed
                             const float spread = (dist01(app.rng) - 0.5f) * 0.15f;
-                            const pebble::math::vec2 d1 = pebble::math::normalize(jet_dir1 + pebble::math::vec2{spread, spread});
-                            const pebble::math::vec2 d2 = pebble::math::normalize(jet_dir2 + pebble::math::vec2{spread, spread});
+                            const pebble::math::vec2 d1 = pebble::math::normalize(jet_dir1 + pebble::math::vec2{
+                                spread, spread
+                            });
+                            const pebble::math::vec2 d2 = pebble::math::normalize(jet_dir2 + pebble::math::vec2{
+                                spread, spread
+                            });
 
                             app.jets.push_back(RelativisticJetParticle{
                                 .pos = app.planets[i].pos + d1 * (app.planets[i].radius + 2.0f),
@@ -1561,7 +1648,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                     }
 
                     app.planets[j].alive = false;
-                } else if (decision.regime == prakriti::celestial::CollisionRegime::BrittleFracture) {
+                }
+                else if (decision.regime == prakriti::celestial::CollisionRegime::BrittleFracture) {
                     // ========================================================
                     // 2. CATASTROPHIC BRITTLE SHATTERING / VORONOI FRAGMENTATION
                     // ========================================================
@@ -1582,12 +1670,17 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                             shard.radius = std::clamp(2.4f * std::sqrt(shard.mass / shard.density), 0.75f, 1.8f);
 
                             // Fan out ejecta along impact dispersal cone
-                            const float spread = (static_cast<float>(k) - (num_shards - 1) * 0.5f) * 0.85f + (dist01(app.rng) - 0.5f) * 0.3f;
+                            const float spread = (static_cast<float>(k) - (num_shards - 1) * 0.5f) * 0.85f + (
+                                dist01(app.rng) - 0.5f) * 0.3f;
                             const float ejecta_angle = impact_angle + 3.14159f + spread;
                             const float ejecta_speed = 25.0f + dist01(app.rng) * 35.0f;
 
-                            shard.vel = app.planets[i].vel + pebble::math::vec2{std::cos(ejecta_angle), std::sin(ejecta_angle)} * ejecta_speed;
-                            shard.pos = app.planets[i].pos + pebble::math::vec2{std::cos(ejecta_angle), std::sin(ejecta_angle)} * (app.planets[i].radius + shard.radius + 1.0f);
+                            shard.vel = app.planets[i].vel + pebble::math::vec2{
+                                std::cos(ejecta_angle), std::sin(ejecta_angle)
+                            } * ejecta_speed;
+                            shard.pos = app.planets[i].pos + pebble::math::vec2{
+                                std::cos(ejecta_angle), std::sin(ejecta_angle)
+                            } * (app.planets[i].radius + shard.radius + 1.0f);
                             shard.temperature = app.planets[i].temperature + 350.0f;
                             shard.omega = (dist01(app.rng) - 0.5f) * 12.0f;
                             shard.angular_momentum = 0.5f * shard.mass * (shard.radius * shard.radius) * shard.omega;
@@ -1610,7 +1703,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
                             });
                         }
                     }
-                } else {
+                }
+                else {
                     // ========================================================
                     // 3. ELASTIC / INELASTIC MOMENTUM RECOIL & SPIN TRANSFER
                     // ========================================================
@@ -1632,7 +1726,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
 
                         // Tangential friction and surface spin transfer (torque):
                         constexpr float friction = 0.25f;
-                        const float impulse_t = std::clamp(-vt * (m1 * m2) / m_sum, -friction * impulse_n, friction * impulse_n);
+                        const float impulse_t = std::clamp(-vt * (m1 * m2) / m_sum, -friction * impulse_n,
+                                                           friction * impulse_n);
                         const pebble::math::vec2 friction_vec = tangent * impulse_t;
 
                         app.planets[i].vel = app.planets[i].vel + friction_vec * (1.0f / m1);
@@ -1718,7 +1813,9 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
             }
         }
     }
-    std::erase_if(app.snr_blasts, [](const prakriti::celestial::SedovTaylorBlast& snr) { return snr.age >= snr.max_age; });
+    std::erase_if(app.snr_blasts, [](const prakriti::celestial::SedovTaylorBlast& snr) {
+        return snr.age >= snr.max_age;
+    });
 
     // 12. Evaluate Active Magnetohydrodynamic (MHD) Magnetic Flux Tubes between Binary Stars/Pulsars
     app.mhd_tubes.clear();
@@ -1728,7 +1825,8 @@ static void step_celestial_simulation(PebbleVerseApp& app, float dt) {
         for (std::size_t j = i + 1; j < app.planets.size(); ++j) {
             const auto& p2 = app.planets[j];
             if (!p2.alive || p2.mass < 140.0f) continue;
-            const auto tube = prakriti::celestial::compute_mhd_flux_tube(p1.pos, p1.mass, p1.omega, p2.pos, p2.mass, p2.omega);
+            const auto tube = prakriti::celestial::compute_mhd_flux_tube(
+                p1.pos, p1.mass, p1.omega, p2.pos, p2.mass, p2.omega);
             if (tube.field_strength > 0.05f) {
                 app.mhd_tubes.push_back(tube);
             }
@@ -1770,7 +1868,7 @@ static void render_terminal_ascii(const PebbleVerseApp& app) {
 
     const int TERM_W = std::clamp(term_cols - 2, 40, 120);
     const int TERM_H = std::clamp(term_rows - 4, 15, 45); // Reserve 4 rows for HUD, top border, bottom border
-    const int SUB_H  = TERM_H * 2;
+    const int SUB_H = TERM_H * 2;
 
     struct TermCell {
         bool has_body = false;
@@ -1793,11 +1891,14 @@ static void render_terminal_ascii(const PebbleVerseApp& app) {
 
         if (p.mass > 400.0f) {
             subgrid[gy][gx].glyph = '@';
-        } else if (p.mass > 150.0f) {
+        }
+        else if (p.mass > 150.0f) {
             subgrid[gy][gx].glyph = '#';
-        } else if (p.mass > 60.0f) {
+        }
+        else if (p.mass > 60.0f) {
             subgrid[gy][gx].glyph = '*';
-        } else {
+        }
+        else {
             subgrid[gy][gx].glyph = '.';
         }
     }
@@ -1834,16 +1935,23 @@ static void render_terminal_ascii(const PebbleVerseApp& app) {
 
             if (const auto& bot = subgrid[bot_y][x]; !top.has_body && !bot.has_body) {
                 out += ' ';
-            } else if (top.has_body && !bot.has_body) {
+            }
+            else if (top.has_body && !bot.has_body) {
                 // Top half only
-                out += "\033[38;2;" + std::to_string(top.r) + ";" + std::to_string(top.g) + ";" + std::to_string(top.b) + "m▀\033[0m";
-            } else if (!top.has_body && bot.has_body) {
+                out += "\033[38;2;" + std::to_string(top.r) + ";" + std::to_string(top.g) + ";" + std::to_string(top.b)
+                    + "m▀\033[0m";
+            }
+            else if (!top.has_body && bot.has_body) {
                 // Bottom half only
-                out += "\033[38;2;" + std::to_string(bot.r) + ";" + std::to_string(bot.g) + ";" + std::to_string(bot.b) + "m▄\033[0m";
-            } else {
+                out += "\033[38;2;" + std::to_string(bot.r) + ";" + std::to_string(bot.g) + ";" + std::to_string(bot.b)
+                    + "m▄\033[0m";
+            }
+            else {
                 // Both halves with distinct TrueColors
-                out += "\033[38;2;" + std::to_string(top.r) + ";" + std::to_string(top.g) + ";" + std::to_string(top.b) +
-                       ";48;2;" + std::to_string(bot.r) + ";" + std::to_string(bot.g) + ";" + std::to_string(bot.b) + "m▀\033[0m";
+                out += "\033[38;2;" + std::to_string(top.r) + ";" + std::to_string(top.g) + ";" + std::to_string(top.b)
+                    +
+                    ";48;2;" + std::to_string(bot.r) + ";" + std::to_string(bot.g) + ";" + std::to_string(bot.b) +
+                    "m▀\033[0m";
             }
         }
 
@@ -1872,7 +1980,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         if (tp.alive) {
             app.target_cam_pos = tp.pos;
             app.target_zoom = std::clamp(2.4f - (tp.radius / 10.0f), 0.6f, 3.5f);
-        } else {
+        }
+        else {
             app.tracked_planet_index = -1; // Reset if target merged or evaporated
         }
     }
@@ -1928,7 +2037,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
                 const pebble::math::vec2 p_w = warp_vertex(gx, gy);
                 h_line.line_to(p_w[0], p_w[1]);
             }
-            scene.add(kalpana::Node::shape(h_line, kalpana::Paint::stroke(kalpana::Color{0.10f, 0.22f, 0.45f, 0.035f}, 0.5f)));
+            scene.add(kalpana::Node::shape(
+                h_line, kalpana::Paint::stroke(kalpana::Color{0.10f, 0.22f, 0.45f, 0.035f}, 0.5f)));
         }
 
         // Vertical geodesic lines (Ultra-faint, sparse spacing)
@@ -1942,7 +2052,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
                 const pebble::math::vec2 p_w = warp_vertex(gx, gy);
                 v_line.line_to(p_w[0], p_w[1]);
             }
-            scene.add(kalpana::Node::shape(v_line, kalpana::Paint::stroke(kalpana::Color{0.10f, 0.22f, 0.45f, 0.035f}, 0.5f)));
+            scene.add(kalpana::Node::shape(
+                v_line, kalpana::Paint::stroke(kalpana::Color{0.10f, 0.22f, 0.45f, 0.035f}, 0.5f)));
         }
     }
 
@@ -1965,7 +2076,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
                             const pebble::math::vec2 s_pt = w2s(orbit_pts[pt_i]);
                             orbit_path.line_to(s_pt[0], s_pt[1]);
                         }
-                        scene.add(kalpana::Node::shape(orbit_path, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.85f, 1.0f, 0.20f}, 0.8f)));
+                        scene.add(kalpana::Node::shape(
+                            orbit_path, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.85f, 1.0f, 0.20f}, 0.8f)));
                     }
                 }
             }
@@ -1979,7 +2091,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
                 kalpana::Color t_col = col;
                 t_col.a = fade * 0.40f;
                 const pebble::math::vec2 s_trail = w2s(p.trail_history[idx]);
-                app.instanced_planets.add_instance(s_trail[0], s_trail[1], p.radius * fade * 0.85f * app.camera_zoom, t_col);
+                app.instanced_planets.add_instance(s_trail[0], s_trail[1], p.radius * fade * 0.85f * app.camera_zoom,
+                                                   t_col);
             }
         }
         // Celestial Body Core & Contact Binary Lobe (Dumbbell shape)
@@ -1990,9 +2103,9 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         if (p.is_singularity || p.type == CelestialType::BlackHoleSingularity || p.is_neutron_star) {
             // 1. Photon Sphere & Outer Einstein Lensing Ring ($r_{\text{photon}} = 1.5 R_s$, $r_{\text{Einstein}} \propto \sqrt{M}$) - Ultra-Subtle & Faint
             const float r_einstein = (p.radius * 1.5f + std::sqrt(p.mass) * 0.45f) * app.camera_zoom;
-            kalpana::Color einstein_col = p.is_singularity 
-                ? kalpana::Color{0.40f, 0.70f, 1.0f, 0.05f} 
-                : kalpana::Color{0.25f, 0.85f, 1.0f, 0.07f};
+            kalpana::Color einstein_col = p.is_singularity
+                                              ? kalpana::Color{0.40f, 0.70f, 1.0f, 0.05f}
+                                              : kalpana::Color{0.25f, 0.85f, 1.0f, 0.07f};
             app.instanced_planets.add_instance(s_pos[0], s_pos[1], r_einstein, einstein_col);
 
             // 2. Innermost Stable Circular Orbit (ISCO) Plasma Glow - Delicate & Thin
@@ -2054,7 +2167,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         const pebble::math::vec2 s_center = w2s(gw.center);
         kalpana::Path gw_ring;
         gw_ring.circle(s_center[0], s_center[1], gw.radius * app.camera_zoom);
-        scene.add(kalpana::Node::shape(gw_ring, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.7f, 1.0f, alpha}, 0.6f)));
+        scene.add(kalpana::Node::shape(
+            gw_ring, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.7f, 1.0f, alpha}, 0.6f)));
     }
 
     // 6b. Supernova Remnant (SNR) Sedov-Taylor Blast Shockwaves (Ultra-faint expanding compression fronts)
@@ -2063,7 +2177,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         const pebble::math::vec2 s_center = w2s(snr.center);
         kalpana::Path snr_ring;
         snr_ring.circle(s_center[0], s_center[1], snr.radius * app.camera_zoom);
-        scene.add(kalpana::Node::shape(snr_ring, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.45f, 0.15f, alpha}, 0.8f)));
+        scene.add(kalpana::Node::shape(
+            snr_ring, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.45f, 0.15f, alpha}, 0.8f)));
     }
 
     // 6c. Magnetohydrodynamic (MHD) Magnetic Flux Tubes (Ultra-faint synchrotron flux arcs between binary stars/pulsars)
@@ -2076,7 +2191,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
             flux_path.move_to(s1[0], s1[1]);
             flux_path.quad_to(smid[0], smid[1], s2[0], s2[1]);
             const float alpha = tube.field_strength * 0.04f;
-            scene.add(kalpana::Node::shape(flux_path, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.95f, 1.0f, alpha}, 0.6f)));
+            scene.add(kalpana::Node::shape(
+                flux_path, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.95f, 1.0f, alpha}, 0.6f)));
         }
 
         // 6e. Planetary Atmospheric Haze & Strange Quark Star Deconfined Gluon Halos (Ultra-faint Sub-layer)
@@ -2089,27 +2205,31 @@ static void render_gpu_frame(PebbleVerseApp& app) {
                 kalpana::Path atmo_ring;
                 atmo_ring.circle(s_pos[0], s_pos[1], (p.radius + 2.5f) * app.camera_zoom);
                 const float atmo_alpha = std::clamp(p.atmosphere_mass / (p.mass * 0.08f), 0.02f, 0.08f);
-                scene.add(kalpana::Node::shape(atmo_ring, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.75f, 1.0f, atmo_alpha}, 1.0f)));
+                scene.add(kalpana::Node::shape(
+                    atmo_ring, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.75f, 1.0f, atmo_alpha}, 1.0f)));
             }
 
             // Strange Quark Star Deconfined Gluon Aura
             if (p.is_strange_star || p.type == CelestialType::StrangeQuarkStar) {
                 kalpana::Path gluon_aura;
                 gluon_aura.circle(s_pos[0], s_pos[1], p.radius * 2.2f * app.camera_zoom);
-                scene.add(kalpana::Node::shape(gluon_aura, kalpana::Paint::stroke(kalpana::Color{0.8f, 0.2f, 1.0f, 0.12f}, 1.2f)));
+                scene.add(kalpana::Node::shape(
+                    gluon_aura, kalpana::Paint::stroke(kalpana::Color{0.8f, 0.2f, 1.0f, 0.12f}, 1.2f)));
             }
 
             // Pulsar Timing Array (PTA) GW Modulation Beacon
             if (p.is_neutron_star && !app.gw_ripples.empty()) {
                 const float gw_strain = app.gw_ripples[0].amplitude;
-                const auto pta = prakriti::celestial::evaluate_pulsar_gw_timing_residual(p.omega, gw_strain, 1.2f, app.time);
+                const auto pta = prakriti::celestial::evaluate_pulsar_gw_timing_residual(
+                    p.omega, gw_strain, 1.2f, app.time);
                 if (std::abs(pta.timing_shift_ns) > 0.01f) {
                     kalpana::Path pta_ray;
                     const pebble::math::vec2 beam_dir{std::cos(p.angle), std::sin(p.angle)};
                     const pebble::math::vec2 ray_end = s_pos + beam_dir * (22.0f * app.camera_zoom);
                     pta_ray.move_to(s_pos[0], s_pos[1]);
                     pta_ray.line_to(ray_end[0], ray_end[1]);
-                    scene.add(kalpana::Node::shape(pta_ray, kalpana::Paint::stroke(kalpana::Color{0.4f, 0.95f, 1.0f, 0.08f}, 0.8f)));
+                    scene.add(kalpana::Node::shape(
+                        pta_ray, kalpana::Paint::stroke(kalpana::Color{0.4f, 0.95f, 1.0f, 0.08f}, 0.8f)));
                 }
             }
         }
@@ -2124,7 +2244,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
             // ── Binary Black Hole Tidal Distortion & Shared Accretion Bridge ──
             for (std::size_t o_idx = idx + 1; o_idx < app.planets.size(); ++o_idx) {
                 const auto& other = app.planets[o_idx];
-                if (!other.alive || (!other.is_singularity && other.type != CelestialType::BlackHoleSingularity)) continue;
+                if (!other.alive || (!other.is_singularity && other.type != CelestialType::BlackHoleSingularity))
+                    continue;
                 const pebble::math::vec2 d = other.pos - p.pos;
                 const float dist = std::sqrt(d[0] * d[0] + d[1] * d[1]);
                 const float mutual_isco = (p.radius + other.radius) * 3.2f;
@@ -2135,11 +2256,14 @@ static void render_gpu_frame(PebbleVerseApp& app) {
                     isco_bridge.move_to(s_pos[0], s_pos[1]);
                     isco_bridge.line_to(s_other[0], s_other[1]);
                     const float bridge_thick = std::max(2.0f, (p.radius + other.radius) * 1.2f * app.camera_zoom);
-                    scene.add(kalpana::Node::shape(isco_bridge, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.65f, 0.2f, 0.85f}, bridge_thick)));
-                    
+                    scene.add(kalpana::Node::shape(isco_bridge,
+                                                   kalpana::Paint::stroke(
+                                                       kalpana::Color{1.0f, 0.65f, 0.2f, 0.85f}, bridge_thick)));
+
                     // Shared Common Ergosphere Envelope
                     const pebble::math::vec2 s_mid = (s_pos + s_other) * 0.5f;
-                    app.instanced_planets.add_instance(s_mid[0], s_mid[1], dist * 1.1f * app.camera_zoom, kalpana::Color{0.6f, 0.25f, 1.0f, 0.25f});
+                    app.instanced_planets.add_instance(s_mid[0], s_mid[1], dist * 1.1f * app.camera_zoom,
+                                                       kalpana::Color{0.6f, 0.25f, 1.0f, 0.25f});
                 }
             }
 
@@ -2154,15 +2278,19 @@ static void render_gpu_frame(PebbleVerseApp& app) {
 
             // Layer 3: Razor-Sharp Relativistic Photon Sphere / Einstein Ring
             const float photon_ring_r = p.radius * 1.6f * app.camera_zoom;
-            app.instanced_planets.add_instance(s_pos[0], s_pos[1], photon_ring_r, kalpana::Color{1.0f, 0.92f, 0.65f, 0.95f});
+            app.instanced_planets.add_instance(s_pos[0], s_pos[1], photon_ring_r,
+                                               kalpana::Color{1.0f, 0.92f, 0.65f, 0.95f});
 
             // Layer 4: Absolute Pitch-Black Event Horizon ($R_s = \frac{2GM}{c^2}$) Void Core
             // Renders on top with complete opacity so zero light escapes from within
-            app.instanced_planets.add_instance(s_pos[0], s_pos[1], p.radius * app.camera_zoom, kalpana::Color{0.005f, 0.005f, 0.012f, 1.0f});
-        } else if (p.is_neutron_star || p.type == CelestialType::NeutronStar) {
+            app.instanced_planets.add_instance(s_pos[0], s_pos[1], p.radius * app.camera_zoom,
+                                               kalpana::Color{0.005f, 0.005f, 0.012f, 1.0f});
+        }
+        else if (p.is_neutron_star || p.type == CelestialType::NeutronStar) {
             // Radiant Pulsar Magnetosphere Halo
             const float pulsar_halo_r = p.radius * 2.5f * app.camera_zoom;
-            app.instanced_planets.add_instance(s_pos[0], s_pos[1], pulsar_halo_r, kalpana::Color{0.3f, 0.9f, 1.0f, 0.25f});
+            app.instanced_planets.add_instance(s_pos[0], s_pos[1], pulsar_halo_r,
+                                               kalpana::Color{0.3f, 0.9f, 1.0f, 0.25f});
 
             // High-Speed Pulsar Magnetic Dipole Sweeping Beams
             const pebble::math::vec2 beam_vec{std::cos(p.angle), std::sin(p.angle)};
@@ -2171,8 +2299,10 @@ static void render_gpu_frame(PebbleVerseApp& app) {
             const pebble::math::vec2 b2 = s_pos + beam_vec * (p.radius * 3.6f * app.camera_zoom);
             dipole_beam.move_to(b1[0], b1[1]);
             dipole_beam.line_to(b2[0], b2[1]);
-            scene.add(kalpana::Node::shape(dipole_beam, kalpana::Paint::stroke(kalpana::Color{0.4f, 0.95f, 1.0f, 0.85f}, 1.5f)));
-        } else if (p.temperature > 1800.0f && p.mass >= 220.0f) {
+            scene.add(kalpana::Node::shape(dipole_beam,
+                                           kalpana::Paint::stroke(kalpana::Color{0.4f, 0.95f, 1.0f, 0.85f}, 1.5f)));
+        }
+        else if (p.temperature > 1800.0f && p.mass >= 220.0f) {
             // Incandescent Fusion Star Corona (Only for genuine fusion stars!)
             const float corona_r = p.radius * 1.8f * app.camera_zoom;
             app.instanced_planets.add_instance(s_pos[0], s_pos[1], corona_r, kalpana::Color{1.0f, 0.6f, 0.1f, 0.20f});
@@ -2185,7 +2315,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         kalpana::Path sling_line;
         sling_line.move_to(app.slingshot.start_x, app.slingshot.start_y);
         sling_line.line_to(app.slingshot.current_x, app.slingshot.current_y);
-        scene.add(kalpana::Node::shape(sling_line, kalpana::Paint::stroke(kalpana::Color{0.2f, 0.95f, 0.4f, 0.85f}, 2.0f)));
+        scene.add(kalpana::Node::shape(
+            sling_line, kalpana::Paint::stroke(kalpana::Color{0.2f, 0.95f, 0.4f, 0.85f}, 2.0f)));
 
         kalpana::Path sling_head;
         sling_head.circle(app.slingshot.start_x, app.slingshot.start_y, 4.0f);
@@ -2213,7 +2344,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
             sim_pos = sim_pos + sim_vel * pred_dt;
             traj_path.line_to(sim_pos[0], sim_pos[1]);
         }
-        scene.add(kalpana::Node::shape(traj_path, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.9f, 0.6f, 0.45f}, 1.5f)));
+        scene.add(
+            kalpana::Node::shape(traj_path, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.9f, 0.6f, 0.45f}, 1.5f)));
     }
 
     // 6. Real-Time Open-World Cosmic Radar Inset (Bottom-Right with Adaptive Scale)
@@ -2233,12 +2365,16 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         kalpana::Path r_cross;
         const float cx = radar_x + radar_w * 0.5f;
         const float cy = radar_y + radar_h * 0.5f;
-        r_cross.move_to(cx - 6.0f, cy); r_cross.line_to(cx + 6.0f, cy);
-        r_cross.move_to(cx, cy - 6.0f); r_cross.line_to(cx, cy + 6.0f);
+        r_cross.move_to(cx - 6.0f, cy);
+        r_cross.line_to(cx + 6.0f, cy);
+        r_cross.move_to(cx, cy - 6.0f);
+        r_cross.line_to(cx, cy + 6.0f);
         scene.add(kalpana::Node::shape(r_cross, kalpana::Paint::stroke(kalpana::Color{0.25f, 0.6f, 0.9f, 0.4f}, 0.8f)));
 
         // Viewport bounds rectangle on radar
-        const float radar_world_span = (app.radar_zoom_level == 0) ? (FW * 1.5f) : ((app.radar_zoom_level == 1) ? (FW * 3.5f) : (FW * 7.0f));
+        const float radar_world_span = (app.radar_zoom_level == 0)
+                                           ? (FW * 1.5f)
+                                           : ((app.radar_zoom_level == 1) ? (FW * 3.5f) : (FW * 7.0f));
         const float vp_rw = (FW / radar_world_span) * radar_w;
         const float vp_rh = (FH / radar_world_span) * radar_h;
         const float vp_rx = cx + ((app.camera_pos[0] - FW * 0.5f) / radar_world_span) * radar_w - vp_rw * 0.5f;
@@ -2246,14 +2382,16 @@ static void render_gpu_frame(PebbleVerseApp& app) {
 
         kalpana::Path vp_rect;
         vp_rect.rect(vp_rx, vp_ry, vp_rw, vp_rh);
-        scene.add(kalpana::Node::shape(vp_rect, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.85f, 1.0f, 0.45f}, 0.8f)));
+        scene.add(kalpana::Node::shape(
+            vp_rect, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.85f, 1.0f, 0.45f}, 0.8f)));
 
         // Map all bodies across open universe onto radar coordinates
         for (const auto& p : app.planets) {
             if (!p.alive) continue;
             const float rx = cx + ((p.pos[0] - FW * 0.5f) / radar_world_span) * radar_w;
             const float ry = cy + ((p.pos[1] - FH * 0.5f) / radar_world_span) * radar_h;
-            if (rx >= radar_x + 1.0f && rx <= radar_x + radar_w - 1.0f && ry >= radar_y + 1.0f && ry <= radar_y + radar_h - 1.0f) {
+            if (rx >= radar_x + 1.0f && rx <= radar_x + radar_w - 1.0f && ry >= radar_y + 1.0f && ry <= radar_y +
+                radar_h - 1.0f) {
                 kalpana::Path p_dot;
                 const float dot_r = (p.mass > 500.0f) ? 2.2f : ((p.mass > 100.0f) ? 1.5f : 0.85f);
                 p_dot.circle(rx, ry, dot_r);
@@ -2273,11 +2411,13 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         kalpana::Path hr_box;
         hr_box.rect(hr_x, hr_y, hr_w, hr_h);
         scene.add(kalpana::Node::shape(hr_box, kalpana::Paint::fill(kalpana::Color{0.015f, 0.03f, 0.06f, 0.65f})));
-        scene.add(kalpana::Node::shape(hr_box, kalpana::Paint::stroke(kalpana::Color{0.25f, 0.45f, 0.75f, 0.35f}, 0.8f)));
+        scene.add(
+            kalpana::Node::shape(hr_box, kalpana::Paint::stroke(kalpana::Color{0.25f, 0.45f, 0.75f, 0.35f}, 0.8f)));
 
         // Axis line
         kalpana::Path hr_axes;
-        hr_axes.move_to(hr_x + 6.0f, hr_y + 6.0f); hr_axes.line_to(hr_x + 6.0f, hr_y + hr_h - 6.0f);
+        hr_axes.move_to(hr_x + 6.0f, hr_y + 6.0f);
+        hr_axes.line_to(hr_x + 6.0f, hr_y + hr_h - 6.0f);
         hr_axes.line_to(hr_x + hr_w - 6.0f, hr_y + hr_h - 6.0f);
         scene.add(kalpana::Node::shape(hr_axes, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.5f, 0.8f, 0.25f}, 0.6f)));
 
@@ -2300,178 +2440,327 @@ static void render_gpu_frame(PebbleVerseApp& app) {
     }
 
     // High-Legibility Vector Stroke Typography (Continuous crisp anti-aliased line strokes)
-    auto draw_stroke_char = [&](const float x, const float y, const char ch, const kalpana::Color col, const float w = 7.0f, const float h = 11.0f) -> float {
+    auto draw_stroke_char = [&](const float x, const float y, const char ch, const kalpana::Color col,
+                                const float w = 7.0f, const float h = 11.0f) -> float {
         kalpana::Path p;
         const float x0 = x, x1 = x + w * 0.5f, x2 = x + w;
         const float y0 = y, y1 = y + h * 0.5f, y2 = y + h;
 
         switch (ch) {
-            case 'A':
-                p.move_to(x0, y2); p.line_to(x0, y1); p.line_to(x1, y0); p.line_to(x2, y1); p.line_to(x2, y2);
-                p.move_to(x0, y1); p.line_to(x2, y1);
-                break;
-            case 'B':
-                p.move_to(x0, y2); p.line_to(x0, y0); p.line_to(x1 + 1.0f, y0); p.line_to(x2, y0 + h * 0.25f);
-                p.line_to(x1 + 1.0f, y1); p.line_to(x2, y1 + h * 0.25f); p.line_to(x1 + 1.0f, y2); p.line_to(x0, y2);
-                p.move_to(x0, y1); p.line_to(x1 + 1.0f, y1);
-                break;
-            case 'C':
-                p.move_to(x2, y0); p.line_to(x0, y0); p.line_to(x0, y2); p.line_to(x2, y2);
-                break;
-            case 'D':
-                p.move_to(x0, y0); p.line_to(x1, y0); p.line_to(x2, y1); p.line_to(x1, y2); p.line_to(x0, y2); p.line_to(x0, y0);
-                break;
-            case 'E':
-                p.move_to(x2, y0); p.line_to(x0, y0); p.line_to(x0, y2); p.line_to(x2, y2);
-                p.move_to(x0, y1); p.line_to(x1 + 1.0f, y1);
-                break;
-            case 'F':
-                p.move_to(x2, y0); p.line_to(x0, y0); p.line_to(x0, y2);
-                p.move_to(x0, y1); p.line_to(x1 + 1.0f, y1);
-                break;
-            case 'G':
-                p.move_to(x2, y0); p.line_to(x0, y0); p.line_to(x0, y2); p.line_to(x2, y2); p.line_to(x2, y1); p.line_to(x1, y1);
-                break;
-            case 'H':
-                p.move_to(x0, y0); p.line_to(x0, y2);
-                p.move_to(x2, y0); p.line_to(x2, y2);
-                p.move_to(x0, y1); p.line_to(x2, y1);
-                break;
-            case 'I':
-                p.move_to(x0, y0); p.line_to(x2, y0);
-                p.move_to(x1, y0); p.line_to(x1, y2);
-                p.move_to(x0, y2); p.line_to(x2, y2);
-                break;
-            case 'K':
-                p.move_to(x0, y0); p.line_to(x0, y2);
-                p.move_to(x2, y0); p.line_to(x0, y1); p.line_to(x2, y2);
-                break;
-            case 'L':
-                p.move_to(x0, y0); p.line_to(x0, y2); p.line_to(x2, y2);
-                break;
-            case 'M':
-                p.move_to(x0, y2); p.line_to(x0, y0); p.line_to(x1, y1); p.line_to(x2, y0); p.line_to(x2, y2);
-                break;
-            case 'N':
-                p.move_to(x0, y2); p.line_to(x0, y0); p.line_to(x2, y2); p.line_to(x2, y0);
-                break;
-            case 'O':
-            case '0':
-                p.move_to(x0, y0); p.line_to(x2, y0); p.line_to(x2, y2); p.line_to(x0, y2); p.line_to(x0, y0);
-                break;
-            case 'P':
-                p.move_to(x0, y2); p.line_to(x0, y0); p.line_to(x2, y0); p.line_to(x2, y1); p.line_to(x0, y1);
-                break;
-            case 'R':
-                p.move_to(x0, y2); p.line_to(x0, y0); p.line_to(x2, y0); p.line_to(x2, y1); p.line_to(x0, y1);
-                p.move_to(x1, y1); p.line_to(x2, y2);
-                break;
-            case 'S':
-                p.move_to(x2, y0); p.line_to(x0, y0); p.line_to(x0, y1); p.line_to(x2, y1); p.line_to(x2, y2); p.line_to(x0, y2);
-                break;
-            case 'T':
-                p.move_to(x0, y0); p.line_to(x2, y0);
-                p.move_to(x1, y0); p.line_to(x1, y2);
-                break;
-            case 'U':
-                p.move_to(x0, y0); p.line_to(x0, y2); p.line_to(x2, y2); p.line_to(x2, y0);
-                break;
-            case 'V':
-                p.move_to(x0, y0); p.line_to(x1, y2); p.line_to(x2, y0);
-                break;
-            case 'W':
-                p.move_to(x0, y0); p.line_to(x0, y2); p.line_to(x1, y1); p.line_to(x2, y2); p.line_to(x2, y0);
-                break;
-            case 'X':
-                p.move_to(x0, y0); p.line_to(x2, y2);
-                p.move_to(x2, y0); p.line_to(x0, y2);
-                break;
-            case 'Y':
-                p.move_to(x0, y0); p.line_to(x1, y1); p.line_to(x2, y0);
-                p.move_to(x1, y1); p.line_to(x1, y2);
-                break;
-            case 'Z':
-                p.move_to(x0, y0); p.line_to(x2, y0); p.line_to(x0, y2); p.line_to(x2, y2);
-                break;
-            case 'Q':
-                p.move_to(x0, y0); p.line_to(x2, y0); p.line_to(x2, y2); p.line_to(x0, y2); p.line_to(x0, y0);
-                p.move_to(x1, y1); p.line_to(x2 + 1.0f, y2 + 1.0f);
-                break;
-            case '<':
-                p.move_to(x2, y0); p.line_to(x0, y1); p.line_to(x2, y2);
-                break;
-            case '>':
-                p.move_to(x0, y0); p.line_to(x2, y1); p.line_to(x0, y2);
-                break;
-            case '(':
-                p.move_to(x2, y0); p.line_to(x0, y1); p.line_to(x2, y2);
-                break;
-            case ')':
-                p.move_to(x0, y0); p.line_to(x2, y1); p.line_to(x0, y2);
-                break;
-            case '%':
-                p.circle(x0 + 1.5f, y0 + 2.0f, 1.0f);
-                p.move_to(x0, y2); p.line_to(x2, y0);
-                p.circle(x2 - 1.5f, y2 - 2.0f, 1.0f);
-                break;
-            case '1':
-                p.move_to(x0, y0 + 3.0f); p.line_to(x1, y0); p.line_to(x1, y2);
-                p.move_to(x0, y2); p.line_to(x2, y2);
-                break;
-            case '2':
-                p.move_to(x0, y0); p.line_to(x2, y0); p.line_to(x2, y1); p.line_to(x0, y2); p.line_to(x2, y2);
-                break;
-            case '3':
-                p.move_to(x0, y0); p.line_to(x2, y0); p.line_to(x2, y1); p.line_to(x0, y1);
-                p.move_to(x2, y1); p.line_to(x2, y2); p.line_to(x0, y2);
-                break;
-            case '4':
-                p.move_to(x0, y0); p.line_to(x0, y1); p.line_to(x2, y1);
-                p.move_to(x2, y0); p.line_to(x2, y2);
-                break;
-            case '5':
-                p.move_to(x2, y0); p.line_to(x0, y0); p.line_to(x0, y1); p.line_to(x2, y1); p.line_to(x2, y2); p.line_to(x0, y2);
-                break;
-            case '6':
-                p.move_to(x2, y0); p.line_to(x0, y0); p.line_to(x0, y2); p.line_to(x2, y2); p.line_to(x2, y1); p.line_to(x0, y1);
-                break;
-            case '7':
-                p.move_to(x0, y0); p.line_to(x2, y0); p.line_to(x1, y2);
-                break;
-            case '8':
-                p.move_to(x0, y0); p.line_to(x2, y0); p.line_to(x2, y2); p.line_to(x0, y2); p.line_to(x0, y0);
-                p.move_to(x0, y1); p.line_to(x2, y1);
-                break;
-            case '9':
-                p.move_to(x2, y1); p.line_to(x0, y1); p.line_to(x0, y0); p.line_to(x2, y0); p.line_to(x2, y2); p.line_to(x0, y2);
-                break;
-            case ':':
-                p.circle(x1, y0 + 3.0f, 1.0f);
-                p.circle(x1, y2 - 3.0f, 1.0f);
-                break;
-            case '.':
-                p.circle(x1, y2 - 1.0f, 1.0f);
-                break;
-            case '-':
-                p.move_to(x0, y1); p.line_to(x2, y1);
-                break;
-            case '+':
-                p.move_to(x0, y1); p.line_to(x2, y1);
-                p.move_to(x1, y0 + 2.0f); p.line_to(x1, y2 - 2.0f);
-                break;
-            case '/':
-                p.move_to(x0, y2); p.line_to(x2, y0);
-                break;
-            case '[':
-                p.move_to(x2, y0); p.line_to(x0, y0); p.line_to(x0, y2); p.line_to(x2, y2);
-                break;
-            case ']':
-                p.move_to(x0, y0); p.line_to(x2, y0); p.line_to(x2, y2); p.line_to(x0, y2);
-                break;
-            case ' ':
-                return w * 0.6f;
-            default:
-                break;
+        case 'A':
+            p.move_to(x0, y2);
+            p.line_to(x0, y1);
+            p.line_to(x1, y0);
+            p.line_to(x2, y1);
+            p.line_to(x2, y2);
+            p.move_to(x0, y1);
+            p.line_to(x2, y1);
+            break;
+        case 'B':
+            p.move_to(x0, y2);
+            p.line_to(x0, y0);
+            p.line_to(x1 + 1.0f, y0);
+            p.line_to(x2, y0 + h * 0.25f);
+            p.line_to(x1 + 1.0f, y1);
+            p.line_to(x2, y1 + h * 0.25f);
+            p.line_to(x1 + 1.0f, y2);
+            p.line_to(x0, y2);
+            p.move_to(x0, y1);
+            p.line_to(x1 + 1.0f, y1);
+            break;
+        case 'C':
+            p.move_to(x2, y0);
+            p.line_to(x0, y0);
+            p.line_to(x0, y2);
+            p.line_to(x2, y2);
+            break;
+        case 'D':
+            p.move_to(x0, y0);
+            p.line_to(x1, y0);
+            p.line_to(x2, y1);
+            p.line_to(x1, y2);
+            p.line_to(x0, y2);
+            p.line_to(x0, y0);
+            break;
+        case 'E':
+            p.move_to(x2, y0);
+            p.line_to(x0, y0);
+            p.line_to(x0, y2);
+            p.line_to(x2, y2);
+            p.move_to(x0, y1);
+            p.line_to(x1 + 1.0f, y1);
+            break;
+        case 'F':
+            p.move_to(x2, y0);
+            p.line_to(x0, y0);
+            p.line_to(x0, y2);
+            p.move_to(x0, y1);
+            p.line_to(x1 + 1.0f, y1);
+            break;
+        case 'G':
+            p.move_to(x2, y0);
+            p.line_to(x0, y0);
+            p.line_to(x0, y2);
+            p.line_to(x2, y2);
+            p.line_to(x2, y1);
+            p.line_to(x1, y1);
+            break;
+        case 'H':
+            p.move_to(x0, y0);
+            p.line_to(x0, y2);
+            p.move_to(x2, y0);
+            p.line_to(x2, y2);
+            p.move_to(x0, y1);
+            p.line_to(x2, y1);
+            break;
+        case 'I':
+            p.move_to(x0, y0);
+            p.line_to(x2, y0);
+            p.move_to(x1, y0);
+            p.line_to(x1, y2);
+            p.move_to(x0, y2);
+            p.line_to(x2, y2);
+            break;
+        case 'K':
+            p.move_to(x0, y0);
+            p.line_to(x0, y2);
+            p.move_to(x2, y0);
+            p.line_to(x0, y1);
+            p.line_to(x2, y2);
+            break;
+        case 'L':
+            p.move_to(x0, y0);
+            p.line_to(x0, y2);
+            p.line_to(x2, y2);
+            break;
+        case 'M':
+            p.move_to(x0, y2);
+            p.line_to(x0, y0);
+            p.line_to(x1, y1);
+            p.line_to(x2, y0);
+            p.line_to(x2, y2);
+            break;
+        case 'N':
+            p.move_to(x0, y2);
+            p.line_to(x0, y0);
+            p.line_to(x2, y2);
+            p.line_to(x2, y0);
+            break;
+        case 'O':
+        case '0':
+            p.move_to(x0, y0);
+            p.line_to(x2, y0);
+            p.line_to(x2, y2);
+            p.line_to(x0, y2);
+            p.line_to(x0, y0);
+            break;
+        case 'P':
+            p.move_to(x0, y2);
+            p.line_to(x0, y0);
+            p.line_to(x2, y0);
+            p.line_to(x2, y1);
+            p.line_to(x0, y1);
+            break;
+        case 'R':
+            p.move_to(x0, y2);
+            p.line_to(x0, y0);
+            p.line_to(x2, y0);
+            p.line_to(x2, y1);
+            p.line_to(x0, y1);
+            p.move_to(x1, y1);
+            p.line_to(x2, y2);
+            break;
+        case 'S':
+            p.move_to(x2, y0);
+            p.line_to(x0, y0);
+            p.line_to(x0, y1);
+            p.line_to(x2, y1);
+            p.line_to(x2, y2);
+            p.line_to(x0, y2);
+            break;
+        case 'T':
+            p.move_to(x0, y0);
+            p.line_to(x2, y0);
+            p.move_to(x1, y0);
+            p.line_to(x1, y2);
+            break;
+        case 'U':
+            p.move_to(x0, y0);
+            p.line_to(x0, y2);
+            p.line_to(x2, y2);
+            p.line_to(x2, y0);
+            break;
+        case 'V':
+            p.move_to(x0, y0);
+            p.line_to(x1, y2);
+            p.line_to(x2, y0);
+            break;
+        case 'W':
+            p.move_to(x0, y0);
+            p.line_to(x0, y2);
+            p.line_to(x1, y1);
+            p.line_to(x2, y2);
+            p.line_to(x2, y0);
+            break;
+        case 'X':
+            p.move_to(x0, y0);
+            p.line_to(x2, y2);
+            p.move_to(x2, y0);
+            p.line_to(x0, y2);
+            break;
+        case 'Y':
+            p.move_to(x0, y0);
+            p.line_to(x1, y1);
+            p.line_to(x2, y0);
+            p.move_to(x1, y1);
+            p.line_to(x1, y2);
+            break;
+        case 'Z':
+            p.move_to(x0, y0);
+            p.line_to(x2, y0);
+            p.line_to(x0, y2);
+            p.line_to(x2, y2);
+            break;
+        case 'Q':
+            p.move_to(x0, y0);
+            p.line_to(x2, y0);
+            p.line_to(x2, y2);
+            p.line_to(x0, y2);
+            p.line_to(x0, y0);
+            p.move_to(x1, y1);
+            p.line_to(x2 + 1.0f, y2 + 1.0f);
+            break;
+        case '<':
+            p.move_to(x2, y0);
+            p.line_to(x0, y1);
+            p.line_to(x2, y2);
+            break;
+        case '>':
+            p.move_to(x0, y0);
+            p.line_to(x2, y1);
+            p.line_to(x0, y2);
+            break;
+        case '(':
+            p.move_to(x2, y0);
+            p.line_to(x0, y1);
+            p.line_to(x2, y2);
+            break;
+        case ')':
+            p.move_to(x0, y0);
+            p.line_to(x2, y1);
+            p.line_to(x0, y2);
+            break;
+        case '%':
+            p.circle(x0 + 1.5f, y0 + 2.0f, 1.0f);
+            p.move_to(x0, y2);
+            p.line_to(x2, y0);
+            p.circle(x2 - 1.5f, y2 - 2.0f, 1.0f);
+            break;
+        case '1':
+            p.move_to(x0, y0 + 3.0f);
+            p.line_to(x1, y0);
+            p.line_to(x1, y2);
+            p.move_to(x0, y2);
+            p.line_to(x2, y2);
+            break;
+        case '2':
+            p.move_to(x0, y0);
+            p.line_to(x2, y0);
+            p.line_to(x2, y1);
+            p.line_to(x0, y2);
+            p.line_to(x2, y2);
+            break;
+        case '3':
+            p.move_to(x0, y0);
+            p.line_to(x2, y0);
+            p.line_to(x2, y1);
+            p.line_to(x0, y1);
+            p.move_to(x2, y1);
+            p.line_to(x2, y2);
+            p.line_to(x0, y2);
+            break;
+        case '4':
+            p.move_to(x0, y0);
+            p.line_to(x0, y1);
+            p.line_to(x2, y1);
+            p.move_to(x2, y0);
+            p.line_to(x2, y2);
+            break;
+        case '5':
+            p.move_to(x2, y0);
+            p.line_to(x0, y0);
+            p.line_to(x0, y1);
+            p.line_to(x2, y1);
+            p.line_to(x2, y2);
+            p.line_to(x0, y2);
+            break;
+        case '6':
+            p.move_to(x2, y0);
+            p.line_to(x0, y0);
+            p.line_to(x0, y2);
+            p.line_to(x2, y2);
+            p.line_to(x2, y1);
+            p.line_to(x0, y1);
+            break;
+        case '7':
+            p.move_to(x0, y0);
+            p.line_to(x2, y0);
+            p.line_to(x1, y2);
+            break;
+        case '8':
+            p.move_to(x0, y0);
+            p.line_to(x2, y0);
+            p.line_to(x2, y2);
+            p.line_to(x0, y2);
+            p.line_to(x0, y0);
+            p.move_to(x0, y1);
+            p.line_to(x2, y1);
+            break;
+        case '9':
+            p.move_to(x2, y1);
+            p.line_to(x0, y1);
+            p.line_to(x0, y0);
+            p.line_to(x2, y0);
+            p.line_to(x2, y2);
+            p.line_to(x0, y2);
+            break;
+        case ':':
+            p.circle(x1, y0 + 3.0f, 1.0f);
+            p.circle(x1, y2 - 3.0f, 1.0f);
+            break;
+        case '.':
+            p.circle(x1, y2 - 1.0f, 1.0f);
+            break;
+        case '-':
+            p.move_to(x0, y1);
+            p.line_to(x2, y1);
+            break;
+        case '+':
+            p.move_to(x0, y1);
+            p.line_to(x2, y1);
+            p.move_to(x1, y0 + 2.0f);
+            p.line_to(x1, y2 - 2.0f);
+            break;
+        case '/':
+            p.move_to(x0, y2);
+            p.line_to(x2, y0);
+            break;
+        case '[':
+            p.move_to(x2, y0);
+            p.line_to(x0, y0);
+            p.line_to(x0, y2);
+            p.line_to(x2, y2);
+            break;
+        case ']':
+            p.move_to(x0, y0);
+            p.line_to(x2, y0);
+            p.line_to(x2, y2);
+            p.line_to(x0, y2);
+            break;
+        case ' ':
+            return w * 0.6f;
+        default:
+            break;
         }
 
         scene.add(kalpana::Node::shape(p, kalpana::Paint::stroke(col, 1.4f)));
@@ -2480,7 +2769,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
 
     // 6. Top Header Vector HUD Banner with Crisp Stroke Text
     {
-        auto draw_text = [&](const float x, const float y, const std::string_view str, const kalpana::Color col, const float w = 7.0f, const float h = 11.0f) -> float {
+        auto draw_text = [&](const float x, const float y, const std::string_view str, const kalpana::Color col,
+                             const float w = 7.0f, const float h = 11.0f) -> float {
             float cx = x;
             for (const char ch : str) {
                 cx += draw_stroke_char(cx, y, ch, col, w, h);
@@ -2495,7 +2785,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         kalpana::Path hud_border;
         hud_border.move_to(0.0f, 32.0f);
         hud_border.line_to(FW, 32.0f);
-        scene.add(kalpana::Node::shape(hud_border, kalpana::Paint::stroke(kalpana::Color{0.2f, 0.4f, 0.7f, 0.6f}, 1.0f)));
+        scene.add(
+            kalpana::Node::shape(hud_border, kalpana::Paint::stroke(kalpana::Color{0.2f, 0.4f, 0.7f, 0.6f}, 1.0f)));
 
         // Title Tag: "PEBBLE"
         draw_text(12.0f, 10.0f, "PEBBLE", kalpana::Color{0.4f, 0.8f, 1.0f, 0.95f}, 8.0f, 12.0f);
@@ -2504,25 +2795,29 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         kalpana::Path bodies_dot;
         bodies_dot.circle(105.0f, 16.0f, 3.5f);
         scene.add(kalpana::Node::shape(bodies_dot, kalpana::Paint::fill(kalpana::Color{0.2f, 0.85f, 1.0f, 0.95f})));
-        draw_text(115.0f, 10.0f, "BODIES:" + std::to_string(app.active_planets_count), kalpana::Color{0.2f, 0.85f, 1.0f, 0.95f}, 6.5f, 11.0f);
+        draw_text(115.0f, 10.0f, "BODIES:" + std::to_string(app.active_planets_count),
+                  kalpana::Color{0.2f, 0.85f, 1.0f, 0.95f}, 6.5f, 11.0f);
 
         // 2) Green Dot + "MERGES: <count>"
         kalpana::Path merge_dot;
         merge_dot.circle(235.0f, 16.0f, 3.5f);
         scene.add(kalpana::Node::shape(merge_dot, kalpana::Paint::fill(kalpana::Color{0.25f, 0.95f, 0.45f, 0.95f})));
-        draw_text(245.0f, 10.0f, "MERGES:" + std::to_string(app.fusions_count), kalpana::Color{0.25f, 0.95f, 0.45f, 0.95f}, 6.5f, 11.0f);
+        draw_text(245.0f, 10.0f, "MERGES:" + std::to_string(app.fusions_count),
+                  kalpana::Color{0.25f, 0.95f, 0.45f, 0.95f}, 6.5f, 11.0f);
 
         // 3) Red Dot + "SHARDS: <count>"
         kalpana::Path frac_dot;
         frac_dot.circle(385.0f, 16.0f, 3.5f);
         scene.add(kalpana::Node::shape(frac_dot, kalpana::Paint::fill(kalpana::Color{1.0f, 0.35f, 0.35f, 0.95f})));
-        draw_text(395.0f, 10.0f, "SHARDS:" + std::to_string(app.fractures_count), kalpana::Color{1.0f, 0.35f, 0.35f, 0.95f}, 6.5f, 11.0f);
+        draw_text(395.0f, 10.0f, "SHARDS:" + std::to_string(app.fractures_count),
+                  kalpana::Color{1.0f, 0.35f, 0.35f, 0.95f}, 6.5f, 11.0f);
 
         // 4) Violet Dot + "COMPUTE: <time>MS"
         kalpana::Path comp_dot;
         comp_dot.circle(535.0f, 16.0f, 3.5f);
         scene.add(kalpana::Node::shape(comp_dot, kalpana::Paint::fill(kalpana::Color{0.85f, 0.45f, 1.0f, 0.95f})));
-        draw_text(545.0f, 10.0f, "COMPUTE:" + std::to_string(static_cast<int>(app.compute_ms)) + "MS", kalpana::Color{0.85f, 0.45f, 1.0f, 0.95f}, 6.5f, 11.0f);
+        draw_text(545.0f, 10.0f, "COMPUTE:" + std::to_string(static_cast<int>(app.compute_ms)) + "MS",
+                  kalpana::Color{0.85f, 0.45f, 1.0f, 0.95f}, 6.5f, 11.0f);
 
         // 5) Active Configured Parameters Display (Clean Physics Telemetry, No Controls Text)
         // G Constant
@@ -2535,11 +2830,16 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         draw_text(745.0f, 10.0f, th_str, kalpana::Color{0.45f, 0.85f, 1.0f, 0.95f}, 6.5f, 11.0f);
 
         // Spectral View Mode (Toggleable via V / 1-3)
-        const char* view_str = (app.view_mode == SpectralViewMode::OpticalRGB) ? "VIEW:OPTICAL" :
-                              ((app.view_mode == SpectralViewMode::ThermalInfrared) ? "VIEW:THERMAL" : "VIEW:RADIO/XRAY");
-        const kalpana::Color view_col = (app.view_mode == SpectralViewMode::OpticalRGB) ? kalpana::Color{0.5f, 0.95f, 1.0f, 0.95f} :
-                                       ((app.view_mode == SpectralViewMode::ThermalInfrared) ? kalpana::Color{1.0f, 0.45f, 0.2f, 0.95f} :
-                                                                                              kalpana::Color{0.85f, 0.4f, 1.0f, 0.95f});
+        const char* view_str = (app.view_mode == SpectralViewMode::OpticalRGB)
+                                   ? "VIEW:OPTICAL"
+                                   : ((app.view_mode == SpectralViewMode::ThermalInfrared)
+                                          ? "VIEW:THERMAL"
+                                          : "VIEW:RADIO/XRAY");
+        const kalpana::Color view_col = (app.view_mode == SpectralViewMode::OpticalRGB)
+                                            ? kalpana::Color{0.5f, 0.95f, 1.0f, 0.95f}
+                                            : ((app.view_mode == SpectralViewMode::ThermalInfrared)
+                                                   ? kalpana::Color{1.0f, 0.45f, 0.2f, 0.95f}
+                                                   : kalpana::Color{0.85f, 0.4f, 1.0f, 0.95f});
         draw_text(850.0f, 10.0f, view_str, view_col, 6.5f, 11.0f);
 
         // Cosmic Metallicity Z Index
@@ -2548,17 +2848,21 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         draw_text(995.0f, 10.0f, z_str, kalpana::Color{1.0f, 0.75f, 0.3f, 0.95f}, 6.5f, 11.0f);
 
         // Sector Coordinates Display (e.g. SEC:[0, 0])
-        const std::string sec_str = "SEC:[" + std::to_string(app.current_sector.x) + "," + std::to_string(app.current_sector.y) + "]";
+        const std::string sec_str = "SEC:[" + std::to_string(app.current_sector.x) + "," + std::to_string(
+            app.current_sector.y) + "]";
         draw_text(1075.0f, 10.0f, sec_str, kalpana::Color{0.3f, 0.95f, 0.85f, 0.95f}, 6.0f, 11.0f);
 
         // Time Dilation Speed
         const int speed_pct = static_cast<int>(app.time_dilation * 100.0f);
-        std::string time_str = "TIME:" + std::to_string(speed_pct / 100) + "." + std::to_string((speed_pct % 100) / 10) + "X";
+        std::string time_str = "TIME:" + std::to_string(speed_pct / 100) + "." + std::to_string((speed_pct % 100) / 10)
+            + "X";
         draw_text(1175.0f, 10.0f, time_str, kalpana::Color{0.6f, 0.95f, 0.7f, 0.95f}, 6.0f, 11.0f);
 
         // Overlays Layer Toggle Status
         std::string over_hud = app.show_analytics_overlays ? "OVERLAYS:ON" : "OVERLAYS:OFF";
-        kalpana::Color over_col = app.show_analytics_overlays ? kalpana::Color{0.4f, 0.95f, 0.5f, 0.95f} : kalpana::Color{0.6f, 0.6f, 0.6f, 0.75f};
+        kalpana::Color over_col = app.show_analytics_overlays
+                                      ? kalpana::Color{0.4f, 0.95f, 0.5f, 0.95f}
+                                      : kalpana::Color{0.6f, 0.6f, 0.6f, 0.75f};
         draw_text(1250.0f, 10.0f, over_hud, over_col, 5.5f, 10.0f);
 
         // 6) NADI Real-Time Compute Sparkline Waveform (Ultra-Faint Mini Wave in Top Right)
@@ -2572,7 +2876,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
             spark_line.line_to(sx_base + 30.0f, sy_base - comp_h * 0.8f);
             spark_line.line_to(sx_base + 45.0f, sy_base - comp_h * 0.5f);
             spark_line.line_to(sx_base + 60.0f, sy_base);
-            scene.add(kalpana::Node::shape(spark_line, kalpana::Paint::stroke(kalpana::Color{0.85f, 0.45f, 1.0f, 0.40f}, 0.8f)));
+            scene.add(kalpana::Node::shape(
+                spark_line, kalpana::Paint::stroke(kalpana::Color{0.85f, 0.45f, 1.0f, 0.40f}, 0.8f)));
         }
     }
 
@@ -2585,7 +2890,8 @@ static void render_gpu_frame(PebbleVerseApp& app) {
 
     // 8. Startup Parameter Configuration Popup Modal
     if (app.in_startup_modal) {
-        auto draw_modal_text = [&](const float x, const float y, const std::string_view str, const kalpana::Color col, const float w = 7.5f, const float h = 12.0f) -> float {
+        auto draw_modal_text = [&](const float x, const float y, const std::string_view str, const kalpana::Color col,
+                                   const float w = 7.5f, const float h = 12.0f) -> float {
             float cx = x;
             for (const char ch : str) {
                 cx += draw_stroke_char(cx, y, ch, col, w, h);
@@ -2607,14 +2913,16 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         kalpana::Path modal_card;
         modal_card.rect(mx, my, mw, mh);
         scene.add(kalpana::Node::shape(modal_card, kalpana::Paint::fill(kalpana::Color{0.04f, 0.07f, 0.14f, 0.98f})));
-        scene.add(kalpana::Node::shape(modal_card, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.65f, 1.0f, 0.85f}, 1.5f)));
+        scene.add(kalpana::Node::shape(
+            modal_card, kalpana::Paint::stroke(kalpana::Color{0.3f, 0.65f, 1.0f, 0.85f}, 1.5f)));
 
         // Modal Header Banner
         kalpana::Path header_strip;
         header_strip.rect(mx, my, mw, 45.0f);
         scene.add(kalpana::Node::shape(header_strip, kalpana::Paint::fill(kalpana::Color{0.08f, 0.14f, 0.28f, 0.95f})));
 
-        draw_modal_text(mx + 25.0f, my + 15.0f, "PEBBLE VERSE : COSMOLOGICAL CONFIG", kalpana::Color{0.4f, 0.9f, 1.0f, 1.0f}, 8.5f, 14.0f);
+        draw_modal_text(mx + 25.0f, my + 15.0f, "PEBBLE VERSE : COSMOLOGICAL CONFIG",
+                        kalpana::Color{0.4f, 0.9f, 1.0f, 1.0f}, 8.5f, 14.0f);
 
         // Parameters Rows
         const float start_y = my + 60.0f;
@@ -2623,80 +2931,109 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         // Row 0: Dust Count
         {
             const bool sel = (app.config_selected_row == 0);
-            const kalpana::Color row_col = sel ? kalpana::Color{1.0f, 0.85f, 0.2f, 1.0f} : kalpana::Color{0.7f, 0.8f, 0.9f, 0.85f};
+            const kalpana::Color row_col = sel
+                                               ? kalpana::Color{1.0f, 0.85f, 0.2f, 1.0f}
+                                               : kalpana::Color{0.7f, 0.8f, 0.9f, 0.85f};
             if (sel) {
                 kalpana::Path sel_box;
                 sel_box.rect(mx + 15.0f, start_y - 4.0f, mw - 30.0f, 44.0f);
-                scene.add(kalpana::Node::shape(sel_box, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.85f, 0.2f, 0.7f}, 1.2f)));
+                scene.add(kalpana::Node::shape(
+                    sel_box, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.85f, 0.2f, 0.7f}, 1.2f)));
             }
             draw_modal_text(mx + 30.0f, start_y + 4.0f, "[1] INITIAL BODIES / DUST", row_col, 7.0f, 11.0f);
-            draw_modal_text(mx + 340.0f, start_y + 4.0f, "< " + std::to_string(app.config_initial_dust_count) + " SPECS >", sel ? kalpana::Color{0.3f, 0.95f, 1.0f, 1.0f} : row_col, 7.5f, 12.0f);
-            draw_modal_text(mx + 30.0f, start_y + 22.0f, "TOTAL PRIMORDIAL MATTER PARTICLES SEEDED IN COSMOS", kalpana::Color{0.45f, 0.6f, 0.75f, 0.75f}, 5.0f, 9.0f);
+            draw_modal_text(mx + 340.0f, start_y + 4.0f,
+                            "< " + std::to_string(app.config_initial_dust_count) + " SPECS >",
+                            sel ? kalpana::Color{0.3f, 0.95f, 1.0f, 1.0f} : row_col, 7.5f, 12.0f);
+            draw_modal_text(mx + 30.0f, start_y + 22.0f, "TOTAL PRIMORDIAL MATTER PARTICLES SEEDED IN COSMOS",
+                            kalpana::Color{0.45f, 0.6f, 0.75f, 0.75f}, 5.0f, 9.0f);
         }
 
         // Row 1: Gravitational Constant G
         {
             const float ry = start_y + row_step;
             const bool sel = (app.config_selected_row == 1);
-            const kalpana::Color row_col = sel ? kalpana::Color{1.0f, 0.85f, 0.2f, 1.0f} : kalpana::Color{0.7f, 0.8f, 0.9f, 0.85f};
+            const kalpana::Color row_col = sel
+                                               ? kalpana::Color{1.0f, 0.85f, 0.2f, 1.0f}
+                                               : kalpana::Color{0.7f, 0.8f, 0.9f, 0.85f};
             if (sel) {
                 kalpana::Path sel_box;
                 sel_box.rect(mx + 15.0f, ry - 4.0f, mw - 30.0f, 44.0f);
-                scene.add(kalpana::Node::shape(sel_box, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.85f, 0.2f, 0.7f}, 1.2f)));
+                scene.add(kalpana::Node::shape(
+                    sel_box, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.85f, 0.2f, 0.7f}, 1.2f)));
             }
             draw_modal_text(mx + 30.0f, ry + 4.0f, "[2] GRAVITATIONAL G", row_col, 7.0f, 11.0f);
-            draw_modal_text(mx + 340.0f, ry + 4.0f, "< " + std::to_string(static_cast<int>(app.config_grav_g)) + " N*M2 >", sel ? kalpana::Color{0.3f, 0.95f, 1.0f, 1.0f} : row_col, 7.5f, 12.0f);
-            draw_modal_text(mx + 30.0f, ry + 22.0f, "FUNDAMENTAL N-BODY ACCELERATION CONSTANT", kalpana::Color{0.45f, 0.6f, 0.75f, 0.75f}, 5.0f, 9.0f);
+            draw_modal_text(mx + 340.0f, ry + 4.0f,
+                            "< " + std::to_string(static_cast<int>(app.config_grav_g)) + " N*M2 >",
+                            sel ? kalpana::Color{0.3f, 0.95f, 1.0f, 1.0f} : row_col, 7.5f, 12.0f);
+            draw_modal_text(mx + 30.0f, ry + 22.0f, "FUNDAMENTAL N-BODY ACCELERATION CONSTANT",
+                            kalpana::Color{0.45f, 0.6f, 0.75f, 0.75f}, 5.0f, 9.0f);
         }
 
         // Row 2: Primordial Distribution Pattern
         {
             const float ry = start_y + row_step * 2.0f;
             const bool sel = (app.config_selected_row == 2);
-            const kalpana::Color row_col = sel ? kalpana::Color{1.0f, 0.85f, 0.2f, 1.0f} : kalpana::Color{0.7f, 0.8f, 0.9f, 0.85f};
+            const kalpana::Color row_col = sel
+                                               ? kalpana::Color{1.0f, 0.85f, 0.2f, 1.0f}
+                                               : kalpana::Color{0.7f, 0.8f, 0.9f, 0.85f};
             if (sel) {
                 kalpana::Path sel_box;
                 sel_box.rect(mx + 15.0f, ry - 4.0f, mw - 30.0f, 44.0f);
-                scene.add(kalpana::Node::shape(sel_box, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.85f, 0.2f, 0.7f}, 1.2f)));
+                scene.add(kalpana::Node::shape(
+                    sel_box, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.85f, 0.2f, 0.7f}, 1.2f)));
             }
-            const std::string mode_str = (app.config_dist_mode == 0) ? "UNIFORM COSMIC" :
-                                        ((app.config_dist_mode == 1) ? "BARYCENTRIC CLUSTER" : "DUAL ACCRETION");
+            const std::string mode_str = (app.config_dist_mode == 0)
+                                             ? "UNIFORM COSMIC"
+                                             : ((app.config_dist_mode == 1) ? "BARYCENTRIC CLUSTER" : "DUAL ACCRETION");
             draw_modal_text(mx + 30.0f, ry + 4.0f, "[3] MATTER PATTERN", row_col, 7.0f, 11.0f);
-            draw_modal_text(mx + 340.0f, ry + 4.0f, "< " + mode_str + " >", sel ? kalpana::Color{0.3f, 0.95f, 1.0f, 1.0f} : row_col, 6.5f, 11.0f);
-            draw_modal_text(mx + 30.0f, ry + 22.0f, "SPATIAL GEOMETRY OF IN-SITU MATRICES", kalpana::Color{0.45f, 0.6f, 0.75f, 0.75f}, 5.0f, 9.0f);
+            draw_modal_text(mx + 340.0f, ry + 4.0f, "< " + mode_str + " >",
+                            sel ? kalpana::Color{0.3f, 0.95f, 1.0f, 1.0f} : row_col, 6.5f, 11.0f);
+            draw_modal_text(mx + 30.0f, ry + 22.0f, "SPATIAL GEOMETRY OF IN-SITU MATRICES",
+                            kalpana::Color{0.45f, 0.6f, 0.75f, 0.75f}, 5.0f, 9.0f);
         }
 
         // Row 3: Barnes-Hut Theta Precision
         {
             const float ry = start_y + row_step * 3.0f;
             const bool sel = (app.config_selected_row == 3);
-            const kalpana::Color row_col = sel ? kalpana::Color{1.0f, 0.85f, 0.2f, 1.0f} : kalpana::Color{0.7f, 0.8f, 0.9f, 0.85f};
+            const kalpana::Color row_col = sel
+                                               ? kalpana::Color{1.0f, 0.85f, 0.2f, 1.0f}
+                                               : kalpana::Color{0.7f, 0.8f, 0.9f, 0.85f};
             if (sel) {
                 kalpana::Path sel_box;
                 sel_box.rect(mx + 15.0f, ry - 4.0f, mw - 30.0f, 44.0f);
-                scene.add(kalpana::Node::shape(sel_box, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.85f, 0.2f, 0.7f}, 1.2f)));
+                scene.add(kalpana::Node::shape(
+                    sel_box, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.85f, 0.2f, 0.7f}, 1.2f)));
             }
             const int theta_pct = static_cast<int>(app.config_bh_theta * 100.0f);
             draw_modal_text(mx + 30.0f, ry + 4.0f, "[4] QUADTREE THETA", row_col, 7.0f, 11.0f);
-            draw_modal_text(mx + 340.0f, ry + 4.0f, "< 0." + std::to_string(theta_pct) + " MACRO >", sel ? kalpana::Color{0.3f, 0.95f, 1.0f, 1.0f} : row_col, 7.5f, 12.0f);
-            draw_modal_text(mx + 30.0f, ry + 22.0f, "MULTIPOLE OPENING ANGLE RESOLUTION", kalpana::Color{0.45f, 0.6f, 0.75f, 0.75f}, 5.0f, 9.0f);
+            draw_modal_text(mx + 340.0f, ry + 4.0f, "< 0." + std::to_string(theta_pct) + " MACRO >",
+                            sel ? kalpana::Color{0.3f, 0.95f, 1.0f, 1.0f} : row_col, 7.5f, 12.0f);
+            draw_modal_text(mx + 30.0f, ry + 22.0f, "MULTIPOLE OPENING ANGLE RESOLUTION",
+                            kalpana::Color{0.45f, 0.6f, 0.75f, 0.75f}, 5.0f, 9.0f);
         }
 
         // Row 4: Analytics Overlays Layer Toggle (Grid, Jacobi Links, MHD Arcs, H-R Inset)
         {
             const float ry = start_y + row_step * 4.0f;
             const bool sel = (app.config_selected_row == 4);
-            const kalpana::Color row_col = sel ? kalpana::Color{1.0f, 0.85f, 0.2f, 1.0f} : kalpana::Color{0.7f, 0.8f, 0.9f, 0.85f};
+            const kalpana::Color row_col = sel
+                                               ? kalpana::Color{1.0f, 0.85f, 0.2f, 1.0f}
+                                               : kalpana::Color{0.7f, 0.8f, 0.9f, 0.85f};
             if (sel) {
                 kalpana::Path sel_box;
                 sel_box.rect(mx + 15.0f, ry - 4.0f, mw - 30.0f, 44.0f);
-                scene.add(kalpana::Node::shape(sel_box, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.85f, 0.2f, 0.7f}, 1.2f)));
+                scene.add(kalpana::Node::shape(
+                    sel_box, kalpana::Paint::stroke(kalpana::Color{1.0f, 0.85f, 0.2f, 0.7f}, 1.2f)));
             }
             const std::string over_str = app.show_analytics_overlays ? "ENABLED" : "DISABLED";
-            const kalpana::Color val_col = app.show_analytics_overlays ? kalpana::Color{0.25f, 0.95f, 0.45f, 1.0f} : kalpana::Color{0.75f, 0.4f, 0.4f, 1.0f};
+            const kalpana::Color val_col = app.show_analytics_overlays
+                                               ? kalpana::Color{0.25f, 0.95f, 0.45f, 1.0f}
+                                               : kalpana::Color{0.75f, 0.4f, 0.4f, 1.0f};
             draw_modal_text(mx + 30.0f, ry + 4.0f, "[5] OVERLAYS LAYER", row_col, 7.0f, 11.0f);
             draw_modal_text(mx + 340.0f, ry + 4.0f, "< " + over_str + " >", sel ? val_col : row_col, 7.0f, 11.0f);
-            draw_modal_text(mx + 30.0f, ry + 22.0f, "SEPARATE SUB-LAYER: GRID, JACOBI, MHD & H-R INSET", kalpana::Color{0.45f, 0.6f, 0.75f, 0.75f}, 5.0f, 9.0f);
+            draw_modal_text(mx + 30.0f, ry + 22.0f, "SEPARATE SUB-LAYER: GRID, JACOBI, MHD & H-R INSET",
+                            kalpana::Color{0.45f, 0.6f, 0.75f, 0.75f}, 5.0f, 9.0f);
         }
 
         // Bottom Action Bar: Launch Prompt
@@ -2705,10 +3042,12 @@ static void render_gpu_frame(PebbleVerseApp& app) {
         scene.add(kalpana::Node::shape(btn_box, kalpana::Paint::fill(kalpana::Color{0.12f, 0.45f, 0.95f, 0.9f})));
         scene.add(kalpana::Node::shape(btn_box, kalpana::Paint::stroke(kalpana::Color{0.4f, 0.85f, 1.0f, 1.0f}, 1.5f)));
 
-        draw_modal_text(mx + 155.0f, my + mh - 47.0f, "PRESS [ENTER] TO START SIMULATION", kalpana::Color{1.0f, 1.0f, 1.0f, 1.0f}, 7.0f, 12.0f);
+        draw_modal_text(mx + 155.0f, my + mh - 47.0f, "PRESS [ENTER] TO START SIMULATION",
+                        kalpana::Color{1.0f, 1.0f, 1.0f, 1.0f}, 7.0f, 12.0f);
 
         // Sub-instruction
-        draw_modal_text(mx + 115.0f, my + mh - 16.0f, "[UP/DOWN]: SELECT   [LEFT/RIGHT]: ADJUST VALUE", kalpana::Color{0.5f, 0.7f, 0.9f, 0.8f}, 5.5f, 9.5f);
+        draw_modal_text(mx + 115.0f, my + mh - 16.0f, "[UP/DOWN]: SELECT   [LEFT/RIGHT]: ADJUST VALUE",
+                        kalpana::Color{0.5f, 0.7f, 0.9f, 0.8f}, 5.5f, 9.5f);
     }
 
     // Render vector overlays
@@ -2718,7 +3057,7 @@ static void render_gpu_frame(PebbleVerseApp& app) {
     static constexpr std::size_t kMaxIBufBytes = 4 * 1024 * 1024; // 4MB
 
     const auto& verts = app.canvas->backend().vertices();
-    const auto& inds  = app.canvas->backend().indices();
+    const auto& inds = app.canvas->backend().indices();
 
     if (!verts.empty() && !inds.empty()) {
         const std::size_t v_bytes = std::min(verts.size() * sizeof(kalpana::sokol_backend::Vertex), kMaxVBufBytes);
@@ -2827,7 +3166,8 @@ static void frame_cb() {
         sg_begin_pass(pass);
         sg_end_pass();
         sg_commit();
-    } else {
+    }
+    else {
         render_gpu_frame(app);
     }
 }
@@ -2851,35 +3191,44 @@ static void event_cb(const sapp_event* e) {
             app.slingshot.current_x = e->mouse_x;
             app.slingshot.current_y = e->mouse_y;
         }
-    } else if (e->type == SAPP_EVENTTYPE_MOUSE_SCROLL) {
+    }
+    else if (e->type == SAPP_EVENTTYPE_MOUSE_SCROLL) {
         // Smooth Multi-Scale Logarithmic Cosmic Zoom: Range 0.25x (Deep Space) to 3.5x (Close Surface)
         if (e->scroll_y > 0.0f) {
             app.target_zoom = std::min(3.5f, app.target_zoom * 1.15f);
-        } else if (e->scroll_y < 0.0f) {
+        }
+        else if (e->scroll_y < 0.0f) {
             app.target_zoom = std::max(0.25f, app.target_zoom * 0.87f);
         }
-    } else if (e->type == SAPP_EVENTTYPE_MOUSE_DOWN) {
+    }
+    else if (e->type == SAPP_EVENTTYPE_MOUSE_DOWN) {
         if (e->mouse_button == SAPP_MOUSEBUTTON_MIDDLE) {
             app.middle_mouse_down = true;
             app.last_mouse_pos = pebble::math::vec2{e->mouse_x, e->mouse_y};
-        } else if (e->mouse_button == SAPP_MOUSEBUTTON_RIGHT) {
+        }
+        else if (e->mouse_button == SAPP_MOUSEBUTTON_RIGHT) {
             app.right_mouse_down = true;
             app.last_mouse_pos = pebble::math::vec2{e->mouse_x, e->mouse_y};
-        } else if (e->mouse_button == SAPP_MOUSEBUTTON_LEFT && !app.gravity_vortex && !app.heat_ray && !app.freeze_ray) {
+        }
+        else if (e->mouse_button == SAPP_MOUSEBUTTON_LEFT && !app.gravity_vortex && !app.heat_ray && !app.freeze_ray) {
             app.slingshot.active = true;
             app.slingshot.start_x = e->mouse_x;
             app.slingshot.start_y = e->mouse_y;
             app.slingshot.current_x = e->mouse_x;
             app.slingshot.current_y = e->mouse_y;
-        } else {
+        }
+        else {
             app.mouse_down = true;
         }
-    } else if (e->type == SAPP_EVENTTYPE_MOUSE_UP) {
+    }
+    else if (e->type == SAPP_EVENTTYPE_MOUSE_UP) {
         if (e->mouse_button == SAPP_MOUSEBUTTON_MIDDLE) {
             app.middle_mouse_down = false;
-        } else if (e->mouse_button == SAPP_MOUSEBUTTON_RIGHT) {
+        }
+        else if (e->mouse_button == SAPP_MOUSEBUTTON_RIGHT) {
             app.right_mouse_down = false;
-        } else if (e->mouse_button == SAPP_MOUSEBUTTON_LEFT && app.slingshot.active) {
+        }
+        else if (e->mouse_button == SAPP_MOUSEBUTTON_LEFT && app.slingshot.active) {
             app.slingshot.active = false;
             const float dx = app.slingshot.start_x - e->mouse_x;
             const float dy = app.slingshot.start_y - e->mouse_y;
@@ -2896,17 +3245,20 @@ static void event_cb(const sapp_event* e) {
                 p.mat_params = prakriti::celestial::ice_crust();
                 p.mass = 80.0f;
                 p.temperature = -70.0f;
-            } else if (app.selected_mat_index == 2) {
+            }
+            else if (app.selected_mat_index == 2) {
                 p.type = CelestialType::SilicateRock;
                 p.mat_params = prakriti::celestial::silicate_rock();
                 p.mass = 140.0f;
                 p.temperature = 40.0f;
-            } else if (app.selected_mat_index == 3) {
+            }
+            else if (app.selected_mat_index == 3) {
                 p.type = CelestialType::IronCore;
                 p.mat_params = prakriti::celestial::iron_nickel_core();
                 p.mass = 240.0f;
                 p.temperature = 220.0f;
-            } else {
+            }
+            else {
                 p.type = CelestialType::MoltenMagma;
                 p.mat_params = prakriti::celestial::molten_magma();
                 p.mass = 450.0f;
@@ -2921,287 +3273,311 @@ static void event_cb(const sapp_event* e) {
             app.planets.push_back(p);
         }
         app.mouse_down = false;
-    } else if (e->type == SAPP_EVENTTYPE_KEY_DOWN) {
+    }
+    else if (e->type == SAPP_EVENTTYPE_KEY_DOWN) {
         if (app.in_startup_modal) {
             switch (e->key_code) {
-                case SAPP_KEYCODE_UP:
-                    app.config_selected_row = (app.config_selected_row == 0) ? 4 : app.config_selected_row - 1;
-                    break;
-                case SAPP_KEYCODE_DOWN:
-                    app.config_selected_row = (app.config_selected_row + 1) % 5;
-                    break;
-                case SAPP_KEYCODE_LEFT:
-                    if (app.config_selected_row == 0) {
-                        app.config_initial_dust_count = std::max(100, app.config_initial_dust_count - 100);
-                    } else if (app.config_selected_row == 1) {
-                        app.config_grav_g = std::max(4000.0f, app.config_grav_g - 2000.0f);
-                    } else if (app.config_selected_row == 2) {
-                        app.config_dist_mode = (app.config_dist_mode == 0) ? 2 : app.config_dist_mode - 1;
-                    } else if (app.config_selected_row == 3) {
-                        app.config_bh_theta = std::max(0.3f, app.config_bh_theta - 0.05f);
-                    } else if (app.config_selected_row == 4) {
-                        app.show_analytics_overlays = !app.show_analytics_overlays;
-                    }
-                    break;
-                case SAPP_KEYCODE_RIGHT:
-                    if (app.config_selected_row == 0) {
-                        app.config_initial_dust_count = std::min(1500, app.config_initial_dust_count + 100);
-                    } else if (app.config_selected_row == 1) {
-                        app.config_grav_g = std::min(45000.0f, app.config_grav_g + 2000.0f);
-                    } else if (app.config_selected_row == 2) {
-                        app.config_dist_mode = (app.config_dist_mode + 1) % 3;
-                    } else if (app.config_selected_row == 3) {
-                        app.config_bh_theta = std::min(0.85f, app.config_bh_theta + 0.05f);
-                    } else if (app.config_selected_row == 4) {
-                        app.show_analytics_overlays = !app.show_analytics_overlays;
-                    }
-                    break;
-                case SAPP_KEYCODE_ENTER:
-                case SAPP_KEYCODE_KP_ENTER:
-                case SAPP_KEYCODE_SPACE: {
-                    // Apply parameters and launch pure autonomous physical simulation
-                    std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
-                    app.in_startup_modal = false;
-                    app.gravity_policy.G = app.config_grav_g;
-                    app.gravity_policy.theta = app.config_bh_theta;
-
-                    app.planets.clear();
-                    app.sparks.clear();
-                    app.nebulae.clear();
-                    app.jets.clear();
-
-                    // Seed initial viewport spatial tiles (4x4 tiles of 320x200 covering [0, FW] x [0, FH])
-                    app.visited_sectors.clear();
-                    for (int tx = 0; tx < 4; ++tx) {
-                        for (int ty = 0; ty < 4; ++ty) {
-                            const prakriti::celestial::SectorKey sk{tx, ty};
-                            app.visited_sectors.insert(prakriti::celestial::hash_sector_key(sk));
-                        }
-                    }
-
-                    for (int i = 0; i < app.config_initial_dust_count; ++i) {
-                        if (app.config_dist_mode == 0) {
-                            // Mode 0: True Isotropic Uniform Field with Thermal Dispersion across [0, FW] x [0, FH]
-                            spawn_dust_particle(app, true, 12.0f + dist01(app.rng) * (FW - 24.0f), 12.0f + dist01(app.rng) * (FH - 24.0f));
-                        } else if (app.config_dist_mode == 1) {
-                            // Mode 1: Rotating Barycentric Protogalactic Disk
-                            const float cx = FW * 0.5f;
-                            const float cy = FH * 0.5f;
-                            std::normal_distribution<float> norm_r(0.0f, FW * 0.18f);
-                            const float r = std::clamp(std::abs(norm_r(app.rng)) + 12.0f, 15.0f, FW * 0.42f);
-                            const float theta = dist01(app.rng) * 6.2831853f;
-                            const float px = cx + std::cos(theta) * r;
-                            const float py = cy + std::sin(theta) * r;
-
-                            spawn_dust_particle(app, true, px, py);
-
-                            // Organic Keplerian / Virial orbital speed: v \approx \sqrt{G * M(r) / r}
-                            auto& p_new = app.planets.back();
-                            const float expected_interior_mass = 15.0f * (r / 20.0f) * 12.0f;
-                            const float v_mag = std::sqrt((app.config_grav_g * expected_interior_mass) / std::max(r, 20.0f)) * 0.08f;
-                            const pebble::math::vec2 tangent{-std::sin(theta), std::cos(theta)};
-                            p_new.vel = tangent * v_mag + p_new.vel * 0.25f;
-                        } else {
-                            // Mode 2: Dual Infall Colliding Protogalactic Clouds with natural relative orbital velocity
-                            const bool cloud2 = (i % 2 == 0);
-                            const float cx = cloud2 ? (FW * 0.65f) : (FW * 0.35f);
-                            const float cy = cloud2 ? (FH * 0.60f) : (FH * 0.40f);
-                            std::normal_distribution<float> norm_r(0.0f, 65.0f);
-                            const float r = std::clamp(std::abs(norm_r(app.rng)), 5.0f, 120.0f);
-                            const float theta = dist01(app.rng) * 6.2831853f;
-                            const float px = std::clamp(cx + std::cos(theta) * r, 20.0f, FW - 20.0f);
-                            const float py = std::clamp(cy + std::sin(theta) * r, 20.0f, FH - 20.0f);
-
-                            spawn_dust_particle(app, true, px, py);
-                            auto& p_new = app.planets.back();
-                            // Infall drift speed between the two clusters
-                            const pebble::math::vec2 drift = cloud2 ? pebble::math::vec2{-6.0f, -3.5f} : pebble::math::vec2{6.0f, 3.5f};
-                            const pebble::math::vec2 spin_v{-std::sin(theta) * 4.5f, std::cos(theta) * 4.5f};
-                            p_new.vel = drift + spin_v + p_new.vel * 0.2f;
-                        }
-                    }
-                    break;
+            case SAPP_KEYCODE_UP:
+                app.config_selected_row = (app.config_selected_row == 0) ? 4 : app.config_selected_row - 1;
+                break;
+            case SAPP_KEYCODE_DOWN:
+                app.config_selected_row = (app.config_selected_row + 1) % 5;
+                break;
+            case SAPP_KEYCODE_LEFT:
+                if (app.config_selected_row == 0) {
+                    app.config_initial_dust_count = std::max(100, app.config_initial_dust_count - 100);
                 }
-                default:
-                    break;
+                else if (app.config_selected_row == 1) {
+                    app.config_grav_g = std::max(4000.0f, app.config_grav_g - 2000.0f);
+                }
+                else if (app.config_selected_row == 2) {
+                    app.config_dist_mode = (app.config_dist_mode == 0) ? 2 : app.config_dist_mode - 1;
+                }
+                else if (app.config_selected_row == 3) {
+                    app.config_bh_theta = std::max(0.3f, app.config_bh_theta - 0.05f);
+                }
+                else if (app.config_selected_row == 4) {
+                    app.show_analytics_overlays = !app.show_analytics_overlays;
+                }
+                break;
+            case SAPP_KEYCODE_RIGHT:
+                if (app.config_selected_row == 0) {
+                    app.config_initial_dust_count = std::min(1500, app.config_initial_dust_count + 100);
+                }
+                else if (app.config_selected_row == 1) {
+                    app.config_grav_g = std::min(45000.0f, app.config_grav_g + 2000.0f);
+                }
+                else if (app.config_selected_row == 2) {
+                    app.config_dist_mode = (app.config_dist_mode + 1) % 3;
+                }
+                else if (app.config_selected_row == 3) {
+                    app.config_bh_theta = std::min(0.85f, app.config_bh_theta + 0.05f);
+                }
+                else if (app.config_selected_row == 4) {
+                    app.show_analytics_overlays = !app.show_analytics_overlays;
+                }
+                break;
+            case SAPP_KEYCODE_ENTER:
+            case SAPP_KEYCODE_KP_ENTER:
+            case SAPP_KEYCODE_SPACE: {
+                // Apply parameters and launch pure autonomous physical simulation
+                std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
+                app.in_startup_modal = false;
+                app.gravity_policy.G = app.config_grav_g;
+                app.gravity_policy.theta = app.config_bh_theta;
+
+                app.planets.clear();
+                app.sparks.clear();
+                app.nebulae.clear();
+                app.jets.clear();
+
+                // Seed initial viewport spatial tiles (4x4 tiles of 320x200 covering [0, FW] x [0, FH])
+                app.visited_sectors.clear();
+                for (int tx = 0; tx < 4; ++tx) {
+                    for (int ty = 0; ty < 4; ++ty) {
+                        const prakriti::celestial::SectorKey sk{tx, ty};
+                        app.visited_sectors.insert(prakriti::celestial::hash_sector_key(sk));
+                    }
+                }
+
+                for (int i = 0; i < app.config_initial_dust_count; ++i) {
+                    if (app.config_dist_mode == 0) {
+                        // Mode 0: True Isotropic Uniform Field with Thermal Dispersion across [0, FW] x [0, FH]
+                        spawn_dust_particle(app, true, 12.0f + dist01(app.rng) * (FW - 24.0f),
+                                            12.0f + dist01(app.rng) * (FH - 24.0f));
+                    }
+                    else if (app.config_dist_mode == 1) {
+                        // Mode 1: Rotating Barycentric Protogalactic Disk
+                        const float cx = FW * 0.5f;
+                        const float cy = FH * 0.5f;
+                        std::normal_distribution<float> norm_r(0.0f, FW * 0.18f);
+                        const float r = std::clamp(std::abs(norm_r(app.rng)) + 12.0f, 15.0f, FW * 0.42f);
+                        const float theta = dist01(app.rng) * 6.2831853f;
+                        const float px = cx + std::cos(theta) * r;
+                        const float py = cy + std::sin(theta) * r;
+
+                        spawn_dust_particle(app, true, px, py);
+
+                        // Organic Keplerian / Virial orbital speed: v \approx \sqrt{G * M(r) / r}
+                        auto& p_new = app.planets.back();
+                        const float expected_interior_mass = 15.0f * (r / 20.0f) * 12.0f;
+                        const float v_mag = std::sqrt((app.config_grav_g * expected_interior_mass) / std::max(r, 20.0f))
+                            * 0.08f;
+                        const pebble::math::vec2 tangent{-std::sin(theta), std::cos(theta)};
+                        p_new.vel = tangent * v_mag + p_new.vel * 0.25f;
+                    }
+                    else {
+                        // Mode 2: Dual Infall Colliding Protogalactic Clouds with natural relative orbital velocity
+                        const bool cloud2 = (i % 2 == 0);
+                        const float cx = cloud2 ? (FW * 0.65f) : (FW * 0.35f);
+                        const float cy = cloud2 ? (FH * 0.60f) : (FH * 0.40f);
+                        std::normal_distribution<float> norm_r(0.0f, 65.0f);
+                        const float r = std::clamp(std::abs(norm_r(app.rng)), 5.0f, 120.0f);
+                        const float theta = dist01(app.rng) * 6.2831853f;
+                        const float px = std::clamp(cx + std::cos(theta) * r, 20.0f, FW - 20.0f);
+                        const float py = std::clamp(cy + std::sin(theta) * r, 20.0f, FH - 20.0f);
+
+                        spawn_dust_particle(app, true, px, py);
+                        auto& p_new = app.planets.back();
+                        // Infall drift speed between the two clusters
+                        const pebble::math::vec2 drift = cloud2
+                                                             ? pebble::math::vec2{-6.0f, -3.5f}
+                                                             : pebble::math::vec2{6.0f, 3.5f};
+                        const pebble::math::vec2 spin_v{-std::sin(theta) * 4.5f, std::cos(theta) * 4.5f};
+                        p_new.vel = drift + spin_v + p_new.vel * 0.2f;
+                    }
+                }
+                break;
+            }
+            default:
+                break;
             }
             return;
         }
 
         switch (e->key_code) {
-            case SAPP_KEYCODE_1: app.selected_mat_index = 1; break; // Ice Crust
-            case SAPP_KEYCODE_2: app.selected_mat_index = 2; break; // Silicate Rock
-            case SAPP_KEYCODE_3: app.selected_mat_index = 3; break; // Iron Core
-            case SAPP_KEYCODE_4: app.selected_mat_index = 4; break; // Molten Magma
-            case SAPP_KEYCODE_LEFT_BRACKET:
-            case SAPP_KEYCODE_MINUS:
-                app.time_dilation = std::max(0.1f, app.time_dilation * 0.75f);
-                break;
-            case SAPP_KEYCODE_RIGHT_BRACKET:
-            case SAPP_KEYCODE_EQUAL:
-                app.time_dilation = std::min(4.0f, app.time_dilation * 1.35f);
-                break;
-            case SAPP_KEYCODE_I:
-                // Instantly spawn an external system inflow
-                spawn_external_inflow(app);
-                break;
-            case SAPP_KEYCODE_M:
-                // Cycle Radar Reach (1.5x -> 3.5x -> 7.0x)
-                app.radar_zoom_level = (app.radar_zoom_level + 1) % 3;
-                break;
-            case SAPP_KEYCODE_UP:
-                app.target_cam_pos[1] -= 240.0f;
+        case SAPP_KEYCODE_1: app.selected_mat_index = 1;
+            break; // Ice Crust
+        case SAPP_KEYCODE_2: app.selected_mat_index = 2;
+            break; // Silicate Rock
+        case SAPP_KEYCODE_3: app.selected_mat_index = 3;
+            break; // Iron Core
+        case SAPP_KEYCODE_4: app.selected_mat_index = 4;
+            break; // Molten Magma
+        case SAPP_KEYCODE_LEFT_BRACKET:
+        case SAPP_KEYCODE_MINUS:
+            app.time_dilation = std::max(0.1f, app.time_dilation * 0.75f);
+            break;
+        case SAPP_KEYCODE_RIGHT_BRACKET:
+        case SAPP_KEYCODE_EQUAL:
+            app.time_dilation = std::min(4.0f, app.time_dilation * 1.35f);
+            break;
+        case SAPP_KEYCODE_I:
+            // Instantly spawn an external system inflow
+            spawn_external_inflow(app);
+            break;
+        case SAPP_KEYCODE_M:
+            // Cycle Radar Reach (1.5x -> 3.5x -> 7.0x)
+            app.radar_zoom_level = (app.radar_zoom_level + 1) % 3;
+            break;
+        case SAPP_KEYCODE_UP:
+            app.target_cam_pos[1] -= 240.0f;
+            app.tracked_planet_index = -1;
+            break;
+        case SAPP_KEYCODE_DOWN:
+            app.target_cam_pos[1] += 240.0f;
+            app.tracked_planet_index = -1;
+            break;
+        case SAPP_KEYCODE_LEFT:
+            app.target_cam_pos[0] -= 240.0f;
+            app.tracked_planet_index = -1;
+            break;
+        case SAPP_KEYCODE_RIGHT:
+            app.target_cam_pos[0] += 240.0f;
+            app.tracked_planet_index = -1;
+            break;
+        case SAPP_KEYCODE_TAB: {
+            // Cycle tracking to next massive body (or reset if at end)
+            std::vector<int> heavy_indices;
+            for (int i = 0; i < static_cast<int>(app.planets.size()); ++i) {
+                if (app.planets[i].alive && app.planets[i].mass > 70.0f) {
+                    heavy_indices.push_back(i);
+                }
+            }
+            if (heavy_indices.empty()) {
                 app.tracked_planet_index = -1;
-                break;
-            case SAPP_KEYCODE_DOWN:
-                app.target_cam_pos[1] += 240.0f;
-                app.tracked_planet_index = -1;
-                break;
-            case SAPP_KEYCODE_LEFT:
-                app.target_cam_pos[0] -= 240.0f;
-                app.tracked_planet_index = -1;
-                break;
-            case SAPP_KEYCODE_RIGHT:
-                app.target_cam_pos[0] += 240.0f;
-                app.tracked_planet_index = -1;
-                break;
-            case SAPP_KEYCODE_TAB: {
-                // Cycle tracking to next massive body (or reset if at end)
-                std::vector<int> heavy_indices;
-                for (int i = 0; i < static_cast<int>(app.planets.size()); ++i) {
-                    if (app.planets[i].alive && app.planets[i].mass > 70.0f) {
-                        heavy_indices.push_back(i);
+            }
+            else {
+                int curr_pos = -1;
+                for (int k = 0; k < static_cast<int>(heavy_indices.size()); ++k) {
+                    if (heavy_indices[k] == app.tracked_planet_index) {
+                        curr_pos = k;
+                        break;
                     }
                 }
-                if (heavy_indices.empty()) {
-                    app.tracked_planet_index = -1;
-                } else {
-                    int curr_pos = -1;
-                    for (int k = 0; k < static_cast<int>(heavy_indices.size()); ++k) {
-                        if (heavy_indices[k] == app.tracked_planet_index) {
-                            curr_pos = k;
-                            break;
-                        }
-                    }
-                    if (curr_pos == -1 || curr_pos + 1 >= static_cast<int>(heavy_indices.size())) {
-                        app.tracked_planet_index = (curr_pos == -1) ? heavy_indices[0] : -1;
-                    } else {
-                        app.tracked_planet_index = heavy_indices[curr_pos + 1];
-                    }
+                if (curr_pos == -1 || curr_pos + 1 >= static_cast<int>(heavy_indices.size())) {
+                    app.tracked_planet_index = (curr_pos == -1) ? heavy_indices[0] : -1;
                 }
-                break;
-            }
-            case SAPP_KEYCODE_ESCAPE:
-                app.tracked_planet_index = -1;
-                app.target_cam_pos = pebble::math::vec2{FW * 0.5f, FH * 0.5f};
-                app.target_zoom = 1.0f;
-                break;
-            case SAPP_KEYCODE_O:
-                app.show_analytics_overlays = !app.show_analytics_overlays;
-                break;
-            case SAPP_KEYCODE_V:
-                if (app.view_mode == SpectralViewMode::OpticalRGB) {
-                    app.view_mode = SpectralViewMode::ThermalInfrared;
-                } else if (app.view_mode == SpectralViewMode::ThermalInfrared) {
-                    app.view_mode = SpectralViewMode::RadioXRay;
-                } else {
-                    app.view_mode = SpectralViewMode::OpticalRGB;
+                else {
+                    app.tracked_planet_index = heavy_indices[curr_pos + 1];
                 }
-                break;
-            case SAPP_KEYCODE_B: {
-                // Spawn Inspiral Binary Black Holes at cursor
-                const pebble::math::vec2 spawn_pos = app.camera_pos;
-                PlanetBody bh1, bh2;
-                bh1.ent = app.world.spawn();
-                bh1.pos = spawn_pos + pebble::math::vec2{-25.0f, 0.0f};
-                bh1.prev_pos = bh1.pos;
-                bh1.vel = pebble::math::vec2{0.0f, -22.0f};
-                bh1.mass = 450.0f;
-                bh1.radius = 3.5f;
-                bh1.type = CelestialType::BlackHoleSingularity;
-                bh1.mat_params = prakriti::celestial::black_hole_singularity();
-                bh1.is_singularity = true;
-
-                bh2.ent = app.world.spawn();
-                bh2.pos = spawn_pos + pebble::math::vec2{25.0f, 0.0f};
-                bh2.prev_pos = bh2.pos;
-                bh2.vel = pebble::math::vec2{0.0f, 22.0f};
-                bh2.mass = 450.0f;
-                bh2.radius = 3.5f;
-                bh2.type = CelestialType::BlackHoleSingularity;
-                bh2.mat_params = prakriti::celestial::black_hole_singularity();
-                bh2.is_singularity = true;
-
-                app.planets.push_back(bh1);
-                app.planets.push_back(bh2);
-                break;
             }
-            case SAPP_KEYCODE_P: {
-                // Spawn Millisecond Pulsar with Magnetosphere
-                PlanetBody pulsar;
-                pulsar.ent = app.world.spawn();
-                pulsar.pos = app.camera_pos;
-                pulsar.prev_pos = pulsar.pos;
-                pulsar.vel = pebble::math::vec2{0.0f, 0.0f};
-                pulsar.mass = 350.0f;
-                pulsar.radius = 2.4f;
-                pulsar.temperature = 7500.0f;
-                pulsar.omega = 45.0f;
-                pulsar.is_neutron_star = true;
-                pulsar.type = CelestialType::NeutronStar;
-                pulsar.mat_params = prakriti::celestial::neutron_star();
-                app.planets.push_back(pulsar);
-                break;
-            }
-            case SAPP_KEYCODE_S: {
-                // Spawn Glowing Protostar with Protoplanetary Disk
-                PlanetBody star;
-                star.ent = app.world.spawn();
-                star.pos = app.camera_pos;
-                star.prev_pos = star.pos;
-                star.vel = pebble::math::vec2{0.0f, 0.0f};
-                star.mass = 650.0f;
-                star.radius = 6.0f;
-                star.temperature = 4200.0f;
-                star.type = CelestialType::SuperheatedPlasma;
-                star.mat_params = prakriti::celestial::superheated_plasma();
-                app.planets.push_back(star);
-
-                // Surrounding Protoplanetary dust ring
-                std::uniform_real_distribution<float> d01(0.0f, 1.0f);
-                for (int d = 0; d < 28; ++d) {
-                    const float a = (static_cast<float>(d) / 28.0f) * 6.2831853f;
-                    const float r = 35.0f + d01(app.rng) * 45.0f;
-                    const float spd = std::sqrt((app.config_grav_g * star.mass) / r);
-                    PlanetBody dust;
-                    dust.ent = app.world.spawn();
-                    dust.pos = star.pos + pebble::math::vec2{std::cos(a), std::sin(a)} * r;
-                    dust.prev_pos = dust.pos;
-                    dust.vel = pebble::math::vec2{-std::sin(a), std::cos(a)} * spd;
-                    dust.mass = 0.5f;
-                    dust.radius = 0.9f;
-                    dust.type = CelestialType::SilicateRock;
-                    dust.mat_params = prakriti::celestial::silicate_rock();
-                    app.planets.push_back(dust);
-                }
-                break;
-            }
-            case SAPP_KEYCODE_SPACE:
-                app.paused = !app.paused;
-                break;
-            case SAPP_KEYCODE_R:
-                app.planets.clear();
-                app.sparks.clear();
-                app.nebulae.clear();
-                app.jets.clear();
-                app.gw_ripples.clear();
-                app.flares.clear();
-                for (int i = 0; i < app.config_initial_dust_count; ++i) spawn_dust_particle(app);
-                break;
-            default:
-                break;
+            break;
         }
-    } else if (e->type == SAPP_EVENTTYPE_KEY_UP) {
+        case SAPP_KEYCODE_ESCAPE:
+            app.tracked_planet_index = -1;
+            app.target_cam_pos = pebble::math::vec2{FW * 0.5f, FH * 0.5f};
+            app.target_zoom = 1.0f;
+            break;
+        case SAPP_KEYCODE_O:
+            app.show_analytics_overlays = !app.show_analytics_overlays;
+            break;
+        case SAPP_KEYCODE_V:
+            if (app.view_mode == SpectralViewMode::OpticalRGB) {
+                app.view_mode = SpectralViewMode::ThermalInfrared;
+            }
+            else if (app.view_mode == SpectralViewMode::ThermalInfrared) {
+                app.view_mode = SpectralViewMode::RadioXRay;
+            }
+            else {
+                app.view_mode = SpectralViewMode::OpticalRGB;
+            }
+            break;
+        case SAPP_KEYCODE_B: {
+            // Spawn Inspiral Binary Black Holes at cursor
+            const pebble::math::vec2 spawn_pos = app.camera_pos;
+            PlanetBody bh1, bh2;
+            bh1.ent = app.world.spawn();
+            bh1.pos = spawn_pos + pebble::math::vec2{-25.0f, 0.0f};
+            bh1.prev_pos = bh1.pos;
+            bh1.vel = pebble::math::vec2{0.0f, -22.0f};
+            bh1.mass = 450.0f;
+            bh1.radius = 3.5f;
+            bh1.type = CelestialType::BlackHoleSingularity;
+            bh1.mat_params = prakriti::celestial::black_hole_singularity();
+            bh1.is_singularity = true;
+
+            bh2.ent = app.world.spawn();
+            bh2.pos = spawn_pos + pebble::math::vec2{25.0f, 0.0f};
+            bh2.prev_pos = bh2.pos;
+            bh2.vel = pebble::math::vec2{0.0f, 22.0f};
+            bh2.mass = 450.0f;
+            bh2.radius = 3.5f;
+            bh2.type = CelestialType::BlackHoleSingularity;
+            bh2.mat_params = prakriti::celestial::black_hole_singularity();
+            bh2.is_singularity = true;
+
+            app.planets.push_back(bh1);
+            app.planets.push_back(bh2);
+            break;
+        }
+        case SAPP_KEYCODE_P: {
+            // Spawn Millisecond Pulsar with Magnetosphere
+            PlanetBody pulsar;
+            pulsar.ent = app.world.spawn();
+            pulsar.pos = app.camera_pos;
+            pulsar.prev_pos = pulsar.pos;
+            pulsar.vel = pebble::math::vec2{0.0f, 0.0f};
+            pulsar.mass = 350.0f;
+            pulsar.radius = 2.4f;
+            pulsar.temperature = 7500.0f;
+            pulsar.omega = 45.0f;
+            pulsar.is_neutron_star = true;
+            pulsar.type = CelestialType::NeutronStar;
+            pulsar.mat_params = prakriti::celestial::neutron_star();
+            app.planets.push_back(pulsar);
+            break;
+        }
+        case SAPP_KEYCODE_S: {
+            // Spawn Glowing Protostar with Protoplanetary Disk
+            PlanetBody star;
+            star.ent = app.world.spawn();
+            star.pos = app.camera_pos;
+            star.prev_pos = star.pos;
+            star.vel = pebble::math::vec2{0.0f, 0.0f};
+            star.mass = 650.0f;
+            star.radius = 6.0f;
+            star.temperature = 4200.0f;
+            star.type = CelestialType::SuperheatedPlasma;
+            star.mat_params = prakriti::celestial::superheated_plasma();
+            app.planets.push_back(star);
+
+            // Surrounding Protoplanetary dust ring
+            std::uniform_real_distribution<float> d01(0.0f, 1.0f);
+            for (int d = 0; d < 28; ++d) {
+                const float a = (static_cast<float>(d) / 28.0f) * 6.2831853f;
+                const float r = 35.0f + d01(app.rng) * 45.0f;
+                const float spd = std::sqrt((app.config_grav_g * star.mass) / r);
+                PlanetBody dust;
+                dust.ent = app.world.spawn();
+                dust.pos = star.pos + pebble::math::vec2{std::cos(a), std::sin(a)} * r;
+                dust.prev_pos = dust.pos;
+                dust.vel = pebble::math::vec2{-std::sin(a), std::cos(a)} * spd;
+                dust.mass = 0.5f;
+                dust.radius = 0.9f;
+                dust.type = CelestialType::SilicateRock;
+                dust.mat_params = prakriti::celestial::silicate_rock();
+                app.planets.push_back(dust);
+            }
+            break;
+        }
+        case SAPP_KEYCODE_SPACE:
+            app.paused = !app.paused;
+            break;
+        case SAPP_KEYCODE_R:
+            app.planets.clear();
+            app.sparks.clear();
+            app.nebulae.clear();
+            app.jets.clear();
+            app.gw_ripples.clear();
+            app.flares.clear();
+            for (int i = 0; i < app.config_initial_dust_count; ++i) spawn_dust_particle(app);
+            break;
+        default:
+            break;
+        }
+    }
+    else if (e->type == SAPP_EVENTTYPE_KEY_UP) {
         if (e->key_code == SAPP_KEYCODE_V) app.gravity_vortex = false;
         if (e->key_code == SAPP_KEYCODE_H) app.heat_ray = false;
         if (e->key_code == SAPP_KEYCODE_C) app.freeze_ray = false;

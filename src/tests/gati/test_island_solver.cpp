@@ -2,7 +2,12 @@
 #include "gati/island_solver.hpp"
 #include "akruti/primitives.hpp"
 
-TEST_CASE("Gati: SequentialImpulseSolver", "[gati][island_solver]") {
+TEST_CASE (
+"Gati: SequentialImpulseSolver"
+,
+"[gati][island_solver]"
+)
+ {
     akruti::Circle c{{0, 0}, 1.0f};
     std::vector<gati::RigidBody> bodies;
     bodies.emplace_back(c, gati::RigidBodyDesc{.position = {0, 0}, .mass = 1.0f});

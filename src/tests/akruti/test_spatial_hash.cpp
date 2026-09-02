@@ -2,7 +2,12 @@
 #include "akruti/spatial_hash.hpp"
 #include <vector>
 
-TEST_CASE("Akruti: SpatialHash", "[akruti][spatial_hash]") {
+TEST_CASE (
+"Akruti: SpatialHash"
+,
+"[akruti][spatial_hash]"
+)
+ {
     akruti::SpatialHashBroadphase sh(2.0f);
 
     akruti::AABB<float> box1{pebble::math::vec2{0, 0}, pebble::math::vec2{1, 1}};

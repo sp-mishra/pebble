@@ -7,7 +7,12 @@
 #include "containers/numeric/math_vector.hpp"
 #include <chrono>
 
-TEST_CASE("Bench RealShaderPass shade_cell on 256x256", "[kalpana][bench][realshader][!benchmark]") {
+TEST_CASE (
+"Bench RealShaderPass shade_cell on 256x256"
+,
+"[kalpana][bench][realshader][!benchmark]"
+)
+ {
     using namespace kalpana;
 
     PaintField<> f(256, 256, 1.0f);

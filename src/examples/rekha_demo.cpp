@@ -4,13 +4,13 @@
 #include <string_view>
 
 namespace demo_log {
-inline void info(std::string_view msg) {
-    std::clog << "[info] " << msg << '\n';
-}
+    inline void info(std::string_view msg) {
+        std::clog << "[info] " << msg << '\n';
+    }
 
-inline void error(std::string_view prefix, std::string_view value) {
-    std::cerr << "[error] " << prefix << value << '\n';
-}
+    inline void error(std::string_view prefix, std::string_view value) {
+        std::cerr << "[error] " << prefix << value << '\n';
+    }
 } // namespace demo_log
 
 int main(int argc, char* argv[]) {

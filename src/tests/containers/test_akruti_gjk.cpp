@@ -5,7 +5,12 @@
 
 using namespace akruti;
 
-TEST_CASE("akruti: GJK boolean overlap", "[akruti][gjk]") {
+TEST_CASE (
+"akruti: GJK boolean overlap"
+,
+"[akruti][gjk]"
+)
+ {
     Circle a{{0, 0}, 1}, b{{1.5f, 0}, 1}, c{{5, 0}, 1};
     REQUIRE(gjk_overlap(a, b));
     REQUIRE_FALSE(gjk_overlap(a, c));
@@ -15,7 +20,12 @@ TEST_CASE("akruti: GJK boolean overlap", "[akruti][gjk]") {
     REQUIRE_FALSE(gjk_overlap(ba, bc));
 }
 
-TEST_CASE("akruti: EPA penetration depth and normal", "[akruti][epa]") {
+TEST_CASE (
+"akruti: EPA penetration depth and normal"
+,
+"[akruti][epa]"
+)
+ {
     Circle a{{0, 0}, 1}, b{{1.5f, 0}, 1};
     Contact ct = epa(a, b);
     REQUIRE(ct.hit);
@@ -28,7 +38,12 @@ TEST_CASE("akruti: EPA penetration depth and normal", "[akruti][epa]") {
     REQUIRE(cb.depth == Catch::Approx(0.5).margin(0.02));
 }
 
-TEST_CASE("akruti: GJK distance between disjoint shapes", "[akruti][gjk][distance]") {
+TEST_CASE (
+"akruti: GJK distance between disjoint shapes"
+,
+"[akruti][gjk][distance]"
+)
+ {
     Circle a{{0, 0}, 1}, b{{5, 0}, 1};
     Separation s = gjk_distance(a, b);
     REQUIRE(s.distance == Catch::Approx(3.0).margin(0.02)); // surface gap

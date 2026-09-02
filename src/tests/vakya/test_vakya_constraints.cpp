@@ -34,6 +34,7 @@ using namespace vakya::types;
 
 TEST_CASE (
 
+
 "constraint_solver concept: unification_solver satisfies concept"
 ,
 "[vakya][constraints][static]"
@@ -44,6 +45,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "constraint_solver concept: rule_constraint_solver satisfies concept"
 ,
 "[vakya][constraints][static]"
@@ -53,6 +55,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "constraint_solver concept: graph_constraint_solver satisfies concept"
 ,
@@ -67,6 +70,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "unification_solver: same_type constraint on equal types → solved"
 ,
@@ -97,6 +101,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "unification_solver: same_type on incompatible types → unsatisfiable"
 ,
@@ -129,6 +134,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "unification_solver: handles same_type / convertible / subtype"
 ,
 "[vakya][constraints]"
@@ -146,6 +152,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "unification_solver: does not handle implements / same_rank"
 ,
 "[vakya][constraints]"
@@ -162,6 +169,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "composite_solver: same_type routes to unification_solver"
 ,
@@ -200,6 +208,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "graph_constraint_solver: acyclic dependency graph → solved"
 ,
 "[vakya][constraints]"
@@ -235,6 +244,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "graph_constraint_solver: constraint cycle → unsatisfiable + diagnostic"
 ,
@@ -273,6 +283,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "rule_constraint_solver: trait implication closure + query"
 ,
@@ -314,6 +325,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "composite_solver: mixed-kind batch routes to correct backends"
 ,
@@ -361,6 +373,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "any_solver: type-erases unification_solver correctly"
 ,

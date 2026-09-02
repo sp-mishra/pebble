@@ -8,7 +8,12 @@
 
 using namespace nitya;
 
-TEST_CASE("Nitya: Multi-Segment Parallel Recovery", "[nitya][recovery][pravaha]") {
+TEST_CASE (
+"Nitya: Multi-Segment Parallel Recovery"
+,
+"[nitya][recovery][pravaha]"
+)
+ {
     const std::filesystem::path test_dir = "./test_nitya_par_recovery_db";
     std::filesystem::remove_all(test_dir);
 

@@ -4,7 +4,12 @@
 
 using namespace containers::spatial;
 
-TEST_CASE("Spatial: QuadTree Construction, Point Insertion & Morton Encoding", "[quadtree][spatial]") {
+TEST_CASE (
+"Spatial: QuadTree Construction, Point Insertion & Morton Encoding"
+,
+"[quadtree][spatial]"
+)
+ {
     BoundingBox2D box{pebble::math::vec2{-100.0f, -100.0f}, pebble::math::vec2{100.0f, 100.0f}};
     QuadTree<std::uint32_t, 4> tree(box);
 

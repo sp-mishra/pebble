@@ -12,7 +12,12 @@
 
 using namespace containers::reactive;
 
-TEST_CASE("reactive::Signal: get / set / operator()", "[containers][reactive]") {
+TEST_CASE (
+"reactive::Signal: get / set / operator()"
+,
+"[containers][reactive]"
+)
+ {
     Signal<int> s{7};
     CHECK(s.get() == 7);
     CHECK(s() == 7);
@@ -20,7 +25,12 @@ TEST_CASE("reactive::Signal: get / set / operator()", "[containers][reactive]") 
     CHECK(s.get() == 42);
 }
 
-TEST_CASE("reactive::Signal: notifies observers on every set()", "[containers][reactive]") {
+TEST_CASE (
+"reactive::Signal: notifies observers on every set()"
+,
+"[containers][reactive]"
+)
+ {
     Signal<int> s{0};
     int fired = 0;
     int last = -1;
@@ -37,7 +47,12 @@ TEST_CASE("reactive::Signal: notifies observers on every set()", "[containers][r
     CHECK(s.observer_count() == 0);
 }
 
-TEST_CASE("reactive::Signal: set_if_changed skips equal writes", "[containers][reactive]") {
+TEST_CASE (
+"reactive::Signal: set_if_changed skips equal writes"
+,
+"[containers][reactive]"
+)
+ {
     Signal<int> s{5};
     int fired = 0;
     s.subscribe([&]() noexcept { ++fired; });
@@ -48,7 +63,12 @@ TEST_CASE("reactive::Signal: set_if_changed skips equal writes", "[containers][r
     CHECK(fired == 1);
 }
 
-TEST_CASE("reactive::Signal: mutate edits in place then notifies", "[containers][reactive]") {
+TEST_CASE (
+"reactive::Signal: mutate edits in place then notifies"
+,
+"[containers][reactive]"
+)
+ {
     Signal<int> s{10};
     int fired = 0;
     s.subscribe([&]() noexcept { ++fired; });
@@ -57,7 +77,12 @@ TEST_CASE("reactive::Signal: mutate edits in place then notifies", "[containers]
     CHECK(fired == 1);
 }
 
-TEST_CASE("reactive::Computed: recomputes lazily after a dependency changes", "[containers][reactive]") {
+TEST_CASE (
+"reactive::Computed: recomputes lazily after a dependency changes"
+,
+"[containers][reactive]"
+)
+ {
     Signal<int> a{2};
     Signal<int> b{3};
 

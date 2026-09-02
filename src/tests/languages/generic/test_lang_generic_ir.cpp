@@ -23,7 +23,12 @@ static_assert(sizeof(lang::ir_node<TestKind, std::monostate>) ==
 
 // ---- ir_module: push / child iteration / root / reset --------------------
 
-TEST_CASE("ir_module: basic push/children/root/reset", "[lang][ir]") {
+TEST_CASE (
+"ir_module: basic push/children/root/reset"
+,
+"[lang][ir]"
+)
+ {
     lang::ir_module<TestKind> mod;
 
     // Push a root node
@@ -60,7 +65,12 @@ TEST_CASE("ir_module: basic push/children/root/reset", "[lang][ir]") {
 
 // ---- ir_interner: structural-hash dedup -----------------------------------
 
-TEST_CASE("ir_interner: structural-hash dedup", "[lang][ir]") {
+TEST_CASE (
+"ir_interner: structural-hash dedup"
+,
+"[lang][ir]"
+)
+ {
     lang::ir_interner interner;
 
     // Two structurally identical hashes → same node id returned
@@ -77,7 +87,12 @@ TEST_CASE("ir_interner: structural-hash dedup", "[lang][ir]") {
 
 // ---- ir_interner: name interning ------------------------------------------
 
-TEST_CASE("ir_interner: name interning dedup", "[lang][ir]") {
+TEST_CASE (
+"ir_interner: name interning dedup"
+,
+"[lang][ir]"
+)
+ {
     lang::ir_interner interner;
     const auto id1 = interner.intern_name("foo");
     const auto id2 = interner.intern_name("foo");
@@ -91,7 +106,12 @@ TEST_CASE("ir_interner: name interning dedup", "[lang][ir]") {
 // Build a hand-constructed event_log and verify lower_events produces matching
 // structure and hashes with green_arena::build.
 
-TEST_CASE("lower_events: round-trip matches green_arena", "[lang][ir]") {
+TEST_CASE (
+"lower_events: round-trip matches green_arena"
+,
+"[lang][ir]"
+)
+ {
     using KE = TestKind;
     using Log = lang::event_log<KE, std::uint16_t>;
 
@@ -134,7 +154,12 @@ TEST_CASE("lower_events: round-trip matches green_arena", "[lang][ir]") {
 
 // ---- as_egraph_view / as_adjacency ----------------------------------------
 
-TEST_CASE("ir_module: graph views", "[lang][ir]") {
+TEST_CASE (
+"ir_module: graph views"
+,
+"[lang][ir]"
+)
+ {
     lang::ir_module<TestKind> mod;
     lang::ir_node<TestKind> r{}; r.kind = TestKind::root;
     lang::ir_node<TestKind> c{}; c.kind = TestKind::leaf;

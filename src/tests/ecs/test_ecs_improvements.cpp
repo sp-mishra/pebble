@@ -3,50 +3,55 @@
 #include "containers/numeric/math_vector.hpp"
 
 namespace {
+    struct Pos {
+        float x = 0.0f;
+        float y = 0.0f;
+    };
 
-struct Pos {
-    float x = 0.0f;
-    float y = 0.0f;
-};
+    struct Vel {
+        float dx = 0.0f;
+        float dy = 0.0f;
+    };
 
-struct Vel {
-    float dx = 0.0f;
-    float dy = 0.0f;
-};
+    struct Hp {
+        int points = 100;
+    };
 
-struct Hp {
-    int points = 100;
-};
+    struct Flag {};
 
-struct Flag {};
+    struct PhysicsSystem {
+        using reads = pebble::ecs::Reads<Vel>;
+        using writes = pebble::ecs::Writes<Pos>;
 
-struct PhysicsSystem {
-    using reads = pebble::ecs::Reads<Vel>;
-    using writes = pebble::ecs::Writes<Pos>;
+        int runs = 0;
 
-    int runs = 0;
-    void run(pebble::ecs::World& w, float dt) {
-        w.view<Pos, Vel>([&](pebble::ecs::Entity, Pos& p, const Vel& v) {
-            p.x += v.dx * dt;
-            p.y += v.dy * dt;
-        });
-        ++runs;
-    }
-};
+        void run(pebble::ecs::World& w, float dt) {
+            w.view<Pos, Vel>([&](pebble::ecs::Entity, Pos& p, const Vel& v) {
+                p.x += v.dx * dt;
+                p.y += v.dy * dt;
+            });
+            ++runs;
+        }
+    };
 
-struct RenderSystem {
-    using reads = pebble::ecs::Reads<Pos>;
-    using writes = pebble::ecs::Writes<>;
+    struct RenderSystem {
+        using reads = pebble::ecs::Reads<Pos>;
+        using writes = pebble::ecs::Writes<>;
 
-    int runs = 0;
-    void run(pebble::ecs::World&, float) {
-        ++runs;
-    }
-};
+        int runs = 0;
 
+        void run(pebble::ecs::World&, float) {
+            ++runs;
+        }
+    };
 } // namespace
 
-TEST_CASE("ECS Improvements: Static Assertions for Zero Virtuals", "[ecs][zero_virtual]") {
+TEST_CASE (
+"ECS Improvements: Static Assertions for Zero Virtuals"
+,
+"[ecs][zero_virtual]"
+)
+ {
     STATIC_REQUIRE(!std::is_polymorphic_v<pebble::ecs::Entity>);
     STATIC_REQUIRE(!std::is_polymorphic_v<pebble::ecs::ErasedStore>);
     STATIC_REQUIRE(!std::is_polymorphic_v<pebble::ecs::ComponentStore<Pos>>);
@@ -60,7 +65,12 @@ TEST_CASE("ECS Improvements: Static Assertions for Zero Virtuals", "[ecs][zero_v
     STATIC_REQUIRE(!std::is_polymorphic_v<pebble::ecs::World>);
 }
 
-TEST_CASE("ECS Improvements: Paged Sparse On-Demand Allocation", "[ecs][paged_sparse]") {
+TEST_CASE (
+"ECS Improvements: Paged Sparse On-Demand Allocation"
+,
+"[ecs][paged_sparse]"
+)
+ {
     pebble::ecs::PagedSparse<std::uint32_t, 512> sparse;
     REQUIRE(sparse.allocated_pages() == 0);
     REQUIRE_FALSE(sparse.has(100));
@@ -84,7 +94,12 @@ TEST_CASE("ECS Improvements: Paged Sparse On-Demand Allocation", "[ecs][paged_sp
     REQUIRE_FALSE(sparse.has(2000));
 }
 
-TEST_CASE("ECS Improvements: Reactive Observers", "[ecs][observer]") {
+TEST_CASE (
+"ECS Improvements: Reactive Observers"
+,
+"[ecs][observer]"
+)
+ {
     pebble::ecs::World world;
 
     int adds = 0;
@@ -122,7 +137,12 @@ TEST_CASE("ECS Improvements: Reactive Observers", "[ecs][observer]") {
     REQUIRE(removes == 2);
 }
 
-TEST_CASE("ECS Improvements: Entity Relations & Cascade Despawn", "[ecs][relation]") {
+TEST_CASE (
+"ECS Improvements: Entity Relations & Cascade Despawn"
+,
+"[ecs][relation]"
+)
+ {
     pebble::ecs::World world;
 
     auto parent = world.spawn();
@@ -151,7 +171,12 @@ TEST_CASE("ECS Improvements: Entity Relations & Cascade Despawn", "[ecs][relatio
     REQUIRE_FALSE(world.alive(grandchild));
 }
 
-TEST_CASE("ECS Improvements: Linear Arena CommandBuffer", "[ecs][command_buffer]") {
+TEST_CASE (
+"ECS Improvements: Linear Arena CommandBuffer"
+,
+"[ecs][command_buffer]"
+)
+ {
     pebble::ecs::World world;
 
     auto e1 = world.spawn();
@@ -180,7 +205,12 @@ TEST_CASE("ECS Improvements: Linear Arena CommandBuffer", "[ecs][command_buffer]
     REQUIRE_FALSE(world.has<Vel>(e1));
 }
 
-TEST_CASE("ECS Improvements: Topological System Scheduler", "[ecs][scheduler]") {
+TEST_CASE (
+"ECS Improvements: Topological System Scheduler"
+,
+"[ecs][scheduler]"
+)
+ {
     pebble::ecs::World world;
     auto e = world.spawn();
     world.add(e, Pos{0.0f, 0.0f});
@@ -198,7 +228,12 @@ TEST_CASE("ECS Improvements: Topological System Scheduler", "[ecs][scheduler]") 
     REQUIRE(world.get<Pos>(e)->y == 0.5f);
 }
 
-TEST_CASE("ECS Improvements: Change Detection Ticks", "[ecs][change_detection]") {
+TEST_CASE (
+"ECS Improvements: Change Detection Ticks"
+,
+"[ecs][change_detection]"
+)
+ {
     pebble::ecs::World world;
     auto e1 = world.spawn();
 
@@ -212,7 +247,12 @@ TEST_CASE("ECS Improvements: Change Detection Ticks", "[ecs][change_detection]")
     REQUIRE(world.store<Pos>().last_mutation_tick() == 1);
 }
 
-TEST_CASE("ECS Improvements: Archetype Columnar Storage", "[ecs][archetype]") {
+TEST_CASE (
+"ECS Improvements: Archetype Columnar Storage"
+,
+"[ecs][archetype]"
+)
+ {
     pebble::ecs::ArchetypeStorage storage;
     REQUIRE(storage.archetype_count() == 0);
 
@@ -228,7 +268,12 @@ TEST_CASE("ECS Improvements: Archetype Columnar Storage", "[ecs][archetype]") {
     REQUIRE(storage.archetype_count() == 2);
 }
 
-TEST_CASE("ECS Improvements: Auto-Lead-Store Dynamic Join View", "[ecs][view][lead_store]") {
+TEST_CASE (
+"ECS Improvements: Auto-Lead-Store Dynamic Join View"
+,
+"[ecs][view][lead_store]"
+)
+ {
     pebble::ecs::World world;
 
     // Create 100 entities with Pos
@@ -259,7 +304,12 @@ TEST_CASE("ECS Improvements: Auto-Lead-Store Dynamic Join View", "[ecs][view][le
     REQUIRE(visited_count == 5);
 }
 
-TEST_CASE("ECS Improvements: ErasedStore Type-Erased Ops (Zero Virtual)", "[ecs][erased_store]") {
+TEST_CASE (
+"ECS Improvements: ErasedStore Type-Erased Ops (Zero Virtual)"
+,
+"[ecs][erased_store]"
+)
+ {
     pebble::ecs::ComponentStore<Pos> pos_store(1024);
     pos_store.set(1, Pos{42.0f, 84.0f});
     pos_store.set(2, Pos{10.0f, 20.0f});
@@ -292,7 +342,12 @@ TEST_CASE("ECS Improvements: ErasedStore Type-Erased Ops (Zero Virtual)", "[ecs]
     REQUIRE(erased.contains(2));
 }
 
-TEST_CASE("ECS Improvements: PagedSparse On-Demand Page Allocation", "[ecs][paged_sparse]") {
+TEST_CASE (
+"ECS Improvements: PagedSparse On-Demand Page Allocation"
+,
+"[ecs][paged_sparse]"
+)
+ {
     pebble::ecs::PagedSparse<std::uint32_t, 1024> paged_sparse;
 
     REQUIRE(paged_sparse.allocated_pages() == 0);

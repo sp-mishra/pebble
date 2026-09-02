@@ -7,15 +7,22 @@ using namespace kalpa;
 using namespace kalpa::edsl;
 
 namespace {
-    ga::Vector<double> v2(double a, double b) { ga::Vector<double> v(2); v[0]=a; v[1]=b; return v; }
+    ga::Vector<double> v2(double a, double b) {
+        ga::Vector<double> v(2);
+        v[0] = a;
+        v[1] = b;
+        return v;
+    }
 
     // Hand-written twin of the EDSL objective, for parity checks. File scope
     // because it carries a templated call operator.
     struct Functor {
-        template<typename V> auto operator()(const V& x) const {
+        template <typename V>
+        auto operator()(const V& x) const {
             using S = typename V::value_type;
-            S a = x[0] - S{1}; S b = x[1] - S{2};
-            return a*a + b*b;
+            S a = x[0] - S{1};
+            S b = x[1] - S{2};
+            return a * a + b * b;
         }
     };
 }
@@ -24,7 +31,12 @@ namespace {
 // EDSL objective == functor objective at the optimum.
 //   minimize (x−1)² + (y−2)²  →  x*=(1,2), f*=0.
 // ===========================================================================
-TEST_CASE("kalpa: EDSL objective reaches the analytic optimum", "[kalpa][edsl]") {
+TEST_CASE (
+"kalpa: EDSL objective reaches the analytic optimum"
+,
+"[kalpa][edsl]"
+)
+ {
     auto x = vars();
     auto prob = minimize<double>( sq(x[0] - constant(1.0)) + sq(x[1] - constant(2.0)) );
     Solver<LBFGS<double>, Derivatives<Dual,double>, Wolfe<double>> s;
@@ -35,7 +47,12 @@ TEST_CASE("kalpa: EDSL objective reaches the analytic optimum", "[kalpa][edsl]")
     CHECK(r->f   == Catch::Approx(0.0).margin(1e-9));
 }
 
-TEST_CASE("kalpa: EDSL and functor solvers agree", "[kalpa][edsl]") {
+TEST_CASE (
+"kalpa: EDSL and functor solvers agree"
+,
+"[kalpa][edsl]"
+)
+ {
     auto x = vars();
     auto eprob = minimize<double>( sq(x[0] - constant(1.0)) + sq(x[1] - constant(2.0)) );
     auto fprob = make_problem<double>(Functor{});
@@ -51,7 +68,12 @@ TEST_CASE("kalpa: EDSL and functor solvers agree", "[kalpa][edsl]") {
 // ===========================================================================
 // EDSL graph value == functor value, pointwise.
 // ===========================================================================
-TEST_CASE("kalpa: EDSL evaluates to the same value as the functor", "[kalpa][edsl]") {
+TEST_CASE (
+"kalpa: EDSL evaluates to the same value as the functor"
+,
+"[kalpa][edsl]"
+)
+ {
     auto x = vars();
     auto expr = wrap( sq(x[0] - constant(1.0)) + sq(x[1] - constant(2.0)) );
     Functor f;
@@ -64,7 +86,12 @@ TEST_CASE("kalpa: EDSL evaluates to the same value as the functor", "[kalpa][eds
 // EDSL graph gradient (via Derivatives<Dual>) == functor gradient == analytic.
 //   ∇f = [2(x−1), 2(y−2)].
 // ===========================================================================
-TEST_CASE("kalpa: EDSL graph gradient matches ga::Dual on the functor", "[kalpa][edsl][derivatives]") {
+TEST_CASE (
+"kalpa: EDSL graph gradient matches ga::Dual on the functor"
+,
+"[kalpa][edsl][derivatives]"
+)
+ {
     auto x = vars();
     auto expr = wrap( sq(x[0] - constant(1.0)) + sq(x[1] - constant(2.0)) );
     Functor f;
@@ -85,7 +112,12 @@ TEST_CASE("kalpa: EDSL graph gradient matches ga::Dual on the functor", "[kalpa]
 // var()/constant()/sq() compose: a product term and a division term evaluate.
 //   g(x) = (x0 * x1) / constant(2) + sq(x0)   at (3,4) = 12/2 + 9 = 15.
 // ===========================================================================
-TEST_CASE("kalpa: EDSL supports mul/div/sq composition", "[kalpa][edsl]") {
+TEST_CASE (
+"kalpa: EDSL supports mul/div/sq composition"
+,
+"[kalpa][edsl]"
+)
+ {
     auto x = vars();
     auto expr = wrap( (x[0] * x[1]) / constant(2.0) + sq(x[0]) );
     CHECK(expr(v2(3.0, 4.0)) == Catch::Approx(15.0));
@@ -97,7 +129,12 @@ TEST_CASE("kalpa: EDSL supports mul/div/sq composition", "[kalpa][edsl]") {
 //   Le:  x0 <= 2         → residual = x0−2  (feasible ⇔ ≤ 0).
 //   Ge:  x0 >= 0         → residual = 0−x0 = −x0 (feasible ⇔ ≤ 0).
 // ===========================================================================
-TEST_CASE("kalpa: subject_to builds an equality residual", "[kalpa][edsl][constraints]") {
+TEST_CASE (
+"kalpa: subject_to builds an equality residual"
+,
+"[kalpa][edsl][constraints]"
+)
+ {
     auto x = vars();
     auto cs = subject_to( (x[0] + x[1]) == constant(1.0) );
     CHECK(cs.count() == 1);
@@ -108,7 +145,12 @@ TEST_CASE("kalpa: subject_to builds an equality residual", "[kalpa][edsl][constr
     CHECK_FALSE(cs.feasible(v2(1.0, 1.0)));
 }
 
-TEST_CASE("kalpa: subject_to encodes <= and >= sign conventions", "[kalpa][edsl][constraints]") {
+TEST_CASE (
+"kalpa: subject_to encodes <= and >= sign conventions"
+,
+"[kalpa][edsl][constraints]"
+)
+ {
     auto x = vars();
     auto le = subject_to( x[0] <= constant(2.0) );   // x0−2 ≤ 0
     CHECK(le.residual(0, v2(3.0, 0.0)) == Catch::Approx(1.0).margin(1e-12));   // violated → +1
@@ -123,7 +165,12 @@ TEST_CASE("kalpa: subject_to encodes <= and >= sign conventions", "[kalpa][edsl]
     CHECK_FALSE(ge.feasible(v2(-1.0, 0.0)));
 }
 
-TEST_CASE("kalpa: multiple subject_to constraints count and evaluate", "[kalpa][edsl][constraints]") {
+TEST_CASE (
+"kalpa: multiple subject_to constraints count and evaluate"
+,
+"[kalpa][edsl][constraints]"
+)
+ {
     auto x = vars();
     auto cs = subject_to( (x[0] + x[1]) == constant(2.0),
                           x[0] >= constant(0.0) );
@@ -137,7 +184,12 @@ TEST_CASE("kalpa: multiple subject_to constraints count and evaluate", "[kalpa][
 // Auto — structural analysis selects a solver and drives the EDSL objective
 // to its optimum. (x−1)²+(y−2)² is smooth + convex + low-dim → Newton/LBFGS.
 // ===========================================================================
-TEST_CASE("kalpa: Auto selects a gradient method for a smooth convex objective", "[kalpa][edsl][auto]") {
+TEST_CASE (
+"kalpa: Auto selects a gradient method for a smooth convex objective"
+,
+"[kalpa][edsl][auto]"
+)
+ {
     auto x = vars();
     auto expr = sq(x[0] - constant(1.0)) + sq(x[1] - constant(2.0));
 
@@ -149,7 +201,12 @@ TEST_CASE("kalpa: Auto selects a gradient method for a smooth convex objective",
     CHECK((ch.algo == MethodChoice::Newton || ch.algo == MethodChoice::LBFGS));
 }
 
-TEST_CASE("kalpa: Auto solves the EDSL objective to the analytic optimum", "[kalpa][edsl][auto]") {
+TEST_CASE (
+"kalpa: Auto solves the EDSL objective to the analytic optimum"
+,
+"[kalpa][edsl][auto]"
+)
+ {
     auto x = vars();
     auto prob = minimize<double>( sq(x[0] - constant(1.0)) + sq(x[1] - constant(2.0)) );
     Auto<double> automatic;
@@ -161,7 +218,12 @@ TEST_CASE("kalpa: Auto solves the EDSL objective to the analytic optimum", "[kal
 }
 
 // A division by a variable makes the objective non-convex; analysis flags it.
-TEST_CASE("kalpa: Auto flags a non-convex division objective", "[kalpa][edsl][auto]") {
+TEST_CASE (
+"kalpa: Auto flags a non-convex division objective"
+,
+"[kalpa][edsl][auto]"
+)
+ {
     auto x = vars();
     auto expr = sq(x[0] - constant(1.0)) + constant(1.0) / (x[1] + constant(3.0));
     vakya::property_store store;

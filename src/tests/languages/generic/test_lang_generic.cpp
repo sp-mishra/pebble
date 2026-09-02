@@ -53,7 +53,12 @@
 // Test 1 — stable_entity_id derivation stability
 // ============================================================================
 
-TEST_CASE("lang: stable_entity_id derivation is stable", "[lang][identity]") {
+TEST_CASE (
+"lang: stable_entity_id derivation is stable"
+,
+"[lang][identity]"
+)
+ {
     constexpr auto id1 = lang::detail::make_id("math.dot", lang::kKindFunction);
     constexpr auto id2 = lang::detail::make_id("math.dot", lang::kKindFunction);
 
@@ -66,7 +71,12 @@ TEST_CASE("lang: stable_entity_id derivation is stable", "[lang][identity]") {
 // Test 2 — stable_entity_id kind fields
 // ============================================================================
 
-TEST_CASE("lang: stable_entity_id kind constants correct", "[lang][identity]") {
+TEST_CASE (
+"lang: stable_entity_id kind constants correct"
+,
+"[lang][identity]"
+)
+ {
     constexpr auto fn  = lang::detail::make_id("a.b", lang::kKindFunction);
     constexpr auto ty  = lang::detail::make_id("a.b", lang::kKindType);
     constexpr auto mod = lang::detail::make_id("a.b", lang::kKindModule);
@@ -83,7 +93,12 @@ TEST_CASE("lang: stable_entity_id kind constants correct", "[lang][identity]") {
 // Test 3 — fp_combine is non-symmetric
 // ============================================================================
 
-TEST_CASE("lang: fp_combine order matters", "[lang][identity]") {
+TEST_CASE (
+"lang: fp_combine order matters"
+,
+"[lang][identity]"
+)
+ {
     constexpr lang::descriptor_fingerprint a = 0xDEADBEEFULL;
     constexpr lang::descriptor_fingerprint b = 0xCAFEBABEULL;
     constexpr auto ab = lang::detail::fp_combine(a, b);
@@ -95,7 +110,12 @@ TEST_CASE("lang: fp_combine order matters", "[lang][identity]") {
 // Test 4 — module_resolver with pluggable extension
 // ============================================================================
 
-TEST_CASE("lang: module_resolver pluggable source_extension", "[lang][module_system]") {
+TEST_CASE (
+"lang: module_resolver pluggable source_extension"
+,
+"[lang][module_system]"
+)
+ {
     lang::resolver_config cfg;
     cfg.source_extension = ".mylang";
     lang::module_resolver resolver{cfg};
@@ -121,7 +141,12 @@ TEST_CASE("lang: module_resolver pluggable source_extension", "[lang][module_sys
 // Test 5 — circular import detection LANG-IMP-003
 // ============================================================================
 
-TEST_CASE("lang: import_graph circular import LANG-IMP-003", "[lang][import_resolver]") {
+TEST_CASE (
+"lang: import_graph circular import LANG-IMP-003"
+,
+"[lang][import_resolver]"
+)
+ {
     lang::import_graph graph;
     // A → B → C → A (cycle)
     graph.declare_imports("A", {{"B"}});
@@ -142,7 +167,12 @@ TEST_CASE("lang: import_graph circular import LANG-IMP-003", "[lang][import_reso
 // Test 6 — topo sort ordering: C before B before A
 // ============================================================================
 
-TEST_CASE("lang: import_graph topo sort importees first", "[lang][import_resolver]") {
+TEST_CASE (
+"lang: import_graph topo sort importees first"
+,
+"[lang][import_resolver]"
+)
+ {
     lang::module_resolver resolver;
     // Register native modules so they resolve.
     for (const auto& name : {"A", "B", "C"}) {
@@ -175,7 +205,12 @@ TEST_CASE("lang: import_graph topo sort importees first", "[lang][import_resolve
 // Test 7 — version constraint LANG-IMP-004
 // ============================================================================
 
-TEST_CASE("lang: import_graph version constraint LANG-IMP-004", "[lang][import_resolver]") {
+TEST_CASE (
+"lang: import_graph version constraint LANG-IMP-004"
+,
+"[lang][import_resolver]"
+)
+ {
     lang::module_resolver resolver;
     lang::module_descriptor d;
     d.name    = "util";
@@ -201,7 +236,12 @@ TEST_CASE("lang: import_graph version constraint LANG-IMP-004", "[lang][import_r
 // Test 8 — capability gate LANG-IMP-005
 // ============================================================================
 
-TEST_CASE("lang: import_graph capability gate LANG-IMP-005", "[lang][import_resolver]") {
+TEST_CASE (
+"lang: import_graph capability gate LANG-IMP-005"
+,
+"[lang][import_resolver]"
+)
+ {
     lang::module_resolver resolver;
     lang::module_descriptor d;
     d.name = "gpu_lib";
@@ -227,7 +267,12 @@ TEST_CASE("lang: import_graph capability gate LANG-IMP-005", "[lang][import_reso
 // Test 9 — symbol flow from resolved importee
 // ============================================================================
 
-TEST_CASE("lang: import_graph symbol flow from importee", "[lang][import_resolver]") {
+TEST_CASE (
+"lang: import_graph symbol flow from importee"
+,
+"[lang][import_resolver]"
+)
+ {
     lang::module_resolver resolver;
     lang::module_descriptor d;
     d.name = "math";
@@ -260,7 +305,12 @@ TEST_CASE("lang: import_graph symbol flow from importee", "[lang][import_resolve
 // Test 10 — rule_engine requires_ violation
 // ============================================================================
 
-TEST_CASE("lang: rule_engine requires_ violation", "[lang][rules]") {
+TEST_CASE (
+"lang: rule_engine requires_ violation"
+,
+"[lang][rules]"
+)
+ {
     lang::rule_engine engine;
     lang::rule_descriptor r;
     r.id      = lang::detail::make_id("tx.requires_io", lang::kKindRule);
@@ -289,7 +339,12 @@ TEST_CASE("lang: rule_engine requires_ violation", "[lang][rules]") {
 // Test 11 — rule_engine conflicts violation
 // ============================================================================
 
-TEST_CASE("lang: rule_engine conflicts violation", "[lang][rules]") {
+TEST_CASE (
+"lang: rule_engine conflicts violation"
+,
+"[lang][rules]"
+)
+ {
     lang::rule_engine engine;
     lang::rule_descriptor r;
     r.id      = lang::detail::make_id("pure.conflicts_io", lang::kKindRule);
@@ -319,7 +374,12 @@ TEST_CASE("lang: rule_engine conflicts violation", "[lang][rules]") {
 // Test 12 — rule_engine generates_obligation
 // ============================================================================
 
-TEST_CASE("lang: rule_engine generates_obligation on violation", "[lang][rules]") {
+TEST_CASE (
+"lang: rule_engine generates_obligation on violation"
+,
+"[lang][rules]"
+)
+ {
     lang::rule_engine engine;
     lang::rule_descriptor r;
     r.id                      = lang::detail::make_id("div.safe", lang::kKindRule);
@@ -349,7 +409,12 @@ TEST_CASE("lang: rule_engine generates_obligation on violation", "[lang][rules]"
 // Test 13 — symbol_table<uppercase_export_policy> uppercase → exported
 // ============================================================================
 
-TEST_CASE("lang: symbol_table uppercase_export_policy", "[lang][symbol_table]") {
+TEST_CASE (
+"lang: symbol_table uppercase_export_policy"
+,
+"[lang][symbol_table]"
+)
+ {
     lang::symbol_table<lang::uppercase_export_policy> tbl;
 
     lang::symbol_entry upper; upper.name = "Dot";    upper.kind = lang::sym_kind::function;
@@ -374,7 +439,12 @@ TEST_CASE("lang: symbol_table uppercase_export_policy", "[lang][symbol_table]") 
 // Test 14 — collecting_sink errors/warnings separation
 // ============================================================================
 
-TEST_CASE("lang: collecting_sink errors and warnings", "[lang][diagnostics]") {
+TEST_CASE (
+"lang: collecting_sink errors and warnings"
+,
+"[lang][diagnostics]"
+)
+ {
     enum class my_kind { bad, note };
     struct my_helper {
         static constexpr std::string_view to_code(my_kind k) noexcept {
@@ -399,7 +469,12 @@ TEST_CASE("lang: collecting_sink errors and warnings", "[lang][diagnostics]") {
 // Test 15 — discharge_driver: assume→proven, check→unknown+guard
 // ============================================================================
 
-TEST_CASE("lang: discharge_driver policy outcomes", "[lang][proof]") {
+TEST_CASE (
+"lang: discharge_driver policy outcomes"
+,
+"[lang][proof]"
+)
+ {
     lang::discharge_driver<> driver;
     lang::assumption_context actx;
     lang::analysis_store astore;
@@ -440,7 +515,12 @@ TEST_CASE("lang: discharge_driver policy outcomes", "[lang][proof]") {
 // Test 16 — registry_builder collision detection LANG-REG-001
 // ============================================================================
 
-TEST_CASE("lang: registry_builder duplicate function LANG-REG-001", "[lang][registry]") {
+TEST_CASE (
+"lang: registry_builder duplicate function LANG-REG-001"
+,
+"[lang][registry]"
+)
+ {
     lang::registry_builder<> builder;
 
     lang::function_descriptor_base f1;
@@ -465,7 +545,12 @@ TEST_CASE("lang: registry_builder duplicate function LANG-REG-001", "[lang][regi
 // Test 17 — registry_builder global fingerprint non-zero
 // ============================================================================
 
-TEST_CASE("lang: registry_builder global fingerprint non-zero", "[lang][registry]") {
+TEST_CASE (
+"lang: registry_builder global fingerprint non-zero"
+,
+"[lang][registry]"
+)
+ {
     lang::registry_builder<> builder;
     lang::function_descriptor_base f;
     f.name        = "util.scale";
@@ -484,7 +569,12 @@ TEST_CASE("lang: registry_builder global fingerprint non-zero", "[lang][registry
 // Test 18 — dependency_graph cycle_nodes returns cycle participants
 // ============================================================================
 
-TEST_CASE("lang: dependency_graph cycle_nodes", "[lang][module_system]") {
+TEST_CASE (
+"lang: dependency_graph cycle_nodes"
+,
+"[lang][module_system]"
+)
+ {
     lang::dependency_graph g;
     // A → B → C → A (cycle), D is separate
     g.add_import("A", "B");

@@ -11,7 +11,12 @@
 
 using namespace pebble::drishya;
 
-TEST_CASE("reactive: signal get/set", "[drishya][reactive]") {
+TEST_CASE (
+"reactive: signal get/set"
+,
+"[drishya][reactive]"
+)
+ {
     Signal<int> s{7};
     CHECK(s.get() == 7);
     CHECK(s() == 7);
@@ -19,7 +24,12 @@ TEST_CASE("reactive: signal get/set", "[drishya][reactive]") {
     CHECK(s.get() == 42);
 }
 
-TEST_CASE("reactive: signal notifies observers on set", "[drishya][reactive]") {
+TEST_CASE (
+"reactive: signal notifies observers on set"
+,
+"[drishya][reactive]"
+)
+ {
     Signal<int> s{0};
     int fired = 0;
     int last = -1;
@@ -35,7 +45,12 @@ TEST_CASE("reactive: signal notifies observers on set", "[drishya][reactive]") {
     CHECK(fired == 2); // no longer observing
 }
 
-TEST_CASE("reactive: setting the same value still tracks correctly", "[drishya][reactive]") {
+TEST_CASE (
+"reactive: setting the same value still tracks correctly"
+,
+"[drishya][reactive]"
+)
+ {
     Signal<int> s{5};
     int fired = 0;
     s.subscribe([&]() noexcept { ++fired; });
@@ -44,7 +59,12 @@ TEST_CASE("reactive: setting the same value still tracks correctly", "[drishya][
     CHECK(fired >= 1);
 }
 
-TEST_CASE("reactive: bind mirrors a signal into a setter", "[drishya][reactive]") {
+TEST_CASE (
+"reactive: bind mirrors a signal into a setter"
+,
+"[drishya][reactive]"
+)
+ {
     Signal<int> src{1};
     int mirror = 0;
     bind(src, [&](const int& v) { mirror = v; });

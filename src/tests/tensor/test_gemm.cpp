@@ -13,18 +13,23 @@
 using namespace ts;
 
 // Reference naive gemm
-template<typename T>
+template <typename T>
 static void naive_gemm(const T* A, const T* B, T* C,
-                        std::size_t M, std::size_t N, std::size_t K) {
-    for (std::size_t i=0;i<M;++i)
-        for (std::size_t j=0;j<N;++j) {
+                       std::size_t M, std::size_t N, std::size_t K) {
+    for (std::size_t i = 0; i < M; ++i)
+        for (std::size_t j = 0; j < N; ++j) {
             T s = T{0};
-            for (std::size_t k=0;k<K;++k) s += A[i*K+k]*B[k*N+j];
-            C[i*N+j] = s;
+            for (std::size_t k = 0; k < K; ++k) s += A[i * K + k] * B[k * N + j];
+            C[i * N + j] = s;
         }
 }
 
-TEST_CASE("tensor gemm: DefaultComputationPolicy blocked gemm correctness", "[tensor][gemm][blas]") {
+TEST_CASE (
+"tensor gemm: DefaultComputationPolicy blocked gemm correctness"
+,
+"[tensor][gemm][blas]"
+)
+ {
     SECTION("square 8×8") {
         constexpr std::size_t N = 8;
         DynamicTensor<float> A(TensorShape{N,N}), B(TensorShape{N,N}), C(TensorShape{N,N});
@@ -69,7 +74,12 @@ TEST_CASE("tensor gemm: DefaultComputationPolicy blocked gemm correctness", "[te
     }
 }
 
-TEST_CASE("tensor gemm: matmul convenience (alpha=1 beta=0)", "[tensor][gemm][matmul]") {
+TEST_CASE (
+"tensor gemm: matmul convenience (alpha=1 beta=0)"
+,
+"[tensor][gemm][matmul]"
+)
+ {
     constexpr std::size_t N = 6;
     DynamicTensor<float> A(TensorShape{N,N}), B(TensorShape{N,N});
     for (std::size_t i=0;i<N*N;++i) { A.data()[i]=float(i+1); B.data()[i]=float(N*N-i); }
@@ -81,7 +91,12 @@ TEST_CASE("tensor gemm: matmul convenience (alpha=1 beta=0)", "[tensor][gemm][ma
         CHECK(C.data()[i] == Catch::Approx(C_ref.data()[i]).epsilon(1e-4f));
 }
 
-TEST_CASE("tensor BLAS: gemv correctness", "[tensor][blas][gemv]") {
+TEST_CASE (
+"tensor BLAS: gemv correctness"
+,
+"[tensor][blas][gemv]"
+)
+ {
     constexpr std::size_t M=5, N=4;
     DynamicTensor<float> A(TensorShape{M,N}), x(TensorShape{N}), y(TensorShape{M});
     for (std::size_t i=0;i<M*N;++i) A.data()[i] = float(i+1);
@@ -96,7 +111,12 @@ TEST_CASE("tensor BLAS: gemv correctness", "[tensor][blas][gemv]") {
     }
 }
 
-TEST_CASE("tensor BLAS: axpy correctness", "[tensor][blas][axpy]") {
+TEST_CASE (
+"tensor BLAS: axpy correctness"
+,
+"[tensor][blas][axpy]"
+)
+ {
     constexpr std::size_t N = 8;
     DynamicTensor<float> x(TensorShape{N}), y(TensorShape{N});
     for (std::size_t i=0;i<N;++i) { x.data()[i]=float(i+1); y.data()[i]=float(2*i); }
@@ -105,7 +125,12 @@ TEST_CASE("tensor BLAS: axpy correctness", "[tensor][blas][axpy]") {
         CHECK(y.data()[i] == Catch::Approx(float(2*i) + 3.f*float(i+1)).epsilon(1e-5f));
 }
 
-TEST_CASE("tensor BLAS: dot and nrm2", "[tensor][blas][dot][nrm2]") {
+TEST_CASE (
+"tensor BLAS: dot and nrm2"
+,
+"[tensor][blas][dot][nrm2]"
+)
+ {
     constexpr std::size_t N = 5;
     DynamicTensor<float> x(TensorShape{N}), y(TensorShape{N});
     for (std::size_t i=0;i<N;++i) { x.data()[i]=float(i+1); y.data()[i]=float(i+2); }
@@ -124,7 +149,12 @@ TEST_CASE("tensor BLAS: dot and nrm2", "[tensor][blas][dot][nrm2]") {
     CHECK(nrm == Catch::Approx(nrm_ref).epsilon(1e-5f));
 }
 
-TEST_CASE("tensor BLAS: syrk correctness", "[tensor][blas][syrk]") {
+TEST_CASE (
+"tensor BLAS: syrk correctness"
+,
+"[tensor][blas][syrk]"
+)
+ {
     constexpr std::size_t M=3, N=4;
     DynamicTensor<float> A(TensorShape{M,N}), C(TensorShape{M,M});
     for (std::size_t i=0;i<M*N;++i) A.data()[i]=float(i+1);
@@ -140,7 +170,7 @@ TEST_CASE("tensor BLAS: syrk correctness", "[tensor][blas][syrk]") {
 }
 
 #if __has_include(<hwy/highway.h>)
-TEST_CASE("tensor BLAS: HighwayComputationPolicy gemm matches scalar", "[tensor][gemm][highway]") {
+TEST_CASE ("tensor BLAS: HighwayComputationPolicy gemm matches scalar", "[tensor][gemm][highway]") {
     constexpr std::size_t N = 8;
     using HCP = ts::HighwayComputationPolicy;
     DynamicTensor<float, ts::DefaultStoragePolicy, HCP> A(TensorShape{N,N}), B(TensorShape{N,N}), C(TensorShape{N,N});

@@ -3,13 +3,23 @@
 #include "kalpana/effect/liquify.hpp"
 #include "kalpana/color/spectral.hpp"
 
-TEST_CASE("LiquifyBrush: construction and valid state", "[kalpana][liquify]") {
+TEST_CASE (
+"LiquifyBrush: construction and valid state"
+,
+"[kalpana][liquify]"
+)
+ {
     using namespace kalpana;
     LiquifyBrush<> brush(16, 16, 1.0f, LiquifyParams{.mode = LiquifyMode::Push});
     REQUIRE(brush.valid());
 }
 
-TEST_CASE("LiquifyBrush: Push mode accumulates displacement", "[kalpana][liquify]") {
+TEST_CASE (
+"LiquifyBrush: Push mode accumulates displacement"
+,
+"[kalpana][liquify]"
+)
+ {
     using namespace kalpana;
     LiquifyBrush<> brush(16, 16, 1.0f, LiquifyParams{.mode = LiquifyMode::Push, .strength = 1.0f, .radius = 4.0f});
 
@@ -20,7 +30,12 @@ TEST_CASE("LiquifyBrush: Push mode accumulates displacement", "[kalpana][liquify
     REQUIRE(disp.channel(0).at(8, 8) > 0.0f);
 }
 
-TEST_CASE("LiquifyBrush: clear resets displacement to zero", "[kalpana][liquify]") {
+TEST_CASE (
+"LiquifyBrush: clear resets displacement to zero"
+,
+"[kalpana][liquify]"
+)
+ {
     using namespace kalpana;
     LiquifyBrush<> brush(8, 8, 1.0f);
     brush.accumulate(4.0f, 4.0f, 2.0f, 1.0f);
@@ -32,7 +47,12 @@ TEST_CASE("LiquifyBrush: clear resets displacement to zero", "[kalpana][liquify]
             REQUIRE(disp.channel(0).at(r, c) == Catch::Approx(0.0f));
 }
 
-TEST_CASE("LiquifyBrush: apply does not crash on valid field", "[kalpana][liquify]") {
+TEST_CASE (
+"LiquifyBrush: apply does not crash on valid field"
+,
+"[kalpana][liquify]"
+)
+ {
     using namespace kalpana;
     PaintField<> f(16, 16, 1.0f);
     spectral::SpectralColor paint = spectral::SpectralColor::from_color(Color{0.5f, 0.3f, 0.8f, 1.0f});
@@ -52,7 +72,12 @@ TEST_CASE("LiquifyBrush: apply does not crash on valid field", "[kalpana][liquif
     REQUIRE(f.total_mass() <= mass_before * (1.0f + 0.002f));
 }
 
-TEST_CASE("LiquifyBrush: Twirl mode displacement is perpendicular", "[kalpana][liquify]") {
+TEST_CASE (
+"LiquifyBrush: Twirl mode displacement is perpendicular"
+,
+"[kalpana][liquify]"
+)
+ {
     using namespace kalpana;
     LiquifyBrush<> brush(16, 16, 1.0f, LiquifyParams{.mode = LiquifyMode::Twirl, .strength = 1.0f, .radius = 6.0f});
     brush.accumulate(8.0f, 8.0f);

@@ -8,7 +8,12 @@
 
 using pebble::spandana::DestructionEngine;
 
-TEST_CASE("Spandana: shatter shard inertia equals Akruti exact polar moment", "[spandana][destruction]") {
+TEST_CASE (
+"Spandana: shatter shard inertia equals Akruti exact polar moment"
+,
+"[spandana][destruction]"
+)
+ {
     akruti::Poly box;
     box.push_back(akruti::Vec{-50.0f, -50.0f});
     box.push_back(akruti::Vec{ 50.0f, -50.0f});
@@ -27,7 +32,12 @@ TEST_CASE("Spandana: shatter shard inertia equals Akruti exact polar moment", "[
     }
 }
 
-TEST_CASE("Spandana: shard mass props match a direct khanda::fracture_voronoi call", "[spandana][destruction]") {
+TEST_CASE (
+"Spandana: shard mass props match a direct khanda::fracture_voronoi call"
+,
+"[spandana][destruction]"
+)
+ {
     // Fracture the same geometry directly through Akruti and confirm at least one shard's
     // (area, inertia) pair is reproduced in the Spandana descriptor list (delegation parity).
     akruti::Poly box;

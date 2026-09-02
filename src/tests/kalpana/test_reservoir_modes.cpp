@@ -4,20 +4,26 @@
 #include "kalpana/color/spectral.hpp"
 
 namespace {
-// Helper: read cell (r,c) from PaintField as SpectralColor
-kalpana::spectral::SpectralColor cell_pigment(const kalpana::PaintField<>& f,
-                                               std::size_t r, std::size_t c) {
-    kalpana::spectral::Spectrum sp{};
-    for (std::size_t b = 0; b < kalpana::spectral::kBands; ++b)
-        sp[b] = f.field().channel(kalpana::PaintChannels::KM_START + b).at(r, c);
-    return kalpana::spectral::SpectralColor{sp};
-}
-float cell_water(const kalpana::PaintField<>& f, std::size_t r, std::size_t c) {
-    return f.field().channel(kalpana::PaintChannels::WATER).at(r, c);
-}
+    // Helper: read cell (r,c) from PaintField as SpectralColor
+    kalpana::spectral::SpectralColor cell_pigment(const kalpana::PaintField<>& f,
+                                                  std::size_t r, std::size_t c) {
+        kalpana::spectral::Spectrum sp{};
+        for (std::size_t b = 0; b < kalpana::spectral::kBands; ++b)
+            sp[b] = f.field().channel(kalpana::PaintChannels::KM_START + b).at(r, c);
+        return kalpana::spectral::SpectralColor{sp};
+    }
+
+    float cell_water(const kalpana::PaintField<>& f, std::size_t r, std::size_t c) {
+        return f.field().channel(kalpana::PaintChannels::WATER).at(r, c);
+    }
 }
 
-TEST_CASE("PigmentReservoir<1>: single slot round-trip", "[kalpana][reservoir]") {
+TEST_CASE (
+"PigmentReservoir<1>: single slot round-trip"
+,
+"[kalpana][reservoir]"
+)
+ {
     using namespace kalpana;
     PaintField<> f(8, 8, 1.0f);
 
@@ -38,7 +44,12 @@ TEST_CASE("PigmentReservoir<1>: single slot round-trip", "[kalpana][reservoir]")
     REQUIRE(sum > 0.0f);
 }
 
-TEST_CASE("PigmentReservoir<1>: rinse clears slot", "[kalpana][reservoir]") {
+TEST_CASE (
+"PigmentReservoir<1>: rinse clears slot"
+,
+"[kalpana][reservoir]"
+)
+ {
     using namespace kalpana;
     PigmentReservoir<1> res;
 
@@ -58,7 +69,12 @@ TEST_CASE("PigmentReservoir<1>: rinse clears slot", "[kalpana][reservoir]") {
     REQUIRE(slot.volume < 0.01f);
 }
 
-TEST_CASE("PigmentReservoir<3>: multicolor slot mapping", "[kalpana][reservoir]") {
+TEST_CASE (
+"PigmentReservoir<3>: multicolor slot mapping"
+,
+"[kalpana][reservoir]"
+)
+ {
     using namespace kalpana;
     PigmentReservoir<3> res;
 
@@ -69,7 +85,12 @@ TEST_CASE("PigmentReservoir<3>: multicolor slot mapping", "[kalpana][reservoir]"
     REQUIRE(res.slot_for_u(1.0f)  == 2);
 }
 
-TEST_CASE("PigmentReservoir: deposit blends pigment into cell pigment", "[kalpana][reservoir]") {
+TEST_CASE (
+"PigmentReservoir: deposit blends pigment into cell pigment"
+,
+"[kalpana][reservoir]"
+)
+ {
     using namespace kalpana;
     PigmentReservoir<1> res;
 

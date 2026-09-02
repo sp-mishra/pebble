@@ -8,7 +8,12 @@
 
 using namespace litegraph;
 
-TEST_CASE("LiteGraph Pravaha Add-on: Parallel Level-Synchronous BFS", "[litegraph][pravaha][bfs]") {
+TEST_CASE (
+"LiteGraph Pravaha Add-on: Parallel Level-Synchronous BFS"
+,
+"[litegraph][pravaha][bfs]"
+)
+ {
     Graph<int, int, Directed> g;
 
     // Build a diamond DAG: 0 -> 1, 0 -> 2, 1 -> 3, 2 -> 3
@@ -36,7 +41,12 @@ TEST_CASE("LiteGraph Pravaha Add-on: Parallel Level-Synchronous BFS", "[litegrap
     REQUIRE(visited_nodes.size() == 4);
 }
 
-TEST_CASE("LiteGraph Pravaha Add-on: Parallel CSR PageRank", "[litegraph][pravaha][pagerank]") {
+TEST_CASE (
+"LiteGraph Pravaha Add-on: Parallel CSR PageRank"
+,
+"[litegraph][pravaha][pagerank]"
+)
+ {
     Graph<int, double, Directed> g;
 
     auto n0 = g.add_node(0);
@@ -76,7 +86,12 @@ TEST_CASE("LiteGraph Pravaha Add-on: Parallel CSR PageRank", "[litegraph][pravah
     }
 }
 
-TEST_CASE("LiteGraph Pravaha Add-on: Parallel Multi-Source Dijkstra", "[litegraph][pravaha][dijkstra]") {
+TEST_CASE (
+"LiteGraph Pravaha Add-on: Parallel Multi-Source Dijkstra"
+,
+"[litegraph][pravaha][dijkstra]"
+)
+ {
     Graph<int, double, Directed> g;
 
     auto n0 = g.add_node(0);
@@ -108,7 +123,12 @@ TEST_CASE("LiteGraph Pravaha Add-on: Parallel Multi-Source Dijkstra", "[litegrap
     REQUIRE(dist_n1[n3.value] == Catch::Approx(3.5));
 }
 
-TEST_CASE("LiteGraph Pravaha Add-on: Parallel Betweenness Centrality", "[litegraph][pravaha][betweenness]") {
+TEST_CASE (
+"LiteGraph Pravaha Add-on: Parallel Betweenness Centrality"
+,
+"[litegraph][pravaha][betweenness]"
+)
+ {
     Graph<int, int, Undirected> g;
 
     // Linear chain: 0 - 1 - 2 - 3 - 4

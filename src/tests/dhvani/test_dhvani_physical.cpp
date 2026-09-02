@@ -25,7 +25,12 @@
 // synth layer
 // ---------------------------------------------------------------------------
 
-TEST_CASE("dhvani: WaveShape sine produces values in [-1, 1]", "[dhvani][synth][waveform]") {
+TEST_CASE (
+"dhvani: WaveShape sine produces values in [-1, 1]"
+,
+"[dhvani][synth][waveform]"
+)
+ {
     pebble::dhvani::synth::OscillatorState s{.frequency=440.f, .amplitude=1.f, .sample_rate=44100};
     for (int i = 0; i < 1024; ++i) {
         const float v = pebble::dhvani::synth::tick(s, pebble::dhvani::synth::WaveShape::Sine);
@@ -34,7 +39,12 @@ TEST_CASE("dhvani: WaveShape sine produces values in [-1, 1]", "[dhvani][synth][
     }
 }
 
-TEST_CASE("dhvani: WaveShape white-noise energy is non-zero", "[dhvani][synth][waveform]") {
+TEST_CASE (
+"dhvani: WaveShape white-noise energy is non-zero"
+,
+"[dhvani][synth][waveform]"
+)
+ {
     pebble::dhvani::synth::OscillatorState s{.frequency=1.f, .amplitude=1.f, .sample_rate=44100};
     float sum = 0.f;
     for (int i = 0; i < 256; ++i)
@@ -42,7 +52,12 @@ TEST_CASE("dhvani: WaveShape white-noise energy is non-zero", "[dhvani][synth][w
     CHECK(sum > 0.f);
 }
 
-TEST_CASE("dhvani: fill_block populates all frames", "[dhvani][synth][waveform]") {
+TEST_CASE (
+"dhvani: fill_block populates all frames"
+,
+"[dhvani][synth][waveform]"
+)
+ {
     pebble::dhvani::synth::OscillatorState s{.frequency=220.f, .amplitude=0.5f, .sample_rate=44100};
     pebble::dhvani::synth::SampleBlock<64> blk{};
     pebble::dhvani::synth::fill_block(s, pebble::dhvani::synth::WaveShape::Saw, blk);
@@ -51,7 +66,12 @@ TEST_CASE("dhvani: fill_block populates all frames", "[dhvani][synth][waveform]"
     CHECK(energy > 0.f);
 }
 
-TEST_CASE("dhvani: ADSR envelope — trigger → attack → decay → sustain", "[dhvani][synth][envelope]") {
+TEST_CASE (
+"dhvani: ADSR envelope — trigger → attack → decay → sustain"
+,
+"[dhvani][synth][envelope]"
+)
+ {
     using namespace pebble::dhvani::synth;
     EnvelopeState env{};
     env.params = {.attack=0.01f, .decay=0.05f, .sustain=0.5f, .release=0.1f};
@@ -68,7 +88,12 @@ TEST_CASE("dhvani: ADSR envelope — trigger → attack → decay → sustain", 
     CHECK_FALSE(done(env));
 }
 
-TEST_CASE("dhvani: ADSR envelope — release reaches Done", "[dhvani][synth][envelope]") {
+TEST_CASE (
+"dhvani: ADSR envelope — release reaches Done"
+,
+"[dhvani][synth][envelope]"
+)
+ {
     using namespace pebble::dhvani::synth;
     EnvelopeState env{};
     env.params = {.attack=0.001f, .decay=0.001f, .sustain=0.5f, .release=0.01f};
@@ -83,7 +108,12 @@ TEST_CASE("dhvani: ADSR envelope — release reaches Done", "[dhvani][synth][env
     CHECK(env.value == Catch::Approx(0.f).margin(1e-4f));
 }
 
-TEST_CASE("dhvani: Biquad LP filter attenuates above cutoff", "[dhvani][synth][filter]") {
+TEST_CASE (
+"dhvani: Biquad LP filter attenuates above cutoff"
+,
+"[dhvani][synth][filter]"
+)
+ {
     using namespace pebble::dhvani::synth;
     constexpr uint32_t sr = 44100;
     // LP at 1kHz, Q=0.7
@@ -101,7 +131,12 @@ TEST_CASE("dhvani: Biquad LP filter attenuates above cutoff", "[dhvani][synth][f
     CHECK(energy_filtered < 50.f);
 }
 
-TEST_CASE("dhvani: Biquad HP filter passes above cutoff", "[dhvani][synth][filter]") {
+TEST_CASE (
+"dhvani: Biquad HP filter passes above cutoff"
+,
+"[dhvani][synth][filter]"
+)
+ {
     using namespace pebble::dhvani::synth;
     constexpr uint32_t sr = 44100;
     const auto hp = make_biquad<FilterTag_HighPass>(100.f, 0.7f, sr);
@@ -114,7 +149,12 @@ TEST_CASE("dhvani: Biquad HP filter passes above cutoff", "[dhvani][synth][filte
     CHECK(energy > 100.f);
 }
 
-TEST_CASE("dhvani: ModalResonator energy after excitation", "[dhvani][synth][resonator]") {
+TEST_CASE (
+"dhvani: ModalResonator energy after excitation"
+,
+"[dhvani][synth][resonator]"
+)
+ {
     using namespace pebble::dhvani::synth;
     ModalResonator<4> r{};
     r.modes[0] = {.freq=440.f,  .decay=0.9995f, .amp=1.f};
@@ -127,7 +167,12 @@ TEST_CASE("dhvani: ModalResonator energy after excitation", "[dhvani][synth][res
     CHECK(energy > 0.f);
 }
 
-TEST_CASE("dhvani: KarplusStrong decays over time", "[dhvani][synth][resonator]") {
+TEST_CASE (
+"dhvani: KarplusStrong decays over time"
+,
+"[dhvani][synth][resonator]"
+)
+ {
     using namespace pebble::dhvani::synth;
     KarplusStrong<2048> ks{};
     ks.set_frequency(440.f, 44100);
@@ -146,7 +191,12 @@ TEST_CASE("dhvani: KarplusStrong decays over time", "[dhvani][synth][resonator]"
 // physical layer
 // ---------------------------------------------------------------------------
 
-TEST_CASE("dhvani: MaterialPresets satisfy PhysicalMaterial concept", "[dhvani][physical][material]") {
+TEST_CASE (
+"dhvani: MaterialPresets satisfy PhysicalMaterial concept"
+,
+"[dhvani][physical][material]"
+)
+ {
     using namespace pebble::dhvani::physical;
     static_assert(PhysicalMaterial<MaterialPreset>);
     const auto s = presets::steel();
@@ -155,7 +205,12 @@ TEST_CASE("dhvani: MaterialPresets satisfy PhysicalMaterial concept", "[dhvani][
     CHECK(r.material_params().stiffness < 0.1f);
 }
 
-TEST_CASE("dhvani: ImpactVoice steel vs rubber — both produce energy", "[dhvani][physical][impact]") {
+TEST_CASE (
+"dhvani: ImpactVoice steel vs rubber — both produce energy"
+,
+"[dhvani][physical][impact]"
+)
+ {
     using namespace pebble::dhvani::physical;
     constexpr uint32_t sr = 44100;
     ImpactVoice<8> vs{}, vr{};
@@ -172,7 +227,12 @@ TEST_CASE("dhvani: ImpactVoice steel vs rubber — both produce energy", "[dhvan
     CHECK(er > 0.f);
 }
 
-TEST_CASE("dhvani: ImpactVoice inactive after envelope done", "[dhvani][physical][impact]") {
+TEST_CASE (
+"dhvani: ImpactVoice inactive after envelope done"
+,
+"[dhvani][physical][impact]"
+)
+ {
     using namespace pebble::dhvani::physical;
     ImpactVoice<4> v{};
     // Very fast envelope
@@ -181,7 +241,12 @@ TEST_CASE("dhvani: ImpactVoice inactive after envelope done", "[dhvani][physical
     CHECK_FALSE(v.is_active());
 }
 
-TEST_CASE("dhvani: FractureVoice — burst at onset, silence after decay", "[dhvani][physical][fracture]") {
+TEST_CASE (
+"dhvani: FractureVoice — burst at onset, silence after decay"
+,
+"[dhvani][physical][fracture]"
+)
+ {
     using namespace pebble::dhvani::physical;
     FractureVoice v{};
     v.trigger(presets::glass().params, {1.f, 2}, 44100u);
@@ -192,7 +257,12 @@ TEST_CASE("dhvani: FractureVoice — burst at onset, silence after decay", "[dhv
     CHECK(late  < 0.01f);  // decayed to near-silence
 }
 
-TEST_CASE("dhvani: FractureVoice — glass vs rubber cutoff difference", "[dhvani][physical][fracture]") {
+TEST_CASE (
+"dhvani: FractureVoice — glass vs rubber cutoff difference"
+,
+"[dhvani][physical][fracture]"
+)
+ {
     using namespace pebble::dhvani::physical;
     constexpr uint32_t sr = 44100;
     FractureVoice vg{}, vr{};
@@ -209,7 +279,12 @@ TEST_CASE("dhvani: FractureVoice — glass vs rubber cutoff difference", "[dhvan
     CHECK(er > 0.f);
 }
 
-TEST_CASE("dhvani: FrictionVoice — zero velocity yields near-zero output", "[dhvani][physical][surface]") {
+TEST_CASE (
+"dhvani: FrictionVoice — zero velocity yields near-zero output"
+,
+"[dhvani][physical][surface]"
+)
+ {
     using namespace pebble::dhvani::physical;
     FrictionVoice v{};
     v.configure(presets::wood().params, {.velocity=0.f, .normal_force=0.8f}, 44100u);
@@ -218,7 +293,12 @@ TEST_CASE("dhvani: FrictionVoice — zero velocity yields near-zero output", "[d
     CHECK(energy < 1e-4f);
 }
 
-TEST_CASE("dhvani: FrictionVoice — non-zero velocity produces signal", "[dhvani][physical][surface]") {
+TEST_CASE (
+"dhvani: FrictionVoice — non-zero velocity produces signal"
+,
+"[dhvani][physical][surface]"
+)
+ {
     using namespace pebble::dhvani::physical;
     FrictionVoice v{};
     v.configure(presets::wood().params, {.velocity=0.8f, .normal_force=0.9f}, 44100u);
@@ -227,7 +307,12 @@ TEST_CASE("dhvani: FrictionVoice — non-zero velocity produces signal", "[dhvan
     CHECK(energy > 0.f);
 }
 
-TEST_CASE("dhvani: FrictionVoice set_velocity modulation", "[dhvani][physical][surface]") {
+TEST_CASE (
+"dhvani: FrictionVoice set_velocity modulation"
+,
+"[dhvani][physical][surface]"
+)
+ {
     using namespace pebble::dhvani::physical;
     constexpr uint32_t sr = 44100;
     FrictionVoice v{};
@@ -242,7 +327,12 @@ TEST_CASE("dhvani: FrictionVoice set_velocity modulation", "[dhvani][physical][s
     CHECK(hi > lo);
 }
 
-TEST_CASE("dhvani: TearVoice produces periodic bursts", "[dhvani][physical][surface]") {
+TEST_CASE (
+"dhvani: TearVoice produces periodic bursts"
+,
+"[dhvani][physical][surface]"
+)
+ {
     using namespace pebble::dhvani::physical;
     TearVoice v{};
     v.configure(presets::cloth().params, 0.5f, 44100u);
@@ -251,7 +341,12 @@ TEST_CASE("dhvani: TearVoice produces periodic bursts", "[dhvani][physical][surf
     CHECK(energy > 0.f);
 }
 
-TEST_CASE("dhvani: MetalHit bell resonator — non-zero energy", "[dhvani][physical][metal]") {
+TEST_CASE (
+"dhvani: MetalHit bell resonator — non-zero energy"
+,
+"[dhvani][physical][metal]"
+)
+ {
     using namespace pebble::dhvani::physical;
     auto res = make_metal_resonator<8>(MetalType::Bell, 440.f, 1.f, 44100u);
     float energy = 0.f;
@@ -259,7 +354,12 @@ TEST_CASE("dhvani: MetalHit bell resonator — non-zero energy", "[dhvani][physi
     CHECK(energy > 0.f);
 }
 
-TEST_CASE("dhvani: MetalHit all types produce energy", "[dhvani][physical][metal]") {
+TEST_CASE (
+"dhvani: MetalHit all types produce energy"
+,
+"[dhvani][physical][metal]"
+)
+ {
     using namespace pebble::dhvani::physical;
     constexpr uint32_t sr = 44100;
     for (auto t : {MetalType::Bell, MetalType::Cymbal, MetalType::Plate,
@@ -275,7 +375,12 @@ TEST_CASE("dhvani: MetalHit all types produce energy", "[dhvani][physical][metal
 // EDSL
 // ---------------------------------------------------------------------------
 
-TEST_CASE("dhvani: EDSL impact().render() — non-zero PCM block", "[dhvani][edsl]") {
+TEST_CASE (
+"dhvani: EDSL impact().render() — non-zero PCM block"
+,
+"[dhvani][edsl]"
+)
+ {
     using namespace pebble::dhvani;
     auto blk = impact()
         .material(physical::presets::steel().params)
@@ -287,7 +392,12 @@ TEST_CASE("dhvani: EDSL impact().render() — non-zero PCM block", "[dhvani][eds
     CHECK(energy > 0.f);
 }
 
-TEST_CASE("dhvani: EDSL fracture().render() — non-zero PCM block", "[dhvani][edsl]") {
+TEST_CASE (
+"dhvani: EDSL fracture().render() — non-zero PCM block"
+,
+"[dhvani][edsl]"
+)
+ {
     using namespace pebble::dhvani;
     auto blk = fracture()
         .material(physical::presets::glass().params)
@@ -298,7 +408,12 @@ TEST_CASE("dhvani: EDSL fracture().render() — non-zero PCM block", "[dhvani][e
     CHECK(energy > 0.f);
 }
 
-TEST_CASE("dhvani: EDSL metal_hit().render() bell vs cymbal differ", "[dhvani][edsl]") {
+TEST_CASE (
+"dhvani: EDSL metal_hit().render() bell vs cymbal differ"
+,
+"[dhvani][edsl]"
+)
+ {
     using namespace pebble::dhvani;
     auto bell = metal_hit(physical::MetalType::Bell).force(1.f).sample_rate(44100u).render<512>();
     auto cym  = metal_hit(physical::MetalType::Cymbal).force(1.f).sample_rate(44100u).render<512>();
@@ -309,7 +424,12 @@ TEST_CASE("dhvani: EDSL metal_hit().render() bell vs cymbal differ", "[dhvani][e
     CHECK(diff > 0.f);
 }
 
-TEST_CASE("dhvani: EDSL material PhysicalMaterial concept overload", "[dhvani][edsl]") {
+TEST_CASE (
+"dhvani: EDSL material PhysicalMaterial concept overload"
+,
+"[dhvani][edsl]"
+)
+ {
     using namespace pebble::dhvani;
     // Uses template overload that accepts PhysicalMaterial directly
     auto blk = impact().material(physical::presets::wood()).force(0.5f).render<256>();
@@ -318,7 +438,12 @@ TEST_CASE("dhvani: EDSL material PhysicalMaterial concept overload", "[dhvani][e
     CHECK(energy > 0.f);
 }
 
-TEST_CASE("dhvani: EDSL SoundEvent build()", "[dhvani][edsl]") {
+TEST_CASE (
+"dhvani: EDSL SoundEvent build()"
+,
+"[dhvani][edsl]"
+)
+ {
     using namespace pebble::dhvani;
     const auto evt = impact().material(physical::presets::concrete().params).force(0.7f).build();
     CHECK(evt.type == SoundEventType::Impact);
@@ -330,7 +455,12 @@ TEST_CASE("dhvani: EDSL SoundEvent build()", "[dhvani][edsl]") {
 // backend
 // ---------------------------------------------------------------------------
 
-TEST_CASE("dhvani: NullBackend start invokes callback with correct span", "[dhvani][backend]") {
+TEST_CASE (
+"dhvani: NullBackend start invokes callback with correct span"
+,
+"[dhvani][backend]"
+)
+ {
     pebble::dhvani::backend::NullBackend nb{44100u, 512};
     bool called = false;
     nb.start([&](std::span<pebble::dhvani::synth::SampleFrame> frames) {
@@ -344,7 +474,12 @@ TEST_CASE("dhvani: NullBackend start invokes callback with correct span", "[dhva
     CHECK_FALSE(nb.is_running());
 }
 
-TEST_CASE("dhvani: NullBackend captures rendered PCM", "[dhvani][backend]") {
+TEST_CASE (
+"dhvani: NullBackend captures rendered PCM"
+,
+"[dhvani][backend]"
+)
+ {
     using namespace pebble::dhvani;
     backend::NullBackend nb{44100u, 256};
     nb.start([](std::span<synth::SampleFrame> frames) {
@@ -361,7 +496,12 @@ TEST_CASE("dhvani: NullBackend captures rendered PCM", "[dhvani][backend]") {
 // graph
 // ---------------------------------------------------------------------------
 
-TEST_CASE("dhvani: SoundGraph — OscillatorNode generates signal", "[dhvani][graph]") {
+TEST_CASE (
+"dhvani: SoundGraph — OscillatorNode generates signal"
+,
+"[dhvani][graph]"
+)
+ {
     using namespace pebble::dhvani;
     graph::SoundGraph g{};
     graph::OscillatorNode osc{};
@@ -376,7 +516,12 @@ TEST_CASE("dhvani: SoundGraph — OscillatorNode generates signal", "[dhvani][gr
     CHECK(energy > 0.f);
 }
 
-TEST_CASE("dhvani: SoundGraph GainNode scales signal", "[dhvani][graph]") {
+TEST_CASE (
+"dhvani: SoundGraph GainNode scales signal"
+,
+"[dhvani][graph]"
+)
+ {
     using namespace pebble::dhvani;
     graph::SoundGraph g{};
     graph::OscillatorNode osc{};
@@ -399,7 +544,12 @@ TEST_CASE("dhvani: SoundGraph GainNode scales signal", "[dhvani][graph]") {
 // bridges
 // ---------------------------------------------------------------------------
 
-TEST_CASE("dhvani: GatiSoundBridge on_collision enqueues cue", "[dhvani][bridge][gati]") {
+TEST_CASE (
+"dhvani: GatiSoundBridge on_collision enqueues cue"
+,
+"[dhvani][bridge][gati]"
+)
+ {
     using namespace pebble::dhvani;
     SoundBus bus{};
     GatiSoundBridge bridge{bus, 44100u, 1.f};
@@ -414,7 +564,12 @@ TEST_CASE("dhvani: GatiSoundBridge on_collision enqueues cue", "[dhvani][bridge]
     CHECK(bus.pending_count() == 1);
 }
 
-TEST_CASE("dhvani: GatiSoundBridge on_collision fracture for brittle material", "[dhvani][bridge][gati]") {
+TEST_CASE (
+"dhvani: GatiSoundBridge on_collision fracture for brittle material"
+,
+"[dhvani][bridge][gati]"
+)
+ {
     using namespace pebble::dhvani;
     SoundBus bus{};
     GatiSoundBridge bridge{bus, 44100u, 1.f};
@@ -432,7 +587,12 @@ TEST_CASE("dhvani: GatiSoundBridge on_collision fracture for brittle material", 
     });
 }
 
-TEST_CASE("dhvani: GatiSoundBridge on_collision suppresses near-zero impulse", "[dhvani][bridge][gati]") {
+TEST_CASE (
+"dhvani: GatiSoundBridge on_collision suppresses near-zero impulse"
+,
+"[dhvani][bridge][gati]"
+)
+ {
     using namespace pebble::dhvani;
     SoundBus bus{};
     GatiSoundBridge bridge{bus, 44100u, 1.f};
@@ -440,7 +600,12 @@ TEST_CASE("dhvani: GatiSoundBridge on_collision suppresses near-zero impulse", "
     CHECK(bus.pending_count() == 0);
 }
 
-TEST_CASE("dhvani: PrakritiBridge from_prakriti_material — solid state", "[dhvani][bridge][prakriti]") {
+TEST_CASE (
+"dhvani: PrakritiBridge from_prakriti_material — solid state"
+,
+"[dhvani][bridge][prakriti]"
+)
+ {
     const auto p = pebble::dhvani::from_prakriti_material(0.9f, 0.05f);
     // Cold dense material → high stiffness, low damping
     CHECK(p.stiffness   > 0.5f);
@@ -448,7 +613,12 @@ TEST_CASE("dhvani: PrakritiBridge from_prakriti_material — solid state", "[dhv
     CHECK(p.brittleness > 0.f);
 }
 
-TEST_CASE("dhvani: PrakritiBridge from_prakriti_material — gas state", "[dhvani][bridge][prakriti]") {
+TEST_CASE (
+"dhvani: PrakritiBridge from_prakriti_material — gas state"
+,
+"[dhvani][bridge][prakriti]"
+)
+ {
     const auto p = pebble::dhvani::from_prakriti_material(0.05f, 0.95f);
     // Hot low-density → low stiffness, high damping
     CHECK(p.stiffness < 0.5f);

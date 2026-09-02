@@ -1,7 +1,12 @@
 #include "catch_amalgamated.hpp"
 #include "kalpana/kalpana.hpp"
 
-TEST_CASE("Kalpana: Kubelka-Munk Spectral Pigment Mixing (Blue + Yellow -> Green)", "[kalpana][color][spectral]") {
+TEST_CASE (
+"Kalpana: Kubelka-Munk Spectral Pigment Mixing (Blue + Yellow -> Green)"
+,
+"[kalpana][color][spectral]"
+)
+ {
     kalpana::Color blue = kalpana::colors::blue();
     kalpana::Color yellow = kalpana::colors::yellow();
 
@@ -15,7 +20,12 @@ TEST_CASE("Kalpana: Kubelka-Munk Spectral Pigment Mixing (Blue + Yellow -> Green
     REQUIRE(spectral_mix.g > spectral_mix.r);
 }
 
-TEST_CASE("Kalpana: Vector Path Construction & Akruti Spline Bridge", "[kalpana][geom][path]") {
+TEST_CASE (
+"Kalpana: Vector Path Construction & Akruti Spline Bridge"
+,
+"[kalpana][geom][path]"
+)
+ {
     kalpana::Path path;
     path.round_rect(10.0f, 10.0f, 80.0f, 40.0f, 5.0f, 5.0f);
 
@@ -35,7 +45,12 @@ TEST_CASE("Kalpana: Vector Path Construction & Akruti Spline Bridge", "[kalpana]
     REQUIRE(spline_path.points().size() == 4);
 }
 
-TEST_CASE("Kalpana: Scene Graph Composition & Headless Scanline Canvas", "[kalpana][scene][canvas]") {
+TEST_CASE (
+"Kalpana: Scene Graph Composition & Headless Scanline Canvas"
+,
+"[kalpana][scene][canvas]"
+)
+ {
     kalpana::Scene scene;
     scene.clear_color(kalpana::colors::white());
 
@@ -56,7 +71,12 @@ TEST_CASE("Kalpana: Scene Graph Composition & Headless Scanline Canvas", "[kalpa
     REQUIRE(sample_px == red_argb);
 }
 
-TEST_CASE("Kalpana: Realtime Brush Pressure Dynamics & Stamp Emission (Unified API)", "[kalpana][brush]") {
+TEST_CASE (
+"Kalpana: Realtime Brush Pressure Dynamics & Stamp Emission (Unified API)"
+,
+"[kalpana][brush]"
+)
+ {
     kalpana::SpectralBrush brush;
     brush.size(20.0f).spacing(0.2f).color(kalpana::colors::coral());
 
@@ -71,7 +91,12 @@ TEST_CASE("Kalpana: Realtime Brush Pressure Dynamics & Stamp Emission (Unified A
     REQUIRE(stamps.front().radius < stamps.back().radius);
 }
 
-TEST_CASE("Kalpana: Sokol Metal GPU Tessellation Backend (Polygon Fan & Outline Quads)", "[kalpana][sokol][gpu]") {
+TEST_CASE (
+"Kalpana: Sokol Metal GPU Tessellation Backend (Polygon Fan & Outline Quads)"
+,
+"[kalpana][sokol][gpu]"
+)
+ {
     kalpana::Scene scene;
     scene.clear_color(kalpana::Color{0.0f, 0.0f, 0.0f, 1.0f});
 

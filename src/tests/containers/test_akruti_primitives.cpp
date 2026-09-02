@@ -6,7 +6,12 @@
 using namespace akruti;
 using V = Vec2<Scalar>;
 
-TEST_CASE("akruti: primitive SDFs sign correctly", "[akruti][primitives]") {
+TEST_CASE (
+"akruti: primitive SDFs sign correctly"
+,
+"[akruti][primitives]"
+)
+ {
     Circle c{{0, 0}, 1};
     REQUIRE(c.sdf({0, 0}) == Catch::Approx(-1.0));
     REQUIRE(c.sdf({1, 0}) == Catch::Approx(0.0));
@@ -21,7 +26,12 @@ TEST_CASE("akruti: primitive SDFs sign correctly", "[akruti][primitives]") {
     REQUIRE(h.sdf({0, -1}) == Catch::Approx(-1.0));
 }
 
-TEST_CASE("akruti: point_inside and closest_point", "[akruti][query]") {
+TEST_CASE (
+"akruti: point_inside and closest_point"
+,
+"[akruti][query]"
+)
+ {
     Circle c{{0, 0}, 1};
     REQUIRE(point_inside(c, V{0.5f, 0}));
     REQUIRE_FALSE(point_inside(c, V{2, 0}));
@@ -30,7 +40,12 @@ TEST_CASE("akruti: point_inside and closest_point", "[akruti][query]") {
     REQUIRE(cp.y == Catch::Approx(0.0).margin(0.01));
 }
 
-TEST_CASE("akruti: SDF raycast hits and misses", "[akruti][query]") {
+TEST_CASE (
+"akruti: SDF raycast hits and misses"
+,
+"[akruti][query]"
+)
+ {
     Circle c{{5, 0}, 1};
     RayHit h = raycast(c, V{0, 0}, V{1, 0});
     REQUIRE(h.hit);
@@ -39,7 +54,12 @@ TEST_CASE("akruti: SDF raycast hits and misses", "[akruti][query]") {
     REQUIRE_FALSE(raycast(c, V{0, 10}, V{1, 0}, 20).hit);
 }
 
-TEST_CASE("akruti: convex hull drops interior points", "[akruti][hull]") {
+TEST_CASE (
+"akruti: convex hull drops interior points"
+,
+"[akruti][hull]"
+)
+ {
     containers::static_vector<V, 8> pts;
     (void)pts.push_back({0, 0}); (void)pts.push_back({1, 0});
     (void)pts.push_back({1, 1}); (void)pts.push_back({0, 1});

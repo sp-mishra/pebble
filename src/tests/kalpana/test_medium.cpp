@@ -3,7 +3,12 @@
 #include "kalpana/brush/medium.hpp"
 #include "kalpana/color/spectral.hpp"
 
-TEST_CASE("MediumSolver: step runs without crash", "[kalpana][medium]") {
+TEST_CASE (
+"MediumSolver: step runs without crash"
+,
+"[kalpana][medium]"
+)
+ {
     using namespace kalpana;
     PaintField<> f(16, 16, 1.0f);
     MediumSolver<> solver;
@@ -23,7 +28,12 @@ TEST_CASE("MediumSolver: step runs without crash", "[kalpana][medium]") {
     REQUIRE(f.total_mass() <= mass_before * 1.05f); // allow slight numerical spread
 }
 
-TEST_CASE("MediumSolver: drying reduces water", "[kalpana][medium]") {
+TEST_CASE (
+"MediumSolver: drying reduces water"
+,
+"[kalpana][medium]"
+)
+ {
     using namespace kalpana;
     PaintField<> f(8, 8, 1.0f);
     MediumSolver<> solver;
@@ -42,7 +52,12 @@ TEST_CASE("MediumSolver: drying reduces water", "[kalpana][medium]") {
     REQUIRE(f.water_mass() < water_before);
 }
 
-TEST_CASE("PigmentReservoir: pickup and deposit round-trip", "[kalpana][medium][reservoir]") {
+TEST_CASE (
+"PigmentReservoir: pickup and deposit round-trip"
+,
+"[kalpana][medium][reservoir]"
+)
+ {
     using namespace kalpana;
     PaintField<> f(8, 8, 1.0f);
 

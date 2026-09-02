@@ -5,7 +5,12 @@ using namespace manas::nn;
 using Catch::Approx;
 
 // ─── Tape & Ops ──────────────────────────────────────────────────────────────
-TEST_CASE("manas::nn: autodiff: scalar add/mul gradients", "[manas][nn][autodiff]") {
+TEST_CASE (
+"manas::nn: autodiff: scalar add/mul gradients"
+,
+"[manas][nn][autodiff]"
+)
+ {
     Tape::current().reset();
 
     // z = x * y + y, dz/dx = y, dz/dy = x + 1
@@ -24,7 +29,12 @@ TEST_CASE("manas::nn: autodiff: scalar add/mul gradients", "[manas][nn][autodiff
     REQUIRE(y.grad().data()[0] == Approx(4.0f));
 }
 
-TEST_CASE("manas::nn: autodiff: matmul gradient", "[manas][nn][autodiff]") {
+TEST_CASE (
+"manas::nn: autodiff: matmul gradient"
+,
+"[manas][nn][autodiff]"
+)
+ {
     Tape::current().reset();
 
     // A: [2,2], B: [2,1], C = A @ B
@@ -44,7 +54,12 @@ TEST_CASE("manas::nn: autodiff: matmul gradient", "[manas][nn][autodiff]") {
     CHECK(B.grad().data()[1] == Approx(6.0f));
 }
 
-TEST_CASE("manas::nn: autodiff: relu gradient zeros negatives", "[manas][nn][autodiff]") {
+TEST_CASE (
+"manas::nn: autodiff: relu gradient zeros negatives"
+,
+"[manas][nn][autodiff]"
+)
+ {
     Tape::current().reset();
 
     TensorVar x(Tensor({4}, {-2.0f, -0.5f, 0.5f, 2.0f}), true);
@@ -58,7 +73,12 @@ TEST_CASE("manas::nn: autodiff: relu gradient zeros negatives", "[manas][nn][aut
     CHECK(g.data()[3] == Approx(1.0f));  // positive -> 1
 }
 
-TEST_CASE("manas::nn: autodiff: sigmoid gradient", "[manas][nn][autodiff]") {
+TEST_CASE (
+"manas::nn: autodiff: sigmoid gradient"
+,
+"[manas][nn][autodiff]"
+)
+ {
     Tape::current().reset();
 
     TensorVar x(Tensor({1}, {0.0f}), true);
@@ -69,7 +89,12 @@ TEST_CASE("manas::nn: autodiff: sigmoid gradient", "[manas][nn][autodiff]") {
     CHECK(x.grad().data()[0] == Approx(0.25f).epsilon(1e-4f));
 }
 
-TEST_CASE("manas::nn: autodiff: softmax gradient sums to zero", "[manas][nn][autodiff]") {
+TEST_CASE (
+"manas::nn: autodiff: softmax gradient sums to zero"
+,
+"[manas][nn][autodiff]"
+)
+ {
     Tape::current().reset();
 
     TensorVar x(Tensor({1, 3}, {1.0f, 2.0f, 3.0f}), true);
@@ -84,7 +109,12 @@ TEST_CASE("manas::nn: autodiff: softmax gradient sums to zero", "[manas][nn][aut
 }
 
 // ─── Initializers ─────────────────────────────────────────────────────────────
-TEST_CASE("manas::nn: GlorotUniformInit produces values in range", "[manas][nn][init]") {
+TEST_CASE (
+"manas::nn: GlorotUniformInit produces values in range"
+,
+"[manas][nn][init]"
+)
+ {
     GlorotUniformInit init{42};
     auto t = init({10, 10});
     float fan = 10.0f + 10.0f;
@@ -95,7 +125,12 @@ TEST_CASE("manas::nn: GlorotUniformInit produces values in range", "[manas][nn][
     }
 }
 
-TEST_CASE("manas::nn: HeNormalInit mean ~0, stddev ~ sqrt(2/fan_in)", "[manas][nn][init]") {
+TEST_CASE (
+"manas::nn: HeNormalInit mean ~0, stddev ~ sqrt(2/fan_in)"
+,
+"[manas][nn][init]"
+)
+ {
     HeNormalInit init{42};
     auto t = init({1000, 10});
     float sum = 0.0f;
@@ -105,7 +140,12 @@ TEST_CASE("manas::nn: HeNormalInit mean ~0, stddev ~ sqrt(2/fan_in)", "[manas][n
 }
 
 // ─── Dense Layer ──────────────────────────────────────────────────────────────
-TEST_CASE("manas::nn: Dense forward+backward propagates gradients", "[manas][nn][layers][dense]") {
+TEST_CASE (
+"manas::nn: Dense forward+backward propagates gradients"
+,
+"[manas][nn][layers][dense]"
+)
+ {
     Tape::current().reset();
 
     Dense<ActivationReLU, GlorotUniformInit, ZerosInit> layer(2, 3, true, "fc1");
@@ -125,7 +165,12 @@ TEST_CASE("manas::nn: Dense forward+backward propagates gradients", "[manas][nn]
 }
 
 // ─── BatchNorm1D ──────────────────────────────────────────────────────────────
-TEST_CASE("manas::nn: BatchNorm1D normalizes output mean/var", "[manas][nn][layers][bn]") {
+TEST_CASE (
+"manas::nn: BatchNorm1D normalizes output mean/var"
+,
+"[manas][nn][layers][bn]"
+)
+ {
     Tape::current().reset();
 
     BatchNorm1D bn(4);
@@ -149,7 +194,12 @@ TEST_CASE("manas::nn: BatchNorm1D normalizes output mean/var", "[manas][nn][laye
 }
 
 // ─── Dropout ─────────────────────────────────────────────────────────────────
-TEST_CASE("manas::nn: Dropout zeros some elements in training", "[manas][nn][layers][dropout]") {
+TEST_CASE (
+"manas::nn: Dropout zeros some elements in training"
+,
+"[manas][nn][layers][dropout]"
+)
+ {
     Dropout drop(0.5f, 123);
     Tensor x_data({100});
     for (size_t i = 0; i < 100; ++i) x_data.data()[i] = 1.0f;
@@ -165,7 +215,12 @@ TEST_CASE("manas::nn: Dropout zeros some elements in training", "[manas][nn][lay
     CHECK(zeros < 80);
 }
 
-TEST_CASE("manas::nn: Dropout is identity during inference", "[manas][nn][layers][dropout]") {
+TEST_CASE (
+"manas::nn: Dropout is identity during inference"
+,
+"[manas][nn][layers][dropout]"
+)
+ {
     Dropout drop(0.9f, 42);
     TensorVar x(Tensor({1, 10}, {1,1,1,1,1,1,1,1,1,1}));
     auto y = drop.forward(x, false);
@@ -175,7 +230,12 @@ TEST_CASE("manas::nn: Dropout is identity during inference", "[manas][nn][layers
 }
 
 // ─── Losses ──────────────────────────────────────────────────────────────────
-TEST_CASE("manas::nn: MSE loss and gradient", "[manas][nn][loss]") {
+TEST_CASE (
+"manas::nn: MSE loss and gradient"
+,
+"[manas][nn][loss]"
+)
+ {
     Tape::current().reset();
 
     TensorVar pred(Tensor({3}, {2.0f, 3.0f, 4.0f}), true);
@@ -193,7 +253,12 @@ TEST_CASE("manas::nn: MSE loss and gradient", "[manas][nn][loss]") {
     CHECK(pred.grad().data()[2] == Approx(2.0f * (-1.0f) / 3.0f).epsilon(1e-4f));
 }
 
-TEST_CASE("manas::nn: CrossEntropy loss correct value", "[manas][nn][loss]") {
+TEST_CASE (
+"manas::nn: CrossEntropy loss correct value"
+,
+"[manas][nn][loss]"
+)
+ {
     Tape::current().reset();
 
     // 2 samples, 3 classes
@@ -210,7 +275,12 @@ TEST_CASE("manas::nn: CrossEntropy loss correct value", "[manas][nn][loss]") {
     REQUIRE_NOTHROW(Tape::current().backward(loss.tape_id));
 }
 
-TEST_CASE("manas::nn: BCE loss for binary classification", "[manas][nn][loss]") {
+TEST_CASE (
+"manas::nn: BCE loss for binary classification"
+,
+"[manas][nn][loss]"
+)
+ {
     Tape::current().reset();
 
     TensorVar pred(Tensor({4}, {0.9f, 0.1f, 0.8f, 0.2f}), true);
@@ -223,7 +293,12 @@ TEST_CASE("manas::nn: BCE loss for binary classification", "[manas][nn][loss]") 
 }
 
 // ─── Optimizers ──────────────────────────────────────────────────────────────
-TEST_CASE("manas::nn: SGD reduces MSE loss over iterations", "[manas][nn][optimizer][sgd]") {
+TEST_CASE (
+"manas::nn: SGD reduces MSE loss over iterations"
+,
+"[manas][nn][optimizer][sgd]"
+)
+ {
     Tape::current().reset();
 
     // Simple regression: predict constant 5.0 from x=1.0
@@ -251,7 +326,12 @@ TEST_CASE("manas::nn: SGD reduces MSE loss over iterations", "[manas][nn][optimi
     CHECK(last_loss < 1.0f);  // loss decreased significantly
 }
 
-TEST_CASE("manas::nn: Adam converges on simple regression", "[manas][nn][optimizer][adam]") {
+TEST_CASE (
+"manas::nn: Adam converges on simple regression"
+,
+"[manas][nn][optimizer][adam]"
+)
+ {
     Dense<ActivationNone, ZerosInit, ZerosInit> layer(1, 1, true, "l");
     Adam<> adam(0.1f);  // larger lr for faster convergence test
 
@@ -272,7 +352,12 @@ TEST_CASE("manas::nn: Adam converges on simple regression", "[manas][nn][optimiz
 }
 
 // ─── Sequential Model ─────────────────────────────────────────────────────────
-TEST_CASE("manas::nn: Sequential forward pass produces correct shape", "[manas][nn][model]") {
+TEST_CASE (
+"manas::nn: Sequential forward pass produces correct shape"
+,
+"[manas][nn][model]"
+)
+ {
     Tape::current().reset();
 
     Sequential net;
@@ -288,7 +373,12 @@ TEST_CASE("manas::nn: Sequential forward pass produces correct shape", "[manas][
     REQUIRE(y.shape()[1] == 2);
 }
 
-TEST_CASE("manas::nn: Sequential parameter count correct", "[manas][nn][model]") {
+TEST_CASE (
+"manas::nn: Sequential parameter count correct"
+,
+"[manas][nn][model]"
+)
+ {
     Sequential net;
     net.add(Dense<>(3, 4, true, "fc1"))  // w: 3x4=12, b: 4
        .add(Dense<>(4, 2, true, "fc2")); // w: 4x2=8, b: 2
@@ -297,7 +387,12 @@ TEST_CASE("manas::nn: Sequential parameter count correct", "[manas][nn][model]")
     REQUIRE(params.size() == 4);  // 2 weights + 2 biases
 }
 
-TEST_CASE("manas::nn: train_step decreases loss over epochs", "[manas][nn][model]") {
+TEST_CASE (
+"manas::nn: train_step decreases loss over epochs"
+,
+"[manas][nn][model]"
+)
+ {
     Sequential net;
     net.add(Dense<ActivationReLU>(2, 8, true, "h"))
        .add(Dense<ActivationNone>(8, 1, true, "out"));
@@ -323,7 +418,12 @@ TEST_CASE("manas::nn: train_step decreases loss over epochs", "[manas][nn][model
     CHECK(last_loss < first_loss);
 }
 
-TEST_CASE("manas::nn: NoGradGuard disables gradient recording", "[manas][nn][tape]") {
+TEST_CASE (
+"manas::nn: NoGradGuard disables gradient recording"
+,
+"[manas][nn][tape]"
+)
+ {
     Tape::current().reset();
     TensorVar x(Tensor({2}, {1.0f, 2.0f}), true);
     {

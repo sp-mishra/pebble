@@ -24,7 +24,12 @@ namespace {
     };
 }
 
-TEST_CASE("generic phase telemetry: disabled observer is empty", "[generic][telemetry]") {
+TEST_CASE (
+"generic phase telemetry: disabled observer is empty"
+,
+"[generic][telemetry]"
+)
+ {
     using observer = lang::telemetry::phase_observer<>;
     static_assert(!observer::enabled);
     static_assert(std::is_empty_v<lang::telemetry::phase_scope<observer>>);
@@ -37,7 +42,12 @@ TEST_CASE("generic phase telemetry: disabled observer is empty", "[generic][tele
     SUCCEED();
 }
 
-TEST_CASE("generic phase telemetry: feedback receives one final POD metric", "[generic][telemetry]") {
+TEST_CASE (
+"generic phase telemetry: feedback receives one final POD metric"
+,
+"[generic][telemetry]"
+)
+ {
     using observer = lang::telemetry::phase_observer<utils::nadi::NoSink, test_feedback>;
     test_feedback::reset();
 
@@ -61,7 +71,12 @@ TEST_CASE("generic phase telemetry: feedback receives one final POD metric", "[g
     CHECK(test_feedback::last.outcome == lang::telemetry::phase_outcome::fallback);
 }
 
-TEST_CASE("generic phase telemetry: Nadi receives begin metric and end", "[generic][telemetry][nadi]") {
+TEST_CASE (
+"generic phase telemetry: Nadi receives begin metric and end"
+,
+"[generic][telemetry][nadi]"
+)
+ {
     using sink = utils::nadi::RingBufferSink<16>;
     using observer = lang::telemetry::phase_observer<sink>;
     auto& buffer = sink::instance();

@@ -9,7 +9,12 @@ using namespace ts;
 using namespace ts::edsl;
 using namespace ts::edsl::literals;
 
-TEST_CASE("Pravaha Computation Policy: Basic Tensor Arithmetic", "[tensor][pravaha][arithmetic]") {
+TEST_CASE (
+"Pravaha Computation Policy: Basic Tensor Arithmetic"
+,
+"[tensor][pravaha][arithmetic]"
+)
+ {
     SECTION("Small Tensor Fast-Path (N < 2048)") {
         parallel_tensor<float> A({2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
         parallel_tensor<float> B({2, 3}, {2.0f, 1.0f, 0.5f, 3.0f, 1.0f, 2.0f});
@@ -47,7 +52,12 @@ TEST_CASE("Pravaha Computation Policy: Basic Tensor Arithmetic", "[tensor][prava
     }
 }
 
-TEST_CASE("Pravaha Computation Policy: Parallel Statistical Reductions", "[tensor][pravaha][reductions]") {
+TEST_CASE (
+"Pravaha Computation Policy: Parallel Statistical Reductions"
+,
+"[tensor][pravaha][reductions]"
+)
+ {
     SECTION("Parallel Sum and Mean on Large Buffer") {
         constexpr std::size_t N = 10000;
         std::vector<float> data(N);
@@ -85,7 +95,12 @@ TEST_CASE("Pravaha Computation Policy: Parallel Statistical Reductions", "[tenso
     }
 }
 
-TEST_CASE("Pravaha Computation Policy: Parallel Matrix Multiplication", "[tensor][pravaha][dot]") {
+TEST_CASE (
+"Pravaha Computation Policy: Parallel Matrix Multiplication"
+,
+"[tensor][pravaha][dot]"
+)
+ {
     SECTION("Parallel 2D Dot Product") {
         constexpr size_t M = 64;
         constexpr size_t K = 32;
@@ -109,7 +124,12 @@ TEST_CASE("Pravaha Computation Policy: Parallel Matrix Multiplication", "[tensor
     }
 }
 
-TEST_CASE("Tensor EDSL with Pravaha Parallel Target", "[tensor_edsl][pravaha][target]") {
+TEST_CASE (
+"Tensor EDSL with Pravaha Parallel Target"
+,
+"[tensor_edsl][pravaha][target]"
+)
+ {
     auto in = sym_tensor<2>("in", {4, 4});
     auto W = sym_tensor<2>("W", {4, 4});
     auto graph = ts::edsl::relu(ts::edsl::matmul(in, W) + "bias"_p);

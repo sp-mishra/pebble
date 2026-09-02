@@ -10,17 +10,22 @@
 using kalpana::Path;
 
 namespace {
-akruti::Poly square_poly(float s, float cx = 0.0f, float cy = 0.0f) {
-    akruti::Poly p;
-    p.push_back(akruti::Vec2<akruti::Scalar>{cx - s, cy - s});
-    p.push_back(akruti::Vec2<akruti::Scalar>{cx + s, cy - s});
-    p.push_back(akruti::Vec2<akruti::Scalar>{cx + s, cy + s});
-    p.push_back(akruti::Vec2<akruti::Scalar>{cx - s, cy + s});
-    return p;
-}
+    akruti::Poly square_poly(float s, float cx = 0.0f, float cy = 0.0f) {
+        akruti::Poly p;
+        p.push_back(akruti::Vec2<akruti::Scalar>{cx - s, cy - s});
+        p.push_back(akruti::Vec2<akruti::Scalar>{cx + s, cy - s});
+        p.push_back(akruti::Vec2<akruti::Scalar>{cx + s, cy + s});
+        p.push_back(akruti::Vec2<akruti::Scalar>{cx - s, cy + s});
+        return p;
+    }
 } // namespace
 
-TEST_CASE("Kalpana: subtract delegates to akruti::subtract_polygon", "[kalpana][geom][csg]") {
+TEST_CASE (
+"Kalpana: subtract delegates to akruti::subtract_polygon"
+,
+"[kalpana][geom][csg]"
+)
+ {
     // Disjoint clip => subtract must leave subject area unchanged (matches akruti fast path).
     Path a = kalpana::rect(-10.0f, -10.0f, 20.0f, 20.0f);
     Path b = kalpana::rect(1000.0f, 1000.0f, 20.0f, 20.0f);
@@ -34,7 +39,12 @@ TEST_CASE("Kalpana: subtract delegates to akruti::subtract_polygon", "[kalpana][
             Catch::Approx(std::fabs(akruti::polygon_area(expect))).margin(1e-2));
 }
 
-TEST_CASE("Kalpana: unite of nested returns outer contour (akruti parity)", "[kalpana][geom][csg]") {
+TEST_CASE (
+"Kalpana: unite of nested returns outer contour (akruti parity)"
+,
+"[kalpana][geom][csg]"
+)
+ {
     Path big = kalpana::rect(-10.0f, -10.0f, 20.0f, 20.0f);
     Path small = kalpana::rect(-3.0f, -3.0f, 6.0f, 6.0f);
 
@@ -46,7 +56,12 @@ TEST_CASE("Kalpana: unite of nested returns outer contour (akruti parity)", "[ka
             Catch::Approx(std::fabs(akruti::polygon_area(expect))).margin(1e-2));
 }
 
-TEST_CASE("Kalpana: offset delegates to akruti::offset_polygon", "[kalpana][geom][offset]") {
+TEST_CASE (
+"Kalpana: offset delegates to akruti::offset_polygon"
+,
+"[kalpana][geom][offset]"
+)
+ {
     Path box = kalpana::rect(-10.0f, -10.0f, 20.0f, 20.0f);
     const float base_area = std::fabs(akruti::polygon_area(box.to_poly()));
 

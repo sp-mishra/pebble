@@ -58,7 +58,7 @@ static constexpr float DT = 1.0f / 60.0f;
 // Incorporates analytic shapes plus dynamic oscillating & deformable pinwheels
 struct ShowcaseObstacles {
     std::vector<akruti::Circle> circles;
-    std::vector<akruti::Box>    boxes;
+    std::vector<akruti::Box> boxes;
     std::vector<akruti::Capsule> capsules;
 
     // Dynamic rotating 4-blade impeller pinwheel
@@ -76,7 +76,8 @@ struct ShowcaseObstacles {
         constexpr float kBladeLen = 55.0f;
         for (int i = 0; i < 4; ++i) {
             float a = pinwheel_angle + float(i) * 1.5707963f;
-            pebble::math::vec2 blade_tip = pinwheel_center + pebble::math::vec2(std::cos(a) * kBladeLen, std::sin(a) * kBladeLen);
+            pebble::math::vec2 blade_tip = pinwheel_center + pebble::math::vec2(
+                std::cos(a) * kBladeLen, std::sin(a) * kBladeLen);
             fn(akruti::Capsule{pinwheel_center, blade_tip, 9.0f});
         }
     }
@@ -109,7 +110,8 @@ struct PrakritiStressApp {
 
     ShowcaseObstacles obstacles;
     NadiMetrics telemetry;
-    std::unique_ptr<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, ShowcaseMechanics>> world;
+    std::unique_ptr<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, ShowcaseMechanics>>
+    world;
     prakriti::MaterialId mat_water = 0;
     prakriti::MaterialId mat_steel = 0;
     prakriti::MaterialId mat_dry_ice = 0;
@@ -127,7 +129,7 @@ struct PrakritiStressApp {
     bool mouse_down = false;
     bool heat_emitter = false;
     bool cold_emitter = false;
-    bool fluid_emitter = false;  // [F] Key live fluid nozzle
+    bool fluid_emitter = false; // [F] Key live fluid nozzle
     bool waterfall_mode = false; // [W] Key continuous waterfall cascade (opt-in)
 };
 
@@ -138,9 +140,9 @@ static void init_prakriti_world() {
     prakriti::WorldConfig cfg{};
     cfg.bounds = {{30.0f, 30.0f}, {FW - 30.0f, FH - 30.0f}};
     cfg.gravity = {0.0f, 850.0f}; // Natural crisp gravitational acceleration
-    cfg.substeps = 3;              // 3 high-rate substeps (180 Hz precision)
-    cfg.solver_iters = 2;          // 2 fast solver iterations
-    cfg.cell_size = 16.0f;         // Exact match with smoothing_h for maximum L1/L2 cache locality
+    cfg.substeps = 3; // 3 high-rate substeps (180 Hz precision)
+    cfg.solver_iters = 2; // 2 fast solver iterations
+    cfg.cell_size = 16.0f; // Exact match with smoothing_h for maximum L1/L2 cache locality
 
     // 1. Setup Static Obstacles — Multi-tier Waterfall Cascades & Sluice Ramps
     app.obstacles.circles.clear();
@@ -207,14 +209,15 @@ static void init_prakriti_world() {
         )
     };
 
-    app.world = std::make_unique<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, ShowcaseMechanics>>(
+    app.world = std::make_unique<prakriti::World<
+        prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, ShowcaseMechanics>>(
         cfg, std::move(mechanics_stack)
     );
 
-    app.mat_steel    = app.world->materials().add(prakriti::MaterialRegistry::steel());
-    app.mat_water    = app.world->materials().add(prakriti::MaterialRegistry::water());
-    app.mat_dry_ice  = app.world->materials().add(prakriti::MaterialRegistry::dry_ice());
-    app.mat_lava     = app.world->materials().add(prakriti::MaterialRegistry::magma());
+    app.mat_steel = app.world->materials().add(prakriti::MaterialRegistry::steel());
+    app.mat_water = app.world->materials().add(prakriti::MaterialRegistry::water());
+    app.mat_dry_ice = app.world->materials().add(prakriti::MaterialRegistry::dry_ice());
+    app.mat_lava = app.world->materials().add(prakriti::MaterialRegistry::magma());
     app.mat_obsidian = app.world->materials().add(prakriti::MaterialRegistry::obsidian());
 
     // Custom Viscoelastic Jelly Material
@@ -425,7 +428,8 @@ static void build_scene(kalpana::Scene& scene) {
         kalpana::Path seg;
         seg.move_to(cap.a.x, cap.a.y);
         seg.line_to(cap.b.x, cap.b.y);
-        scene.add(kalpana::Node::shape(seg, kalpana::Paint::stroke(kalpana::Color{0.14f, 0.18f, 0.28f, 0.95f}, cap.radius * 2.0f)));
+        scene.add(kalpana::Node::shape(
+            seg, kalpana::Paint::stroke(kalpana::Color{0.14f, 0.18f, 0.28f, 0.95f}, cap.radius * 2.0f)));
         scene.add(kalpana::Node::shape(seg, kalpana::Paint::stroke(kalpana::Color{0.4f, 0.6f, 0.95f, 0.8f}, 2.5f)));
         scene.add(kalpana::Node::shape(p, kalpana::Paint::fill(kalpana::Color{0.14f, 0.18f, 0.28f, 0.95f})));
         scene.add(kalpana::Node::shape(p, kalpana::Paint::stroke(kalpana::Color{0.4f, 0.6f, 0.95f, 0.8f}, 2.5f)));
@@ -446,8 +450,10 @@ static void build_scene(kalpana::Scene& scene) {
             kalpana::Path blade;
             blade.move_to(hub[0], hub[1]);
             blade.line_to(tip[0], tip[1]);
-            scene.add(kalpana::Node::shape(blade, kalpana::Paint::stroke(kalpana::Color{0.18f, 0.28f, 0.42f, 0.95f}, 18.0f)));
-            scene.add(kalpana::Node::shape(blade, kalpana::Paint::stroke(kalpana::Color{0.2f, 0.75f, 1.0f, 0.85f}, 2.0f)));
+            scene.add(kalpana::Node::shape(
+                blade, kalpana::Paint::stroke(kalpana::Color{0.18f, 0.28f, 0.42f, 0.95f}, 18.0f)));
+            scene.add(kalpana::Node::shape(
+                blade, kalpana::Paint::stroke(kalpana::Color{0.2f, 0.75f, 1.0f, 0.85f}, 2.0f)));
             kalpana::Path tip_dot;
             tip_dot.circle(tip[0], tip[1], 9.0f);
             scene.add(kalpana::Node::shape(tip_dot, kalpana::Paint::fill(kalpana::Color{0.2f, 0.75f, 1.0f, 0.95f})));
@@ -496,7 +502,8 @@ static void build_scene(kalpana::Scene& scene) {
                 heat
             );
             pr = 6.5f;
-        } else if (P.f_liquid[i] > 0.35f) {
+        }
+        else if (P.f_liquid[i] > 0.35f) {
             // Hydrodynamic fluid particle: Cool water vs Molten magma
             if (P.temperature[i] > 200.0f) {
                 // Glowing molten lava
@@ -507,7 +514,8 @@ static void build_scene(kalpana::Scene& scene) {
                     lava_glow
                 );
                 pr = 5.5f;
-            } else {
+            }
+            else {
                 // Clear blue water
                 float heat = std::clamp((P.temperature[i] - 10.0f) / 80.0f, 0.0f, 1.0f);
                 pcol = kalpana::spectral::mix(
@@ -517,18 +525,23 @@ static void build_scene(kalpana::Scene& scene) {
                 );
                 pr = 4.8f;
             }
-        } else {
+        }
+        else {
             // Solid / Viscoelastic Soft-Body / Plastic / Obsidian
             if (P.material[i] == app.mat_dry_ice) {
                 pcol = kalpana::Color{0.92f, 0.96f, 1.0f, 0.98f}; // Cryo frost white
                 pr = 5.2f;
-            } else if (P.material[i] == app.mat_obsidian || (P.f_solid[i] > 0.6f && P.temperature[i] < 600.0f && P.material[i] == app.mat_lava)) {
+            }
+            else if (P.material[i] == app.mat_obsidian || (P.f_solid[i] > 0.6f && P.temperature[i] < 600.0f && P.
+                material[i] == app.mat_lava)) {
                 pcol = kalpana::Color{0.10f, 0.08f, 0.12f, 0.98f}; // Deep volcanic obsidian black-purple
                 pr = 5.2f;
-            } else if (P.f_solid[i] > 0.5f && P.f_plastic[i] > 0.05f) {
+            }
+            else if (P.f_solid[i] > 0.5f && P.f_plastic[i] > 0.05f) {
                 pcol = kalpana::Color{0.15f, 0.92f, 0.55f, 0.92f}; // Bouncy jelly emerald green
                 pr = 5.0f;
-            } else {
+            }
+            else {
                 pcol = kalpana::Color{0.75f, 0.82f, 0.95f, 1.0f}; // Structural steel
                 pr = 4.0f;
             }
@@ -541,10 +554,13 @@ static void build_scene(kalpana::Scene& scene) {
     if (app.mouse_down || app.heat_emitter || app.cold_emitter || app.fluid_emitter) {
         kalpana::Path reticle;
         reticle.circle(app.mouse_x, app.mouse_y, app.fluid_emitter ? 25.0f : 45.0f);
-        kalpana::Color emit_col = app.fluid_emitter ? kalpana::Color{0.1f, 0.75f, 1.0f, 0.8f} :
-                                 (app.heat_emitter  ? kalpana::Color{1.0f, 0.3f, 0.1f, 0.7f} :
-                                 (app.cold_emitter  ? kalpana::Color{0.2f, 0.8f, 1.0f, 0.7f} :
-                                  kalpana::Color{0.5f, 1.0f, 0.5f, 0.5f}));
+        kalpana::Color emit_col = app.fluid_emitter
+                                      ? kalpana::Color{0.1f, 0.75f, 1.0f, 0.8f}
+                                      : (app.heat_emitter
+                                             ? kalpana::Color{1.0f, 0.3f, 0.1f, 0.7f}
+                                             : (app.cold_emitter
+                                                    ? kalpana::Color{0.2f, 0.8f, 1.0f, 0.7f}
+                                                    : kalpana::Color{0.5f, 1.0f, 0.5f, 0.5f}));
         scene.add(kalpana::Node::shape(reticle, kalpana::Paint::stroke(emit_col, 2.5f)));
     }
 
@@ -556,11 +572,14 @@ static void build_scene(kalpana::Scene& scene) {
         kalpana::Path hud_bg;
         hud_bg.round_rect(hud_x, hud_y, hud_w, hud_h, 12.0f, 12.0f);
         scene.add(kalpana::Node::shape(hud_bg, kalpana::Paint::fill(kalpana::Color{0.04f, 0.07f, 0.12f, 0.88f})));
-        scene.add(kalpana::Node::shape(hud_bg, kalpana::Paint::stroke(kalpana::Color{0.22f, 0.32f, 0.50f, 0.85f}, 1.5f)));
+        scene.add(
+            kalpana::Node::shape(hud_bg, kalpana::Paint::stroke(kalpana::Color{0.22f, 0.32f, 0.50f, 0.85f}, 1.5f)));
 
-        kalpana::Color bar_col = app.fps >= 55.0f ? kalpana::Color{0.18f, 0.85f, 0.35f, 0.95f} :
-                                (app.fps >= 30.0f ? kalpana::Color{1.0f, 0.72f, 0.15f, 0.95f} :
-                                 kalpana::Color{0.95f, 0.22f, 0.22f, 0.95f});
+        kalpana::Color bar_col = app.fps >= 55.0f
+                                     ? kalpana::Color{0.18f, 0.85f, 0.35f, 0.95f}
+                                     : (app.fps >= 30.0f
+                                            ? kalpana::Color{1.0f, 0.72f, 0.15f, 0.95f}
+                                            : kalpana::Color{0.95f, 0.22f, 0.22f, 0.95f});
 
         float bar_w = std::clamp((app.fps / 60.0f) * (hud_w - 32.0f), 0.0f, hud_w - 32.0f);
         kalpana::Path fps_bar;
@@ -621,9 +640,11 @@ static void frame_cb() {
                 if (d2 < 55.0f * 55.0f) {
                     if (app.heat_emitter) {
                         P.temperature[i] += 12.0f;
-                    } else if (app.cold_emitter) {
+                    }
+                    else if (app.cold_emitter) {
                         P.temperature[i] -= 12.0f;
-                    } else if (app.mouse_down) {
+                    }
+                    else if (app.mouse_down) {
                         float dist = std::sqrt(d2);
                         if (dist > 1.0f) {
                             P.vel_x[i] += (-dy / dist) * 180.0f * DT;
@@ -737,36 +758,39 @@ static void event_cb(const sapp_event* ev) {
     if (ev->type == SAPP_EVENTTYPE_MOUSE_MOVE) {
         app.mouse_x = ev->mouse_x;
         app.mouse_y = ev->mouse_y;
-    } else if (ev->type == SAPP_EVENTTYPE_MOUSE_DOWN) {
+    }
+    else if (ev->type == SAPP_EVENTTYPE_MOUSE_DOWN) {
         if (ev->mouse_button == SAPP_MOUSEBUTTON_LEFT) app.mouse_down = true;
-    } else if (ev->type == SAPP_EVENTTYPE_MOUSE_UP) {
+    }
+    else if (ev->type == SAPP_EVENTTYPE_MOUSE_UP) {
         if (ev->mouse_button == SAPP_MOUSEBUTTON_LEFT) app.mouse_down = false;
-    } else if (ev->type == SAPP_EVENTTYPE_KEY_DOWN) {
+    }
+    else if (ev->type == SAPP_EVENTTYPE_KEY_DOWN) {
         switch (ev->key_code) {
-            case SAPP_KEYCODE_ESCAPE:
-                sapp_quit();
-                break;
-            case SAPP_KEYCODE_R:
-            case SAPP_KEYCODE_SPACE:
-                init_prakriti_world();
-                break;
-            case SAPP_KEYCODE_H:
-                app.heat_emitter = !app.heat_emitter;
-                break;
-            case SAPP_KEYCODE_C:
-                app.cold_emitter = !app.cold_emitter;
-                break;
-            case SAPP_KEYCODE_F:
-                app.fluid_emitter = !app.fluid_emitter;
-                break;
-            case SAPP_KEYCODE_W:
-                app.waterfall_mode = !app.waterfall_mode;
-                break;
-            case SAPP_KEYCODE_T:
-                app.telemetry.telemetry_overlay = !app.telemetry.telemetry_overlay;
-                break;
-            default:
-                break;
+        case SAPP_KEYCODE_ESCAPE:
+            sapp_quit();
+            break;
+        case SAPP_KEYCODE_R:
+        case SAPP_KEYCODE_SPACE:
+            init_prakriti_world();
+            break;
+        case SAPP_KEYCODE_H:
+            app.heat_emitter = !app.heat_emitter;
+            break;
+        case SAPP_KEYCODE_C:
+            app.cold_emitter = !app.cold_emitter;
+            break;
+        case SAPP_KEYCODE_F:
+            app.fluid_emitter = !app.fluid_emitter;
+            break;
+        case SAPP_KEYCODE_W:
+            app.waterfall_mode = !app.waterfall_mode;
+            break;
+        case SAPP_KEYCODE_T:
+            app.telemetry.telemetry_overlay = !app.telemetry.telemetry_overlay;
+            break;
+        default:
+            break;
         }
     }
 }
@@ -783,7 +807,8 @@ sapp_desc sokol_main(int /*argc*/, char** /*argv*/) {
     d.cleanup_cb = cleanup_cb;
     d.width = W;
     d.height = H;
-    d.window_title = "Pebble Prakriti Multiphysics — [W] Waterfall | [F] Fluid Spray | [H] Heat | [C] Cryo | [T] Telemetry | [R] Reset";
+    d.window_title =
+        "Pebble Prakriti Multiphysics — [W] Waterfall | [F] Fluid Spray | [H] Heat | [C] Cryo | [T] Telemetry | [R] Reset";
     d.icon.sokol_default = true;
     d.logger.func = slog_func;
     return d;

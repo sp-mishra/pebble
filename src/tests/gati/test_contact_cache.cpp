@@ -1,7 +1,12 @@
 #include "catch_amalgamated.hpp"
 #include "gati/contact_cache.hpp"
 
-TEST_CASE("Gati: ContactCache", "[gati][contact_cache]") {
+TEST_CASE (
+"Gati: ContactCache"
+,
+"[gati][contact_cache]"
+)
+ {
     gati::ContactCache cache;
     akruti::Manifold m;
     m.hit = true;

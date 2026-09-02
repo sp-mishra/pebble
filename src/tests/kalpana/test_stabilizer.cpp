@@ -2,7 +2,12 @@
 #include "kalpana/brush/stabilizer.hpp"
 #include "kalpana/brush/brush.hpp"
 
-TEST_CASE("OneEuroFilter: smooths noisy input", "[kalpana][stabilizer]") {
+TEST_CASE (
+"OneEuroFilter: smooths noisy input"
+,
+"[kalpana][stabilizer]"
+)
+ {
     using namespace kalpana;
     OneEuroFilter f;
     f.reset();
@@ -16,7 +21,12 @@ TEST_CASE("OneEuroFilter: smooths noisy input", "[kalpana][stabilizer]") {
     REQUIRE(out.pos[1] == Catch::Approx(200.0f).margin(2.0f));
 }
 
-TEST_CASE("OneEuroFilter: reduces jitter (output less noisy than input)", "[kalpana][stabilizer]") {
+TEST_CASE (
+"OneEuroFilter: reduces jitter (output less noisy than input)"
+,
+"[kalpana][stabilizer]"
+)
+ {
     using namespace kalpana;
     OneEuroFilter f;
     f.reset();
@@ -37,7 +47,12 @@ TEST_CASE("OneEuroFilter: reduces jitter (output less noisy than input)", "[kalp
     REQUIRE(max_output_jump < max_input_jump);
 }
 
-TEST_CASE("StrokeStabilizer<OneEuro>: apply returns filtered point", "[kalpana][stabilizer]") {
+TEST_CASE (
+"StrokeStabilizer<OneEuro>: apply returns filtered point"
+,
+"[kalpana][stabilizer]"
+)
+ {
     using namespace kalpana;
     OneEuroStabilizer s;
     s.strength(0.5f);
@@ -50,7 +65,12 @@ TEST_CASE("StrokeStabilizer<OneEuro>: apply returns filtered point", "[kalpana][
     REQUIRE(!std::isnan(out.pos[1]));
 }
 
-TEST_CASE("PullLagFilter: converges toward target", "[kalpana][stabilizer]") {
+TEST_CASE (
+"PullLagFilter: converges toward target"
+,
+"[kalpana][stabilizer]"
+)
+ {
     using namespace kalpana;
     PullLagFilter f;
     f.reset();
@@ -63,7 +83,12 @@ TEST_CASE("PullLagFilter: converges toward target", "[kalpana][stabilizer]") {
     REQUIRE(std::abs(out.pos[1] - 400.0f) < 5.0f);
 }
 
-TEST_CASE("CatmullRomFilter: output is smooth midpoint interpolation", "[kalpana][stabilizer]") {
+TEST_CASE (
+"CatmullRomFilter: output is smooth midpoint interpolation"
+,
+"[kalpana][stabilizer]"
+)
+ {
     using namespace kalpana;
     CatmullRomFilter<4> f;
     f.reset();

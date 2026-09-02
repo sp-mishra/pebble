@@ -5,7 +5,12 @@ using namespace manas::ml;
 using Catch::Approx;
 
 // ─── Linear Regression ───────────────────────────────────────────────────────
-TEST_CASE("manas::ml: LinearRegression fits y = 2x + 1", "[manas][ml][linear]") {
+TEST_CASE (
+"manas::ml: LinearRegression fits y = 2x + 1"
+,
+"[manas][ml][linear]"
+)
+ {
     // y = 2*x + 1, 4 samples
     ts::tensor<float> X({4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
     ts::tensor<float> y({4}, {3.0f, 5.0f, 7.0f, 9.0f});
@@ -18,7 +23,12 @@ TEST_CASE("manas::ml: LinearRegression fits y = 2x + 1", "[manas][ml][linear]") 
     REQUIRE(pred({3}) == Approx(9.0f).epsilon(0.01f));
 }
 
-TEST_CASE("manas::ml: RidgeRegression (lambda>0) reduces weights", "[manas][ml][linear]") {
+TEST_CASE (
+"manas::ml: RidgeRegression (lambda>0) reduces weights"
+,
+"[manas][ml][linear]"
+)
+ {
     ts::tensor<float> X({4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
     ts::tensor<float> y({4}, {3.0f, 5.0f, 7.0f, 9.0f});
 
@@ -32,7 +42,12 @@ TEST_CASE("manas::ml: RidgeRegression (lambda>0) reduces weights", "[manas][ml][
     CHECK(w_ridge < w_plain);
 }
 
-TEST_CASE("manas::ml: LogisticRegression classifies linearly separable data", "[manas][ml][linear]") {
+TEST_CASE (
+"manas::ml: LogisticRegression classifies linearly separable data"
+,
+"[manas][ml][linear]"
+)
+ {
     // Class 0: x<0, Class 1: x>0
     ts::tensor<float> X({6, 1}, {-3.f, -2.f, -1.f, 1.f, 2.f, 3.f});
     ts::tensor<float> y({6}, {0.f, 0.f, 0.f, 1.f, 1.f, 1.f});
@@ -47,7 +62,12 @@ TEST_CASE("manas::ml: LogisticRegression classifies linearly separable data", "[
 }
 
 // ─── K-Means ─────────────────────────────────────────────────────────────────
-TEST_CASE("manas::ml: KMeans clusters 2D data into 2 groups", "[manas][ml][kmeans]") {
+TEST_CASE (
+"manas::ml: KMeans clusters 2D data into 2 groups"
+,
+"[manas][ml][kmeans]"
+)
+ {
     // Two clear clusters: A near (0,0), B near (10,10)
     ts::tensor<float> X({6, 2}, {
         0.1f, 0.2f,  0.3f, 0.1f,  0.2f, 0.3f,
@@ -68,7 +88,12 @@ TEST_CASE("manas::ml: KMeans clusters 2D data into 2 groups", "[manas][ml][kmean
 }
 
 // ─── PCA ─────────────────────────────────────────────────────────────────────
-TEST_CASE("manas::ml: PCA reduces 2D to 1D principal component", "[manas][ml][pca]") {
+TEST_CASE (
+"manas::ml: PCA reduces 2D to 1D principal component"
+,
+"[manas][ml][pca]"
+)
+ {
     // Data lies mainly along y=x axis
     ts::tensor<float> X({5, 2}, {
         1.0f, 1.0f,  2.0f, 2.0f,  3.0f, 3.0f,  4.0f, 4.0f,  5.0f, 5.0f
@@ -89,7 +114,12 @@ TEST_CASE("manas::ml: PCA reduces 2D to 1D principal component", "[manas][ml][pc
 }
 
 // ─── KNN ─────────────────────────────────────────────────────────────────────
-TEST_CASE("manas::ml: KNNClassifier classifies 1D data", "[manas][ml][knn]") {
+TEST_CASE (
+"manas::ml: KNNClassifier classifies 1D data"
+,
+"[manas][ml][knn]"
+)
+ {
     ts::tensor<float> X_train({4, 1}, {1.0f, 2.0f, 8.0f, 9.0f});
     ts::tensor<float> y_train({4}, {0.0f, 0.0f, 1.0f, 1.0f});
 
@@ -102,7 +132,12 @@ TEST_CASE("manas::ml: KNNClassifier classifies 1D data", "[manas][ml][knn]") {
     CHECK(pred({1}) == Approx(1.0f));
 }
 
-TEST_CASE("manas::ml: KNNRegressor returns mean of neighbors", "[manas][ml][knn]") {
+TEST_CASE (
+"manas::ml: KNNRegressor returns mean of neighbors"
+,
+"[manas][ml][knn]"
+)
+ {
     ts::tensor<float> X_train({4, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
     ts::tensor<float> y_train({4}, {1.0f, 2.0f, 3.0f, 4.0f});
 
@@ -115,7 +150,12 @@ TEST_CASE("manas::ml: KNNRegressor returns mean of neighbors", "[manas][ml][knn]
 }
 
 // ─── Naive Bayes ─────────────────────────────────────────────────────────────
-TEST_CASE("manas::ml: GaussianNaiveBayes classifies 2-class problem", "[manas][ml][naive_bayes]") {
+TEST_CASE (
+"manas::ml: GaussianNaiveBayes classifies 2-class problem"
+,
+"[manas][ml][naive_bayes]"
+)
+ {
     ts::tensor<float> X({6, 2}, {
         1.0f, 1.0f,  1.5f, 1.2f,  0.8f, 0.9f,
         8.0f, 8.0f,  8.5f, 7.9f,  7.8f, 8.2f
@@ -132,7 +172,12 @@ TEST_CASE("manas::ml: GaussianNaiveBayes classifies 2-class problem", "[manas][m
 }
 
 // ─── Decision Tree ───────────────────────────────────────────────────────────
-TEST_CASE("manas::ml: DecisionTreeClassifier separates XOR-like data", "[manas][ml][decision_tree]") {
+TEST_CASE (
+"manas::ml: DecisionTreeClassifier separates XOR-like data"
+,
+"[manas][ml][decision_tree]"
+)
+ {
     ts::tensor<float> X({4, 2}, {0.f,0.f, 1.f,0.f, 0.f,1.f, 1.f,1.f});
     ts::tensor<float> y({4}, {0.f, 1.f, 1.f, 0.f});
 
@@ -146,7 +191,12 @@ TEST_CASE("manas::ml: DecisionTreeClassifier separates XOR-like data", "[manas][
     CHECK(pred({3}) == Approx(0.0f));
 }
 
-TEST_CASE("manas::ml: DecisionTreeRegressor fits simple function", "[manas][ml][decision_tree]") {
+TEST_CASE (
+"manas::ml: DecisionTreeRegressor fits simple function"
+,
+"[manas][ml][decision_tree]"
+)
+ {
     ts::tensor<float> X({5, 1}, {1.f, 2.f, 3.f, 4.f, 5.f});
     ts::tensor<float> y({5}, {1.f, 4.f, 9.f, 16.f, 25.f});
 
@@ -159,7 +209,12 @@ TEST_CASE("manas::ml: DecisionTreeRegressor fits simple function", "[manas][ml][
 }
 
 // ─── SVM ─────────────────────────────────────────────────────────────────────
-TEST_CASE("manas::ml: SVM<LinearKernel> classifies linearly separable data", "[manas][ml][svm]") {
+TEST_CASE (
+"manas::ml: SVM<LinearKernel> classifies linearly separable data"
+,
+"[manas][ml][svm]"
+)
+ {
     ts::tensor<float> X({4, 1}, {-2.f, -1.f, 1.f, 2.f});
     ts::tensor<float> y({4}, {-1.f, -1.f, 1.f, 1.f});
 
@@ -172,7 +227,12 @@ TEST_CASE("manas::ml: SVM<LinearKernel> classifies linearly separable data", "[m
     CHECK(pred({1}) == Approx(1.0f));
 }
 
-TEST_CASE("manas::ml: SVM<RBFKernel> classifies non-linear data", "[manas][ml][svm]") {
+TEST_CASE (
+"manas::ml: SVM<RBFKernel> classifies non-linear data"
+,
+"[manas][ml][svm]"
+)
+ {
     // Simple two-class problem solvable by RBF
     ts::tensor<float> X({4, 1}, {-2.f, -1.f, 1.f, 2.f});
     ts::tensor<float> y({4}, {-1.f, -1.f, 1.f, 1.f});
@@ -183,7 +243,12 @@ TEST_CASE("manas::ml: SVM<RBFKernel> classifies non-linear data", "[manas][ml][s
 }
 
 // ─── Random Forest ───────────────────────────────────────────────────────────
-TEST_CASE("manas::ml: RandomForestClassifier fits training data", "[manas][ml][random_forest]") {
+TEST_CASE (
+"manas::ml: RandomForestClassifier fits training data"
+,
+"[manas][ml][random_forest]"
+)
+ {
     ts::tensor<float> X({6, 2}, {
         0.f,0.f,  1.f,0.f,  0.f,1.f,
         5.f,5.f,  6.f,5.f,  5.f,6.f

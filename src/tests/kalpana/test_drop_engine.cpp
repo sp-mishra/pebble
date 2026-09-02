@@ -3,7 +3,12 @@
 #include "kalpana/brush/drop_engine.hpp"
 #include "kalpana/color/spectral.hpp"
 
-TEST_CASE("DropEngine: spawn creates a droplet", "[kalpana][drop_engine]") {
+TEST_CASE (
+"DropEngine: spawn creates a droplet"
+,
+"[kalpana][drop_engine]"
+)
+ {
     using namespace kalpana;
     DropEngine<> engine;
 
@@ -13,7 +18,12 @@ TEST_CASE("DropEngine: spawn creates a droplet", "[kalpana][drop_engine]") {
     REQUIRE(engine.drop_count() == 1);
 }
 
-TEST_CASE("DropEngine: step moves droplets and deposits into field", "[kalpana][drop_engine]") {
+TEST_CASE (
+"DropEngine: step moves droplets and deposits into field"
+,
+"[kalpana][drop_engine]"
+)
+ {
     using namespace kalpana;
     PaintField<> f(32, 32, 1.0f);
     DropEngine<> engine;
@@ -28,7 +38,12 @@ TEST_CASE("DropEngine: step moves droplets and deposits into field", "[kalpana][
     REQUIRE(mass_after >= mass_before); // deposit is additive
 }
 
-TEST_CASE("DropEngine: clear removes all droplets", "[kalpana][drop_engine]") {
+TEST_CASE (
+"DropEngine: clear removes all droplets"
+,
+"[kalpana][drop_engine]"
+)
+ {
     using namespace kalpana;
     DropEngine<> engine;
 
@@ -40,7 +55,12 @@ TEST_CASE("DropEngine: clear removes all droplets", "[kalpana][drop_engine]") {
     REQUIRE(engine.drop_count() == 0);
 }
 
-TEST_CASE("DropEngine: max_drops cap is respected", "[kalpana][drop_engine]") {
+TEST_CASE (
+"DropEngine: max_drops cap is respected"
+,
+"[kalpana][drop_engine]"
+)
+ {
     using namespace kalpana;
     DropEngineParams params;
     params.max_drops = 3;

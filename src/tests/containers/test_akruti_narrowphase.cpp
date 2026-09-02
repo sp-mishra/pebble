@@ -5,7 +5,12 @@
 
 using namespace akruti;
 
-TEST_CASE("akruti: analytic circle-circle fast path", "[akruti][narrowphase]") {
+TEST_CASE (
+"akruti: analytic circle-circle fast path"
+,
+"[akruti][narrowphase]"
+)
+ {
     Circle c1{{0, 0}, 1.0f};
     Circle c2{{1.5f, 0}, 1.0f};
     Circle c3{{3.0f, 0}, 1.0f};
@@ -20,7 +25,12 @@ TEST_CASE("akruti: analytic circle-circle fast path", "[akruti][narrowphase]") {
     REQUIRE_FALSE(m2.hit);
 }
 
-TEST_CASE("akruti: analytic circle-box collision", "[akruti][narrowphase]") {
+TEST_CASE (
+"akruti: analytic circle-box collision"
+,
+"[akruti][narrowphase]"
+)
+ {
     Circle c{{0, 1.2f}, 0.5f};
     Box b{{0, 0}, {1.0f, 1.0f}};
 
@@ -29,7 +39,12 @@ TEST_CASE("akruti: analytic circle-box collision", "[akruti][narrowphase]") {
     REQUIRE(m.depth == Catch::Approx(0.3f).margin(1e-3));
 }
 
-TEST_CASE("akruti: SAT OBB-OBB 2-point contact manifold", "[akruti][narrowphase][sat]") {
+TEST_CASE (
+"akruti: SAT OBB-OBB 2-point contact manifold"
+,
+"[akruti][narrowphase][sat]"
+)
+ {
     // Two stacked boxes
     OrientedBox b1{{0, 0}, {1.0f, 1.0f}, akruti::make_rotation2d(0.0f)};
     OrientedBox b2{{0, 1.8f}, {1.0f, 1.0f}, akruti::make_rotation2d(0.0f)};
@@ -42,7 +57,12 @@ TEST_CASE("akruti: SAT OBB-OBB 2-point contact manifold", "[akruti][narrowphase]
     REQUIRE(m.points.size() == 2);
 }
 
-TEST_CASE("akruti: SAT rotated OBB collision", "[akruti][narrowphase][sat]") {
+TEST_CASE (
+"akruti: SAT rotated OBB collision"
+,
+"[akruti][narrowphase][sat]"
+)
+ {
     OrientedBox b1{{0, 0}, {1.0f, 1.0f}, akruti::make_rotation2d(0.785398f)}; // 45 deg
     OrientedBox b2{{1.2f, 0}, {0.5f, 0.5f}, akruti::make_rotation2d(0.0f)};
 
@@ -51,7 +71,12 @@ TEST_CASE("akruti: SAT rotated OBB collision", "[akruti][narrowphase][sat]") {
     REQUIRE(m.depth > 0.0f);
 }
 
-TEST_CASE("akruti: warm-started GJK temporal caching", "[akruti][narrowphase][gjk]") {
+TEST_CASE (
+"akruti: warm-started GJK temporal caching"
+,
+"[akruti][narrowphase][gjk]"
+)
+ {
     Triangle t{{0, 0}, {1, 0}, {0, 1}};
     Circle c{{0.5f, 0.5f}, 0.5f};
 

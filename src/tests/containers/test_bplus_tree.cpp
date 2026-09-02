@@ -24,7 +24,12 @@ struct TinyBPlusTraits {
     static constexpr std::size_t MaxRecycleNodes = 64;
 };
 
-TEST_CASE("containers::BPlusTree: Basic insertion, find, and update", "[containers][tree][bplus_tree]") {
+TEST_CASE (
+"containers::BPlusTree: Basic insertion, find, and update"
+,
+"[containers][tree][bplus_tree]"
+)
+ {
     BPlusMap<int, std::string> tree;
     REQUIRE(tree.empty());
     REQUIRE(tree.size() == 0);
@@ -59,7 +64,12 @@ TEST_CASE("containers::BPlusTree: Basic insertion, find, and update", "[containe
     CHECK(tree.validate_invariants());
 }
 
-TEST_CASE("containers::BPlusTree: Transparent/Heterogeneous string lookups", "[containers][tree][bplus_tree]") {
+TEST_CASE (
+"containers::BPlusTree: Transparent/Heterogeneous string lookups"
+,
+"[containers][tree][bplus_tree]"
+)
+ {
     // Transparent lookup using std::less<> on std::string keys with std::string_view / const char*
     BPlusTree<std::string, int, std::less<>> tree;
     tree.insert_or_assign("alpha", 1);
@@ -83,7 +93,12 @@ TEST_CASE("containers::BPlusTree: Transparent/Heterogeneous string lookups", "[c
     CHECK(tree.validate_invariants());
 }
 
-TEST_CASE("containers::BPlusTree: Sequential and random multi-level splits", "[containers][tree][bplus_tree]") {
+TEST_CASE (
+"containers::BPlusTree: Sequential and random multi-level splits"
+,
+"[containers][tree][bplus_tree]"
+)
+ {
     BPlusTree<int, int, std::less<int>, TinyBPlusTraits> tree;
 
     constexpr int kCount = 500;
@@ -110,7 +125,12 @@ TEST_CASE("containers::BPlusTree: Sequential and random multi-level splits", "[c
     CHECK(expected_key == kCount);
 }
 
-TEST_CASE("containers::BPlusTree: O(N) Bulk Loading from sorted sequence", "[containers][tree][bplus_tree]") {
+TEST_CASE (
+"containers::BPlusTree: O(N) Bulk Loading from sorted sequence"
+,
+"[containers][tree][bplus_tree]"
+)
+ {
     std::vector<std::pair<const int, int>> items;
     constexpr int kCount = 1000;
     for (int i = 0; i < kCount; ++i) {
@@ -135,7 +155,12 @@ TEST_CASE("containers::BPlusTree: O(N) Bulk Loading from sorted sequence", "[con
     CHECK(expected == kCount);
 }
 
-TEST_CASE("containers::BPlusTree: Lower/Upper bound and Range Scanning with Prefetch", "[containers][tree][bplus_tree]") {
+TEST_CASE (
+"containers::BPlusTree: Lower/Upper bound and Range Scanning with Prefetch"
+,
+"[containers][tree][bplus_tree]"
+)
+ {
     BPlusMap<int, int> tree;
     for (int i = 10; i <= 100; i += 10) {
         tree.insert_or_assign(i, i * 2);
@@ -169,7 +194,12 @@ TEST_CASE("containers::BPlusTree: Lower/Upper bound and Range Scanning with Pref
     CHECK(scanned_keys == expected_scanned);
 }
 
-TEST_CASE("containers::BPlusTree: Deletion, Rebalancing, and Node Freelist Recycling", "[containers][tree][bplus_tree]") {
+TEST_CASE (
+"containers::BPlusTree: Deletion, Rebalancing, and Node Freelist Recycling"
+,
+"[containers][tree][bplus_tree]"
+)
+ {
     BPlusTree<int, int, std::less<int>, TinyBPlusTraits> tree;
     constexpr int kCount = 100;
 
@@ -203,7 +233,12 @@ TEST_CASE("containers::BPlusTree: Deletion, Rebalancing, and Node Freelist Recyc
     CHECK(tree.validate_invariants());
 }
 
-TEST_CASE("containers::BPlusSet: Ordered Set operations and bulk loading", "[containers][tree][bplus_tree]") {
+TEST_CASE (
+"containers::BPlusSet: Ordered Set operations and bulk loading"
+,
+"[containers][tree][bplus_tree]"
+)
+ {
     BPlusSet<std::string> words;
     words.insert("apple");
     words.insert("banana");
@@ -234,7 +269,12 @@ TEST_CASE("containers::BPlusSet: Ordered Set operations and bulk loading", "[con
     CHECK(bulk_set.validate_invariants());
 }
 
-TEST_CASE("containers::BPlusTree: Smriti BumpPool Zero-Heap Arena Allocation", "[containers][tree][bplus_tree][smriti]") {
+TEST_CASE (
+"containers::BPlusTree: Smriti BumpPool Zero-Heap Arena Allocation"
+,
+"[containers][tree][bplus_tree][smriti]"
+)
+ {
     using PoolType = smriti::pools::BumpPool<smriti::domains::SystemRAMDomain>;
     PoolType pool{65536}; // 64KB memory arena pool
 
@@ -264,7 +304,12 @@ TEST_CASE("containers::BPlusTree: Smriti BumpPool Zero-Heap Arena Allocation", "
 #include "containers/tree/bplus_tree_pravaha.hpp"
 #include <cstdint>
 
-TEST_CASE("bplus_tree: simd vs scalar search parity", "[bplus_tree][simd]") {
+TEST_CASE (
+"bplus_tree: simd vs scalar search parity"
+,
+"[bplus_tree][simd]"
+)
+ {
     // Numeric keys exercise the SIMD membership probe; string keys the scalar fallback.
     BPlusMap<int, int> mi;
     BPlusMap<std::uint64_t, int> mu;
@@ -323,7 +368,12 @@ TEST_CASE("bplus_tree: simd vs scalar search parity", "[bplus_tree][simd]") {
     CHECK(ms.validate_invariants());
 }
 
-TEST_CASE("bplus_tree: bottom-up from_sorted correctness", "[bplus_tree][bulkload]") {
+TEST_CASE (
+"bplus_tree: bottom-up from_sorted correctness"
+,
+"[bplus_tree][bulkload]"
+)
+ {
     // Empty range → empty tree.
     {
         std::vector<std::pair<const int, int>> empty;
@@ -373,7 +423,12 @@ TEST_CASE("bplus_tree: bottom-up from_sorted correctness", "[bplus_tree][bulkloa
     }
 }
 
-TEST_CASE("bplus_tree: fanout auto-tunes to node bytes", "[bplus_tree][traits]") {
+TEST_CASE (
+"bplus_tree: fanout auto-tunes to node bytes"
+,
+"[bplus_tree][traits]"
+)
+ {
     STATIC_REQUIRE(BPlusTreeTraits<DefaultBPlusTreeTraits<int, int>>);
     STATIC_REQUIRE(BPlusTreeTraits<DefaultBPlusTreeTraits<std::uint64_t, double>>);
     STATIC_REQUIRE(BPlusTreeTraits<TinyBPlusTraits>);
@@ -392,7 +447,12 @@ TEST_CASE("bplus_tree: fanout auto-tunes to node bytes", "[bplus_tree][traits]")
     STATIC_REQUIRE(SmallTree::InnerCapacity >= 3);
 }
 
-TEST_CASE("bplus_tree: pravaha parallel parity", "[bplus_tree][pravaha]") {
+TEST_CASE (
+"bplus_tree: pravaha parallel parity"
+,
+"[bplus_tree][pravaha]"
+)
+ {
     BPlusMap<int, int> tree;
     constexpr int N = 4000;
     long long serial_sum = 0;

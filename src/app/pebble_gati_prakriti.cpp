@@ -61,14 +61,14 @@ static constexpr float DT = 1.0f / 60.0f;
 // Showcase Obstacle Set (Cauldron Geometry & Hearth Stand)
 // ----------------------------------------------------------------------------
 struct CauldronObstacles {
-    std::vector<akruti::Circle>  circles;
-    std::vector<akruti::Box>     boxes;
+    std::vector<akruti::Circle> circles;
+    std::vector<akruti::Box> boxes;
     std::vector<akruti::Capsule> capsules;
 
     template <typename F>
     void for_each_shape(F&& f) const {
-        for (const auto& c : circles)  f(c);
-        for (const auto& b : boxes)    f(b);
+        for (const auto& c : circles) f(c);
+        for (const auto& b : boxes) f(b);
         for (const auto& cap : capsules) f(cap);
     }
 };
@@ -110,7 +110,8 @@ struct BoilingSimApp {
 
     // Prakriti Multiphysics & Continuum World
     CauldronObstacles obstacles;
-    std::unique_ptr<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, ShowcaseMechanics>> world;
+    std::unique_ptr<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, ShowcaseMechanics>>
+    world;
     prakriti::PhaseRuleEngine phase_engine;
 
     prakriti::MaterialId mat_water{};
@@ -170,9 +171,9 @@ static void init_boiling_world() {
     prakriti::WorldConfig cfg{};
     cfg.bounds = {{20.0f, 20.0f}, {FW - 20.0f, FH - 20.0f}};
     cfg.gravity = {0.0f, 750.0f}; // Downward gravity
-    cfg.substeps = 3;             // 180 Hz precision
+    cfg.substeps = 3; // 180 Hz precision
     cfg.solver_iters = 2;
-    cfg.cell_size = 11.0f;        // High-resolution spatial grid for fine fluid simulation
+    cfg.cell_size = 11.0f; // High-resolution spatial grid for fine fluid simulation
 
     // 3. Build Cauldron Obstacle Geometry (Deep, tall-rimmed U-cauldron)
     app.obstacles.circles.clear();
@@ -181,7 +182,7 @@ static void init_boiling_world() {
 
     const float cx = app.pot_cx;
     const float cy = app.pot_cy;
-    const float r  = app.pot_radius;
+    const float r = app.pot_radius;
     const float th = app.pot_wall_thick;
 
     // Left high rim of pot
@@ -240,8 +241,8 @@ static void init_boiling_world() {
 
     // 4. Setup Density Solver & Fine SPH Smoothing
     prakriti::DensitySolver density_solver;
-    density_solver.cfg.smoothing_h = 11.0f;     // Crisp high-resolution fluid kernel
-    density_solver.cfg.rest_density = 0.0057f;  // Calibrated Poly6 kernel sum at rest 4.6px particle spacing
+    density_solver.cfg.smoothing_h = 11.0f; // Crisp high-resolution fluid kernel
+    density_solver.cfg.rest_density = 0.0057f; // Calibrated Poly6 kernel sum at rest 4.6px particle spacing
     density_solver.cfg.relaxation_eps = 1e-4f;
     density_solver.cfg.scorr_k = 0.001f;
 
@@ -253,7 +254,8 @@ static void init_boiling_world() {
         )
     };
 
-    app.world = std::make_unique<prakriti::World<prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, ShowcaseMechanics>>(
+    app.world = std::make_unique<prakriti::World<
+        prakriti::DefaultMaterialLaw, prakriti::DefaultComputeBackend, ShowcaseMechanics>>(
         cfg, std::move(mechanics_stack)
     );
 
@@ -309,19 +311,19 @@ static void init_boiling_world() {
     auto pot_entity = ecs_world.spawn();
     ecs_world.add<gati::Transform>(pot_entity, {.position = pebble::math::vec2(cx, cy)});
     ecs_world.add<gati::MaterialComponent>(pot_entity, {
-        .params = iron_mat,
-        .temperature = 20.0f,
-        .phase_fractions = {1.0f, 0.0f, 0.0f, 0.0f} // Solid cast iron
-    });
+                                               .params = iron_mat,
+                                               .temperature = 20.0f,
+                                               .phase_fractions = {1.0f, 0.0f, 0.0f, 0.0f} // Solid cast iron
+                                           });
 
     // Hearth Burner Entity
     auto burner_entity = ecs_world.spawn();
     ecs_world.add<gati::Transform>(burner_entity, {.position = pebble::math::vec2(cx, cy + 140.0f)});
     ecs_world.add<gati::MaterialComponent>(burner_entity, {
-        .params = fire_mat,
-        .temperature = 950.0f, // Glowing hearth fire
-        .phase_fractions = {0.0f, 0.0f, 0.0f, 1.0f}
-    });
+                                               .params = fire_mat,
+                                               .temperature = 950.0f, // Glowing hearth fire
+                                               .phase_fractions = {0.0f, 0.0f, 0.0f, 1.0f}
+                                           });
 
     app.pot_temp = 20.0f;
 }
@@ -351,7 +353,8 @@ static void update_thermodynamics_and_phase(float dt) {
             if (d2 < 70.0f * 70.0f) {
                 if (app.heat_torch || (app.mouse_down && app.mouse_y > cy)) {
                     P.temperature[i] += 450.0f * dt;
-                } else if (app.ice_blast || (app.mouse_down && app.mouse_y <= cy)) {
+                }
+                else if (app.ice_blast || (app.mouse_down && app.mouse_y <= cy)) {
                     P.temperature[i] -= 450.0f * dt;
                 }
             }
@@ -390,14 +393,14 @@ static void update_thermodynamics_and_phase(float dt) {
         // Thermal expansion & organic convection in warm liquid water (T > 25°C)
         if (P.f_liquid[i] > 0.4f && P.temperature[i] > 25.0f) {
             float heat_ratio = std::clamp((P.temperature[i] - 20.0f) / 80.0f, 0.0f, 1.0f);
-            
+
             // Upward convective acceleration + radial sloshing
             float convection = -heat_ratio * 220.0f;
             P.vel_y[i] += convection * dt;
-            
+
             float radial = (P.pos_x[i] - cx) * 0.04f * heat_ratio;
             P.vel_x[i] += radial * dt;
-            
+
             // Micro-bubble agitation near boiling
             if (P.temperature[i] > 85.0f) {
                 P.vel_x[i] += (float(std::rand() % 30) - 15.0f) * 10.0f * dt;
@@ -413,7 +416,8 @@ static void update_thermodynamics_and_phase(float dt) {
 
             float plume_wobble = std::sin(P.pos_y[i] * 0.08f + float(app.frame) * 0.25f);
             P.vel_x[i] += plume_wobble * 80.0f * dt;
-        } else {
+        }
+        else {
             liquid_p_count++;
         }
 
@@ -465,7 +469,7 @@ static void build_scene(kalpana::Scene& scene) {
 
     const float cx = app.pot_cx;
     const float cy = app.pot_cy;
-    const float r  = app.pot_radius;
+    const float r = app.pot_radius;
 
     // 1. Background Grid & Cold Aloft Canopy
     {
@@ -492,9 +496,12 @@ static void build_scene(kalpana::Scene& scene) {
     // 2. Hearth Stand & Burner Pit Grate
     {
         kalpana::Path stand;
-        stand.move_to(cx - 190.0f, cy + 180.0f); stand.line_to(cx + 190.0f, cy + 180.0f);
-        stand.move_to(cx - 120.0f, cy + 85.0f);  stand.line_to(cx - 170.0f, cy + 180.0f);
-        stand.move_to(cx + 120.0f, cy + 85.0f);  stand.line_to(cx + 170.0f, cy + 180.0f);
+        stand.move_to(cx - 190.0f, cy + 180.0f);
+        stand.line_to(cx + 190.0f, cy + 180.0f);
+        stand.move_to(cx - 120.0f, cy + 85.0f);
+        stand.line_to(cx - 170.0f, cy + 180.0f);
+        stand.move_to(cx + 120.0f, cy + 85.0f);
+        stand.line_to(cx + 170.0f, cy + 180.0f);
         scene.add(kalpana::Node::shape(stand, kalpana::Paint::stroke(kalpana::Color{0.25f, 0.28f, 0.35f, 1.0f}, 8.0f)));
     }
 
@@ -504,9 +511,11 @@ static void build_scene(kalpana::Scene& scene) {
         kalpana::Color flame_col;
         if (em.temp > 1000.0f) {
             flame_col = {1.0f, 0.95f, 0.40f, life_alpha * 0.9f};
-        } else if (em.temp > 700.0f) {
+        }
+        else if (em.temp > 700.0f) {
             flame_col = {1.0f, 0.45f, 0.05f, life_alpha * 0.85f};
-        } else {
+        }
+        else {
             flame_col = {0.85f, 0.15f, 0.05f, life_alpha * 0.6f};
         }
         kalpana::Path ep;
@@ -538,7 +547,8 @@ static void build_scene(kalpana::Scene& scene) {
         kalpana::Path hud_bg;
         hud_bg.rect(20.0f, 20.0f, FW - 40.0f, 65.0f);
         scene.add(kalpana::Node::shape(hud_bg, kalpana::Paint::fill(kalpana::Color{0.08f, 0.11f, 0.16f, 0.88f})));
-        scene.add(kalpana::Node::shape(hud_bg, kalpana::Paint::stroke(kalpana::Color{0.20f, 0.35f, 0.50f, 0.60f}, 1.5f)));
+        scene.add(
+            kalpana::Node::shape(hud_bg, kalpana::Paint::stroke(kalpana::Color{0.20f, 0.35f, 0.50f, 0.60f}, 1.5f)));
 
         // Water Temperature Gauge Bar
         float temp_bar_w = 240.0f;
@@ -548,7 +558,9 @@ static void build_scene(kalpana::Scene& scene) {
         t_fill.rect(35.0f, 52.0f, temp_fill_w, 14.0f);
         scene.add(kalpana::Node::shape(t_bg, kalpana::Paint::fill(kalpana::Color{0.12f, 0.15f, 0.20f, 1.0f})));
         scene.add(kalpana::Node::shape(t_fill, kalpana::Paint::fill(
-            app.avg_water_temp > 98.0f ? kalpana::Color{1.0f, 0.30f, 0.10f, 1.0f} : kalpana::Color{0.15f, 0.70f, 1.0f, 1.0f})));
+                                           app.avg_water_temp > 98.0f
+                                               ? kalpana::Color{1.0f, 0.30f, 0.10f, 1.0f}
+                                               : kalpana::Color{0.15f, 0.70f, 1.0f, 1.0f})));
         scene.add(kalpana::Node::shape(t_bg, kalpana::Paint::stroke(kalpana::Color{0.35f, 0.45f, 0.55f, 0.8f}, 1.0f)));
     }
 
@@ -560,7 +572,7 @@ static void build_scene(kalpana::Scene& scene) {
         for (std::size_t i = 0; i < N; ++i) {
             float px = P.pos_x[i];
             float py = P.pos_y[i];
-            float t  = P.temperature[i];
+            float t = P.temperature[i];
             float f_gas = P.f_gas[i];
 
             kalpana::Color p_col;
@@ -571,16 +583,19 @@ static void build_scene(kalpana::Scene& scene) {
                 p_radius = 4.2f + f_gas * 2.6f;
                 float steam_alpha = std::clamp(0.20f + 0.35f * f_gas, 0.15f, 0.60f);
                 p_col = {0.90f, 0.96f, 1.0f, steam_alpha};
-            } else if (t >= 95.0f) {
+            }
+            else if (t >= 95.0f) {
                 // BOILING FROTH: Micro-bubbly cyan-white
                 p_radius = 3.0f;
                 p_col = {0.90f, 0.98f, 1.0f, 0.95f};
-            } else if (t >= 60.0f) {
+            }
+            else if (t >= 60.0f) {
                 // HOT WATER: Warm aquamarine
                 float warm_prog = (t - 60.0f) / 35.0f;
                 p_radius = 2.7f;
                 p_col = {0.15f + 0.50f * warm_prog, 0.70f + 0.25f * warm_prog, 0.95f, 0.92f};
-            } else {
+            }
+            else {
                 // COOL LIQUID WATER: Crisp translucent sapphire blue droplet
                 float cool_prog = std::clamp((t - 15.0f) / 45.0f, 0.0f, 1.0f);
                 p_radius = 2.6f;
@@ -709,20 +724,25 @@ static void event_cb(const sapp_event* ev) {
     if (ev->type == SAPP_EVENTTYPE_MOUSE_MOVE) {
         app.mouse_x = ev->mouse_x;
         app.mouse_y = ev->mouse_y;
-    } else if (ev->type == SAPP_EVENTTYPE_MOUSE_DOWN) {
+    }
+    else if (ev->type == SAPP_EVENTTYPE_MOUSE_DOWN) {
         app.mouse_down = true;
         app.mouse_x = ev->mouse_x;
         app.mouse_y = ev->mouse_y;
-    } else if (ev->type == SAPP_EVENTTYPE_MOUSE_UP) {
+    }
+    else if (ev->type == SAPP_EVENTTYPE_MOUSE_UP) {
         app.mouse_down = false;
-    } else if (ev->type == SAPP_EVENTTYPE_KEY_DOWN) {
+    }
+    else if (ev->type == SAPP_EVENTTYPE_KEY_DOWN) {
         if (ev->key_code == SAPP_KEYCODE_SPACE) {
             app.fire_intensity = std::min(3.0f, app.fire_intensity + 0.5f);
             app.heat_torch = true;
-        } else if (ev->key_code == SAPP_KEYCODE_C) {
+        }
+        else if (ev->key_code == SAPP_KEYCODE_C) {
             app.fire_intensity = std::max(0.0f, app.fire_intensity - 0.5f);
             app.ice_blast = true;
-        } else if (ev->key_code == SAPP_KEYCODE_F) {
+        }
+        else if (ev->key_code == SAPP_KEYCODE_F) {
             // [F] Add Fresh Fine Water Stream from top Faucet (Capacity up to 2,500 particles)
             if (app.world && app.world->particles().size() < 2500) {
                 for (int k = 0; k < 10; ++k) {
@@ -738,20 +758,24 @@ static void event_cb(const sapp_event* ev) {
                     });
                 }
             }
-        } else if (ev->key_code == SAPP_KEYCODE_R) {
+        }
+        else if (ev->key_code == SAPP_KEYCODE_R) {
             init_boiling_world();
         }
-    } else if (ev->type == SAPP_EVENTTYPE_KEY_UP) {
+    }
+    else if (ev->type == SAPP_EVENTTYPE_KEY_UP) {
         if (ev->key_code == SAPP_KEYCODE_SPACE) {
             app.heat_torch = false;
-        } else if (ev->key_code == SAPP_KEYCODE_C) {
+        }
+        else if (ev->key_code == SAPP_KEYCODE_C) {
             app.ice_blast = false;
         }
     }
 }
 
 sapp_desc sokol_main(int argc, char* argv[]) {
-    (void)argc; (void)argv;
+    (void)argc;
+    (void)argv;
     sapp_desc d{};
     d.init_cb = init_cb;
     d.frame_cb = frame_cb;

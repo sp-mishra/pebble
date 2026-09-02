@@ -37,6 +37,7 @@ using namespace vakya::types;
 
 TEST_CASE (
 
+
 "vakya smt: no_smt_backend satisfies smt_backend concept"
 ,
 "[vakya][smt][static]"
@@ -47,6 +48,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "vakya smt: smt_constraint_solver<no_smt_backend> satisfies constraint_solver"
 ,
 "[vakya][smt][static]"
@@ -56,6 +58,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "vakya smt: no_smt_backend check_sat returns deferred"
 ,
@@ -70,6 +73,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "vakya smt: smt_constraint_solver<no_smt_backend> handles() always false"
 ,
 "[vakya][smt][stub]"
@@ -83,6 +87,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "vakya smt: smt_constraint_solver<no_smt_backend> solve returns deferred"
 ,

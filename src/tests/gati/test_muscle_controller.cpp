@@ -2,7 +2,12 @@
 #include "gati/gati.hpp"
 #include "prakriti/prakriti.hpp"
 
-TEST_CASE("Gati: MuscleActivationSystem integrates activation toward excitation", "[gati][muscle][activation]") {
+TEST_CASE (
+"Gati: MuscleActivationSystem integrates activation toward excitation"
+,
+"[gati][muscle][activation]"
+)
+ {
     gati::World world;
     const auto e = world.spawn();
     world.add<gati::MuscleController>(e, {
@@ -27,7 +32,12 @@ TEST_CASE("Gati: MuscleActivationSystem integrates activation toward excitation"
     REQUIRE(ctrl->activation <= 1.0f);
 }
 
-TEST_CASE("Gati: MuscleBridgeSystem writes activation into MuscleStore", "[gati][muscle][bridge]") {
+TEST_CASE (
+"Gati: MuscleBridgeSystem writes activation into MuscleStore"
+,
+"[gati][muscle][bridge]"
+)
+ {
     gati::World world;
     prakriti::MuscleStore<> muscles;
     const auto id = muscles.add({
@@ -55,7 +65,12 @@ TEST_CASE("Gati: MuscleBridgeSystem writes activation into MuscleStore", "[gati]
     REQUIRE(muscles.activation[id] == Catch::Approx(0.65f));
 }
 
-TEST_CASE("Gati: Muscle systems par_view path updates all controllers", "[gati][muscle][parallel]") {
+TEST_CASE (
+"Gati: Muscle systems par_view path updates all controllers"
+,
+"[gati][muscle][parallel]"
+)
+ {
     gati::World world;
     prakriti::MuscleStore<> muscles;
 

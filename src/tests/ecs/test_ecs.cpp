@@ -3,32 +3,35 @@
 #include "containers/numeric/math_vector.hpp"
 
 namespace {
+    struct Position {
+        pebble::math::vec2 val{};
+        bool operator==(const Position&) const = default;
+    };
 
-struct Position {
-    pebble::math::vec2 val{};
-    bool operator==(const Position&) const = default;
-};
+    struct Velocity {
+        pebble::math::vec2 val{};
+        bool operator==(const Velocity&) const = default;
+    };
 
-struct Velocity {
-    pebble::math::vec2 val{};
-    bool operator==(const Velocity&) const = default;
-};
+    struct Tag {
+        int id = 0;
+    };
 
-struct Tag {
-    int id = 0;
-};
+    struct Disabled {};
 
-struct Disabled {};
+    struct Frozen {};
 
-struct Frozen {};
-
-struct Name {
-    const char* str = nullptr;
-};
-
+    struct Name {
+        const char* str = nullptr;
+    };
 } // namespace
 
-TEST_CASE("ECS: Entity Lifecycle and Generation Safety", "[ecs][lifecycle]") {
+TEST_CASE (
+"ECS: Entity Lifecycle and Generation Safety"
+,
+"[ecs][lifecycle]"
+)
+ {
     pebble::ecs::World world;
 
     auto e1 = world.spawn();
@@ -52,7 +55,12 @@ TEST_CASE("ECS: Entity Lifecycle and Generation Safety", "[ecs][lifecycle]") {
     REQUIRE_FALSE(world.alive(e1)); // Stale handle remains invalid
 }
 
-TEST_CASE("ECS: Component Add, Get, Has, and Remove", "[ecs][components]") {
+TEST_CASE (
+"ECS: Component Add, Get, Has, and Remove"
+,
+"[ecs][components]"
+)
+ {
     pebble::ecs::World world;
 
     auto e = world.spawn();
@@ -74,7 +82,12 @@ TEST_CASE("ECS: Component Add, Get, Has, and Remove", "[ecs][components]") {
     REQUIRE(world.has<Position>(e));
 }
 
-TEST_CASE("ECS: Multi-Component Query View", "[ecs][query]") {
+TEST_CASE (
+"ECS: Multi-Component Query View"
+,
+"[ecs][query]"
+)
+ {
     pebble::ecs::World world;
 
     auto e1 = world.spawn();
@@ -101,7 +114,12 @@ TEST_CASE("ECS: Multi-Component Query View", "[ecs][query]") {
     REQUIRE(world.get<Position>(e2)->val[0] == 3.0f); // Untouched
 }
 
-TEST_CASE("ECS: Rich Query Filter DSL (With, Without, Optional)", "[ecs][query_dsl]") {
+TEST_CASE (
+"ECS: Rich Query Filter DSL (With, Without, Optional)"
+,
+"[ecs][query_dsl]"
+)
+ {
     pebble::ecs::World world;
 
     auto e1 = world.spawn();
@@ -132,7 +150,12 @@ TEST_CASE("ECS: Rich Query Filter DSL (With, Without, Optional)", "[ecs][query_d
     REQUIRE(matched == 2); // e1 and e3 (e2 is Disabled)
 }
 
-TEST_CASE("ECS: Deferred CommandBuffer Execution", "[ecs][commands]") {
+TEST_CASE (
+"ECS: Deferred CommandBuffer Execution"
+,
+"[ecs][commands]"
+)
+ {
     pebble::ecs::World world;
 
     auto e1 = world.spawn();
@@ -153,7 +176,12 @@ TEST_CASE("ECS: Deferred CommandBuffer Execution", "[ecs][commands]") {
     REQUIRE_FALSE(world.alive(e1));
 }
 
-TEST_CASE("ECS: view with Without<C> excludes matching entities", "[ecs][view][filter]") {
+TEST_CASE (
+"ECS: view with Without<C> excludes matching entities"
+,
+"[ecs][view][filter]"
+)
+ {
     pebble::ecs::World world;
 
     for (int i = 0; i < 10; ++i) {
@@ -171,7 +199,12 @@ TEST_CASE("ECS: view with Without<C> excludes matching entities", "[ecs][view][f
     REQUIRE(count == 5);
 }
 
-TEST_CASE("ECS: CommandBuffer spawn_batch creates N entities on flush", "[ecs][commands][spawn]") {
+TEST_CASE (
+"ECS: CommandBuffer spawn_batch creates N entities on flush"
+,
+"[ecs][commands][spawn]"
+)
+ {
     pebble::ecs::World world;
 
     std::span<pebble::ecs::Entity> batch = world.commands().spawn_batch(5);

@@ -8,7 +8,12 @@
 
 using namespace pebble::drishya;
 
-TEST_CASE("reflow: NullMotion snaps to target and is always settled", "[drishya][reflow]") {
+TEST_CASE (
+"reflow: NullMotion snaps to target and is always settled"
+,
+"[drishya][reflow]"
+)
+ {
     NullMotion m;
     STATIC_REQUIRE(ReflowMotion<NullMotion>);
     const Rect2D target{10.0f, 20.0f, 30.0f, 40.0f};
@@ -18,7 +23,12 @@ TEST_CASE("reflow: NullMotion snaps to target and is always settled", "[drishya]
     CHECK(m.settled());
 }
 
-TEST_CASE("reflow: SpringReflow converges to the target rect", "[drishya][reflow]") {
+TEST_CASE (
+"reflow: SpringReflow converges to the target rect"
+,
+"[drishya][reflow]"
+)
+ {
     SpringReflow m;
     STATIC_REQUIRE(ReflowMotion<SpringReflow>);
 

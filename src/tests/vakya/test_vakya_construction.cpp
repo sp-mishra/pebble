@@ -33,6 +33,7 @@
 TEST_CASE (
 
 
+
 "vakya: operator surface builds expected tag structure"
 ,
 "[vakya][construction]"
@@ -51,6 +52,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "vakya: as_expr wraps lvalues by ref and rvalues by value"
@@ -73,6 +75,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "vakya: structural_equal and structural_hash agree on equal trees"
 ,
 "[vakya][hash]"
@@ -92,6 +95,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "vakya: structural_equal distinguishes different trees"
 ,
 "[vakya][hash]"
@@ -108,6 +112,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "vakya: tree metrics on a small tree"
@@ -129,6 +134,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "vakya: built-in tag_descriptor metadata"
 ,
 "[vakya][tags]"
@@ -146,6 +152,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "vakya: build_dag interns a shared subexpression"
@@ -169,6 +176,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "vakya: IRBuilder matches the operator surface structurally"
 ,
 "[vakya][construction]"
@@ -187,6 +195,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "vakya::pattern: add(pv<0>, lit<0>) matches add(x, 0)"
@@ -208,6 +217,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "vakya::pattern: named rule('add_zero', …) labels and fires"
@@ -239,6 +249,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "vakya: vakya_terminal tag opts custom type into Terminal concept"
 ,
 "[vakya][terminal]"
@@ -266,6 +277,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "vakya::pattern: non-linear pattern var requires structural equality"
@@ -298,6 +310,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "vakya::pattern: commutative tag matches reversed operand order"
@@ -335,6 +348,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "vakya: tag_descriptor::is_commutative is true for add/mul, false by default"

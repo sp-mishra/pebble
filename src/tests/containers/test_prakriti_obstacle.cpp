@@ -12,10 +12,17 @@ using namespace prakriti;
 // Floor half-plane: solid below y=0, normal +y.
 struct FloorSet {
     akruti::HalfPlane floor{akruti::Vec2<akruti::Scalar>{0.0f, 1.0f}, akruti::Vec2<akruti::Scalar>{0.0f, 0.0f}};
-    template <class Fn> void for_each_shape(Fn&& fn) const { fn(floor); }
+
+    template <class Fn>
+    void for_each_shape(Fn&& fn) const { fn(floor); }
 };
 
-TEST_CASE("obstacle: particle settles on floor", "[prakriti][obstacle]") {
+TEST_CASE (
+"obstacle: particle settles on floor"
+,
+"[prakriti][obstacle]"
+)
+ {
     FloorSet floor;
     auto stack = SolverStack<XpbdSolver, ObstacleSolver<FloorSet>>{
         std::make_tuple(XpbdSolver{}, ObstacleSolver<FloorSet>{floor, ObstacleConfig{.friction=0.5f, .restitution=0.0f}})};
@@ -27,7 +34,12 @@ TEST_CASE("obstacle: particle settles on floor", "[prakriti][obstacle]") {
     REQUIRE(std::fabs(w.particles().pos_y[0]) < 0.05f);
 }
 
-TEST_CASE("obstacle: restitution rebounds upward", "[prakriti][obstacle][restitution]") {
+TEST_CASE (
+"obstacle: restitution rebounds upward"
+,
+"[prakriti][obstacle][restitution]"
+)
+ {
     FloorSet floor;
     auto stack = SolverStack<XpbdSolver, ObstacleSolver<FloorSet>>{
         std::make_tuple(XpbdSolver{}, ObstacleSolver<FloorSet>{floor, ObstacleConfig{.friction=0.0f, .restitution=0.8f}})};
@@ -49,10 +61,17 @@ TEST_CASE("obstacle: restitution rebounds upward", "[prakriti][obstacle][restitu
 // Dynamic Body obstacle set
 struct DynamicObstacleSet {
     akruti::DynamicBody<akruti::Circle> body{akruti::Circle{{0.0f, 0.0f}, 2.0f}, 10.0f, 20.0f};
-    template <class Fn> void for_each_shape(Fn&& fn) const { fn(body); }
+
+    template <class Fn>
+    void for_each_shape(Fn&& fn) const { fn(body); }
 };
 
-TEST_CASE("obstacle: particle deflects off dynamic Akruti body", "[prakriti][obstacle][dynamic_body]") {
+TEST_CASE (
+"obstacle: particle deflects off dynamic Akruti body"
+,
+"[prakriti][obstacle][dynamic_body]"
+)
+ {
     DynamicObstacleSet dyn_obs;
     dyn_obs.body.position = {0.0f, 0.0f};
 

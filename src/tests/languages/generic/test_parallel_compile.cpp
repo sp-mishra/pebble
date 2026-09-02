@@ -6,7 +6,12 @@
 #include <string>
 #include <vector>
 
-TEST_CASE("generic module compilation preserves source order with Pravaha", "[lang][module][parallel]") {
+TEST_CASE (
+"generic module compilation preserves source order with Pravaha"
+,
+"[lang][module][parallel]"
+)
+ {
     const std::vector<std::string> modules{
         "core", "math", "io", "net", "data", "ui", "app", "tools"};
     pravaha::JThreadBackend backend{2};
@@ -24,7 +29,12 @@ TEST_CASE("generic module compilation preserves source order with Pravaha", "[la
         REQUIRE(result->results[index] == modules[index].size());
 }
 
-TEST_CASE("generic module compilation remains inline below the policy threshold", "[lang][module][parallel]") {
+TEST_CASE (
+"generic module compilation remains inline below the policy threshold"
+,
+"[lang][module][parallel]"
+)
+ {
     const std::vector<std::string> modules{"core", "app"};
     pravaha::JThreadBackend backend{2};
 

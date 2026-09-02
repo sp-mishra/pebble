@@ -10,7 +10,12 @@ using namespace akruti;
 using namespace akruti::scene;
 using V = Vec2<Scalar>;
 
-TEST_CASE("akruti: payload pack/unpack round-trips", "[akruti][scene][payload]") {
+TEST_CASE (
+"akruti: payload pack/unpack round-trips"
+,
+"[akruti][scene][payload]"
+)
+ {
     for (std::uint32_t t = 0; t < 6; ++t) {
         for (std::uint32_t i : {0u, 1u, 123u, kIndexMask}) {
             const std::uint32_t p = pack(t, i);
@@ -20,7 +25,12 @@ TEST_CASE("akruti: payload pack/unpack round-trips", "[akruti][scene][payload]")
     }
 }
 
-TEST_CASE("akruti: scene add + count + tree size", "[akruti][scene][build]") {
+TEST_CASE (
+"akruti: scene add + count + tree size"
+,
+"[akruti][scene][build]"
+)
+ {
     Scene scene;
     int n = 0;
     for (int gx = 0; gx < 10; ++gx)
@@ -36,7 +46,12 @@ TEST_CASE("akruti: scene add + count + tree size", "[akruti][scene][build]") {
     REQUIRE(scene.count<Box>() == 1u);
 }
 
-TEST_CASE("akruti: broadphase pairs: overlapping chain", "[akruti][scene][broadphase]") {
+TEST_CASE (
+"akruti: broadphase pairs: overlapping chain"
+,
+"[akruti][scene][broadphase]"
+)
+ {
     // Circles r=1 spaced 1.5 apart on x: each overlaps only its immediate neighbors.
     Scene scene;
     constexpr int N = 8;
@@ -50,7 +65,12 @@ TEST_CASE("akruti: broadphase pairs: overlapping chain", "[akruti][scene][broadp
     REQUIRE(pairs.size() <= std::size_t(N) * std::size_t(N));
 }
 
-TEST_CASE("akruti: broadphase: isolated shape yields no pair", "[akruti][scene][broadphase]") {
+TEST_CASE (
+"akruti: broadphase: isolated shape yields no pair"
+,
+"[akruti][scene][broadphase]"
+)
+ {
     Scene scene;
     (void)scene.add(Circle{{0, 0}, Scalar(1)});
     (void)scene.add(Circle{{1000, 1000}, Scalar(1)});   // far away
@@ -58,7 +78,12 @@ TEST_CASE("akruti: broadphase: isolated shape yields no pair", "[akruti][scene][
     REQUIRE(pairs.empty());
 }
 
-TEST_CASE("akruti: bulk narrowphase matches direct epa", "[akruti][scene][narrowphase]") {
+TEST_CASE (
+"akruti: bulk narrowphase matches direct epa"
+,
+"[akruti][scene][narrowphase]"
+)
+ {
     Scene scene;
     (void)scene.add(Circle{{0, 0}, Scalar(1)});          // payload 0
     (void)scene.add(Circle{{Scalar(1.5), 0}, Scalar(1)}); // overlaps first by 0.5
@@ -76,7 +101,12 @@ TEST_CASE("akruti: bulk narrowphase matches direct epa", "[akruti][scene][narrow
     REQUIRE(contacts[0].depth == Catch::Approx(ref.depth).margin(0.02));
 }
 
-TEST_CASE("akruti: bulk point_inside matches brute force", "[akruti][scene][point]") {
+TEST_CASE (
+"akruti: bulk point_inside matches brute force"
+,
+"[akruti][scene][point]"
+)
+ {
     Scene scene;
     std::vector<Circle> shapes = {{{0, 0}, 2}, {{10, 0}, 1}, {{0, 10}, Scalar(1.5)}};
     for (auto& c : shapes) (void)scene.add(c);
@@ -92,7 +122,12 @@ TEST_CASE("akruti: bulk point_inside matches brute force", "[akruti][scene][poin
     }
 }
 
-TEST_CASE("akruti: bulk raycast matches single-shape min-t", "[akruti][scene][ray]") {
+TEST_CASE (
+"akruti: bulk raycast matches single-shape min-t"
+,
+"[akruti][scene][ray]"
+)
+ {
     Scene scene;
     std::vector<Circle> shapes = {{{5, 0}, 1}, {{12, 0}, 1}};
     for (auto& c : shapes) (void)scene.add(c);
@@ -111,7 +146,12 @@ TEST_CASE("akruti: bulk raycast matches single-shape min-t", "[akruti][scene][ra
     REQUIRE(got[0].t == Catch::Approx(ref.t).margin(1e-2));
 }
 
-TEST_CASE("akruti: bulk sdf field matches min over shapes", "[akruti][scene][sdf]") {
+TEST_CASE (
+"akruti: bulk sdf field matches min over shapes"
+,
+"[akruti][scene][sdf]"
+)
+ {
     Scene scene;
     std::vector<Circle> shapes = {{{0, 0}, 2}, {{6, 0}, Scalar(1.5)}, {{0, 6}, 1}};
     for (auto& c : shapes) (void)scene.add(c);
@@ -130,7 +170,12 @@ TEST_CASE("akruti: bulk sdf field matches min over shapes", "[akruti][scene][sdf
         }
 }
 
-TEST_CASE("akruti: bulk ops are deterministic", "[akruti][scene][determinism]") {
+TEST_CASE (
+"akruti: bulk ops are deterministic"
+,
+"[akruti][scene][determinism]"
+)
+ {
     Scene scene;
     for (int i = 0; i < 20; ++i)
         (void)scene.add(Circle{{Scalar(i) * Scalar(1.2), 0}, Scalar(1)});
@@ -151,7 +196,12 @@ TEST_CASE("akruti: bulk ops are deterministic", "[akruti][scene][determinism]") 
     REQUIRE(f1 == f2);
 }
 
-TEST_CASE("akruti: empty scene: bulk ops no-op", "[akruti][scene][edge]") {
+TEST_CASE (
+"akruti: empty scene: bulk ops no-op"
+,
+"[akruti][scene][edge]"
+)
+ {
     Scene scene;
     REQUIRE(scene.count() == 0);
     auto pairs = broadphase_pairs(scene);

@@ -12,26 +12,34 @@
 #include "languages/samasa/policies/memo_policy.hpp"
 
 namespace {
+    using namespace lang::samasa;
 
-using namespace lang::samasa;
+    enum class SK : std::uint8_t { root };
 
-enum class SK : std::uint8_t { root };
-enum class TK : std::uint8_t { eof, tok_a, tok_b };
+    enum class TK : std::uint8_t { eof, tok_a, tok_b };
 
-template <class TokenKind>
-token_buffer<TokenKind> make_tokens(std::initializer_list<TokenKind> kinds) {
-    token_buffer<TokenKind> buf;
-    std::uint32_t off = 0;
-    for (auto k : kinds) { buf.data.push_back({k, off, 1, 0, 0}); ++off; }
-    buf.data.push_back({TokenKind{}, off, 0, 0, 0});
-    return buf;
-}
+    template <class TokenKind>
+    token_buffer<TokenKind> make_tokens(std::initializer_list<TokenKind> kinds) {
+        token_buffer<TokenKind> buf;
+        std::uint32_t off = 0;
+        for (auto k : kinds) {
+            buf.data.push_back({k, off, 1, 0, 0});
+            ++off;
+        }
+        buf.data.push_back({TokenKind{}, off, 0, 0, 0});
+        return buf;
+    }
 
-// ============================================================================
-// no_memo: direct match works
-// ============================================================================
+    // ============================================================================
+    // no_memo: direct match works
+    // ============================================================================
 
-TEST_CASE("memo: direct tok match succeeds", "[samasa][conformance][memo]") {
+    TEST_CASE (
+    "memo: direct tok match succeeds"
+    ,
+    "[samasa][conformance][memo]"
+    )
+ {
     auto buf = make_tokens<TK>({TK::tok_a});
     event_stream<SK> events;
     lang::collecting_sink<diagnostic> sink;
@@ -43,12 +51,15 @@ TEST_CASE("memo: direct tok match succeeds", "[samasa][conformance][memo]") {
     CHECK(r.ok());
 }
 
-// ============================================================================
-// selective_memo: same position → same result
-// ============================================================================
+    // ============================================================================
+    // selective_memo: same position → same result
+    // ============================================================================
 
-TEST_CASE("memo: memoized rule invoked twice at same position → same result",
-          "[samasa][conformance][memo]")
+    TEST_CASE (
+    "memo: memoized rule invoked twice at same position → same result"
+    ,
+    "[samasa][conformance][memo]"
+    )
 {
     auto buf = make_tokens<TK>({TK::tok_a, TK::tok_b});
     event_stream<SK> events;
@@ -72,8 +83,11 @@ TEST_CASE("memo: memoized rule invoked twice at same position → same result",
     CHECK(ok1); // tok_a present → both succeed
 }
 
-TEST_CASE("memo: memoized rule at failing position → same failure on retry",
-          "[samasa][conformance][memo]")
+    TEST_CASE (
+    "memo: memoized rule at failing position → same failure on retry"
+    ,
+    "[samasa][conformance][memo]"
+    )
 {
     auto buf = make_tokens<TK>({TK::tok_b}); // tok_a not present
     event_stream<SK> events;
@@ -94,12 +108,15 @@ TEST_CASE("memo: memoized rule at failing position → same failure on retry",
     CHECK(ok1 == ok2);
 }
 
-// ============================================================================
-// Different positions → independent memo entries
-// ============================================================================
+    // ============================================================================
+    // Different positions → independent memo entries
+    // ============================================================================
 
-TEST_CASE("memo: different positions compute independently",
-          "[samasa][conformance][memo]")
+    TEST_CASE (
+    "memo: different positions compute independently"
+    ,
+    "[samasa][conformance][memo]"
+    )
 {
     auto buf = make_tokens<TK>({TK::tok_a, TK::tok_a});
     event_stream<SK> events;

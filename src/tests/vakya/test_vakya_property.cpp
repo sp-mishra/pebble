@@ -42,6 +42,7 @@ using BigKey = property_key<std::array<std::uint64_t, 8>, "shape.dims">; // 64 b
 TEST_CASE (
 
 
+
 "property: key ids are name-stable and distinct"
 ,
 "[vakya][property]"
@@ -57,6 +58,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "property: set/get/has round-trip (int)"
@@ -83,6 +85,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "property: set overwrites existing value"
 ,
 "[vakya][property]"
@@ -100,6 +103,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "property: non-trivial payload (string)"
@@ -123,6 +127,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "property: large payload spills to heap and survives move"
@@ -149,6 +154,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "property: erase removes a key"
 ,
 "[vakya][property]"
@@ -173,6 +179,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "property_store: absent key returns nullptr"
 ,
 "[vakya][property]"
@@ -188,6 +195,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "property_store: attach by expression structural key"
@@ -216,6 +224,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "property: basic_property_set<64> stores 64-byte payload inline"
 ,
 "[vakya][property]"
@@ -238,6 +247,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 
 "property_store: concurrent find calls are safe"

@@ -2,7 +2,12 @@
 #include "akruti/akruti.hpp"
 #include <cmath>
 
-TEST_CASE("Akruti: GridSDF 2D Bilinear Interpolation & Shape Contract", "[akruti][gridsdf]") {
+TEST_CASE (
+"Akruti: GridSDF 2D Bilinear Interpolation & Shape Contract"
+,
+"[akruti][gridsdf]"
+)
+ {
     // 3x3 grid spanning [-1, -1] to [1, 1]
     akruti::GridSDF<3, 3> grid;
     grid.bounds = {{-1.0f, -1.0f}, {1.0f, 1.0f}};
