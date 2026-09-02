@@ -30,16 +30,24 @@ namespace petika {
         Result<void> put(const Key& key, const Value& value, const nitya::lsn_t lsn) {
             return apply_writes({typename store_type::write{key, value}}, lsn);
         }
+
         Result<Value> get(const Key& key) const { return translate(values_.get(key)); }
-        Result<Value> get_at(const Key& key, const nitya::lsn_t lsn) const { return translate(values_.get_at(key, lsn)); }
+
+        Result<Value> get_at(const Key& key, const nitya::lsn_t lsn) const {
+            return translate(values_.get_at(key, lsn));
+        }
+
         [[nodiscard]] nitya::lsn_t version_of(const Key& key) const { return values_.version_of(key); }
+
         [[nodiscard]] nitya::lsn_t version_at(const Key& key, const nitya::lsn_t lsn) const {
             return values_.version_at(key, lsn);
         }
+
         Result<void> erase(const Key& key, const nitya::lsn_t lsn) {
             if (!values_.contains(key)) return std::unexpected(StorageError::NotFound);
             return apply_writes({typename store_type::write{key, std::nullopt}}, lsn);
         }
+
         [[nodiscard]] bool contains(const Key& key) const { return values_.contains(key); }
         [[nodiscard]] std::size_t size() const noexcept { return values_.size(); }
         [[nodiscard]] bool empty() const noexcept { return size() == 0; }
@@ -74,12 +82,14 @@ namespace petika {
             for (const auto& mutation : mutations) {
                 if (mutation.op == EntryOp::Put) {
                     writes.push_back({mutation.key, mutation.value});
-                } else if (mutation.op == EntryOp::Delete) {
+                }
+                else if (mutation.op == EntryOp::Delete) {
                     const bool from_this_batch = batch_inserts.contains(mutation.key);
                     if (!from_this_batch && !values_.contains(mutation.key))
                         return std::unexpected(StorageError::NotFound);
                     writes.push_back({mutation.key, std::nullopt});
-                } else {
+                }
+                else {
                     return std::unexpected(StorageError::InvalidArg);
                 }
             }
@@ -93,6 +103,7 @@ namespace petika {
                 callback(EntryView{key, value, stamp});
             });
         }
+
         template <class Callback>
         void for_each(Callback&& callback) const {
             auto snapshot = values_.snapshot_at_current();
@@ -103,10 +114,10 @@ namespace petika {
 
         Result<void> apply_log_record(const EntryOp op, const Key& key, const Value& value, const nitya::lsn_t lsn) {
             switch (op) {
-            case EntryOp::Put:    return put(key, value, lsn);
+            case EntryOp::Put: return put(key, value, lsn);
             case EntryOp::Delete: return erase_for_replay(key, lsn);
-            case EntryOp::Clear:  return clear(lsn);
-            case EntryOp::Batch:  return std::unexpected(StorageError::NotSupported);
+            case EntryOp::Clear: return clear(lsn);
+            case EntryOp::Batch: return std::unexpected(StorageError::NotSupported);
             }
             return std::unexpected(StorageError::InvalidArg);
         }
@@ -124,15 +135,19 @@ namespace petika {
             const Comparator compare{};
             return !compare(left, right) && !compare(right, left);
         }
+
         template <class T>
         static Result<T> translate(anukrama::result<T> value) {
             if (value) return *std::move(value);
             return std::unexpected(value.error() == anukrama::error::not_found
-                ? StorageError::NotFound : StorageError::InternalError);
+                                       ? StorageError::NotFound
+                                       : StorageError::InternalError);
         }
+
         Result<void> erase_for_replay(const Key& key, const nitya::lsn_t lsn) {
             return apply_writes({typename store_type::write{key, std::nullopt}}, lsn);
         }
+
         Result<void> apply_writes(const std::vector<typename store_type::write>& writes, const nitya::lsn_t lsn) {
             std::lock_guard lock{replay_mutex_};
             if (lsn <= last_lsn_) return {};
@@ -141,6 +156,7 @@ namespace petika {
             last_lsn_ = lsn;
             return {};
         }
+
         store_type values_;
         mutable std::mutex replay_mutex_;
         nitya::lsn_t last_lsn_{};

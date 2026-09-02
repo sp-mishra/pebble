@@ -33,9 +33,9 @@ namespace litegraph {
     // permuted, but original<->compact id maps stay consistent so results remain
     // invariant under relabeling.
     enum class Reorder {
-        Original,   // active_node_ids() order (default; zero cost).
+        Original, // active_node_ids() order (default; zero cost).
         DegreeDesc, // highest out-degree first — improves locality for gather kernels.
-        Bfs         // BFS discovery order from the lowest compact node — cache-friendly.
+        Bfs // BFS discovery order from the lowest compact node — cache-friendly.
     };
 
     // Opt-in freeze configuration. Defaults reproduce the historical behaviour
@@ -220,7 +220,8 @@ namespace litegraph {
             std::stable_sort(idx.begin(), idx.end(),
                              [&](std::size_t a, std::size_t b) { return deg[a] > deg[b]; });
             for (std::size_t i = 0; i < compact_nodes; ++i) ordered[i] = active[idx[i]];
-        } else if (options.reorder == Reorder::Bfs && compact_nodes > 0) {
+        }
+        else if (options.reorder == Reorder::Bfs && compact_nodes > 0) {
             // Discovery order from each unvisited seed (lowest native id first).
             std::vector<std::uint8_t> seen(g.node_capacity(), 0);
             ordered.clear();
@@ -266,10 +267,11 @@ namespace litegraph {
         const std::size_t arc_count = csr.offsets_.back();
         csr.targets_.resize(arc_count);
         csr.edge_ids_.resize(arc_count);
-        if constexpr (std::is_arithmetic_v<EdgeT>) {
+        if constexpr (std::is_arithmetic_v < EdgeT >) {
             csr.edge_weights_enabled_ = true;
             csr.edge_weights_.resize(arc_count);
-        } else {
+        }
+        else {
             csr.edge_data_.resize(arc_count);
         }
 
@@ -285,9 +287,10 @@ namespace litegraph {
                 const std::size_t pos = cursor[c]++;
                 csr.targets_[pos] = NodeId{*compact_target};
                 csr.edge_ids_[pos] = eid;
-                if constexpr (std::is_arithmetic_v<EdgeT>) {
+                if constexpr (std::is_arithmetic_v < EdgeT >) {
                     csr.edge_weights_[pos] = static_cast<double>(data);
-                } else {
+                }
+                else {
                     csr.edge_data_[pos] = data;
                 }
             });
@@ -480,7 +483,8 @@ namespace litegraph {
                     }
                     next_rank[v] = acc;
                 }
-            } else {
+            }
+            else {
                 std::fill(next_rank.begin(), next_rank.end(), base);
 
                 for (std::size_t u = 0; u < n; ++u) {

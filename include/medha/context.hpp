@@ -178,8 +178,8 @@ namespace medha {
         template <transactional_resource R>
         [[nodiscard]] std::expected<void, tx_error>
         store(resource_handle<R>& handle, resource_key<R> key, resource_value<R> value)
-            requires (!resource_traits<R>::value_trivially_copyable &&
-                      resource_traits<R>::resource_stages_values) {
+            requires (!resource_traits < R > ::value_trivially_copyable &&
+                resource_traits < R > ::resource_stages_values) {
             assert(phase_ == tx_phase::active);
             enlist(handle.resource());
             if (auto staged = handle.stage(*this, key, std::move(value)); !staged)
@@ -248,7 +248,10 @@ namespace medha {
             }
             phase_ = tx_phase::validating;
             for (const auto& p : participants_) {
-                if (auto r = p.validate(p.object, *this); !r) { abort(); return std::unexpected(r.error()); }
+                if (auto r = p.validate(p.object, *this); !r) {
+                    abort();
+                    return std::unexpected(r.error());
+                }
             }
 
             // Build report
@@ -267,7 +270,10 @@ namespace medha {
 
             phase_ = tx_phase::committing;
             for (const auto& p : participants_) {
-                if (auto r = p.commit(p.object, *this); !r) { abort(); return std::unexpected(r.error()); }
+                if (auto r = p.commit(p.object, *this); !r) {
+                    abort();
+                    return std::unexpected(r.error());
+                }
             }
             phase_ = tx_phase::committed;
 
@@ -324,11 +330,15 @@ namespace medha {
         template <transactional_resource R>
         void enlist(R& resource) {
             const auto object = static_cast<void*>(&resource);
-            if (std::ranges::any_of(participants_, [object](const participant& p) { return p.object == object; })) return;
-            participants_.push_back({object,
+            if (std::ranges::any_of(participants_, [object](const participant& p) {
+                return p.object == object;
+            })) return;
+            participants_.push_back({
+                object,
                 [](void* p, transaction_context& c) { return tx_validate(*static_cast<R*>(p), c); },
                 [](void* p, transaction_context& c) { return tx_commit(*static_cast<R*>(p), c); },
-                [](void* p, transaction_context& c) noexcept { tx_rollback(*static_cast<R*>(p), c); }});
+                [](void* p, transaction_context& c) noexcept { tx_rollback(*static_cast<R*>(p), c); }
+            });
         }
 
         // Reset for retry: clear state, keep options.
@@ -350,6 +360,7 @@ namespace medha {
             std::expected<void, tx_error> (*commit)(void*, transaction_context&);
             void (*rollback)(void*, transaction_context&) noexcept;
         };
+
         options opts_;
         tx_phase phase_;
         read_set read_set_;

@@ -13,11 +13,10 @@
 #include <cstdint>
 
 namespace lang::samasa {
-
     template <class Stream>
     struct cursor {
         const Stream* stream = nullptr;
-        std::uint32_t pos    = 0;
+        std::uint32_t pos = 0;
 
         [[nodiscard]] constexpr bool at_end() const noexcept {
             return !stream || pos >= stream->size();
@@ -41,5 +40,4 @@ namespace lang::samasa {
             return pos == o.pos && stream == o.stream;
         }
     };
-
 } // namespace lang::samasa

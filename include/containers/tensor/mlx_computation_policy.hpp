@@ -18,13 +18,12 @@
 #include <stdexcept>
 
 namespace ts {
-
     struct MlxComputationPolicy {
     private:
-        template<typename E>
+        template <typename E>
         static mlx::core::array get_mlx_array(
-            const TensorExpression<E, typename E::value_type, typename E::storage_policy, typename E::computation_policy> &expr) {
-
+            const TensorExpression<E, typename E::value_type, typename E::storage_policy, typename
+                                   E::computation_policy>& expr) {
             auto shape_vec = get_shape(expr.self());
             if (shape_vec.empty()) {
                 using T = typename E::value_type;
@@ -34,7 +33,8 @@ namespace ts {
 
             if constexpr (requires { expr.self().storage(); }) {
                 return expr.self().storage().get();
-            } else if constexpr (requires { expr.self().operator()(std::vector<size_t>{}); }) {
+            }
+            else if constexpr (requires { expr.self().operator()(std::vector<size_t>{}); }) {
                 mlx::core::Shape shape_vec_int(shape_vec.begin(), shape_vec.end());
                 using T = typename E::value_type;
                 size_t total = calculate_size_dyn(shape_vec);
@@ -51,29 +51,30 @@ namespace ts {
                     buffer[i] = expr.self()(idx);
                 }
                 return mlx::core::array(buffer.data(), shape_vec_int, MlxDtype<T>::value);
-            } else {
+            }
+            else {
                 mlx::core::Shape shape_vec_int(shape_vec.begin(), shape_vec.end());
                 using T = typename E::value_type;
-                return mlx::core::array(const_cast<T *>(expr.self().data()), shape_vec_int, MlxDtype<T>::value);
+                return mlx::core::array(const_cast<T*>(expr.self().data()), shape_vec_int, MlxDtype<T>::value);
             }
         }
 
-        template<typename T>
+        template <typename T>
         static auto wrap_result(mlx::core::array result_array, const TensorShape& expected_shape = {}) {
             MlxStorage<T> result_storage(result_array);
             TensorShape result_shape(result_array.shape().begin(), result_array.shape().end());
-            
-            if (!expected_shape.empty() && 
-                result_shape.size() == 1 && 
+
+            if (!expected_shape.empty() &&
+                result_shape.size() == 1 &&
                 calculate_size_dyn(expected_shape) == result_storage.size()) {
                 result_shape = expected_shape;
             }
-            
+
             return DynamicTensor<T, MlxStoragePolicy, MlxComputationPolicy>(result_shape, result_storage);
         }
 
-        template<typename E1, typename E2, typename BinaryOp>
-        static auto binary_op_helper(const E1 &a, const E2 &b, BinaryOp op) {
+        template <typename E1, typename E2, typename BinaryOp>
+        static auto binary_op_helper(const E1& a, const E2& b, BinaryOp op) {
             auto arr_a = get_mlx_array(a);
             auto arr_b = get_mlx_array(b);
             auto result_arr = op(arr_a, arr_b);
@@ -87,84 +88,84 @@ namespace ts {
         }
 
     public:
-        template<typename E1, typename E2>
-        static auto add(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto add(const E1& a, const E2& b) {
             return binary_op_helper(a, b, [](auto arr_a, auto arr_b) {
                 return mlx::core::add(arr_a, arr_b);
             });
         }
 
-        template<typename E1, typename E2>
-        static auto subtract(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto subtract(const E1& a, const E2& b) {
             return binary_op_helper(a, b, [](auto arr_a, auto arr_b) {
                 return mlx::core::subtract(arr_a, arr_b);
             });
         }
 
-        template<typename E1, typename E2>
-        static auto multiply(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto multiply(const E1& a, const E2& b) {
             return binary_op_helper(a, b, [](auto arr_a, auto arr_b) {
                 return mlx::core::multiply(arr_a, arr_b);
             });
         }
 
-        template<typename E1, typename E2>
-        static auto divide(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto divide(const E1& a, const E2& b) {
             return binary_op_helper(a, b, [](auto arr_a, auto arr_b) {
                 return mlx::core::divide(arr_a, arr_b);
             });
         }
 
-        template<typename E1, typename E2>
-        static auto dot(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto dot(const E1& a, const E2& b) {
             auto result_arr = mlx::core::matmul(get_mlx_array(a), get_mlx_array(b));
             return wrap_result<typename E1::value_type>(result_arr);
         }
 
-        template<typename E>
-        static auto abs(const E &e) {
+        template <typename E>
+        static auto abs(const E& e) {
             auto result_arr = mlx::core::abs(get_mlx_array(e));
             const TensorShape original_shape = get_shape(e);
             return wrap_result<typename E::value_type>(result_arr, original_shape);
         }
 
-        template<typename E>
-        static auto sqrt(const E &e) {
+        template <typename E>
+        static auto sqrt(const E& e) {
             auto result_arr = mlx::core::sqrt(get_mlx_array(e));
             const TensorShape original_shape = get_shape(e);
             return wrap_result<typename E::value_type>(result_arr, original_shape);
         }
 
-        template<typename E>
-        static auto exp(const E &e) {
+        template <typename E>
+        static auto exp(const E& e) {
             auto result_arr = mlx::core::exp(get_mlx_array(e));
             const TensorShape original_shape = get_shape(e);
             return wrap_result<typename E::value_type>(result_arr, original_shape);
         }
 
-        template<typename E>
-        static auto log(const E &e) {
+        template <typename E>
+        static auto log(const E& e) {
             auto result_arr = mlx::core::log(get_mlx_array(e));
             const TensorShape original_shape = get_shape(e);
             return wrap_result<typename E::value_type>(result_arr, original_shape);
         }
 
-        template<typename E>
-        static auto sum(const E &expr) {
+        template <typename E>
+        static auto sum(const E& expr) {
             auto result_arr = mlx::core::sum(get_mlx_array(expr));
             result_arr.eval();
             return result_arr.template item<typename E::value_type>();
         }
 
-        template<typename E>
-        static auto mean(const E &expr) {
+        template <typename E>
+        static auto mean(const E& expr) {
             auto result_arr = mlx::core::mean(get_mlx_array(expr));
             result_arr.eval();
             return result_arr.template item<typename E::value_type>();
         }
 
-        template<typename E>
-        static auto max(const E &expr) {
+        template <typename E>
+        static auto max(const E& expr) {
             auto arr = get_mlx_array(expr);
             arr.eval();
             TensorShape shape = get_shape(expr);
@@ -179,8 +180,8 @@ namespace ts {
             return result_arr.template item<typename E::value_type>();
         }
 
-        template<typename E1, typename E2>
-        static auto greater(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto greater(const E1& a, const E2& b) {
             auto arr_a = get_mlx_array(a);
             auto arr_b = get_mlx_array(b);
             auto result_arr = mlx::core::greater(arr_a, arr_b);
@@ -198,7 +199,8 @@ namespace ts {
                 for (size_t i = 0; i < result_arr.size(); ++i) {
                     bool_data.push_back(raw_data[i]);
                 }
-            } else {
+            }
+            else {
                 throw std::runtime_error("MLX greater did not return bool dtype");
             }
 
@@ -210,27 +212,26 @@ namespace ts {
     using mlx_computation_policy = MlxComputationPolicy;
 
     // --- Convenient MLX Apple Silicon GPU Aliases ---
-    template<typename T>
+    template <typename T>
     using gpu_tensor = DynamicTensor<T, MlxStoragePolicy, MlxComputationPolicy>;
 
-    template<typename T>
+    template <typename T>
     using mlx_tensor = DynamicTensor<T, MlxStoragePolicy, MlxComputationPolicy>;
 
-    template<typename T>
+    template <typename T>
     using GpuTensor = gpu_tensor<T>;
 
-    template<typename T>
+    template <typename T>
     using MlxTensor = mlx_tensor<T>;
-
 } // namespace ts
 
 using MlxComputationPolicy = ts::MlxComputationPolicy;
 using mlx_computation_policy = ts::mlx_computation_policy;
 
-template<typename T>
+template <typename T>
 using gpu_tensor = ts::gpu_tensor<T>;
 
-template<typename T>
+template <typename T>
 using mlx_tensor = ts::mlx_tensor<T>;
 
 namespace containers::tensor {

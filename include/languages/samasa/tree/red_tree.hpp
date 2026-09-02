@@ -15,14 +15,13 @@
 #include "green_tree.hpp"
 
 namespace lang::samasa {
-
     using red_id = std::uint32_t;
     inline constexpr red_id k_null_red = std::numeric_limits<std::uint32_t>::max();
 
     template <class SyntaxKind>
     struct red_node {
-        green_id      green       = k_null_green;
-        red_id        parent      = k_null_red;
+        green_id green = k_null_green;
+        red_id parent = k_null_red;
         std::uint32_t child_index = 0; // index among parent's children
     };
 
@@ -54,9 +53,9 @@ namespace lang::samasa {
                 auto children = green.children(gid);
                 for (std::uint32_t i = 0; i < children.size(); ++i) {
                     green_id child = children[i];
-                    rt.nodes_[child].green       = child;
-                    rt.nodes_[child].parent       = static_cast<red_id>(gid);
-                    rt.nodes_[child].child_index  = i;
+                    rt.nodes_[child].green = child;
+                    rt.nodes_[child].parent = static_cast<red_id>(gid);
+                    rt.nodes_[child].child_index = i;
                     queue.push_back(child);
                 }
             }
@@ -65,7 +64,7 @@ namespace lang::samasa {
         }
 
         [[nodiscard]] red_id root() const noexcept { return root_id_; }
-        [[nodiscard]] bool   empty() const noexcept { return nodes_.empty(); }
+        [[nodiscard]] bool empty() const noexcept { return nodes_.empty(); }
 
         [[nodiscard]] const node_type& operator[](red_id id) const { return nodes_[id]; }
 
@@ -81,7 +80,6 @@ namespace lang::samasa {
 
     private:
         std::vector<node_type> nodes_;
-        red_id                 root_id_ = k_null_red;
+        red_id root_id_ = k_null_red;
     };
-
 } // namespace lang::samasa

@@ -73,66 +73,66 @@ namespace tarka::native {
             }
 
             switch (s.kind()) {
-                case SortKind::Bool: {
-                    if (auto b = bool_value(t)) {
-                        return SmtValue{*b};
-                    }
-                    return std::unexpected(SmtError{SmtError::Kind::Unsupported, "no boolean value found in model"});
+            case SortKind::Bool: {
+                if (auto b = bool_value(t)) {
+                    return SmtValue{*b};
                 }
-                case SortKind::BitVec: {
-                    if constexpr (Combination::template has_theory<theory_bv>) {
-                        const auto& bv_th = theories.template get<theory_bv>();
-                        if (auto val = bv_th.get_value(t)) {
-                            return SmtValue{*val};
+                return std::unexpected(SmtError{SmtError::Kind::Unsupported, "no boolean value found in model"});
+            }
+            case SortKind::BitVec: {
+                if constexpr (Combination::template has_theory<theory_bv>) {
+                    const auto& bv_th = theories.template get<theory_bv>();
+                    if (auto val = bv_th.get_value(t)) {
+                        return SmtValue{*val};
+                    }
+                }
+                return std::unexpected(SmtError{SmtError::Kind::Unsupported, "no bitvector value found in model"});
+            }
+            case SortKind::Int: {
+                // Try LRA first
+                if constexpr (Combination::template has_theory<theory_lra>) {
+                    const auto& lra_th = theories.template get<theory_lra>();
+                    if (auto val = lra_th.get_value(t)) {
+                        if (auto iv = val->floor().to_int64()) {
+                            return SmtValue{*iv};
                         }
                     }
-                    return std::unexpected(SmtError{SmtError::Kind::Unsupported, "no bitvector value found in model"});
                 }
-                case SortKind::Int: {
-                    // Try LRA first
-                    if constexpr (Combination::template has_theory<theory_lra>) {
-                        const auto& lra_th = theories.template get<theory_lra>();
-                        if (auto val = lra_th.get_value(t)) {
-                            if (auto iv = val->floor().to_int64()) {
-                                return SmtValue{*iv};
-                            }
+                // Try DL
+                if constexpr (Combination::template has_theory<theory_dl>) {
+                    const auto& dl_th = theories.template get<theory_dl>();
+                    if (auto val = dl_th.get_value(t)) {
+                        if (auto iv = val->floor().to_int64()) {
+                            return SmtValue{*iv};
                         }
                     }
-                    // Try DL
-                    if constexpr (Combination::template has_theory<theory_dl>) {
-                        const auto& dl_th = theories.template get<theory_dl>();
-                        if (auto val = dl_th.get_value(t)) {
-                            if (auto iv = val->floor().to_int64()) {
-                                return SmtValue{*iv};
-                            }
+                }
+                return std::unexpected(SmtError{SmtError::Kind::Unsupported, "no integer value found in model"});
+            }
+            case SortKind::Real: {
+                // Try LRA first
+                if constexpr (Combination::template has_theory<theory_lra>) {
+                    const auto& lra_th = theories.template get<theory_lra>();
+                    if (auto val = lra_th.get_value(t)) {
+                        if (auto pair = val->to_int64_pair()) {
+                            return SmtValue{rational{pair->first, pair->second}};
                         }
                     }
-                    return std::unexpected(SmtError{SmtError::Kind::Unsupported, "no integer value found in model"});
                 }
-                case SortKind::Real: {
-                    // Try LRA first
-                    if constexpr (Combination::template has_theory<theory_lra>) {
-                        const auto& lra_th = theories.template get<theory_lra>();
-                        if (auto val = lra_th.get_value(t)) {
-                            if (auto pair = val->to_int64_pair()) {
-                                return SmtValue{rational{pair->first, pair->second}};
-                            }
+                // Try DL
+                if constexpr (Combination::template has_theory<theory_dl>) {
+                    const auto& dl_th = theories.template get<theory_dl>();
+                    if (auto val = dl_th.get_value(t)) {
+                        if (auto pair = val->to_int64_pair()) {
+                            return SmtValue{rational{pair->first, pair->second}};
                         }
                     }
-                    // Try DL
-                    if constexpr (Combination::template has_theory<theory_dl>) {
-                        const auto& dl_th = theories.template get<theory_dl>();
-                        if (auto val = dl_th.get_value(t)) {
-                            if (auto pair = val->to_int64_pair()) {
-                                return SmtValue{rational{pair->first, pair->second}};
-                            }
-                        }
-                    }
-                    return std::unexpected(SmtError{SmtError::Kind::Unsupported, "no real value found in model"});
                 }
-                default: {
-                    return std::unexpected(SmtError{SmtError::Kind::Unsupported, "unsupported sort for model extraction"});
-                }
+                return std::unexpected(SmtError{SmtError::Kind::Unsupported, "no real value found in model"});
+            }
+            default: {
+                return std::unexpected(SmtError{SmtError::Kind::Unsupported, "unsupported sort for model extraction"});
+            }
             }
         }
 

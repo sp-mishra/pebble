@@ -24,7 +24,6 @@
 #include "meta/akshara.hpp"
 
 namespace lang::samasa {
-
     // -------------------------------------------------------------------------
     // Stream concepts
     // -------------------------------------------------------------------------
@@ -47,10 +46,11 @@ namespace lang::samasa {
     template <auto Kind>
     struct tok {
         static constexpr auto token_kind = Kind;
+
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = std::remove_cvref_t<decltype(ctx.stream())>;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
             auto cur = ctx.cursor();
             if (cur.at_end()) return R::soft_failure(cur);
             if (cur.peek().kind == Kind) {
@@ -72,7 +72,7 @@ namespace lang::samasa {
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = std::remove_cvref_t<decltype(ctx.stream())>;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
             auto cur = ctx.cursor();
             if (cur.at_end()) return R::soft_failure(cur);
             const char c = static_cast<char>(cur.peek());
@@ -83,12 +83,12 @@ namespace lang::samasa {
     };
 
     // Convenience char_in instances mirroring akshara charsets.
-    inline constexpr char_in<akshara::cs_digits()>      digit{};
-    inline constexpr char_in<akshara::cs_alpha()>       alpha{};
-    inline constexpr char_in<akshara::cs_alnum()>       alnum{};
-    inline constexpr char_in<akshara::cs_whitespace()>  whitespace{};
+    inline constexpr char_in<akshara::cs_digits()> digit{};
+    inline constexpr char_in<akshara::cs_alpha()> alpha{};
+    inline constexpr char_in<akshara::cs_alnum()> alnum{};
+    inline constexpr char_in<akshara::cs_whitespace()> whitespace{};
     inline constexpr char_in<akshara::cs_ident_start()> ident_start{};
-    inline constexpr char_in<akshara::cs_ident_cont()>  ident_cont{};
+    inline constexpr char_in<akshara::cs_ident_cont()> ident_cont{};
 
     // -------------------------------------------------------------------------
     // char_lit<S> — match fixed string literal in a char stream
@@ -100,7 +100,7 @@ namespace lang::samasa {
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = std::remove_cvref_t<decltype(ctx.stream())>;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
             auto cur = ctx.cursor();
             constexpr std::size_t N = S.length;
             for (std::size_t i = 0; i < N; ++i) {
@@ -123,7 +123,7 @@ namespace lang::samasa {
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = std::remove_cvref_t<decltype(ctx.stream())>;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
             auto cur = ctx.cursor();
             if (cur.at_end()) return R::soft_failure(cur);
             const auto& t = cur.peek();
@@ -144,7 +144,7 @@ namespace lang::samasa {
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = std::remove_cvref_t<decltype(ctx.stream())>;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
             auto cur = ctx.cursor();
             if (cur.at_end()) return R::soft_failure(cur);
             const auto& tok_ref = cur.peek();
@@ -164,10 +164,9 @@ namespace lang::samasa {
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = std::remove_cvref_t<decltype(ctx.stream())>;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
             auto cur = ctx.cursor();
             return cur.at_end() ? R::success_at(cur) : R::soft_failure(cur);
         }
     };
-
 } // namespace lang::samasa

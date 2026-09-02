@@ -27,7 +27,6 @@
 #include <vector>
 
 namespace petika::adapters::pravaha {
-
     template <typename PetikaStore = petika::StringSkipStore>
     class PravahaAsyncStore {
     public:
@@ -64,8 +63,8 @@ namespace petika::adapters::pravaha {
         // Asynchronous compaction & segment retention sweep via Pravaha
         std::future<void> compact_async(
             const std::chrono::seconds max_segment_age,
-            const std::function<void(const nitya::segment_descriptor&)>& on_archive = nullptr,
-            const std::function<void(const nitya::segment_descriptor&)>& on_delete = nullptr
+            const std::function<void(const nitya::segment_descriptor &)>& on_archive = nullptr,
+            const std::function<void(const nitya::segment_descriptor &)>& on_delete = nullptr
         ) {
             auto promise = std::make_shared<std::promise<void>>();
             auto future = promise->get_future();
@@ -117,7 +116,8 @@ namespace petika::adapters::pravaha {
                         store_->for_each([&](const auto& entry) {
                             if (!(entry.key < range_start)) visitor(entry);
                         });
-                    } else {
+                    }
+                    else {
                         store_->scan(range_start, range_end, [&](const auto& entry) {
                             visitor(entry);
                         });
@@ -153,7 +153,6 @@ namespace petika::adapters::pravaha {
         std::unique_ptr<PetikaStore> store_;
         std::shared_ptr<::pravaha::Runner<::pravaha::JThreadBackend>> runner_;
     };
-
 } // namespace petika::adapters::pravaha
 
 #endif // PEBBLE_PETIKA_ADAPTERS_PRAVAHA_HPP

@@ -15,53 +15,52 @@
 #endif
 
 namespace akruti::scene {
-
 #if defined(AKRUTI_HAS_PRAVAHA)
 
-// Shared worker pool for a Scene. Bulk ops submit uniform per-element work into it.
-// Threads = hardware concurrency by default.
-class ParallelExecutor {
-public:
-    explicit ParallelExecutor(unsigned threads = 0)
-        : backend_(threads ? threads : std::thread::hardware_concurrency()),
-          runner_(backend_) {}
+    // Shared worker pool for a Scene. Bulk ops submit uniform per-element work into it.
+    // Threads = hardware concurrency by default.
+    class ParallelExecutor {
+    public:
+        explicit ParallelExecutor(unsigned threads = 0)
+            : backend_(threads ? threads : std::thread::hardware_concurrency()),
+              runner_(backend_) {}
 
-    // Apply body(i) for i in [0, count) across chunks, in parallel. Blocks until done.
-    template <class BodyFn>
-    void for_range(std::size_t count, BodyFn&& body, std::size_t chunk = 256) {
-        if (count == 0) return;
-        const std::size_t num_chunks = (count + chunk - 1) / chunk;
-        std::vector<std::size_t> chunk_indices(num_chunks);
-        for (std::size_t c = 0; c < num_chunks; ++c) chunk_indices[c] = c;
+        // Apply body(i) for i in [0, count) across chunks, in parallel. Blocks until done.
+        template <class BodyFn>
+        void for_range(std::size_t count, BodyFn&& body, std::size_t chunk = 256) {
+            if (count == 0) return;
+            const std::size_t num_chunks = (count + chunk - 1) / chunk;
+            std::vector<std::size_t> chunk_indices(num_chunks);
+            for (std::size_t c = 0; c < num_chunks; ++c) chunk_indices[c] = c;
 
-        auto expr = pravaha::lazy_parallel_for(
-            std::span<const std::size_t>(chunk_indices),
-            [body = std::forward<BodyFn>(body), count, chunk](std::size_t c) {
-                const std::size_t start = c * chunk;
-                const std::size_t end = std::min(start + chunk, count);
-                for (std::size_t i = start; i < end; ++i) {
-                    body(i);
-                }
-            }, 1);
-        (void)runner_.submit(std::move(expr));
-    }
+            auto expr = pravaha::lazy_parallel_for(
+                std::span<const std::size_t>(chunk_indices),
+                [body = std::forward<BodyFn>(body), count, chunk](std::size_t c) {
+                    const std::size_t start = c * chunk;
+                    const std::size_t end = std::min(start + chunk, count);
+                    for (std::size_t i = start; i < end; ++i) {
+                        body(i);
+                    }
+                }, 1);
+            (void)runner_.submit(std::move(expr));
+        }
 
-private:
-    pravaha::JThreadBackend backend_;
-    pravaha::Runner<pravaha::JThreadBackend> runner_;
-};
+    private:
+        pravaha::JThreadBackend backend_;
+        pravaha::Runner<pravaha::JThreadBackend> runner_;
+    };
 
 #else  // serial fallback — no Pravaha
 
-class ParallelExecutor {
-public:
-    explicit ParallelExecutor(unsigned = 0) {}
-    template <class BodyFn>
-    void for_range(std::size_t count, BodyFn&& body, std::size_t = 0) {
-        for (std::size_t i = 0; i < count; ++i) body(i);
-    }
-};
+    class ParallelExecutor {
+    public:
+        explicit ParallelExecutor(unsigned = 0) {}
+
+        template <class BodyFn>
+        void for_range(std::size_t count, BodyFn&& body, std::size_t = 0) {
+            for (std::size_t i = 0; i < count; ++i) body(i);
+        }
+    };
 
 #endif
-
 } // namespace akruti::scene

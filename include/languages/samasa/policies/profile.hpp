@@ -11,6 +11,7 @@ namespace lang::samasa {
         using memo_policy = Memo;
         using trace_policy = Trace;
     };
+
     using fast_profile = parse_profile<>;
     using traced_profile = parse_profile<no_memo, collecting_trace>;
 }

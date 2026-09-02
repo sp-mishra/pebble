@@ -16,29 +16,28 @@
 #include "containers/dynamic/SmallVector.hpp"
 
 namespace gati {
+    struct JointDesc {
+        akruti::JointType type = akruti::JointType::Distance;
+        Vec2 anchor_a{};
+        Vec2 anchor_b{};
+        Vec2 axis{1.0f, 0.0f};
+        Scalar rest_length = 0.0f;
+        Scalar target_angle = 0.0f;
+        Scalar compliance = 0.0f;
+    };
 
-struct JointDesc {
-    akruti::JointType type = akruti::JointType::Distance;
-    Vec2              anchor_a{};
-    Vec2              anchor_b{};
-    Vec2              axis{1.0f, 0.0f};
-    Scalar            rest_length = 0.0f;
-    Scalar            target_angle = 0.0f;
-    Scalar            compliance = 0.0f;
-};
+    // Component: an Akruti Joint frame binding this entity's body to another
+    struct JointRef {
+        akruti::Joint joint;
+    };
 
-// Component: an Akruti Joint frame binding this entity's body to another
-struct JointRef {
-    akruti::Joint joint;
-};
-
-// Build a JointRef between two entities' BodyRef particles
-[[nodiscard]] inline JointRef make_joint(World& w, Entity a, Entity b, const JointDesc& d) {
-    BodyRef* ba = w.get<BodyRef>(a);
-    BodyRef* bb = w.get<BodyRef>(b);
-    akruti::Joint j;
-    if (ba && bb) {
-        switch (d.type) {
+    // Build a JointRef between two entities' BodyRef particles
+    [[nodiscard]] inline JointRef make_joint(World& w, Entity a, Entity b, const JointDesc& d) {
+        BodyRef* ba = w.get<BodyRef>(a);
+        BodyRef* bb = w.get<BodyRef>(b);
+        akruti::Joint j;
+        if (ba && bb) {
+            switch (d.type) {
             case akruti::JointType::Distance:
                 j = akruti::make_distance(ba->particle, bb->particle, {d.anchor_a[0], d.anchor_a[1]},
                                           {d.anchor_b[0], d.anchor_b[1]}, d.rest_length, d.compliance);
@@ -58,22 +57,21 @@ struct JointRef {
                 j.target_angle = d.target_angle;
                 j.compliance = d.compliance;
                 break;
+            }
         }
+        return JointRef{j};
     }
-    return JointRef{j};
-}
 
-// System: gathers active joints from ECS
-struct JointSystem {
-    containers::dynamic::SmallVector<akruti::Joint> live;
+    // System: gathers active joints from ECS
+    struct JointSystem {
+        containers::dynamic::SmallVector<akruti::Joint> live;
 
-    void run(World& w, StepContext) {
-        live.clear();
-        w.view<JointRef>([&](Entity, JointRef& jr) {
-            live.push_back(jr.joint);
-        });
-    }
-};
-
+        void run(World& w, StepContext) {
+            live.clear();
+            w.view<JointRef>([&](Entity, JointRef& jr) {
+                live.push_back(jr.joint);
+            });
+        }
+    };
 } // namespace gati
 #endif // GATI_HAS_JOINTS

@@ -142,7 +142,8 @@ namespace litegraph::highway { namespace detail {
 
 #ifdef LITEGRAPH_ENABLE_HIGHWAY
             std::vector<double> candidates(clamped_end - edge_begin); {
-                const HWY_FULL(double) d;
+                const HWY_FULL (
+double) d;
                 const std::size_t lanes = hwy::Lanes(d);
                 const auto vs = hwy::Set(d, source_distance);
 
@@ -240,8 +241,8 @@ namespace litegraph::highway { namespace detail {
                 for (std::size_t u = 0; u < n; ++u) {
                     const std::size_t out_degree = offsets[u + 1] - offsets[u];
                     contrib[u] = out_degree == 0
-                        ? 0.0
-                        : d * rank[u] / static_cast<double>(out_degree);
+                                     ? 0.0
+                                     : d * rank[u] / static_cast<double>(out_degree);
                 }
                 for (std::size_t v = 0; v < n; ++v) {
                     double acc = base;
@@ -250,7 +251,8 @@ namespace litegraph::highway { namespace detail {
                     }
                     next_rank[v] = acc;
                 }
-            } else {
+            }
+            else {
                 detail::fill_vector(next_rank, teleport);
 
                 if (dangling_mass != 0.0) {

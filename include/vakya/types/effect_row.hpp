@@ -56,6 +56,7 @@ namespace vakya::types {
         effect_row_var tail_var = kNoEffectTail; // kNoEffectTail == closed row
 
         [[nodiscard]] bool is_open() const noexcept { return tail_var != kNoEffectTail; }
+
         [[nodiscard]] bool operator==(const effect_row_node& o) const noexcept {
             return concrete == o.concrete && tail_var == o.tail_var;
         }
@@ -111,9 +112,9 @@ namespace vakya::types {
     // ============================================================================
 
     enum class row_subsume_result : std::uint8_t {
-        subsumes = 0,     // ε₁ ⊑ ε₂ provable
+        subsumes = 0, // ε₁ ⊑ ε₂ provable
         not_subsumes = 1, // refuted (concrete leak, or open ε₁ into closed ε₂)
-        deferred = 2,     // distinct symbolic tails — needs SMT
+        deferred = 2, // distinct symbolic tails — needs SMT
     };
 
     // ============================================================================
@@ -179,7 +180,10 @@ namespace vakya::types {
         [[nodiscard]] solve_result solve(std::span<const constraint> batch,
                                          solve_context /*ctx*/) {
             solve_result r;
-            if (!arena_) { r.status = solve_status::deferred; return r; }
+            if (!arena_) {
+                r.status = solve_status::deferred;
+                return r;
+            }
 
             for (const constraint& c : batch) {
                 if (!handles(c.kind)) continue;

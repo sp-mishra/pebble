@@ -24,7 +24,6 @@
 #include <utility>
 
 namespace nitya::pravaha_adapter {
-
     // A Pravaha runner this adapter can drive: it accepts a task via submit()
     // (result is contextually convertible to bool for success) and exposes a
     // drainable backend. Constrains the previously duck-typed Runner so misuse
@@ -67,8 +66,8 @@ namespace nitya::pravaha_adapter {
         Wal& log,
         Runner& runner,
         const std::chrono::seconds max_segment_age,
-        std::function<void(const segment_descriptor&)> on_archive = {},
-        std::function<void(const segment_descriptor&)> on_delete = {}) {
+        std::function<void(const segment_descriptor &)> on_archive = {},
+        std::function<void(const segment_descriptor &)> on_delete = {}) {
         auto work = [&log, max_segment_age, on_archive = std::move(on_archive), on_delete = std::move(on_delete)] {
             log.apply_retention_rules(max_segment_age, on_archive, on_delete);
         };
@@ -95,8 +94,8 @@ namespace nitya::pravaha_adapter {
         Wal& log,
         Runner& runner,
         const std::chrono::seconds max_segment_age,
-        std::function<void(const segment_descriptor&)> on_archive = {},
-        std::function<void(const segment_descriptor&)> on_delete = {}) {
+        std::function<void(const segment_descriptor &)> on_archive = {},
+        std::function<void(const segment_descriptor &)> on_delete = {}) {
         return apply_retention_rules_blocking(
             log, runner, max_segment_age, std::move(on_archive), std::move(on_delete));
     }

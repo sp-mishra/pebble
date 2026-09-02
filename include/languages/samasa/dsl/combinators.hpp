@@ -27,9 +27,7 @@
 #include "matcher.hpp"
 #include "../core/result.hpp"
 
-namespace lang::samasa {
-
-    namespace detail {
+namespace lang::samasa { namespace detail {
         [[nodiscard]] constexpr std::uint32_t max_fe(std::uint32_t a, std::uint32_t b) noexcept {
             return a > b ? a : b;
         }
@@ -56,21 +54,22 @@ namespace lang::samasa {
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = typename Ctx::stream_type;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
 
-            const auto saved_cp  = ctx.checkpoint();
-            std::uint32_t fe     = 0;
-            parse_status  worst  = parse_status::success;
-            bool          committed = false; // seq-local cut flag
+            const auto saved_cp = ctx.checkpoint();
+            std::uint32_t fe = 0;
+            parse_status worst = parse_status::success;
+            bool committed = false; // seq-local cut flag
 
             auto try_one = [&]<std::size_t I>() -> bool {
                 if (worst == parse_status::hard_fail) return false;
                 // Detect cut via if constexpr — raise committed, do not call match.
-                if constexpr (std::is_same_v<std::tuple_element_t<I, std::tuple<Ms...>>, cut>) {
+                if constexpr (std::is_same_v < std::tuple_element_t < I, std::tuple<Ms...> >, cut >) {
                     committed = true;
                     return true;
-                } else {
-                    auto r = std::get<I>(matchers).match(ctx);
+                }
+                else {
+                    auto r = std::get < I > (matchers).match(ctx);
                     fe = detail::max_fe(fe, r.furthest_error);
                     if (r.ok()) {
                         ctx.set_cursor(r.next);
@@ -79,7 +78,8 @@ namespace lang::samasa {
                     // Upgrade soft_fail to hard_fail when cut has been seen.
                     if (r.hard_fail() || committed) {
                         worst = parse_status::hard_fail;
-                    } else {
+                    }
+                    else {
                         worst = parse_status::soft_fail;
                         ctx.rollback(saved_cp);
                     }
@@ -89,7 +89,7 @@ namespace lang::samasa {
 
             [&]<std::size_t... Is>(std::index_sequence<Is...>) {
                 (try_one.template operator()<Is>() && ...);
-            }(std::index_sequence_for<Ms...>{});
+            }(std::index_sequence_for < Ms...>{});
 
             ctx.update_furthest(fe);
             if (worst == parse_status::success) return R::success_at(ctx.cursor(), fe);
@@ -100,7 +100,7 @@ namespace lang::samasa {
 
     template <class... Ms>
     [[nodiscard]] constexpr seq_t<Ms...> seq(Ms... ms) {
-        return {std::tuple<Ms...>{std::move(ms)...}};
+        return {std::tuple < Ms...>{std::move(ms)...}};
     }
 
     // -------------------------------------------------------------------------
@@ -119,7 +119,7 @@ namespace lang::samasa {
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = typename Ctx::stream_type;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
 
             if constexpr ((requires { Ms::token_kind; } && ...)) {
                 const auto cur = ctx.cursor();
@@ -128,10 +128,14 @@ namespace lang::samasa {
                 auto dispatch = [&]<std::size_t I>() {
                     using M = std::tuple_element_t<I, std::tuple<Ms...>>;
                     if (!selected && cur.peek().kind == M::token_kind)
-                        selected = std::get<I>(matchers).match(ctx);
+                        selected = std::get < I > (matchers).match(ctx);
                 };
-                [&]<std::size_t... Is>(std::index_sequence<Is...>) { (dispatch.template operator()<Is>(), ...); }(std::index_sequence_for<Ms...>{});
-                if (selected) { ctx.set_cursor(selected->next); return *selected; }
+                [&]<std::size_t... Is>(std::index_sequence<Is...>) { (dispatch.template operator()<Is>(), ...); }(
+                    std::index_sequence_for < Ms...>{});
+                if (selected) {
+                    ctx.set_cursor(selected->next);
+                    return *selected;
+                }
                 ctx.update_furthest(cur.peek().offset);
                 return R::soft_failure(cur);
             }
@@ -142,10 +146,16 @@ namespace lang::samasa {
             auto try_one = [&]<std::size_t I>() -> bool {
                 if (found) return true;
                 const auto saved_cp = ctx.checkpoint();
-                auto r = std::get<I>(matchers).match(ctx);
+                auto r = std::get < I > (matchers).match(ctx);
                 fe = detail::max_fe(fe, r.furthest_error);
-                if (r.ok()) { found = r; return true; }
-                if (r.hard_fail()) { found = r; return true; }
+                if (r.ok()) {
+                    found = r;
+                    return true;
+                }
+                if (r.hard_fail()) {
+                    found = r;
+                    return true;
+                }
                 // soft_fail: full checkpoint rollback (cursor + events + diags + repairs)
                 ctx.rollback(saved_cp);
                 return false;
@@ -153,7 +163,7 @@ namespace lang::samasa {
 
             [&]<std::size_t... Is>(std::index_sequence<Is...>) {
                 ((try_one.template operator()<Is>()), ...);
-            }(std::index_sequence_for<Ms...>{});
+            }(std::index_sequence_for < Ms...>{});
 
             ctx.update_furthest(fe);
             if (found) {
@@ -166,7 +176,7 @@ namespace lang::samasa {
 
     template <class... Ms>
     [[nodiscard]] constexpr choice_t<Ms...> choice(Ms... ms) {
-        return {std::tuple<Ms...>{std::move(ms)...}};
+        return {std::tuple < Ms...>{std::move(ms)...}};
     }
 
     // -------------------------------------------------------------------------
@@ -180,16 +190,20 @@ namespace lang::samasa {
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = typename Ctx::stream_type;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
             auto r = m.match(ctx);
-            if (r.ok()) { ctx.set_cursor(r.next); return r; }
+            if (r.ok()) {
+                ctx.set_cursor(r.next);
+                return r;
+            }
             if (r.hard_fail()) return r;
             // soft_fail → succeed without consuming, cursor unchanged
             return R::success_at(ctx.cursor(), r.furthest_error);
         }
     };
 
-    template <class M> [[nodiscard]] constexpr opt_t<M> opt(M m) { return {std::move(m)}; }
+    template <class M>
+    [[nodiscard]] constexpr opt_t<M> opt(M m) { return {std::move(m)}; }
 
     // -------------------------------------------------------------------------
     // many_t<M> (zero-or-more)
@@ -202,13 +216,16 @@ namespace lang::samasa {
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = typename Ctx::stream_type;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
             std::uint32_t fe = 0;
             while (true) {
                 const auto before = ctx.cursor();
                 auto r = m.match(ctx);
                 fe = detail::max_fe(fe, r.furthest_error);
-                if (r.hard_fail()) { ctx.update_furthest(fe); return r; }
+                if (r.hard_fail()) {
+                    ctx.update_furthest(fe);
+                    return r;
+                }
                 if (!r.ok()) break;
                 ctx.set_cursor(r.next);
                 if (ctx.cursor().pos == before.pos) break; // infinite-loop guard
@@ -218,7 +235,8 @@ namespace lang::samasa {
         }
     };
 
-    template <class M> [[nodiscard]] constexpr many_t<M> many(M m) { return {std::move(m)}; }
+    template <class M>
+    [[nodiscard]] constexpr many_t<M> many(M m) { return {std::move(m)}; }
 
     // -------------------------------------------------------------------------
     // many1_t<M> (one-or-more)
@@ -231,7 +249,7 @@ namespace lang::samasa {
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = typename Ctx::stream_type;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
             auto r0 = m.match(ctx);
             if (!r0.ok()) return r0;
             ctx.set_cursor(r0.next);
@@ -240,7 +258,10 @@ namespace lang::samasa {
                 const auto before = ctx.cursor();
                 auto r = m.match(ctx);
                 fe = detail::max_fe(fe, r.furthest_error);
-                if (r.hard_fail()) { ctx.update_furthest(fe); return r; }
+                if (r.hard_fail()) {
+                    ctx.update_furthest(fe);
+                    return r;
+                }
                 if (!r.ok()) break;
                 ctx.set_cursor(r.next);
                 if (ctx.cursor().pos == before.pos) break;
@@ -250,7 +271,8 @@ namespace lang::samasa {
         }
     };
 
-    template <class M> [[nodiscard]] constexpr many1_t<M> many1(M m) { return {std::move(m)}; }
+    template <class M>
+    [[nodiscard]] constexpr many1_t<M> many1(M m) { return {std::move(m)}; }
 
     // -------------------------------------------------------------------------
     // sep_by_t<A,Sep>
@@ -258,13 +280,13 @@ namespace lang::samasa {
 
     template <class A, class Sep>
     struct sep_by_t {
-        A   a;
+        A a;
         Sep sep;
 
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = typename Ctx::stream_type;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
             std::uint32_t fe = 0;
             auto r0 = a.match(ctx);
             fe = detail::max_fe(fe, r0.furthest_error);
@@ -293,7 +315,7 @@ namespace lang::samasa {
     };
 
     template <class A, class Sep>
-    [[nodiscard]] constexpr sep_by_t<A,Sep> sep_by(A a, Sep sep) { return {std::move(a), std::move(sep)}; }
+    [[nodiscard]] constexpr sep_by_t<A, Sep> sep_by(A a, Sep sep) { return {std::move(a), std::move(sep)}; }
 
     // -------------------------------------------------------------------------
     // sep_by1_t<A,Sep>
@@ -301,15 +323,15 @@ namespace lang::samasa {
 
     template <class A, class Sep>
     struct sep_by1_t {
-        A   a;
+        A a;
         Sep sep;
 
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = typename Ctx::stream_type;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
             const auto before = ctx.cursor();
-            auto r = sep_by_t<A,Sep>{a, sep}.match(ctx);
+            auto r = sep_by_t<A, Sep>{a, sep}.match(ctx);
             if (r.ok() && ctx.cursor().pos == before.pos)
                 return R::soft_failure(before, r.furthest_error);
             return r;
@@ -317,7 +339,7 @@ namespace lang::samasa {
     };
 
     template <class A, class Sep>
-    [[nodiscard]] constexpr sep_by1_t<A,Sep> sep_by1(A a, Sep sep) { return {std::move(a), std::move(sep)}; }
+    [[nodiscard]] constexpr sep_by1_t<A, Sep> sep_by1(A a, Sep sep) { return {std::move(a), std::move(sep)}; }
 
     // -------------------------------------------------------------------------
     // lookahead_t<M>
@@ -330,7 +352,7 @@ namespace lang::samasa {
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = typename Ctx::stream_type;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
             const auto saved_cp = ctx.checkpoint();
             auto r = m.match(ctx);
             ctx.rollback(saved_cp);
@@ -339,7 +361,8 @@ namespace lang::samasa {
         }
     };
 
-    template <class M> [[nodiscard]] constexpr lookahead_t<M> lookahead(M m) { return {std::move(m)}; }
+    template <class M>
+    [[nodiscard]] constexpr lookahead_t<M> lookahead(M m) { return {std::move(m)}; }
 
     // -------------------------------------------------------------------------
     // not_followed_by_t<M>
@@ -352,7 +375,7 @@ namespace lang::samasa {
         template <class Ctx>
         [[nodiscard]] constexpr auto match(Ctx& ctx) const {
             using Stream = typename Ctx::stream_type;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
             const auto saved_cp = ctx.checkpoint();
             auto r = m.match(ctx);
             ctx.rollback(saved_cp);
@@ -361,7 +384,8 @@ namespace lang::samasa {
         }
     };
 
-    template <class M> [[nodiscard]] constexpr not_followed_by_t<M> not_followed_by(M m) { return {std::move(m)}; }
+    template <class M>
+    [[nodiscard]] constexpr not_followed_by_t<M> not_followed_by(M m) { return {std::move(m)}; }
 
     // -------------------------------------------------------------------------
     // cut — seq-local commit signal.
@@ -377,5 +401,4 @@ namespace lang::samasa {
             return parse_result<Stream>::success_at(ctx.cursor());
         }
     };
-
 } // namespace lang::samasa

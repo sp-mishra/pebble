@@ -70,7 +70,7 @@ namespace tarka {
 
     struct payload_side_table {
         static constexpr std::size_t kZeroId = TarkaOpTraits::zero_payload; // 0
-        static constexpr std::size_t kOneId = TarkaOpTraits::one_payload;   // 1
+        static constexpr std::size_t kOneId = TarkaOpTraits::one_payload; // 1
 
         std::vector<std::uint64_t> id_to_payload{0, 0}; // slots 0,1 reserved
         std::unordered_map<std::uint64_t, std::size_t> payload_to_id;
@@ -80,8 +80,14 @@ namespace tarka {
             const std::uint64_t ph = t.ptr()->payload_hash;
             if (t.op() == Op::Lit) {
                 if (auto iv = t.ctx().int_literal(ph)) {
-                    if (*iv == 0) { id_to_payload[kZeroId] = ph; return kZeroId; }
-                    if (*iv == 1) { id_to_payload[kOneId] = ph; return kOneId; }
+                    if (*iv == 0) {
+                        id_to_payload[kZeroId] = ph;
+                        return kZeroId;
+                    }
+                    if (*iv == 1) {
+                        id_to_payload[kOneId] = ph;
+                        return kOneId;
+                    }
                 }
             }
             if (auto it = payload_to_id.find(ph); it != payload_to_id.end())

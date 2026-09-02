@@ -39,16 +39,15 @@
 #include <vector>
 
 namespace lang {
-
     // =========================================================================
     // Re-export vakya types under lang:: so generic/ headers stay consistent.
     // =========================================================================
 
-    using effect_mask          = vakya::types::effect_mask;
-    using capability_mask      = vakya::types::capability_mask;
-    using effect_registry      = vakya::types::effect_registry;
-    using capability_registry  = vakya::types::capability_registry;
-    using effect_descriptor    = vakya::types::effect_descriptor;
+    using effect_mask = vakya::types::effect_mask;
+    using capability_mask = vakya::types::capability_mask;
+    using effect_registry = vakya::types::effect_registry;
+    using capability_registry = vakya::types::capability_registry;
+    using effect_descriptor = vakya::types::effect_descriptor;
     using capability_descriptor = vakya::types::capability_descriptor;
 
     // =========================================================================
@@ -58,8 +57,8 @@ namespace lang {
     // =========================================================================
 
     inline constexpr std::uint32_t kEffectExtensionBase = 1000u;
-    inline constexpr effect_mask     kEffectExtBase = 1ULL << 32; // first ext mask bit
-    inline constexpr capability_mask kCapExtBase    = 1ULL << 32;
+    inline constexpr effect_mask kEffectExtBase = 1ULL << 32; // first ext mask bit
+    inline constexpr capability_mask kCapExtBase = 1ULL << 32;
 
     // =========================================================================
     // Delegating factory helpers — call vakya's builtins, language adds ext-band.
@@ -78,8 +77,8 @@ namespace lang {
     // =========================================================================
 
     struct fn_attribute_set {
-        effect_mask     declared_effects = 0;
-        capability_mask declared_caps    = 0;
+        effect_mask declared_effects = 0;
+        capability_mask declared_caps = 0;
         bool is_pure = false; // @pure: asserts final effects == 0 && caps == 0
     };
 
@@ -88,9 +87,9 @@ namespace lang {
     // =========================================================================
 
     struct effects_result {
-        effect_mask     final_effects = 0;
-        capability_mask final_caps    = 0;
-        bool conflict = false;         // @pure declared but non-zero inferred effects
+        effect_mask final_effects = 0;
+        capability_mask final_caps = 0;
+        bool conflict = false; // @pure declared but non-zero inferred effects
         std::string conflict_detail;
     };
 
@@ -110,14 +109,14 @@ namespace lang {
                         capability_mask inferred_caps) {
             effects_result r;
             r.final_effects = inferred_effects | attrs.declared_effects;
-            r.final_caps    = inferred_caps    | attrs.declared_caps;
+            r.final_caps = inferred_caps | attrs.declared_caps;
 
             if (attrs.is_pure && (r.final_effects != 0 || r.final_caps != 0)) {
                 r.conflict = true;
                 r.conflict_detail = std::string("function '") + std::string(name) +
                     "' declared @pure but has inferred effects/caps";
                 r.final_effects = 0;
-                r.final_caps    = 0;
+                r.final_caps = 0;
             }
             results_.push_back(std::move(r));
         }
@@ -125,9 +124,8 @@ namespace lang {
         [[nodiscard]] std::vector<effects_result> take() { return std::move(results_); }
 
     private:
-        [[maybe_unused]] const effect_registry&     ereg_;
+        [[maybe_unused]] const effect_registry& ereg_;
         [[maybe_unused]] const capability_registry& creg_;
         std::vector<effects_result> results_;
     };
-
 } // namespace lang

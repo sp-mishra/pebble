@@ -77,9 +77,11 @@ namespace tarka::native {
         void collect_array_terms(Term t) {
             if (t.op() == Op::Select) {
                 selects_.push_back(t);
-            } else if (t.op() == Op::Store) {
+            }
+            else if (t.op() == Op::Store) {
                 stores_.push_back(t);
-            } else if (t.op() == Op::Distinct || t.op() == Op::Eq) {
+            }
+            else if (t.op() == Op::Distinct || t.op() == Op::Eq) {
                 auto ch = t.children();
                 if (ch.size() == 2 && ch[0].sort().kind() == SortKind::Array) {
                     array_pairs_.push_back({ch[0], ch[1]});
@@ -121,7 +123,8 @@ namespace tarka::native {
                         sat_->ensure_var(reg_->var_of(a_val_eq));
                         Lit l_val_eq = make_lit(reg_->var_of(a_val_eq), false);
                         sat_->add_clause({l_val_eq});
-                    } else {
+                    }
+                    else {
                         // General case:
                         // (read_idx == write_idx) => (select(...) == write_val)
                         // (read_idx != write_idx) => (select(...) == select(orig_array, read_idx))

@@ -202,12 +202,13 @@ namespace symtab {
         // Returns the count of successfully registered symbols.
         // -------------------------------------------------------------------------
         template <std::ranges::input_range R>
-            requires std::same_as<std::ranges::range_value_t<R>
+            requires std::same_as < std::ranges::range_value_t < R >
 
 
-                                  ,
-                                  symbol_entry
-            >
+
+        ,
+        symbol_entry
+        >
         std::size_t register_range(R&& entries) {
             std::size_t count = 0;
             std::unique_lock wl(mtx_);

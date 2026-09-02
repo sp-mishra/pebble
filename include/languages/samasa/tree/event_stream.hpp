@@ -14,7 +14,6 @@
 #include "languages/generic/tree/event_log.hpp"
 
 namespace lang::samasa {
-
     // event_kind is owned by the generic layer.
     using lang::event_kind;
 
@@ -27,5 +26,4 @@ namespace lang::samasa {
     //          event_count / all / reserve — all resolved from lang::event_log.
     template <class SyntaxKind>
     using event_stream = lang::event_log<SyntaxKind, samasa_diag_code>;
-
 } // namespace lang::samasa

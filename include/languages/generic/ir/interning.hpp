@@ -19,7 +19,6 @@
 #include "../../../containers/symbol/InternPool.hpp"
 
 namespace lang {
-
     class ir_interner {
     public:
         // Intern a name string — returns a stable symbol_id (index into the pool).
@@ -52,10 +51,9 @@ namespace lang {
         }
 
     private:
-        symtab::InternPool                             pool_;
+        symtab::InternPool pool_;
         std::unordered_map<std::uintptr_t, symbol_id> name_to_id_;
-        std::unordered_map<std::uint64_t,  ir_node_id> hash_to_node_;
-        symbol_id                                       next_symbol_id_ = k_null_symbol + 1;
+        std::unordered_map<std::uint64_t, ir_node_id> hash_to_node_;
+        symbol_id next_symbol_id_ = k_null_symbol + 1;
     };
-
 } // namespace lang

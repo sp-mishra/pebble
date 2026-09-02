@@ -37,7 +37,6 @@
 #include <vector>
 
 namespace lang {
-
     // =========================================================================
     // ast_node_id — index into ast_arena; k_null_node = absent/invalid
     // =========================================================================
@@ -75,19 +74,18 @@ namespace lang {
             return nodes_[id];
         }
 
-        [[nodiscard]] std::size_t size()  const noexcept { return nodes_.size();  }
-        [[nodiscard]] bool        empty() const noexcept { return nodes_.empty(); }
+        [[nodiscard]] std::size_t size() const noexcept { return nodes_.size(); }
+        [[nodiscard]] bool empty() const noexcept { return nodes_.empty(); }
 
-        using iterator       = typename std::vector<NodeVariant>::iterator;
+        using iterator = typename std::vector<NodeVariant>::iterator;
         using const_iterator = typename std::vector<NodeVariant>::const_iterator;
 
-        iterator       begin() noexcept       { return nodes_.begin(); }
-        iterator       end()   noexcept       { return nodes_.end();   }
+        iterator begin() noexcept { return nodes_.begin(); }
+        iterator end() noexcept { return nodes_.end(); }
         const_iterator begin() const noexcept { return nodes_.begin(); }
-        const_iterator end()   const noexcept { return nodes_.end();   }
+        const_iterator end() const noexcept { return nodes_.end(); }
 
     private:
         std::vector<NodeVariant> nodes_;
     };
-
 } // namespace lang

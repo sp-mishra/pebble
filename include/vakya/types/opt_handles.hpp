@@ -29,9 +29,9 @@ namespace vakya::types {
     // agree on one handle type each; the owning arena lives in its phase header).
     // ============================================================================
 
-    struct region_tag {};      // vakya/types/region.hpp
-    struct effect_row_tag {};  // vakya/types/effect_row.hpp
-    struct rw_summary_tag {};  // vakya/types/rw_summary.hpp
+    struct region_tag {}; // vakya/types/region.hpp
+    struct effect_row_tag {}; // vakya/types/effect_row.hpp
+    struct rw_summary_tag {}; // vakya/types/rw_summary.hpp
 
     using region_ref = containers::generational_handle<region_tag, std::uint32_t>;
     using effect_row_ref = containers::generational_handle<effect_row_tag, std::uint32_t>;
@@ -53,10 +53,10 @@ namespace vakya::types {
     // ============================================================================
 
     enum class execution_affinity : std::uint8_t {
-        unknown = 0,   // not synthesized
-        pure = 1,      // no effects, no aliasing — freely reorderable / parallel
+        unknown = 0, // not synthesized
+        pure = 1, // no effects, no aliasing — freely reorderable / parallel
         cpu_bound = 2, // memory/compute heavy, effect-free
-        io_bound = 3,  // filesystem / network effects present
+        io_bound = 3, // filesystem / network effects present
         sequential = 4 // ordering-sensitive (exceptions, shared writes)
     };
 
@@ -68,10 +68,10 @@ namespace vakya::types {
     // ============================================================================
 
     enum class cost_class : std::uint8_t {
-        unknown = 0,  // symbolic / undetermined
-        tiny = 1,     // leaf / constant
-        small = 2,    // bounded small loop / few ops
+        unknown = 0, // symbolic / undetermined
+        tiny = 1, // leaf / constant
+        small = 2, // bounded small loop / few ops
         moderate = 3, // static extent above small band
-        heavy = 4     // static extent above moderate band / nested
+        heavy = 4 // static extent above moderate band / nested
     };
 } // namespace vakya::types

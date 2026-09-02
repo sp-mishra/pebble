@@ -6,22 +6,21 @@
 #include <numbers>
 
 namespace pebble::dhvani::synth {
+    struct OscillatorState {
+        float phase = 0.f;
+        float frequency = 440.f;
+        float amplitude = 1.f;
+        uint32_t sample_rate = kDefaultSampleRate;
+    };
 
-struct OscillatorState {
-    float    phase       = 0.f;
-    float    frequency   = 440.f;
-    float    amplitude   = 1.f;
-    uint32_t sample_rate = kDefaultSampleRate;
-};
+    enum class WaveShape : uint8_t { Sine, Saw, Square, Triangle, WhiteNoise };
 
-enum class WaveShape : uint8_t { Sine, Saw, Square, Triangle, WhiteNoise };
+    [[nodiscard]] inline Sample tick(OscillatorState& s, WaveShape shape) noexcept {
+        const float p = s.phase;
+        const float dp = s.frequency / static_cast<float>(s.sample_rate);
 
-[[nodiscard]] inline Sample tick(OscillatorState& s, WaveShape shape) noexcept {
-    const float p  = s.phase;
-    const float dp = s.frequency / static_cast<float>(s.sample_rate);
-
-    Sample out;
-    switch (shape) {
+        Sample out;
+        switch (shape) {
         case WaveShape::Sine:
             out = std::sin(p * 2.f * std::numbers::pi_v<float>);
             break;
@@ -45,17 +44,16 @@ enum class WaveShape : uint8_t { Sine, Saw, Square, Triangle, WhiteNoise };
         }
         default:
             out = 0.f;
+        }
+        s.phase = std::fmod(p + dp, 1.f);
+        return out * s.amplitude;
     }
-    s.phase = std::fmod(p + dp, 1.f);
-    return out * s.amplitude;
-}
 
-template <std::size_t N>
-void fill_block(OscillatorState& s, WaveShape shape, SampleBlock<N>& block) noexcept {
-    for (auto& frame : block) {
-        const Sample v = tick(s, shape);
-        frame.left = frame.right = v;
+    template <std::size_t N>
+    void fill_block(OscillatorState& s, WaveShape shape, SampleBlock<N>& block) noexcept {
+        for (auto& frame : block) {
+            const Sample v = tick(s, shape);
+            frame.left = frame.right = v;
+        }
     }
-}
-
 } // namespace pebble::dhvani::synth

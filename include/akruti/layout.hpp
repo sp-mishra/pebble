@@ -72,17 +72,17 @@ namespace akruti::layout {
         std::chrono::nanoseconds clip_time{0};
         std::chrono::nanoseconds constraints_time{0};
         std::chrono::nanoseconds total_time{0};
-        
+
         std::size_t node_count = 0;
         std::size_t dirty_node_count = 0;
-        
+
         std::size_t nodes_measured = 0;
         std::size_t nodes_placed = 0;
         std::size_t constraints_applied = 0;
         std::size_t clips_computed = 0;
         std::size_t text_measure_calls = 0;
         std::size_t spatial_hash_updates = 0;
-        
+
         void reset() {
             measure_time = std::chrono::nanoseconds{0};
             place_time = std::chrono::nanoseconds{0};
@@ -105,49 +105,49 @@ namespace akruti::layout {
     public:
         struct CellKey {
             int32_t x, y;
-            
+
             bool operator==(const CellKey& other) const {
                 return x == other.x && y == other.y;
             }
         };
-        
+
         struct CellKeyHash {
             std::size_t operator()(const CellKey& k) const {
                 return std::hash<int32_t>()(k.x) ^ (std::hash<int32_t>()(k.y) << 1);
             }
         };
-        
+
     private:
         float cell_size_;
         std::unordered_map<CellKey, std::vector<std::uint32_t>, CellKeyHash> grid_;
-        
+
     public:
         explicit SpatialHash(float cell_size = 100.0f) : cell_size_(cell_size) {}
-        
+
         void clear() { grid_.clear(); }
-        
+
         void insert(std::uint32_t node_id, const Rect2D& rect) {
             const CellKey min_cell = get_cell(rect.x, rect.y);
             const CellKey max_cell = get_cell(rect.x + rect.w, rect.y + rect.h);
-            
+
             for (int32_t cy = min_cell.y; cy <= max_cell.y; ++cy) {
                 for (int32_t cx = min_cell.x; cx <= max_cell.x; ++cx) {
                     grid_[CellKey{cx, cy}].push_back(node_id);
                 }
             }
         }
-        
+
         [[nodiscard]] std::vector<std::uint32_t> query(float x, float y) const {
             const CellKey cell = get_cell(x, y);
             auto it = grid_.find(cell);
             return (it != grid_.end()) ? it->second : std::vector<std::uint32_t>{};
         }
-        
+
         [[nodiscard]] std::vector<std::uint32_t> query_rect(const Rect2D& rect) const {
             std::vector<std::uint32_t> result;
             const CellKey min_cell = get_cell(rect.x, rect.y);
             const CellKey max_cell = get_cell(rect.x + rect.w, rect.y + rect.h);
-            
+
             for (int32_t cy = min_cell.y; cy <= max_cell.y; ++cy) {
                 for (int32_t cx = min_cell.x; cx <= max_cell.x; ++cx) {
                     auto it = grid_.find(CellKey{cx, cy});
@@ -156,12 +156,12 @@ namespace akruti::layout {
                     }
                 }
             }
-            
+
             std::sort(result.begin(), result.end());
             result.erase(std::unique(result.begin(), result.end()), result.end());
             return result;
         }
-        
+
     private:
         [[nodiscard]] CellKey get_cell(float x, float y) const {
             return CellKey{
@@ -172,13 +172,15 @@ namespace akruti::layout {
     };
 
     enum class Axis : std::uint8_t { Row = 0, Column = 1 };
+
     enum class Align : std::uint8_t { Start = 0, Center = 1, End = 2, Stretch = 3 };
+
     enum class Justify : std::uint8_t { Start = 0, Center = 1, End = 2, SpaceBetween = 3, SpaceAround = 4 };
 
     enum class Overflow : std::uint8_t {
-        Visible = 0,  // Children overflow parent bounds (default)
-        Clip = 1,     // Children clipped to parent bounds
-        Scroll = 2    // Children clipped and scrollable
+        Visible = 0, // Children overflow parent bounds (default)
+        Clip = 1, // Children clipped to parent bounds
+        Scroll = 2 // Children clipped and scrollable
     };
 
     // Text measurement callback interface
@@ -194,19 +196,20 @@ namespace akruti::layout {
     // Concept for any object able to measure a text run. Lets callers pass a typed
     // metrics object instead of a C function pointer; adapt via make_text_measure.
     template <class T>
-    concept ITextMetrics = requires(const T &t, const char *s, float mw) {
+    concept ITextMetrics = requires(const T& t, const char* s, float mw) {
         { t.measure(s, mw) } -> std::convertible_to<Size2D>;
     };
 
     // Build a TextMeasure trampoline capturing &metrics as user_data. The metrics object
     // must outlive the returned TextMeasure. Zero allocation.
     template <ITextMetrics T>
-    TextMeasure make_text_measure(T &metrics) noexcept {
+    TextMeasure make_text_measure(T& metrics) noexcept {
         return TextMeasure{
-            +[](const char *text, float max_width, void *ud) -> Size2D {
-                return static_cast<T *>(ud)->measure(text, max_width);
+            +[](const char* text, float max_width, void* ud) -> Size2D {
+                return static_cast<T*>(ud)->measure(text, max_width);
             },
-            static_cast<void *>(&metrics)};
+            static_cast<void*>(&metrics)
+        };
     }
 
     struct SizeSpec {
@@ -216,10 +219,11 @@ namespace akruti::layout {
             Auto = 0,
             Px = 1,
             Percent = 2,
-            Fr = 3,      // fractional free-space share; value = weight
+            Fr = 3, // fractional free-space share; value = weight
             Content = 4, // intrinsic content clamped to [value, aux0]
-            Aspect = 5   // derive this axis from the resolved other axis; value = ratio
+            Aspect = 5 // derive this axis from the resolved other axis; value = ratio
         };
+
         Kind kind = Kind::Auto;
         float value = 0.0f;
         // Auxiliary parameters used only by additive units (default 0 keeps size lean
@@ -237,6 +241,7 @@ namespace akruti::layout {
         static SizeSpec Content(const float min_px = 0.0f, const float max_px = 0.0f) noexcept {
             return SizeSpec{Kind::Content, min_px, max_px, 0.0f};
         }
+
         // Derive this axis from the resolved cross axis using ratio = this / other.
         static SizeSpec Aspect(const float ratio) noexcept { return SizeSpec{Kind::Aspect, ratio}; }
 
@@ -257,8 +262,9 @@ namespace akruti::layout {
 
         [[nodiscard]] bool active() const noexcept {
             return min.kind != SizeSpec::Kind::Auto || pref.kind != SizeSpec::Kind::Auto ||
-                   max.kind != SizeSpec::Kind::Auto;
+                max.kind != SizeSpec::Kind::Auto;
         }
+
         friend constexpr bool operator==(const SizeSpecClamp&, const SizeSpecClamp&) = default;
     };
 
@@ -324,7 +330,7 @@ namespace akruti::layout {
         bool match_parent_height = false;
         bool center_x = false;
         bool center_y = false;
-        
+
         // Virtualization properties
         bool virtualization_enabled = false;
         Vec2 scroll_offset{0.0f, 0.0f};
@@ -359,16 +365,22 @@ namespace akruti::layout {
     // Pin a node to a parent edge at `inset` px (parent-relative). Fill stretches to all
     // four edges. Builds on the anchor_* constraints applied in constraints_pass — no
     // sibling DAG required. Returns the mutated style for chaining.
-    inline LayoutStyle &dock(LayoutStyle &st, const Side side, const float inset = 0.0f) noexcept {
+    inline LayoutStyle& dock(LayoutStyle& st, const Side side, const float inset = 0.0f) noexcept {
         switch (side) {
-            case Side::Left:   st.anchor_left = inset;   break;
-            case Side::Right:  st.anchor_right = inset;  break;
-            case Side::Top:    st.anchor_top = inset;    break;
-            case Side::Bottom: st.anchor_bottom = inset; break;
-            case Side::Fill:
-                st.anchor_left = inset; st.anchor_right = inset;
-                st.anchor_top = inset;  st.anchor_bottom = inset;
-                break;
+        case Side::Left: st.anchor_left = inset;
+            break;
+        case Side::Right: st.anchor_right = inset;
+            break;
+        case Side::Top: st.anchor_top = inset;
+            break;
+        case Side::Bottom: st.anchor_bottom = inset;
+            break;
+        case Side::Fill:
+            st.anchor_left = inset;
+            st.anchor_right = inset;
+            st.anchor_top = inset;
+            st.anchor_bottom = inset;
+            break;
         }
         return st;
     }
@@ -376,7 +388,7 @@ namespace akruti::layout {
     // Give a child a proportional share of the parent's main axis. Two children with
     // split(1)/split(2) divide free space 1:2. Implemented via the Fr unit (translated to
     // flex_grow at bake), so no solver change is needed.
-    inline LayoutStyle &split_share(LayoutStyle &st, const float weight, const Axis parent_axis) noexcept {
+    inline LayoutStyle& split_share(LayoutStyle& st, const float weight, const Axis parent_axis) noexcept {
         if (parent_axis == Axis::Row) st.width = SizeSpec::Fr(weight);
         else st.height = SizeSpec::Fr(weight);
         return st;
@@ -387,14 +399,14 @@ namespace akruti::layout {
     static float clamp_min(const float v, const float lo) noexcept { return (v < lo) ? lo : v; }
     static float clamp_max(const float v, const float hi) noexcept { return (v > hi) ? hi : v; }
 
-    static float rect_right(const Rect2D &r) noexcept { return r.x + r.w; }
-    static float rect_bottom(const Rect2D &r) noexcept { return r.y + r.h; }
+    static float rect_right(const Rect2D& r) noexcept { return r.x + r.w; }
+    static float rect_bottom(const Rect2D& r) noexcept { return r.y + r.h; }
 
-    static Bounds2D rect_to_bounds(const Rect2D &r) noexcept {
+    static Bounds2D rect_to_bounds(const Rect2D& r) noexcept {
         return Bounds2D(Vec2{r.x, r.y}, Vec2{r.x + r.w, r.y + r.h});
     }
 
-    static Rect2D bounds_to_rect(const Bounds2D &b) noexcept {
+    static Rect2D bounds_to_rect(const Bounds2D& b) noexcept {
         Rect2D r;
         r.x = b.lo[0];
         r.y = b.lo[1];
@@ -403,7 +415,7 @@ namespace akruti::layout {
         return r;
     }
 
-    static Bounds2D intersect_bounds(const Bounds2D &a, const Bounds2D &b) noexcept {
+    static Bounds2D intersect_bounds(const Bounds2D& a, const Bounds2D& b) noexcept {
         float lo_x = std::max(a.lo[0], b.lo[0]);
         float lo_y = std::max(a.lo[1], b.lo[1]);
         float hi_x = std::min(a.hi[0], b.hi[0]);
@@ -413,7 +425,7 @@ namespace akruti::layout {
         return Bounds2D(Vec2{lo_x, lo_y}, Vec2{hi_x, hi_y});
     }
 
-    static Rect2D inset_rect(const Rect2D &r, const Edges &e) noexcept {
+    static Rect2D inset_rect(const Rect2D& r, const Edges& e) noexcept {
         Rect2D o = r;
         o.x += e.l;
         o.y += e.t;
@@ -422,69 +434,69 @@ namespace akruti::layout {
         return o;
     }
 
-    static float main_size(const Rect2D &r, const Axis axis) noexcept {
+    static float main_size(const Rect2D& r, const Axis axis) noexcept {
         return (axis == Axis::Row) ? r.w : r.h;
     }
 
-    static float cross_size(const Rect2D &r, const Axis axis) noexcept {
+    static float cross_size(const Rect2D& r, const Axis axis) noexcept {
         return (axis == Axis::Row) ? r.h : r.w;
     }
 
-    static float main_size(const Size2D &s, const Axis axis) noexcept {
+    static float main_size(const Size2D& s, const Axis axis) noexcept {
         return (axis == Axis::Row) ? s.w : s.h;
     }
 
-    static float cross_size(const Size2D &s, const Axis axis) noexcept {
+    static float cross_size(const Size2D& s, const Axis axis) noexcept {
         return (axis == Axis::Row) ? s.h : s.w;
     }
 
-    static void set_main_size(Size2D &s, const Axis axis, const float v) noexcept {
+    static void set_main_size(Size2D& s, const Axis axis, const float v) noexcept {
         if (axis == Axis::Row) s.w = v;
         else s.h = v;
     }
 
-    static void set_cross_size(Size2D &s, const Axis axis, const float v) noexcept {
+    static void set_cross_size(Size2D& s, const Axis axis, const float v) noexcept {
         if (axis == Axis::Row) s.h = v;
         else s.w = v;
     }
 
-    static void set_main_pos(Rect2D &r, const Axis axis, const float v) noexcept {
+    static void set_main_pos(Rect2D& r, const Axis axis, const float v) noexcept {
         if (axis == Axis::Row) r.x = v;
         else r.y = v;
     }
 
-    static void set_cross_pos(Rect2D &r, const Axis axis, const float v) noexcept {
+    static void set_cross_pos(Rect2D& r, const Axis axis, const float v) noexcept {
         if (axis == Axis::Row) r.y = v;
         else r.x = v;
     }
 
-    static void set_main_len(Rect2D &r, const Axis axis, const float v) noexcept {
+    static void set_main_len(Rect2D& r, const Axis axis, const float v) noexcept {
         if (axis == Axis::Row) r.w = v;
         else r.h = v;
     }
 
-    static void set_cross_len(Rect2D &r, const Axis axis, const float v) noexcept {
+    static void set_cross_len(Rect2D& r, const Axis axis, const float v) noexcept {
         if (axis == Axis::Row) r.h = v;
         else r.w = v;
     }
 
-    static float main_margin_before(const Edges &m, const Axis axis) noexcept {
+    static float main_margin_before(const Edges& m, const Axis axis) noexcept {
         return (axis == Axis::Row) ? m.l : m.t;
     }
 
-    static float main_margin_after(const Edges &m, const Axis axis) noexcept {
+    static float main_margin_after(const Edges& m, const Axis axis) noexcept {
         return (axis == Axis::Row) ? m.r : m.b;
     }
 
-    static inline float cross_margin_before(const Edges &m, const Axis axis) noexcept {
+    static inline float cross_margin_before(const Edges& m, const Axis axis) noexcept {
         return (axis == Axis::Row) ? m.t : m.l;
     }
 
-    static inline float cross_margin_after(const Edges &m, const Axis axis) noexcept {
+    static inline float cross_margin_after(const Edges& m, const Axis axis) noexcept {
         return (axis == Axis::Row) ? m.b : m.r;
     }
 
-    static float resolve_spec_px_or_inf(const SizeSpec &s, const bool is_max) noexcept {
+    static float resolve_spec_px_or_inf(const SizeSpec& s, const bool is_max) noexcept {
         if (s.kind == SizeSpec::Kind::Px) return std::max(0.0f, s.value);
         return is_max ? std::numeric_limits<float>::infinity() : 0.0f;
     }
@@ -496,7 +508,7 @@ namespace akruti::layout {
         return r;
     }
 
-    static Size2D apply_min_max_content(Size2D content, const LayoutStyle &st) noexcept {
+    static Size2D apply_min_max_content(Size2D content, const LayoutStyle& st) noexcept {
         const float min_w = resolve_spec_px_or_inf(st.min_width, false);
         const float max_w = resolve_spec_px_or_inf(st.max_width, true);
         const float min_h = resolve_spec_px_or_inf(st.min_height, false);
@@ -506,7 +518,7 @@ namespace akruti::layout {
         return content;
     }
 
-    static Size2D apply_aspect_content(Size2D content, const LayoutStyle &st) noexcept {
+    static Size2D apply_aspect_content(Size2D content, const LayoutStyle& st) noexcept {
         if (!st.aspect_lock) return content;
         if (!(st.aspect_ratio > 0.0f)) return content;
 
@@ -516,7 +528,8 @@ namespace akruti::layout {
         if (width_fixed && !height_fixed) {
             const float w = std::max(0.0f, st.width.value);
             content.h = (st.aspect_ratio > 0.0f) ? (w / st.aspect_ratio) : content.h;
-        } else if (height_fixed && !width_fixed) {
+        }
+        else if (height_fixed && !width_fixed) {
             const float h = std::max(0.0f, st.height.value);
             content.w = (st.aspect_ratio > 0.0f) ? (h * st.aspect_ratio) : content.w;
         }
@@ -525,18 +538,18 @@ namespace akruti::layout {
 
     // Resolve one SizeSpec arm against a known parent extent, returning a px value.
     // Px/Percent resolve; other kinds return the passed fallback.
-    static float resolve_arm_px(const SizeSpec &s, const float parent_extent,
+    static float resolve_arm_px(const SizeSpec& s, const float parent_extent,
                                 const float fallback) noexcept {
         switch (s.kind) {
-            case SizeSpec::Kind::Px:      return std::max(0.0f, s.value);
-            case SizeSpec::Kind::Percent: return std::max(0.0f, parent_extent * s.value * 0.01f);
-            default:                      return fallback;
+        case SizeSpec::Kind::Px: return std::max(0.0f, s.value);
+        case SizeSpec::Kind::Percent: return std::max(0.0f, parent_extent * s.value * 0.01f);
+        default: return fallback;
         }
     }
 
     // Clamp a resolved dimension using a min/pref/max triple, resolving each arm against
     // the parent extent. pref (when set) replaces the value; min/max then bound it.
-    static float resolve_clamp_rel(float dim, const SizeSpecClamp &c,
+    static float resolve_clamp_rel(float dim, const SizeSpecClamp& c,
                                    const float parent_extent) noexcept {
         if (!c.active()) return dim;
         if (c.pref.kind != SizeSpec::Kind::Auto) {
@@ -553,35 +566,35 @@ namespace akruti::layout {
     }
 
     struct HierarchyBufferView {
-        std::vector<std::uint32_t> *parent = nullptr;
-        std::vector<std::uint32_t> *first_child = nullptr;
-        std::vector<std::uint32_t> *child_count = nullptr;
-        std::vector<std::uint32_t> *child_offset = nullptr;
-        std::vector<std::uint32_t> *children_idx = nullptr;
-        std::vector<std::uint32_t> *postorder = nullptr;
-        std::vector<std::uint32_t> *subtree_begin = nullptr;
-        std::vector<std::uint32_t> *subtree_end = nullptr;
+        std::vector<std::uint32_t>* parent = nullptr;
+        std::vector<std::uint32_t>* first_child = nullptr;
+        std::vector<std::uint32_t>* child_count = nullptr;
+        std::vector<std::uint32_t>* child_offset = nullptr;
+        std::vector<std::uint32_t>* children_idx = nullptr;
+        std::vector<std::uint32_t>* postorder = nullptr;
+        std::vector<std::uint32_t>* subtree_begin = nullptr;
+        std::vector<std::uint32_t>* subtree_end = nullptr;
     };
 
     struct InputBufferView {
-        std::vector<Axis> *axis = nullptr;
-        std::vector<Align> *align_items = nullptr;
-        std::vector<Justify> *justify_content = nullptr;
-        std::vector<SizeSpec> *width = nullptr;
-        std::vector<SizeSpec> *height = nullptr;
-        std::vector<Edges> *padding = nullptr;
-        std::vector<Edges> *margin = nullptr;
-        std::vector<std::uint64_t> *user_tag = nullptr;
+        std::vector<Axis>* axis = nullptr;
+        std::vector<Align>* align_items = nullptr;
+        std::vector<Justify>* justify_content = nullptr;
+        std::vector<SizeSpec>* width = nullptr;
+        std::vector<SizeSpec>* height = nullptr;
+        std::vector<Edges>* padding = nullptr;
+        std::vector<Edges>* margin = nullptr;
+        std::vector<std::uint64_t>* user_tag = nullptr;
     };
 
     struct GeomBufferView {
-        std::vector<Rect2D> *rect = nullptr;
-        std::vector<Bounds2D> *clip = nullptr;
-        std::vector<Size2D> *measured = nullptr;
+        std::vector<Rect2D>* rect = nullptr;
+        std::vector<Bounds2D>* clip = nullptr;
+        std::vector<Size2D>* measured = nullptr;
     };
 
     struct StateBufferView {
-        std::vector<std::uint8_t> *dirty = nullptr;
+        std::vector<std::uint8_t>* dirty = nullptr;
     };
 
     struct LayoutSnapshot {
@@ -589,11 +602,11 @@ namespace akruti::layout {
         std::vector<Size2D> measured;
         std::vector<Bounds2D> clip;
         std::vector<std::uint8_t> dirty;
-        
+
         std::chrono::system_clock::time_point timestamp;
         std::string label;
         std::size_t node_count = 0;
-        
+
         void clear() {
             rect.clear();
             measured.clear();
@@ -602,7 +615,7 @@ namespace akruti::layout {
             node_count = 0;
             label.clear();
         }
-        
+
         [[nodiscard]] bool empty() const {
             return node_count == 0;
         }
@@ -612,24 +625,24 @@ namespace akruti::layout {
     public:
         PerformanceStats perf_stats;
         bool enable_perf_tracking = false;
-        
+
         SpatialHash spatial_hash;
         bool enable_spatial_hash = false;
-        
+
         bool enable_structural_hashing = false;
-        
+
         bool enable_snapshots = false;
         size_t max_snapshots = 10;
-        
+
         bool enable_constraints_graph_ = false;
         litegraph::Graph<std::monostate, std::monostate> constraints_graph;
-        
+
         bool enable_virtualization = false;
-        
+
         bool enable_parallel_layout = false;
         size_t parallel_threshold = 100;
         size_t parallel_batch_size = 50;
-        
+
         // Baked topology
         std::vector<std::uint32_t> parent;
         std::vector<std::uint32_t> first_child;
@@ -669,23 +682,23 @@ namespace akruti::layout {
 
         TextMeasure text_measure_callback{nullptr, nullptr};
         bool enable_text_measure_debug = false;
-        
+
         struct TextMeasureKey {
             std::uint32_t text_id;
             float max_width;
-            
+
             bool operator==(const TextMeasureKey& other) const {
                 return text_id == other.text_id && max_width == other.max_width;
             }
         };
-        
+
         struct TextMeasureKeyHash {
             std::size_t operator()(const TextMeasureKey& k) const {
-                return std::hash<std::uint32_t>()(k.text_id) ^ 
-                       (std::hash<float>()(k.max_width) << 1);
+                return std::hash<std::uint32_t>()(k.text_id) ^
+                    (std::hash<float>()(k.max_width) << 1);
             }
         };
-        
+
         std::unordered_map<TextMeasureKey, Size2D, TextMeasureKeyHash> text_measure_cache_;
         bool enable_text_measure_cache = false;
 
@@ -718,9 +731,9 @@ namespace akruti::layout {
             DIRTY_CONSTRAINT = 1 << 2,
             DIRTY_CLIP = 1 << 3
         };
-        
+
         static constexpr std::uint8_t DIRTY_GEOM = DIRTY_GEOMETRY;
-        
+
         std::vector<std::uint8_t> dirty;
 
         HierarchyBufferView hierarchy;
@@ -729,41 +742,43 @@ namespace akruti::layout {
         StateBufferView state;
 
         std::vector<Constraint> constraints;
-        
+
         using SubtreeHash = std::uint64_t;
         std::unordered_map<SubtreeHash, std::uint32_t> subtree_hash_table_;
         std::vector<SubtreeHash> node_hashes_;
         std::vector<std::uint32_t> reference_count_;
-        
+
         std::deque<LayoutSnapshot> snapshot_history_;
-        
+
         std::unordered_set<std::uint32_t> scheduled_updates_;
         bool enable_incremental_scheduling = false;
         bool auto_solve = true;
 
         void mark_dirty(const std::uint32_t node, const std::uint8_t mask) noexcept {
             if (node >= size()) return;
-            
+
             std::uint8_t propagated_mask = mask;
             if (mask & DIRTY_MEASURE) {
                 propagated_mask |= (DIRTY_GEOMETRY | DIRTY_CONSTRAINT | DIRTY_CLIP);
-            } else if (mask & DIRTY_GEOMETRY) {
+            }
+            else if (mask & DIRTY_GEOMETRY) {
                 propagated_mask |= (DIRTY_CONSTRAINT | DIRTY_CLIP);
-            } else if (mask & DIRTY_CONSTRAINT) {
+            }
+            else if (mask & DIRTY_CONSTRAINT) {
                 propagated_mask |= DIRTY_CLIP;
             }
-            
+
             std::uint32_t curr = node;
             while (curr != kInvalid) {
                 dirty[curr] |= propagated_mask;
                 curr = parent[curr];
             }
-            
+
             if (enable_incremental_scheduling) {
                 scheduled_updates_.insert(node);
             }
         }
-        
+
         void mark_dirty(const std::uint32_t node) noexcept {
             mark_dirty(node, DIRTY_GEOMETRY);
         }
@@ -835,14 +850,14 @@ namespace akruti::layout {
             reference_count_.clear();
             snapshot_history_.clear();
             scheduled_updates_.clear();
-            
+
             hierarchy = HierarchyBufferView{};
             input = InputBufferView{};
             geom = GeomBufferView{};
             state = StateBufferView{};
         }
 
-        void set_style(const std::uint32_t node, const LayoutStyle &st) {
+        void set_style(const std::uint32_t node, const LayoutStyle& st) {
             if (node >= size()) return;
             axis[node] = st.axis;
             align_items[node] = st.align_items;
@@ -886,7 +901,8 @@ namespace akruti::layout {
                 if (ws.is_aspect() && ws.value > 0.0f) {
                     aspect_ratio[node] = ws.value;
                     aspect_lock[node] = 1;
-                } else if (hs.is_aspect() && hs.value > 0.0f) {
+                }
+                else if (hs.is_aspect() && hs.value > 0.0f) {
                     // Aspect(r) on height: r = w/h, so h = w/r. Store as w/h directly.
                     aspect_ratio[node] = hs.value;
                     aspect_lock[node] = 1;
@@ -915,14 +931,14 @@ namespace akruti::layout {
             margin[node] = st.margin;
 
             const bool c_on = (st.constraint_mask != 0) || st.match_parent_width || st.match_parent_height ||
-                              st.center_x || st.center_y || (st.anchor_left != 0.0f) || (st.anchor_right != 0.0f) ||
-                              (st.anchor_top != 0.0f) || (st.anchor_bottom != 0.0f);
+                st.center_x || st.center_y || (st.anchor_left != 0.0f) || (st.anchor_right != 0.0f) ||
+                (st.anchor_top != 0.0f) || (st.anchor_bottom != 0.0f);
             has_constraint[node] = c_on ? 1 : 0;
 
             mark_dirty(node, DIRTY_GEOMETRY);
         }
 
-        void bake(const LayoutTree &tree) {
+        void bake(const LayoutTree& tree) {
             clear();
             const std::size_t count = tree.size();
             if (count == 0) return;
@@ -930,33 +946,35 @@ namespace akruti::layout {
             reserve_and_resize(count);
 
             std::uint32_t next_index = 0;
-            auto bake_recursive = [&](auto &self, std::uint32_t parent_idx, const typename LayoutTree::TreeNode *n) -> std::uint32_t {
+            auto bake_recursive = [&](auto& self, std::uint32_t parent_idx,
+                                      const typename LayoutTree::TreeNode* n) -> std::uint32_t {
                 const std::uint32_t curr = next_index++;
                 parent[curr] = parent_idx;
                 user_tag[curr] = n->data.user_tag;
                 set_style(curr, n->data.style);
 
-                const auto &children = n->children;
+                const auto& children = n->children;
                 child_count[curr] = static_cast<std::uint32_t>(children.size());
                 if (!children.empty()) {
                     first_child[curr] = next_index;
-                    for (const auto &child : children) {
+                    for (const auto& child : children) {
                         self(self, curr, child.get());
                     }
-                } else {
+                }
+                else {
                     first_child[curr] = kInvalid;
                 }
                 return curr;
             };
 
-            const auto *root = tree.get_root();
+            const auto* root = tree.get_root();
             if (root) {
                 bake_recursive(bake_recursive, kInvalid, root);
             }
 
             compute_subtree_ranges();
             build_buffer_views();
-            
+
             if (enable_constraints_graph_) {
                 rebuild_constraints_graph();
             }
@@ -966,7 +984,7 @@ namespace akruti::layout {
             }
         }
 
-        void solve(const Bounds2D &viewport) {
+        void solve(const Bounds2D& viewport) {
             auto start_time = std::chrono::high_resolution_clock::now();
             if (enable_perf_tracking) perf_stats.reset();
 
@@ -1014,7 +1032,7 @@ namespace akruti::layout {
             }
         }
 
-        void solve_incremental(const Bounds2D &viewport) {
+        void solve_incremental(const Bounds2D& viewport) {
             if (size() == 0) return;
 
             // Check if any node is dirty
@@ -1074,10 +1092,10 @@ namespace akruti::layout {
                 perf_stats.node_count = size();
             }
         }
-        
+
         void take_snapshot(const std::string& label = "") {
             if (!enable_snapshots) return;
-            
+
             LayoutSnapshot snapshot;
             snapshot.rect = rect;
             snapshot.measured = measured;
@@ -1086,25 +1104,25 @@ namespace akruti::layout {
             snapshot.timestamp = std::chrono::system_clock::now();
             snapshot.label = label;
             snapshot.node_count = size();
-            
+
             snapshot_history_.push_back(std::move(snapshot));
-            
+
             while (snapshot_history_.size() > max_snapshots) {
                 snapshot_history_.pop_front();
             }
         }
-        
+
         bool restore_snapshot(size_t index) {
             if (index >= snapshot_history_.size()) return false;
-            
+
             const auto& snapshot = snapshot_history_[index];
             if (snapshot.node_count != size()) return false;
-            
+
             rect = snapshot.rect;
             measured = snapshot.measured;
             clip = snapshot.clip;
             dirty = snapshot.dirty;
-            
+
             return true;
         }
 
@@ -1113,9 +1131,9 @@ namespace akruti::layout {
                 auto candidates = spatial_hash.query(x, y);
                 for (auto it = candidates.rbegin(); it != candidates.rend(); ++it) {
                     const std::uint32_t i = *it;
-                    const Rect2D &r = rect[i];
+                    const Rect2D& r = rect[i];
                     if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
-                        const Bounds2D &c = clip[i];
+                        const Bounds2D& c = clip[i];
                         if (x >= c.lo[0] && x <= c.hi[0] && y >= c.lo[1] && y <= c.hi[1]) {
                             return i;
                         }
@@ -1125,9 +1143,9 @@ namespace akruti::layout {
             }
 
             for (std::int64_t i = static_cast<std::int64_t>(size()) - 1; i >= 0; --i) {
-                const Rect2D &r = rect[static_cast<std::size_t>(i)];
+                const Rect2D& r = rect[static_cast<std::size_t>(i)];
                 if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
-                    const Bounds2D &c = clip[static_cast<std::size_t>(i)];
+                    const Bounds2D& c = clip[static_cast<std::size_t>(i)];
                     if (x >= c.lo[0] && x <= c.hi[0] && y >= c.lo[1] && y <= c.hi[1]) {
                         return static_cast<std::uint32_t>(i);
                     }
@@ -1154,7 +1172,7 @@ namespace akruti::layout {
         // Invoke fn(node_index) for every leaf (child_count == 0) in index order, which is
         // the baked pre-order (natural tab order). Zero heap.
         template <class Fn>
-        void for_each_leaf(Fn &&fn) const {
+        void for_each_leaf(Fn&& fn) const {
             const std::size_t count = size();
             for (std::size_t u = 0; u < count; ++u) {
                 if (child_count[u] == 0) {
@@ -1280,10 +1298,12 @@ namespace akruti::layout {
                 for (std::uint32_t c = 0; c < cc; ++c) {
                     const std::uint32_t ch = fc + c;
                     const Size2D ch_m = measured[ch];
-                    const Edges &ch_mg = margin[ch];
+                    const Edges& ch_mg = margin[ch];
 
-                    const float ch_main = main_size(ch_m, ax) + main_margin_before(ch_mg, ax) + main_margin_after(ch_mg, ax);
-                    const float ch_cross = cross_size(ch_m, ax) + cross_margin_before(ch_mg, ax) + cross_margin_after(ch_mg, ax);
+                    const float ch_main = main_size(ch_m, ax) + main_margin_before(ch_mg, ax) + main_margin_after(
+                        ch_mg, ax);
+                    const float ch_cross = cross_size(ch_m, ax) + cross_margin_before(ch_mg, ax) + cross_margin_after(
+                        ch_mg, ax);
 
                     main_sum += ch_main;
                     cross_max = std::max(cross_max, ch_cross);
@@ -1308,7 +1328,7 @@ namespace akruti::layout {
             st.aspect_lock = (aspect_lock[u] != 0);
 
             Size2D final_size = content;
-            const Edges &pad = padding[u];
+            const Edges& pad = padding[u];
             final_size.w += pad.l + pad.r;
             final_size.h += pad.t + pad.b;
 
@@ -1334,7 +1354,7 @@ namespace akruti::layout {
             measured[u] = final_size;
         }
 
-        static float clamp_content_unit(const float intrinsic, const SizeSpec &s) noexcept {
+        static float clamp_content_unit(const float intrinsic, const SizeSpec& s) noexcept {
             float v = intrinsic;
             const float lo = std::max(0.0f, s.value);
             if (v < lo) v = lo;
@@ -1344,7 +1364,7 @@ namespace akruti::layout {
 
         // Apply only the px-resolvable arms of a clamp at measure time. Non-px arms
         // (Percent/Fr) are left for place_pass where the parent extent is known.
-        static float apply_clamp_px(float v, const SizeSpecClamp &c) noexcept {
+        static float apply_clamp_px(float v, const SizeSpecClamp& c) noexcept {
             if (!c.active()) return v;
             if (c.pref.kind == SizeSpec::Kind::Px) v = c.pref.value;
             if (c.min.kind == SizeSpec::Kind::Px) v = std::max(v, c.min.value);
@@ -1369,12 +1389,12 @@ namespace akruti::layout {
             }
         }
 
-        void place_pass(const Rect2D &root_r) {
+        void place_pass(const Rect2D& root_r) {
             const std::size_t count = size();
             rect[0] = root_r;
             // Honor root's explicit Px extents and aspect ratio (no parent to derive from).
             if (count > 0) {
-                if (width[0].kind == SizeSpec::Kind::Px)  rect[0].w = width[0].value;
+                if (width[0].kind == SizeSpec::Kind::Px) rect[0].w = width[0].value;
                 if (height[0].kind == SizeSpec::Kind::Px) rect[0].h = height[0].value;
                 if (aspect_lock[0] != 0 && aspect_ratio[0] > 0.0f) {
                     if (height[0].is_aspect()) rect[0].h = rect[0].w / aspect_ratio[0];
@@ -1425,7 +1445,9 @@ namespace akruti::layout {
                     else if (jf == Justify::SpaceBetween && cc > 1) main_offset += 0.0f;
                 }
 
-                const float space_between_gap = (free_space > 0.0f && jf == Justify::SpaceBetween && cc > 1) ? (free_space / (cc - 1)) : 0.0f;
+                const float space_between_gap = (free_space > 0.0f && jf == Justify::SpaceBetween && cc > 1)
+                                                    ? (free_space / (cc - 1))
+                                                    : 0.0f;
 
                 for (std::uint32_t c = 0; c < cc; ++c) {
                     const std::uint32_t ch = fc + c;
@@ -1443,14 +1465,16 @@ namespace akruti::layout {
 
                     if (free_space > 0.0f && total_flex_grow > 0.0f) {
                         ch_main += free_space * (flex_grow[ch] / total_flex_grow);
-                    } else if (free_space < 0.0f && total_flex_shrink > 0.0f) {
+                    }
+                    else if (free_space < 0.0f && total_flex_shrink > 0.0f) {
                         ch_main += free_space * (flex_shrink[ch] / total_flex_shrink);
                         ch_main = std::max(0.0f, ch_main);
                     }
 
                     if (al == Align::Stretch) {
                         const float parent_cross = cross_size(content_rect, ax);
-                        ch_cross = std::max(ch_cross, parent_cross - (cross_margin_before(ch_mg, ax) + cross_margin_after(ch_mg, ax)));
+                        ch_cross = std::max(
+                            ch_cross, parent_cross - (cross_margin_before(ch_mg, ax) + cross_margin_after(ch_mg, ax)));
                     }
 
                     // Resolve parent-relative clamp arms (Percent/Fr) now that the parent
@@ -1458,17 +1482,17 @@ namespace akruti::layout {
                     {
                         const float par_main = content_main;
                         const float par_cross = cross_size(content_rect, ax);
-                        const SizeSpecClamp &wc = width_clamp[ch];
-                        const SizeSpecClamp &hc = height_clamp[ch];
+                        const SizeSpecClamp& wc = width_clamp[ch];
+                        const SizeSpecClamp& hc = height_clamp[ch];
                         const bool w_is_main = (ax == Axis::Row);
                         if (wc.active()) {
                             const float par = w_is_main ? par_main : par_cross;
-                            float &dim = w_is_main ? ch_main : ch_cross;
+                            float& dim = w_is_main ? ch_main : ch_cross;
                             dim = resolve_clamp_rel(dim, wc, par);
                         }
                         if (hc.active()) {
                             const float par = w_is_main ? par_cross : par_main;
-                            float &dim = w_is_main ? ch_cross : ch_main;
+                            float& dim = w_is_main ? ch_cross : ch_main;
                             dim = resolve_clamp_rel(dim, hc, par);
                         }
                     }
@@ -1479,7 +1503,8 @@ namespace akruti::layout {
                         if (ax == Axis::Row) {
                             // main = width, cross = height
                             ch_cross = ch_main / aspect_ratio[ch];
-                        } else {
+                        }
+                        else {
                             // main = height, cross = width
                             ch_cross = ch_main * aspect_ratio[ch];
                         }
@@ -1498,7 +1523,8 @@ namespace akruti::layout {
                     float cross_pos = parent_cross_pos + cross_margin_before(ch_mg, ax);
                     if (al == Align::Center) {
                         cross_pos = parent_cross_pos + (parent_cross_len - ch_cross) * 0.5f;
-                    } else if (al == Align::End) {
+                    }
+                    else if (al == Align::End) {
                         cross_pos = parent_cross_pos + parent_cross_len - ch_cross - cross_margin_after(ch_mg, ax);
                     }
 
@@ -1548,7 +1574,8 @@ namespace akruti::layout {
                     if (anchor_left[u] != 0.0f) {
                         // Both edges pinned => derive width from the span.
                         rect[u].w = std::max(0.0f, (parent_right - anchor_right[u]) - rect[u].x);
-                    } else {
+                    }
+                    else {
                         rect[u].x = parent_right - anchor_right[u] - rect[u].w;
                     }
                 }
@@ -1556,14 +1583,15 @@ namespace akruti::layout {
                     const float parent_bottom = rect[p].y + rect[p].h;
                     if (anchor_top[u] != 0.0f) {
                         rect[u].h = std::max(0.0f, (parent_bottom - anchor_bottom[u]) - rect[u].y);
-                    } else {
+                    }
+                    else {
                         rect[u].y = parent_bottom - anchor_bottom[u] - rect[u].h;
                     }
                 }
             }
         }
 
-        void clip_pass(const Bounds2D &viewport) {
+        void clip_pass(const Bounds2D& viewport) {
             const std::size_t count = size();
             clip[0] = viewport;
 
@@ -1591,16 +1619,17 @@ namespace akruti::layout {
                 if (enable_perf_tracking) perf_stats.spatial_hash_updates++;
             }
         }
-        
+
         void rebuild_constraints_graph() {
             constraints_graph.clear();
             const std::size_t count = size();
             for (std::size_t i = 0; i < count; ++i) {
                 constraints_graph.add_node(std::monostate{});
             }
-            for (const auto &c : constraints) {
+            for (const auto& c : constraints) {
                 if (c.target < count && c.source < count && c.source != kInvalid) {
-                    constraints_graph.add_edge(litegraph::NodeId{c.source}, litegraph::NodeId{c.target}, std::monostate{});
+                    constraints_graph.add_edge(litegraph::NodeId{c.source}, litegraph::NodeId{c.target},
+                                               std::monostate{});
                 }
             }
         }
@@ -1611,14 +1640,19 @@ namespace akruti::layout {
     public:
         virtual ~DebugRenderer() = default;
         virtual void draw_rect(const Rect2D& r, float red, float green, float blue, float alpha) = 0;
-        virtual void draw_rect_outline(const Rect2D& r, float red, float green, float blue, float alpha, float thickness) = 0;
-        virtual void draw_line(float x1, float y1, float x2, float y2, float red, float green, float blue, float alpha, float thickness) = 0;
-        virtual void draw_text(float x, float y, const char* text, float red, float green, float blue, float alpha, float size) = 0;
+        virtual void draw_rect_outline(const Rect2D& r, float red, float green, float blue, float alpha,
+                                       float thickness) = 0;
+        virtual void draw_line(float x1, float y1, float x2, float y2, float red, float green, float blue, float alpha,
+                               float thickness) = 0;
+        virtual void draw_text(float x, float y, const char* text, float red, float green, float blue, float alpha,
+                               float size) = 0;
     };
 
     struct DebugOverlayConfig {
-        struct Color { float r, g, b, a; };
-        
+        struct Color {
+            float r, g, b, a;
+        };
+
         Color rect_outline{0.0f, 0.8f, 1.0f, 0.8f};
         Color clip_outline{1.0f, 0.2f, 0.2f, 0.8f};
         Color dirty_highlight{1.0f, 0.9f, 0.0f, 0.9f};
@@ -1626,12 +1660,12 @@ namespace akruti::layout {
         Color text_color{1.0f, 1.0f, 1.0f, 0.9f};
         Color flex_grow_color{0.3f, 0.8f, 1.0f, 0.6f};
         Color flex_shrink_color{1.0f, 0.5f, 0.2f, 0.6f};
-        
+
         float rect_outline_width = 1.0f;
         float clip_outline_width = 1.0f;
         float constraint_line_width = 1.5f;
         float text_size = 12.0f;
-        
+
         bool show_rect_outlines = true;
         bool show_clip_bounds = false;
         bool show_dirty_nodes = true;
@@ -1646,41 +1680,41 @@ namespace akruti::layout {
     public:
         DebugOverlayConfig config;
         bool enabled = true;
-        
+
         void draw(const Engine& engine, DebugRenderer& renderer) const {
             if (!enabled || engine.size() == 0) return;
-            
+
             if (config.show_rect_outlines) draw_rect_outlines(engine, renderer);
             if (config.show_clip_bounds) draw_clip_bounds(engine, renderer);
             if (config.show_dirty_nodes) draw_dirty_nodes(engine, renderer);
             if (config.show_constraint_edges) draw_constraint_edges(engine, renderer);
             if (config.show_text_info) draw_text_info(engine, renderer);
         }
-        
+
     private:
         void draw_rect_outlines(const Engine& engine, DebugRenderer& renderer) const {
             for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(engine.rect.size()); ++i) {
                 const Rect2D& r = engine.rect[i];
                 if (r.w <= 0 || r.h <= 0) continue;
                 renderer.draw_rect_outline(r,
-                    config.rect_outline.r, config.rect_outline.g,
-                    config.rect_outline.b, config.rect_outline.a,
-                    config.rect_outline_width);
+                                           config.rect_outline.r, config.rect_outline.g,
+                                           config.rect_outline.b, config.rect_outline.a,
+                                           config.rect_outline_width);
             }
         }
-        
+
         void draw_clip_bounds(const Engine& engine, DebugRenderer& renderer) const {
             for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(engine.clip.size()); ++i) {
                 const Bounds2D& b = engine.clip[i];
                 Rect2D r = bounds_to_rect(b);
                 if (r.w <= 0 || r.h <= 0) continue;
                 renderer.draw_rect_outline(r,
-                    config.clip_outline.r, config.clip_outline.g,
-                    config.clip_outline.b, config.clip_outline.a,
-                    config.clip_outline_width);
+                                           config.clip_outline.r, config.clip_outline.g,
+                                           config.clip_outline.b, config.clip_outline.a,
+                                           config.clip_outline_width);
             }
         }
-        
+
         void draw_dirty_nodes(const Engine& engine, DebugRenderer& renderer) const {
             for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(engine.rect.size()); ++i) {
                 if (i >= engine.dirty.size()) continue;
@@ -1689,30 +1723,30 @@ namespace akruti::layout {
                 const Rect2D& r = engine.rect[i];
                 if (r.w <= 0 || r.h <= 0) continue;
                 renderer.draw_rect_outline(r,
-                    config.dirty_highlight.r, config.dirty_highlight.g,
-                    config.dirty_highlight.b, config.dirty_highlight.a,
-                    config.rect_outline_width * 2.0f);
+                                           config.dirty_highlight.r, config.dirty_highlight.g,
+                                           config.dirty_highlight.b, config.dirty_highlight.a,
+                                           config.rect_outline_width * 2.0f);
             }
         }
-        
+
         void draw_constraint_edges(const Engine& engine, DebugRenderer& renderer) const {
             for (const auto& c : engine.constraints) {
                 if (c.target >= engine.rect.size() || c.source >= engine.rect.size() || c.source == kInvalid) continue;
                 const Rect2D& target_rect = engine.rect[c.target];
                 const Rect2D& source_rect = engine.rect[c.source];
-                
+
                 const float sx = source_rect.x + source_rect.w * 0.5f;
                 const float sy = source_rect.y + source_rect.h * 0.5f;
                 const float tx = target_rect.x + target_rect.w * 0.5f;
                 const float ty = target_rect.y + target_rect.h * 0.5f;
-                
+
                 renderer.draw_line(sx, sy, tx, ty,
-                    config.constraint_line.r, config.constraint_line.g,
-                    config.constraint_line.b, config.constraint_line.a,
-                    config.constraint_line_width);
+                                   config.constraint_line.r, config.constraint_line.g,
+                                   config.constraint_line.b, config.constraint_line.a,
+                                   config.constraint_line_width);
             }
         }
-        
+
         void draw_text_info(const Engine& engine, DebugRenderer& renderer) const {
             char buffer[256];
             for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(engine.rect.size()); ++i) {
@@ -1721,17 +1755,17 @@ namespace akruti::layout {
                 if (config.show_node_ids) {
                     std::snprintf(buffer, sizeof(buffer), "#%u", i);
                     renderer.draw_text(r.x + 2.0f, r.y + 2.0f,
-                        buffer,
-                        config.text_color.r, config.text_color.g,
-                        config.text_color.b, config.text_color.a,
-                        config.text_size);
+                                       buffer,
+                                       config.text_color.r, config.text_color.g,
+                                       config.text_color.b, config.text_color.a,
+                                       config.text_size);
                 }
             }
         }
     };
 
-    inline void debug_draw_layout(const Engine& engine, DebugRenderer& renderer, 
-                                   const DebugOverlayConfig& config = DebugOverlayConfig{}) {
+    inline void debug_draw_layout(const Engine& engine, DebugRenderer& renderer,
+                                  const DebugOverlayConfig& config = DebugOverlayConfig{}) {
         DebugOverlay overlay;
         overlay.config = config;
         overlay.enabled = true;

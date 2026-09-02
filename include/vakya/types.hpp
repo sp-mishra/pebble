@@ -363,7 +363,7 @@ namespace vakya::types {
         kosha::core::LRUPolicy<std::uint32_t>
     >;
 
-    enum class type_ir_kind : std::uint32_t {};   // opaque; kind encoded in type_node
+    enum class type_ir_kind : std::uint32_t {}; // opaque; kind encoded in type_node
 
     // View of type_arena as lang::ir_module<type_ir_kind, type_ref, handle_store<type_tag>>.
     // Nodes are NOT copied — the view holds a const pointer to the arena's slot_map.
@@ -401,7 +401,7 @@ namespace vakya::types {
 
         // as_egraph_view() — returns self (view is already adjacency-capable).
         [[nodiscard]] const type_ir_module_view& as_egraph_view() const noexcept { return *this; }
-        [[nodiscard]] const type_ir_module_view& as_adjacency()   const noexcept { return *this; }
+        [[nodiscard]] const type_ir_module_view& as_adjacency() const noexcept { return *this; }
     };
 
     class type_arena {
@@ -619,5 +619,4 @@ namespace vakya::types {
             if (cache) (void)cache->put(hash, ref);
         }
     };
-
 } // namespace vakya::types

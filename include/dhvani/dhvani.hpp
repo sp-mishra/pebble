@@ -12,61 +12,59 @@
 #include <vector>
 
 namespace pebble::dhvani {
+    struct SoundCue {
+        std::string_view name;
+        float volume = 1.0f;
+        float pitch = 1.0f;
+        ::pebble::math::vec2 position{0.0f, 0.0f};
+        bool is_spatial = false;
+    };
 
-struct SoundCue {
-    std::string_view     name;
-    float                volume = 1.0f;
-    float                pitch = 1.0f;
-    ::pebble::math::vec2 position{0.0f, 0.0f};
-    bool                 is_spatial = false;
-};
+    class SoundBus {
+    public:
+        SoundBus() = default;
 
-class SoundBus {
-public:
-    SoundBus() = default;
-
-    void play(std::string_view name, float volume = 1.0f, float pitch = 1.0f) {
-        cues_.push_back(SoundCue{
-            .name = name,
-            .volume = volume,
-            .pitch = pitch,
-            .position = {0.0f, 0.0f},
-            .is_spatial = false
-        });
-    }
-
-    void play_spatial(std::string_view name, const ::pebble::math::vec2& emitter_pos,
-                      const AudioListener2D& listener, float volume = 1.0f, float pitch = 1.0f) {
-        auto spatial_out = compute_spatial_audio(emitter_pos, listener, volume);
-        if (spatial_out.attenuation > 0.0f) {
+        void play(std::string_view name, float volume = 1.0f, float pitch = 1.0f) {
             cues_.push_back(SoundCue{
                 .name = name,
-                .volume = spatial_out.attenuation * volume,
+                .volume = volume,
                 .pitch = pitch,
-                .position = emitter_pos,
-                .is_spatial = true
+                .position = {0.0f, 0.0f},
+                .is_spatial = false
             });
         }
-    }
 
-    template <typename SinkFn>
-    void drain(SinkFn&& sink) {
-        for (const auto& cue : cues_) {
-            sink(cue);
+        void play_spatial(std::string_view name, const ::pebble::math::vec2& emitter_pos,
+                          const AudioListener2D& listener, float volume = 1.0f, float pitch = 1.0f) {
+            auto spatial_out = compute_spatial_audio(emitter_pos, listener, volume);
+            if (spatial_out.attenuation > 0.0f) {
+                cues_.push_back(SoundCue{
+                    .name = name,
+                    .volume = spatial_out.attenuation * volume,
+                    .pitch = pitch,
+                    .position = emitter_pos,
+                    .is_spatial = true
+                });
+            }
         }
-        cues_.clear();
-    }
 
-    [[nodiscard]] std::size_t pending_count() const noexcept {
-        return cues_.size();
-    }
+        template <typename SinkFn>
+        void drain(SinkFn&& sink) {
+            for (const auto& cue : cues_) {
+                sink(cue);
+            }
+            cues_.clear();
+        }
 
-    void clear() noexcept {
-        cues_.clear();
-    }
+        [[nodiscard]] std::size_t pending_count() const noexcept {
+            return cues_.size();
+        }
 
-private:
-    std::vector<SoundCue> cues_;
-};
+        void clear() noexcept {
+            cues_.clear();
+        }
 
+    private:
+        std::vector<SoundCue> cues_;
+    };
 } // namespace pebble::dhvani

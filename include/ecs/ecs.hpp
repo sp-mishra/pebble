@@ -22,10 +22,8 @@
 #include "world.hpp"
 
 namespace pebble::ecs {
-
-// Policy-Configured World Aliases
-using DefaultWorld   = BasicWorld<SparseSetStoragePolicy, ArenaAllocPolicy, AutoSchedulerPolicy, PagedSparsePolicy>;
-using ArchetypeWorld = BasicWorld<ArchetypeStoragePolicy, ArenaAllocPolicy, AutoSchedulerPolicy, PagedSparsePolicy>;
-using ParallelWorld  = BasicWorld<SparseSetStoragePolicy, ArenaAllocPolicy, AutoSchedulerPolicy, PagedSparsePolicy>;
-
+    // Policy-Configured World Aliases
+    using DefaultWorld = BasicWorld<SparseSetStoragePolicy, ArenaAllocPolicy, AutoSchedulerPolicy, PagedSparsePolicy>;
+    using ArchetypeWorld = BasicWorld<ArchetypeStoragePolicy, ArenaAllocPolicy, AutoSchedulerPolicy, PagedSparsePolicy>;
+    using ParallelWorld = BasicWorld<SparseSetStoragePolicy, ArenaAllocPolicy, AutoSchedulerPolicy, PagedSparsePolicy>;
 } // namespace pebble::ecs

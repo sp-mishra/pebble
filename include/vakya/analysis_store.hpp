@@ -73,15 +73,15 @@ namespace vakya::types {
         // Populated by the optimization-layer headers; payloads live in per-phase
         // side-arenas keyed by these handles. Leaving them at defaults costs nothing.
         // ------------------------------------------------------------------------
-        region_ref region{};            // aliasing region of this node's value
-        effect_row_ref effect_row{};    // polymorphic effect row (concrete+tail)
-        rw_summary_ref rw{};            // read/write region summary
-        typestate_id state = kNoTypestate;   // affine typestate protocol state
-        std::uint16_t simd_width = 0;   // synthesized SIMD lane count (0 = none)
-        std::uint16_t tile_hint = 0;    // synthesized loop-tile size (0 = none)
+        region_ref region{}; // aliasing region of this node's value
+        effect_row_ref effect_row{}; // polymorphic effect row (concrete+tail)
+        rw_summary_ref rw{}; // read/write region summary
+        typestate_id state = kNoTypestate; // affine typestate protocol state
+        std::uint16_t simd_width = 0; // synthesized SIMD lane count (0 = none)
+        std::uint16_t tile_hint = 0; // synthesized loop-tile size (0 = none)
         execution_affinity affinity = execution_affinity::unknown; // scheduling hint
         cost_class cost = cost_class::unknown; // compile-time cost lattice band
-        std::uint32_t cert_id = 0;      // rewrite_certificate index (0 = none)
+        std::uint32_t cert_id = 0; // rewrite_certificate index (0 = none)
 
         [[nodiscard]] bool has_type() const noexcept { return !type.is_null(); }
         [[nodiscard]] bool has_shape() const noexcept { return !shape.is_null(); }

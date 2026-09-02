@@ -111,7 +111,7 @@ namespace vakya::types {
     syntactic_subtype(const type_arena& arena, type_ref sub, type_ref sup) noexcept {
         if (!is_refinement(arena, sub) || !is_refinement(arena, sup)) return false;
         if (refinement_base(arena, sub) != refinement_base(arena, sup)) return false;
-        if (refinement_predicate(arena, sup) == 0) return true;      // ⇒ ⊤
+        if (refinement_predicate(arena, sup) == 0) return true; // ⇒ ⊤
         return refinement_predicate(arena, sub) == refinement_predicate(arena, sup);
     }
 
@@ -123,8 +123,8 @@ namespace vakya::types {
     // ============================================================================
 
     inline constexpr std::uint64_t kElisionBoundsCheck = 1ULL << 0; // 0<=i<len proven
-    inline constexpr std::uint64_t kElisionNullCheck   = 1ULL << 1; // non-null proven
-    inline constexpr std::uint64_t kElisionOverflow    = 1ULL << 2; // no-overflow proven
+    inline constexpr std::uint64_t kElisionNullCheck = 1ULL << 1; // non-null proven
+    inline constexpr std::uint64_t kElisionOverflow = 1ULL << 2; // no-overflow proven
 
     // Set / query an elision bit on a record's feature vector.
     inline void mark_elision(analysis_record& rec, std::uint64_t bit) noexcept {

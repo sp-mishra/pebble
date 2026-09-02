@@ -134,13 +134,13 @@ namespace vakya::types {
         auto ext = [](int off) {
             return static_cast<constraint_kind>(kConstraintKindExtensionBase + off);
         };
-        add(ext(20), solver_class::graph, kTheoryEquality | kTheoryArrays, 12, "disjoint");     // alias.hpp
-        add(ext(21), solver_class::rule, kTheoryEquality, 6, "effect_subsume");                 // effect_row.hpp
-        add(ext(22), solver_class::unify, kTheoryEquality | kTheoryArithmetic, 4, "value_eq");  // value_param.hpp
-        add(ext(23), solver_class::rule, kTheoryEquality, 6, "transition");                     // typestate.hpp
-        add(ext(24), solver_class::graph, kTheoryEquality | kTheoryArrays, 12, "no_conflict");  // rw_summary.hpp
+        add(ext(20), solver_class::graph, kTheoryEquality | kTheoryArrays, 12, "disjoint"); // alias.hpp
+        add(ext(21), solver_class::rule, kTheoryEquality, 6, "effect_subsume"); // effect_row.hpp
+        add(ext(22), solver_class::unify, kTheoryEquality | kTheoryArithmetic, 4, "value_eq"); // value_param.hpp
+        add(ext(23), solver_class::rule, kTheoryEquality, 6, "transition"); // typestate.hpp
+        add(ext(24), solver_class::graph, kTheoryEquality | kTheoryArrays, 12, "no_conflict"); // rw_summary.hpp
         add(ext(25), solver_class::smt, kTheoryArithmetic | kTheoryEquality, 40, "refine_sub"); // refine.hpp
-        add(ext(26), solver_class::egraph, kTheoryEquality, 20, "equiv_cert");                  // proof_carrying.hpp
+        add(ext(26), solver_class::egraph, kTheoryEquality, 20, "equiv_cert"); // proof_carrying.hpp
 
         return reg;
     }

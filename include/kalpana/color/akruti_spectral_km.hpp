@@ -51,13 +51,13 @@
 #if __has_include(<hwy/highway.h>)
 #include <hwy/highway.h>
 #endif
- namespace akruti::spectral {
+namespace akruti::spectral {
     /**
      * @brief Floating-point concept used across the header (float/double).
      *
      * All public templates constrain T with this concept to ensure numeric operations are well-defined.
      */
-    template<typename T>
+    template <typename T>
     concept Float = std::is_floating_point_v<T>;
 
     namespace km38 {
@@ -77,7 +77,7 @@
         /**
          * @brief Linear RGB float triple (range [0..1] by convention).
          */
-        template<Float T = float>
+        template <Float T = float>
         struct RGBf {
             T r{}, g{}, b{};
         };
@@ -115,19 +115,19 @@
             /**
              * @brief Clamp value to [lo,hi].
              */
-            template<Float T>
+            template <Float T>
             inline T clamp(T v, T lo, T hi) noexcept { return std::min(std::max(v, lo), hi); }
 
             /**
              * @brief Clamp to [0,1].
              */
-            template<Float T>
+            template <Float T>
             inline T clamp01(T v) noexcept { return clamp(v, T(0), T(1)); }
 
             /**
              * @brief Linear interpolation a + (b-a)*t.
              */
-            template<Float T>
+            template <Float T>
             inline T lerp(T a, T b, T t) noexcept { return a + (b - a) * t; }
 
             /**
@@ -135,7 +135,7 @@
              *
              * Implements the standard sRGB transfer curve.
              */
-            template<Float T>
+            template <Float T>
             inline T uncompand(T x) noexcept {
                 return (x > T(0.04045)) ? std::pow((x + T(0.055)) / T(1.055), T(kGamma)) : x / T(12.92);
             }
@@ -143,7 +143,7 @@
             /**
              * @brief sRGB companding (linear->sRGB).
              */
-            template<Float T>
+            template <Float T>
             inline T compand(T x) noexcept {
                 return (x > T(0.0031308)) ? T(1.055) * std::pow(x, T(1.0 / kGamma)) - T(0.055) : x * T(12.92);
             }
@@ -151,9 +151,9 @@
             /**
              * @brief Multiply 3x3 matrix by 3-vector.
              */
-            template<Float T>
-            inline std::array<T, 3> mul3x3(const std::array<std::array<T, 3>, 3> &m,
-                                           const std::array<T, 3> &v) noexcept {
+            template <Float T>
+            inline std::array<T, 3> mul3x3(const std::array<std::array<T, 3>, 3>& m,
+                                           const std::array<T, 3>& v) noexcept {
                 return {
                     m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2],
                     m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2],
@@ -164,9 +164,9 @@
             /**
              * @brief Multiply 3x38 matrix by 38-vector (spectral -> XYZ/RGB).
              */
-            template<Float T>
-            inline std::array<T, 3> mul3xN(const std::array<std::array<T, kSize>, 3> &m,
-                                           const std::array<T, kSize> &v) noexcept {
+            template <Float T>
+            inline std::array<T, 3> mul3xN(const std::array<std::array<T, kSize>, 3>& m,
+                                           const std::array<T, kSize>& v) noexcept {
                 std::array<T, 3> out{T(0), T(0), T(0)};
                 for (std::size_t i = 0; i < kSize; ++i) {
                     out[0] += m[0][i] * v[i];
@@ -179,18 +179,18 @@
             /**
              * @brief Check whether an lRGB triple is inside the canonical [0,1] cube (with epsilon).
              */
-            template<Float T>
-            inline bool in_gamut(const std::array<T, 3> &lrgb, T eps = T(0)) noexcept {
+            template <Float T>
+            inline bool in_gamut(const std::array<T, 3>& lrgb, T eps = T(0)) noexcept {
                 return (lrgb[0] >= -eps && lrgb[0] <= T(1) + eps) &&
-                       (lrgb[1] >= -eps && lrgb[1] <= T(1) + eps) &&
-                       (lrgb[2] >= -eps && lrgb[2] <= T(1) + eps);
+                    (lrgb[1] >= -eps && lrgb[1] <= T(1) + eps) &&
+                    (lrgb[2] >= -eps && lrgb[2] <= T(1) + eps);
             }
 
             /**
              * @brief Euclidean delta E in OKLab space (simple metric).
              */
-            template<Float T>
-            inline T deltaE_ok(const std::array<T, 3> &oklab1, const std::array<T, 3> &oklab2) noexcept {
+            template <Float T>
+            inline T deltaE_ok(const std::array<T, 3>& oklab1, const std::array<T, 3>& oklab2) noexcept {
                 const T dL = oklab1[0] - oklab2[0];
                 const T da = oklab1[1] - oklab2[1];
                 const T db = oklab1[2] - oklab2[2];
@@ -201,8 +201,8 @@
              * @brief Convert OKLab -> OKLCh.
              * @return array {L, C, h(degrees)}
              */
-            template<Float T>
-            inline std::array<T, 3> oklab_to_oklch(const std::array<T, 3> &lab) noexcept {
+            template <Float T>
+            inline std::array<T, 3> oklab_to_oklch(const std::array<T, 3>& lab) noexcept {
                 const T L = lab[0], a = lab[1], b = lab[2];
                 const T C = std::sqrt(a * a + b * b);
                 T h = std::atan2(b, a) * T(180.0 / 3.14159265358979323846);
@@ -215,8 +215,8 @@
              * @param lch array {L, C, h(degrees)}
              * @return array {L, a, b}
              */
-            template<Float T>
-            inline std::array<T, 3> oklch_to_oklab(const std::array<T, 3> &lch) noexcept {
+            template <Float T>
+            inline std::array<T, 3> oklch_to_oklab(const std::array<T, 3>& lch) noexcept {
                 const T L = lch[0], C = lch[1], h = lch[2];
                 const T hr = h * T(3.14159265358979323846 / 180.0);
                 const T a = C * std::cos(hr);
@@ -310,7 +310,12 @@
             };
 
             // CIE Color Matching Functions weighted by D65 (3 x 38)
-            static constexpr std::array<std::array<double, kSize>, 3> CMF = {
+            static constexpr std::array<std::array < double, kSize>
+            ,
+            3
+            >
+            CMF=
+ {
                 {
                     {
                         {
@@ -356,14 +361,24 @@
             };
 
             // Conversion matrices (same as JS)
-            static constexpr std::array<std::array<double, 3>, 3> RGB_XYZ = {
+            static constexpr std::array<std::array < double, 3>
+            ,
+            3
+            >
+            RGB_XYZ=
+ {
                 {
                     {0.41239079926595934, 0.357584339383878, 0.1804807884018343},
                     {0.21263900587151027, 0.715168678767756, 0.07219231536073371},
                     {0.01933081871559182, 0.11919477979462598, 0.9505321522496607}
                 }
             };
-            static constexpr std::array<std::array<double, 3>, 3> XYZ_RGB = {
+            static constexpr std::array<std::array < double, 3>
+            ,
+            3
+            >
+            XYZ_RGB=
+ {
                 {
                     {3.2409699419045226, -1.537383177570094, -0.4986107602930034},
                     {-0.9692436362808796, 1.8759675015077202, 0.04155505740717559},
@@ -371,28 +386,48 @@
                 }
             };
 
-            static constexpr std::array<std::array<double, 3>, 3> XYZ_LMS = {
+            static constexpr std::array<std::array < double, 3>
+            ,
+            3
+            >
+            XYZ_LMS=
+ {
                 {
                     {0.819022437996703, 0.3619062600528904, -0.1288737815209879},
                     {0.0329836539323885, 0.9292868615863434, 0.0361446663506424},
                     {0.0481771893596242, 0.2642395317527308, 0.6335478284694309}
                 }
             };
-            static constexpr std::array<std::array<double, 3>, 3> LMS_XYZ = {
+            static constexpr std::array<std::array < double, 3>
+            ,
+            3
+            >
+            LMS_XYZ=
+ {
                 {
                     {1.2268798758459243, -0.5578149944602171, 0.2813910456659647},
                     {-0.0405757452148008, 1.112286803280317, -0.0717110580655164},
                     {-0.0763729366746601, -0.4214933324022432, 1.5869240198367816}
                 }
             };
-            static constexpr std::array<std::array<double, 3>, 3> LMS_LAB = {
+            static constexpr std::array<std::array < double, 3>
+            ,
+            3
+            >
+            LMS_LAB=
+ {
                 {
                     {0.210454268309314, 0.7936177747023054, -0.0040720430116193},
                     {1.9779985324311684, -2.4285922420485799, 0.450593709617411},
                     {0.0259040424655478, 0.7827717124575296, -0.8086757549230774}
                 }
             };
-            static constexpr std::array<std::array<double, 3>, 3> LAB_LMS = {
+            static constexpr std::array<std::array < double, 3>
+            ,
+            3
+            >
+            LAB_LMS=
+ {
                 {
                     {1.0, 0.3963377773761749, 0.2158037573099136},
                     {1.0, -0.1055613458156586, -0.0638541728258133},
@@ -415,8 +450,8 @@
          * @param cfg configuration (epsilon guard)
          * @return KS value (>=0)
          */
-        template<Float T>
-        inline T KS(T R, const Config &cfg) noexcept {
+        template <Float T>
+        inline T KS(T R, const Config& cfg) noexcept {
             // JS: (1-R)^2/(2R)
             R = detail::clamp(R, T(cfg.epsilon), T(1) - T(cfg.epsilon));
             const T one_minus = T(1) - R;
@@ -432,7 +467,7 @@
          * @param ks Kubelka structure parameter (>=0)
          * @return reflectance-like value
          */
-        template<Float T>
+        template <Float T>
         inline T KM(T ks) noexcept {
             // Numerically-stable inversion of KS -> R:
             // Use rationalized form R = 1 / (1 + ks + sqrt(ks^2 + 2ks))
@@ -454,8 +489,8 @@
          * @param sRGB_255 array of 3 channel values in [0..255]
          * @return linear lRGB in [0..1]
          */
-        template<Float T>
-        inline std::array<T, 3> sRGB_to_lRGB(const std::array<T, 3> &sRGB_255) noexcept {
+        template <Float T>
+        inline std::array<T, 3> sRGB_to_lRGB(const std::array<T, 3>& sRGB_255) noexcept {
             return {
                 detail::uncompand(sRGB_255[0] / T(255)),
                 detail::uncompand(sRGB_255[1] / T(255)),
@@ -466,8 +501,8 @@
         /**
          * @brief Convert linear lRGB to sRGB 0..255 rounded values.
          */
-        template<Float T>
-        inline std::array<T, 3> lRGB_to_sRGB(const std::array<T, 3> &lRGB) noexcept {
+        template <Float T>
+        inline std::array<T, 3> lRGB_to_sRGB(const std::array<T, 3>& lRGB) noexcept {
             return {
                 std::round(detail::compand(lRGB[0]) * T(255)),
                 std::round(detail::compand(lRGB[1]) * T(255)),
@@ -476,8 +511,8 @@
         }
 
         // Conversions lRGB <-> XYZ <-> OKLab
-        template<Float T>
-        inline std::array<T, 3> lRGB_to_XYZ(const std::array<T, 3> &lRGB) noexcept {
+        template <Float T>
+        inline std::array<T, 3> lRGB_to_XYZ(const std::array<T, 3>& lRGB) noexcept {
             const auto m = Data::RGB_XYZ;
             std::array<std::array<T, 3>, 3> mt{
                 {
@@ -489,8 +524,8 @@
             return detail::mul3x3(mt, lRGB);
         }
 
-        template<Float T>
-        inline std::array<T, 3> XYZ_to_lRGB(const std::array<T, 3> &XYZ) noexcept {
+        template <Float T>
+        inline std::array<T, 3> XYZ_to_lRGB(const std::array<T, 3>& XYZ) noexcept {
             const auto m = Data::XYZ_RGB;
             std::array<std::array<T, 3>, 3> mt{
                 {
@@ -502,8 +537,8 @@
             return detail::mul3x3(mt, XYZ);
         }
 
-        template<Float T>
-        inline std::array<T, 3> XYZ_to_OKLab(const std::array<T, 3> &XYZ) noexcept {
+        template <Float T>
+        inline std::array<T, 3> XYZ_to_OKLab(const std::array<T, 3>& XYZ) noexcept {
             // JS:
             // lms = mul(XYZ_LMS, XYZ).map(cbrt)
             // OKLab = mul(LMS_LAB, lms)
@@ -531,8 +566,8 @@
             return detail::mul3x3(B, lms);
         }
 
-        template<Float T>
-        inline std::array<T, 3> OKLab_to_XYZ(const std::array<T, 3> &OKLab) noexcept {
+        template <Float T>
+        inline std::array<T, 3> OKLab_to_XYZ(const std::array<T, 3>& OKLab) noexcept {
             // JS:
             // lms = mul(LAB_LMS, OKLab).map(x^3)
             // XYZ = mul(LMS_XYZ, lms)
@@ -560,13 +595,13 @@
             return detail::mul3x3(B, lms);
         }
 
-        template<Float T>
-        inline std::array<T, 3> lRGB_to_OKLab(const std::array<T, 3> &lRGB) noexcept {
+        template <Float T>
+        inline std::array<T, 3> lRGB_to_OKLab(const std::array<T, 3>& lRGB) noexcept {
             return XYZ_to_OKLab(lRGB_to_XYZ(lRGB));
         }
 
-        template<Float T>
-        inline std::array<T, 3> OKLab_to_lRGB(const std::array<T, 3> &OKLab) noexcept {
+        template <Float T>
+        inline std::array<T, 3> OKLab_to_lRGB(const std::array<T, 3>& OKLab) noexcept {
             return XYZ_to_lRGB(OKLab_to_XYZ(OKLab));
         }
 
@@ -576,8 +611,8 @@
          * @param R 38-band reflectance vector
          * @return XYZ (linear)
          */
-        template<Float T>
-        inline std::array<T, 3> R_to_XYZ(const std::array<T, kSize> &R) noexcept {
+        template <Float T>
+        inline std::array<T, 3> R_to_XYZ(const std::array<T, kSize>& R) noexcept {
             const auto cmf = Data::CMF;
             std::array<std::array<T, kSize>, 3> M{
                 {
@@ -613,8 +648,8 @@
          * @param cfg config for epsilon guards
          * @return 38-band reflectance array
          */
-        template<Float T>
-        inline std::array<T, kSize> lRGB_to_R(std::array<T, 3> lRGB, const Config &cfg) noexcept {
+        template <Float T>
+        inline std::array<T, kSize> lRGB_to_R(std::array<T, 3> lRGB, const Config& cfg) noexcept {
             // Canonical subtractive primary/secondary decomposition
             T w = std::min({lRGB[0], lRGB[1], lRGB[2]});
             T r_rem = std::max(T(0), lRGB[0] - w);
@@ -634,13 +669,13 @@
             std::array<T, kSize> R{};
             for (std::size_t i = 0; i < kSize; ++i) {
                 const T v =
-                        w * T(Data::W[i]) +
-                        c * T(Data::C[i]) +
-                        m * T(Data::M[i]) +
-                        y * T(Data::Y[i]) +
-                        rr * T(Data::R[i]) +
-                        gg * T(Data::G[i]) +
-                        bb * T(Data::B[i]);
+                    w * T(Data::W[i]) +
+                    c * T(Data::C[i]) +
+                    m * T(Data::M[i]) +
+                    y * T(Data::Y[i]) +
+                    rr * T(Data::R[i]) +
+                    gg * T(Data::G[i]) +
+                    bb * T(Data::B[i]);
 
                 R[i] = std::max(T(cfg.epsilon), v);
             }
@@ -664,13 +699,13 @@
          *  - inGamut(), clipToGamut(), mapToGamut() (binary-search chroma)
          *  - toRGB8/toHex convenience outputs
          */
-        template<Float T = double>
+        template <Float T = double>
         class Color {
         public:
             using scalar = T;
 
             /** Construct from 8-bit sRGB. */
-            explicit Color(RGB8 rgb8, const Config &cfg = {}) : cfg_(cfg) {
+            explicit Color(RGB8 rgb8, const Config& cfg = {}) : cfg_(cfg) {
                 sRGB_ = {T(rgb8.r), T(rgb8.g), T(rgb8.b)};
                 lRGB_ = sRGB_to_lRGB(sRGB_);
                 R_ = lRGB_to_R(lRGB_, cfg_);
@@ -678,27 +713,27 @@
             }
 
             /** Construct from sRGB floats in [0..255]. */
-            explicit Color(const std::array<T, 3> &sRGB_255, const Config &cfg = {}) : cfg_(cfg) {
+            explicit Color(const std::array<T, 3>& sRGB_255, const Config& cfg = {}) : cfg_(cfg) {
                 sRGB_ = sRGB_255;
                 lRGB_ = sRGB_to_lRGB(sRGB_);
                 R_ = lRGB_to_R(lRGB_, cfg_);
                 XYZ_ = R_to_XYZ(R_);
             }
 
-            explicit Color(const std::array<T, kSize> &R, const Config &cfg = {}) : cfg_(cfg), R_(R) {
+            explicit Color(const std::array<T, kSize>& R, const Config& cfg = {}) : cfg_(cfg), R_(R) {
                 XYZ_ = R_to_XYZ(R_);
                 lRGB_ = XYZ_to_lRGB(XYZ_);
                 sRGB_ = lRGB_to_sRGB(lRGB_);
             }
 
             /** Return sRGB (0..255 floats). */
-            const std::array<T, 3> &sRGB() const noexcept { return sRGB_; }
+            const std::array<T, 3>& sRGB() const noexcept { return sRGB_; }
 
             /** Return linear lRGB ([0..1]) */
-            const std::array<T, 3> &lRGB() const noexcept { return lRGB_; }
+            const std::array<T, 3>& lRGB() const noexcept { return lRGB_; }
 
             /** Return underlying reflectance bands. */
-            const std::array<T, kSize> &R() const noexcept { return R_; }
+            const std::array<T, kSize>& R() const noexcept { return R_; }
 
             /** Compute OKLab (lazy cached). */
             std::array<T, 3> OKLab() const noexcept {
@@ -799,27 +834,29 @@
                     const T chroma = (minC + maxC) / T(2);
 
                     // explicit template argument + std::array to allow template deduction
-                    const auto lab = detail::oklch_to_oklab<T>(std::array<T,3>{ L, chroma, h });
+                    const auto lab = detail::oklch_to_oklab<T>(std::array<T, 3>{L, chroma, h});
 
                     const auto xyz = OKLab_to_XYZ(lab);
                     current = XYZ_to_lRGB(xyz);
 
                     if (min_in_gamut && detail::in_gamut(current)) {
                         minC = chroma;
-                    } else {
+                    }
+                    else {
                         // Explicitly construct an array of type T so the template parameter T can be deduced.
-                        clipped_lab = lRGB_to_OKLab<T>( std::array<T,3>{
+                        clipped_lab = lRGB_to_OKLab<T>(std::array<T, 3>{
                             detail::clamp01(current[0]),
                             detail::clamp01(current[1]),
                             detail::clamp01(current[2])
-                        } );
+                        });
                         E = detail::deltaE_ok(clipped_lab, lab);
 
                         if (E < jnd) {
                             if (jnd - E < e) break;
                             min_in_gamut = false;
                             minC = chroma;
-                        } else {
+                        }
+                        else {
                             maxC = chroma;
                         }
                     }
@@ -885,7 +922,7 @@
 
             // Hot-path helper: compute KS for 38 bands with epsilon clamp.
             // SIMD vs scalar: results match scalar within small floating tolerances.
-            template<Float T>
+            template <Float T>
             inline void ks_simd(const std::array<T, kSize>& R_in,
                                 std::array<T, kSize>& ks_out,
                                 const Config& cfg) noexcept {
@@ -900,7 +937,7 @@
                 for (; i + L <= kSize; i += L) {
                     const T* ptr = R_in.data() + i;
                     auto r = hwy::HWY_NAMESPACE::LoadU(d, ptr);
-                    r = hwy::HWY_NAMESPACE::Max(r, epsv);                     // clamp R >= epsilon
+                    r = hwy::HWY_NAMESPACE::Max(r, epsv); // clamp R >= epsilon
                     r = hwy::HWY_NAMESPACE::Min(r, hwy::HWY_NAMESPACE::Sub(onev, epsv)); // clamp R <= 1 - epsilon
                     const auto one_minus = hwy::HWY_NAMESPACE::Sub(onev, r);
                     const auto num = hwy::HWY_NAMESPACE::Mul(one_minus, one_minus);
@@ -917,7 +954,7 @@
             }
 
             // Hot-path helper: invert KS -> R with clamp to [epsilon, 1].
-            template<Float T>
+            template <Float T>
             inline void km_simd(const std::array<T, kSize>& ks_in,
                                 std::array<T, kSize>& R_out,
                                 const Config& cfg) noexcept {
@@ -954,7 +991,7 @@
             }
 #else
             // Scalar fallbacks when Highway is not available.
-            template<Float T>
+            template <Float T>
             inline void ks_simd(const std::array<T, kSize>& R_in,
                                 std::array<T, kSize>& ks_out,
                                 const Config& cfg) noexcept {
@@ -965,7 +1002,7 @@
                 }
             }
 
-            template<Float T>
+            template <Float T>
             inline void km_simd(const std::array<T, kSize>& ks_in,
                                 std::array<T, kSize>& R_out,
                                 const Config& cfg) noexcept {
@@ -982,9 +1019,9 @@
         // ------------------------------------------------------------
         // Mixing primitives & utilities
         // ------------------------------------------------------------
-        template<Float T = double>
+        template <Float T = double>
         struct MixItem {
-            const Color<T> *color = nullptr;
+            const Color<T>* color = nullptr;
             T factor = T(1);
         };
 
@@ -997,8 +1034,8 @@
          *
          * Two-pass to avoid heap allocations; mixes are typically small; improves realtime painting performance.
          */
-        template<Float T = double>
-        inline Color<T> mix(std::span<const MixItem<T>> items, const Config &cfg = {}) {
+        template <Float T = double>
+        inline Color<T> mix(std::span<const MixItem<T>> items, const Config& cfg = {}) {
             std::array<T, kSize> R{};
             std::array<T, kSize> ksMix{};
             for (std::size_t i = 0; i < kSize; ++i) ksMix[i] = T(0);
@@ -1011,7 +1048,7 @@
 
             // Pass 1: compute total concentration.
             T totalC = T(0);
-            for (const auto &it : items) {
+            for (const auto& it : items) {
                 const T conc = effective_c(it);
                 if (conc > T(0)) totalC += conc;
             }
@@ -1026,7 +1063,7 @@
 
             // Pass 2: accumulate KS per band using same math (SIMD helpers per item).
             // We convert each item's reflectance R->KS once into a small stack array, scale by conc, accumulate.
-            for (const auto &it : items) {
+            for (const auto& it : items) {
                 if (!it.color) continue;
                 const T conc = effective_c(it);
                 if (!(conc > T(0))) continue;
@@ -1054,8 +1091,8 @@
             return Color<T>(R, cfg);
         }
 
-        template<Float T = double>
-        inline Color<T> mix(std::initializer_list<MixItem<T> > items, const Config &cfg = {}) {
+        template <Float T = double>
+        inline Color<T> mix(std::initializer_list<MixItem<T>> items, const Config& cfg = {}) {
             return mix<T>(std::span<const MixItem<T>>(items.begin(), items.size()), cfg);
         }
 
@@ -1079,8 +1116,8 @@
          *   Color<T> glaze(const Color<T>& base, const Color<T>& top, T thickness, const Config& cfg)
          * thickness in [0,1] where 0 = no effect (returns base), 1 = strong top coat (top dominates).
          */
-        template<Float T = double>
-        inline Color<T> glaze(const Color<T> &base, const Color<T> &top, T thickness, const Config &cfg = {}) {
+        template <Float T = double>
+        inline Color<T> glaze(const Color<T>& base, const Color<T>& top, T thickness, const Config& cfg = {}) {
             // clamp thickness
             thickness = detail::clamp01(thickness);
 
@@ -1091,8 +1128,8 @@
             const T w = (denom > T(0)) ? (std::exp(alpha * thickness) - T(1)) / denom : thickness;
 
             std::array<T, kSize> R{};
-            const auto &Rb = base.R();
-            const auto &Rt = top.R();
+            const auto& Rb = base.R();
+            const auto& Rt = top.R();
             for (std::size_t i = 0; i < kSize; ++i) {
                 // convert to KS with epsilon guards
                 const T ks_b = KS(Rb[i], cfg);
@@ -1132,21 +1169,24 @@
          * Edge cases:
          *   n == 0 -> returns empty span; n == 1 -> {a}
          */
-        template<Float T = double>
+        template <Float T = double>
         inline std::span<Color<T>> palette_into(std::span<Color<T>> out,
                                                 const Color<T>& a,
                                                 const Color<T>& b,
                                                 const Config& cfg = {}) noexcept {
             const std::size_t n = out.size();
             if (n == 0) return out.first(0);
-            if (n == 1) { out[0] = a; return out.first(1); }
+            if (n == 1) {
+                out[0] = a;
+                return out.first(1);
+            }
 
             for (std::size_t i = 0; i < n; ++i) {
                 const T fa = T(n - 1 - i);
                 const T fb = T(i);
                 const std::array<MixItem<T>, 2> items = {
-                    MixItem<T>{ &a, fa },
-                    MixItem<T>{ &b, fb }
+                    MixItem<T>{&a, fa},
+                    MixItem<T>{&b, fb}
                 };
                 out[i] = mix<T>(std::span<const MixItem<T>>(items.data(), items.size()), cfg);
             }
@@ -1159,11 +1199,11 @@
          *
          * Note: This allocates by design. For zero-heap, use palette_into().
          */
-        template<Float T = double>
-        inline std::vector<Color<T> > palette(const Color<T> &a, const Color<T> &b, std::size_t size,
-                                              const Config &cfg = {}) {
+        template <Float T = double>
+        inline std::vector<Color<T>> palette(const Color<T>& a, const Color<T>& b, std::size_t size,
+                                             const Config& cfg = {}) {
             // Avoid default-constructing Color<T> (no default ctor). Resize with a fill value, then overwrite.
-            std::vector<Color<T> > p;
+            std::vector<Color<T>> p;
             p.resize(size, a);
             // Delegate actual generation to the no-heap variant using identical concentration weights.
             palette_into<T>(std::span<Color<T>>(p.data(), p.size()), a, b, cfg);
@@ -1173,9 +1213,9 @@
         /**
          * @brief Stop used by gradient() to declare color stops.
          */
-        template<Float T = double>
+        template <Float T = double>
         struct Stop {
-            const Color<T> *color = nullptr;
+            const Color<T>* color = nullptr;
             T pos = T(0);
         };
 
@@ -1183,14 +1223,14 @@
          * @brief gradient(t, stops): evaluate color at param t in [0..1].
          * - Finds bracketing stops and linearly mixes with concentrations.
          */
-        template<Float T = double>
-        inline Color<T> gradient(T t, std::span<const Stop<T>> stops, const Config &cfg = {}) {
+        template <Float T = double>
+        inline Color<T> gradient(T t, std::span<const Stop<T>> stops, const Config& cfg = {}) {
             t = detail::clamp01(t);
 
-            const Stop<T> *a = nullptr;
-            const Stop<T> *b = nullptr;
+            const Stop<T>* a = nullptr;
+            const Stop<T>* b = nullptr;
 
-            for (const auto &s: stops) {
+            for (const auto& s : stops) {
                 if (!s.color) continue;
                 if (s.pos <= t && (!a || s.pos > a->pos)) a = &s;
                 if (s.pos >= t && (!b || s.pos < b->pos)) b = &s;
@@ -1214,7 +1254,7 @@
          *
          * This is intended for use in drawing pipelines where colors are available as 8-bit values.
          */
-        inline RGB8 mix_rgb8(RGB8 a, RGB8 b, double t, const Config &cfg = {}) {
+        inline RGB8 mix_rgb8(RGB8 a, RGB8 b, double t, const Config& cfg = {}) {
             Color<double> ca(a, cfg);
             Color<double> cb(b, cfg);
             // Match JS palette behavior: mix([a, 1-t], [b, t]) with concentration model.
@@ -1225,7 +1265,7 @@
         }
 
         inline void mix_rgb8_batch(std::span<const RGB8> a, std::span<const RGB8> b, std::span<RGB8> out, double t,
-                                   const Config &cfg = {}) {
+                                   const Config& cfg = {}) {
             const std::size_t n = std::min({a.size(), b.size(), out.size()});
             for (std::size_t i = 0; i < n; ++i) out[i] = mix_rgb8(a[i], b[i], t, cfg);
         }

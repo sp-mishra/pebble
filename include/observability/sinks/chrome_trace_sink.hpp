@@ -78,7 +78,8 @@ namespace utils::nadi {
                 if (out_ptr->fail()) {
                     write_errors.fetch_add(1, std::memory_order_relaxed);
                 }
-            } catch (...) {
+            }
+            catch (...) {
                 write_errors.fetch_add(1, std::memory_order_relaxed);
             }
         }

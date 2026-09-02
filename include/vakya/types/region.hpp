@@ -43,7 +43,7 @@ namespace vakya::types {
     // ============================================================================
 
     enum class region_kind : std::uint8_t {
-        root = 0,  // fresh allocation / parameter / binding
+        root = 0, // fresh allocation / parameter / binding
         field = 1, // parent.selector
         index = 2, // parent[offset]
     };
@@ -56,9 +56,9 @@ namespace vakya::types {
 
     struct region_node {
         region_kind kind = region_kind::root;
-        region_ref parent{};        // null for root
+        region_ref parent{}; // null for root
         std::uint64_t selector = 0; // field name hash (field) / index offset (index)
-        std::uint64_t root_id = 0;  // unique id for root regions (0 for projections)
+        std::uint64_t root_id = 0; // unique id for root regions (0 for projections)
 
         [[nodiscard]] bool operator==(const region_node& o) const noexcept {
             return kind == o.kind && parent == o.parent &&
@@ -70,7 +70,11 @@ namespace vakya::types {
         constexpr std::uint64_t kBasis = 14695981039346656037ULL;
         constexpr std::uint64_t kPrime = 1099511628211ULL;
         auto mix = [&](std::uint64_t h, std::uint64_t v) noexcept {
-            for (int b = 0; b < 8; ++b) { h ^= (v & 0xFFu); h *= kPrime; v >>= 8; }
+            for (int b = 0; b < 8; ++b) {
+                h ^= (v & 0xFFu);
+                h *= kPrime;
+                v >>= 8;
+            }
             return h;
         };
         std::uint64_t h = kBasis;

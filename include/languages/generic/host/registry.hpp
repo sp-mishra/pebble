@@ -43,16 +43,16 @@
 #include <vector>
 
 namespace lang {
-
     // =========================================================================
     // build_diagnostic — emitted during registry_builder::build()
     // =========================================================================
 
     struct build_diag_kind {
         enum class kind : std::uint8_t {
-            duplicate_id,    // LANG-REG-001: two descriptors share a stable_entity_id
-            empty_name,      // LANG-REG-002: descriptor has empty name
+            duplicate_id, // LANG-REG-001: two descriptors share a stable_entity_id
+            empty_name, // LANG-REG-002: descriptor has empty name
         };
+
         kind value = kind::duplicate_id;
 
         constexpr build_diag_kind() = default;
@@ -60,8 +60,8 @@ namespace lang {
 
         [[nodiscard]] static constexpr std::string_view to_code(build_diag_kind k) noexcept {
             switch (k.value) {
-            case kind::duplicate_id:  return "LANG-REG-001";
-            case kind::empty_name:    return "LANG-REG-002";
+            case kind::duplicate_id: return "LANG-REG-001";
+            case kind::empty_name: return "LANG-REG-002";
             }
             return "LANG-REG-000";
         }
@@ -89,8 +89,8 @@ namespace lang {
 
     struct default_desc_set {
         using function_type = function_descriptor_base;
-        using type_type     = type_descriptor_base;
-        using field_type    = field_descriptor_base;
+        using type_type = type_descriptor_base;
+        using field_type = field_descriptor_base;
         using resource_type = resource_descriptor_base;
     };
 
@@ -101,9 +101,9 @@ namespace lang {
     template <DescSet DS = default_desc_set>
     class finalized_registry {
     public:
-        using fn_map  = std::unordered_map<std::string, typename DS::function_type>;
-        using ty_map  = std::unordered_map<std::string, typename DS::type_type>;
-        using fd_map  = std::unordered_map<std::string, typename DS::field_type>;
+        using fn_map = std::unordered_map<std::string, typename DS::function_type>;
+        using ty_map = std::unordered_map<std::string, typename DS::type_type>;
+        using fd_map = std::unordered_map<std::string, typename DS::field_type>;
         using res_map = std::unordered_map<std::string, typename DS::resource_type>;
 
         finalized_registry(fn_map fns, ty_map tys, fd_map fds, res_map ress,
@@ -138,10 +138,10 @@ namespace lang {
             return it == resources_.end() ? nullptr : &it->second;
         }
 
-        [[nodiscard]] std::size_t function_count()  const noexcept { return functions_.size();  }
-        [[nodiscard]] std::size_t type_count()      const noexcept { return types_.size();      }
-        [[nodiscard]] std::size_t field_count()     const noexcept { return fields_.size();     }
-        [[nodiscard]] std::size_t resource_count()  const noexcept { return resources_.size();  }
+        [[nodiscard]] std::size_t function_count() const noexcept { return functions_.size(); }
+        [[nodiscard]] std::size_t type_count() const noexcept { return types_.size(); }
+        [[nodiscard]] std::size_t field_count() const noexcept { return fields_.size(); }
+        [[nodiscard]] std::size_t resource_count() const noexcept { return resources_.size(); }
 
         [[nodiscard]] descriptor_fingerprint global_fingerprint() const noexcept {
             return global_fingerprint_;
@@ -158,9 +158,9 @@ namespace lang {
         }
 
     private:
-        fn_map  functions_;
-        ty_map  types_;
-        fd_map  fields_;
+        fn_map functions_;
+        ty_map types_;
+        fd_map fields_;
         res_map resources_;
         descriptor_fingerprint global_fingerprint_ = 0;
     };
@@ -195,25 +195,25 @@ namespace lang {
         // Returns an error vector if any collision or empty-name is detected.
         [[nodiscard]] build_result build() {
             std::vector<build_diagnostic> errors;
-            typename finalized_registry<DS>::fn_map  fns;
-            typename finalized_registry<DS>::ty_map  tys;
-            typename finalized_registry<DS>::fd_map  fds;
+            typename finalized_registry<DS>::fn_map fns;
+            typename finalized_registry<DS>::ty_map tys;
+            typename finalized_registry<DS>::fd_map fds;
             typename finalized_registry<DS>::res_map ress;
             descriptor_fingerprint gfp = 0;
 
             for (auto& d : pending_fns_) {
                 if (d.name.empty()) {
                     build_diagnostic bd;
-                    bd.kind    = build_diag_kind{build_diag_kind::kind::empty_name};
-                    bd.symbol  = "(function)";
+                    bd.kind = build_diag_kind{build_diag_kind::kind::empty_name};
+                    bd.symbol = "(function)";
                     bd.message = "function descriptor has empty name";
                     errors.push_back(std::move(bd));
                     continue;
                 }
                 if (fns.count(d.name)) {
                     build_diagnostic bd;
-                    bd.kind    = build_diag_kind{build_diag_kind::kind::duplicate_id};
-                    bd.symbol  = d.name;
+                    bd.kind = build_diag_kind{build_diag_kind::kind::duplicate_id};
+                    bd.symbol = d.name;
                     bd.message = "duplicate function registration: '" + d.name + "'";
                     errors.push_back(std::move(bd));
                     continue;
@@ -225,16 +225,16 @@ namespace lang {
             for (auto& d : pending_tys_) {
                 if (d.name.empty()) {
                     build_diagnostic bd;
-                    bd.kind    = build_diag_kind{build_diag_kind::kind::empty_name};
-                    bd.symbol  = "(type)";
+                    bd.kind = build_diag_kind{build_diag_kind::kind::empty_name};
+                    bd.symbol = "(type)";
                     bd.message = "type descriptor has empty name";
                     errors.push_back(std::move(bd));
                     continue;
                 }
                 if (tys.count(d.name)) {
                     build_diagnostic bd;
-                    bd.kind    = build_diag_kind{build_diag_kind::kind::duplicate_id};
-                    bd.symbol  = d.name;
+                    bd.kind = build_diag_kind{build_diag_kind::kind::duplicate_id};
+                    bd.symbol = d.name;
                     bd.message = "duplicate type registration: '" + d.name + "'";
                     errors.push_back(std::move(bd));
                     continue;
@@ -257,10 +257,9 @@ namespace lang {
         }
 
     private:
-        std::vector<typename DS::function_type>  pending_fns_;
-        std::vector<typename DS::type_type>      pending_tys_;
-        std::vector<typename DS::field_type>     pending_fds_;
-        std::vector<typename DS::resource_type>  pending_res_;
+        std::vector<typename DS::function_type> pending_fns_;
+        std::vector<typename DS::type_type> pending_tys_;
+        std::vector<typename DS::field_type> pending_fds_;
+        std::vector<typename DS::resource_type> pending_res_;
     };
-
 } // namespace lang

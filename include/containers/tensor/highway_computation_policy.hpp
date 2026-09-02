@@ -20,13 +20,12 @@
 #include <vector>
 
 namespace ts {
-
     // Custom aligned storage policy for SIMD/Highway
     struct HighwayStoragePolicy {
-        template<typename T>
+        template <typename T>
         using DynamicStorage = std::vector<T, hwy::AlignedAllocator<T>>;
 
-        template<typename T, size_t Size>
+        template <typename T, size_t Size>
         using StaticStorage = std::array<T, Size>;
 
         using StringStorage = ArrowStringStorage;
@@ -34,29 +33,29 @@ namespace ts {
 
     struct HighwayComputationPolicy {
     private:
-        template<typename E>
+        template <typename E>
         struct is_scalar_wrapper : std::false_type {};
 
-        template<typename T, typename SP, typename CP>
+        template <typename T, typename SP, typename CP>
         struct is_scalar_wrapper<ScalarWrapper<T, SP, CP>> : std::true_type {};
 
-        template<typename E1, typename E2, typename OpVec, typename OpScalar>
-        static auto highway_binary_op(const E1 &a, const E2 &b, OpVec op_vec, OpScalar op_scalar) {
+        template <typename E1, typename E2, typename OpVec, typename OpScalar>
+        static auto highway_binary_op(const E1& a, const E2& b, OpVec op_vec, OpScalar op_scalar) {
             using T = typename E1::value_type;
-            const auto &tensor_a = a.self();
-            const auto &tensor_b = b.self();
+            const auto& tensor_a = a.self();
+            const auto& tensor_b = b.self();
 
             auto shape = get_shape(tensor_a);
             size_t total_size = calculate_size_dyn(shape);
             HighwayStoragePolicy::DynamicStorage<T> result_data(total_size);
-            T *result_ptr = result_data.data();
+            T* result_ptr = result_data.data();
 
             constexpr bool a_is_scalar = is_scalar_wrapper<E1>::value;
             constexpr bool b_is_scalar = is_scalar_wrapper<E2>::value;
 
             if constexpr (!a_is_scalar && !b_is_scalar) {
-                const T *data_a = tensor_a.data();
-                const T *data_b = tensor_b.data();
+                const T* data_a = tensor_a.data();
+                const T* data_b = tensor_b.data();
 
                 if (data_a && data_b) {
                     namespace hn = hwy::HWY_NAMESPACE;
@@ -75,7 +74,8 @@ namespace ts {
                         result_ptr[i] = op_scalar(data_a[i], data_b[i]);
                     }
 
-                    return DynamicTensor<T, HighwayStoragePolicy, HighwayComputationPolicy>(shape, std::move(result_data));
+                    return DynamicTensor<T, HighwayStoragePolicy, HighwayComputationPolicy>(
+                        shape, std::move(result_data));
                 }
             }
 
@@ -94,19 +94,19 @@ namespace ts {
             return DynamicTensor<T, HighwayStoragePolicy, HighwayComputationPolicy>(shape, std::move(result_data));
         }
 
-        template<typename E, typename OpVec, typename OpScalar>
-        static auto highway_unary_op_fallback(const E &a, OpVec op_vec, OpScalar op_scalar) {
+        template <typename E, typename OpVec, typename OpScalar>
+        static auto highway_unary_op_fallback(const E& a, OpVec op_vec, OpScalar op_scalar) {
             using T = typename E::value_type;
-            const auto &tensor_a = a.self();
+            const auto& tensor_a = a.self();
             auto shape = get_shape(tensor_a);
             size_t total_size = calculate_size_dyn(shape);
             HighwayStoragePolicy::DynamicStorage<T> result_data(total_size);
-            T *result_ptr = result_data.data();
+            T* result_ptr = result_data.data();
 
             constexpr bool a_is_scalar = is_scalar_wrapper<E>::value;
 
             if constexpr (!a_is_scalar) {
-                const T *data_a = tensor_a.data();
+                const T* data_a = tensor_a.data();
                 if (data_a) {
                     namespace hn = hwy::HWY_NAMESPACE;
                     const hn::ScalableTag<T> d;
@@ -123,7 +123,8 @@ namespace ts {
                         result_ptr[i] = op_scalar(data_a[i]);
                     }
 
-                    return DynamicTensor<T, HighwayStoragePolicy, HighwayComputationPolicy>(shape, std::move(result_data));
+                    return DynamicTensor<T, HighwayStoragePolicy, HighwayComputationPolicy>(
+                        shape, std::move(result_data));
                 }
             }
 
@@ -143,49 +144,57 @@ namespace ts {
         }
 
     public:
-        template<typename E1, typename E2>
-        static auto add(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto add(const E1& a, const E2& b) {
             namespace hn = hwy::HWY_NAMESPACE;
             return highway_binary_op(a, b,
-                []([[maybe_unused]] auto d, auto a_vec, auto b_vec) { return hn::Add(a_vec, b_vec); },
-                [](auto a_val, auto b_val) { return a_val + b_val; });
+                                     []([[maybe_unused]] auto d, auto a_vec, auto b_vec) {
+                                         return hn::Add(a_vec, b_vec);
+                                     },
+                                     [](auto a_val, auto b_val) { return a_val + b_val; });
         }
 
-        template<typename E1, typename E2>
-        static auto subtract(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto subtract(const E1& a, const E2& b) {
             namespace hn = hwy::HWY_NAMESPACE;
             return highway_binary_op(a, b,
-                []([[maybe_unused]] auto d, auto a_vec, auto b_vec) { return hn::Sub(a_vec, b_vec); },
-                [](auto a_val, auto b_val) { return a_val - b_val; });
+                                     []([[maybe_unused]] auto d, auto a_vec, auto b_vec) {
+                                         return hn::Sub(a_vec, b_vec);
+                                     },
+                                     [](auto a_val, auto b_val) { return a_val - b_val; });
         }
 
-        template<typename E1, typename E2>
-        static auto multiply(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto multiply(const E1& a, const E2& b) {
             namespace hn = hwy::HWY_NAMESPACE;
             return highway_binary_op(a, b,
-                []([[maybe_unused]] auto d, auto a_vec, auto b_vec) { return hn::Mul(a_vec, b_vec); },
-                [](auto a_val, auto b_val) { return a_val * b_val; });
+                                     []([[maybe_unused]] auto d, auto a_vec, auto b_vec) {
+                                         return hn::Mul(a_vec, b_vec);
+                                     },
+                                     [](auto a_val, auto b_val) { return a_val * b_val; });
         }
 
-        template<typename E1, typename E2>
-        static auto divide(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto divide(const E1& a, const E2& b) {
             namespace hn = hwy::HWY_NAMESPACE;
             return highway_binary_op(a, b,
-                []([[maybe_unused]] auto d, auto a_vec, auto b_vec) { return hn::Div(a_vec, b_vec); },
-                [](auto a_val, auto b_val) { return a_val / b_val; });
+                                     []([[maybe_unused]] auto d, auto a_vec, auto b_vec) {
+                                         return hn::Div(a_vec, b_vec);
+                                     },
+                                     [](auto a_val, auto b_val) { return a_val / b_val; });
         }
 
-        template<typename E>
-        static auto sum(const E &expr) {
+        template <typename E>
+        static auto sum(const E& expr) {
             using T = typename E::value_type;
-            const auto &tensor = expr.self();
+            const auto& tensor = expr.self();
             auto shape = get_shape(tensor);
             const size_t total_size = calculate_size_dyn(shape);
 
             constexpr bool is_scalar = is_scalar_wrapper<E>::value;
 
             if constexpr (!is_scalar) {
-                const T *data = tensor.data();
+                const T* data = tensor.data();
                 if (data) {
                     namespace hn = hwy::HWY_NAMESPACE;
                     const hn::ScalableTag<T> d;
@@ -222,55 +231,55 @@ namespace ts {
             return total;
         }
 
-        template<typename E>
-        static auto mean(const E &expr) {
+        template <typename E>
+        static auto mean(const E& expr) {
             using T = typename E::value_type;
-            const auto &tensor = expr.self();
+            const auto& tensor = expr.self();
             auto shape = get_shape(tensor);
             size_t total_size = calculate_size_dyn(shape);
             if (total_size == 0) throw std::runtime_error("Mean of empty tensor");
             return sum(expr) / static_cast<T>(total_size);
         }
 
-        template<typename E>
-        static auto sqrt(const E &e) {
+        template <typename E>
+        static auto sqrt(const E& e) {
             namespace hn = hwy::HWY_NAMESPACE;
             return highway_unary_op_fallback(e,
-                []([[maybe_unused]] auto d, auto a_vec) { return hn::Sqrt(a_vec); },
-                [](auto x) { return std::sqrt(x); });
+                                             []([[maybe_unused]] auto d, auto a_vec) { return hn::Sqrt(a_vec); },
+                                             [](auto x) { return std::sqrt(x); });
         }
 
-        template<typename E>
-        static auto exp(const E &e) {
+        template <typename E>
+        static auto exp(const E& e) {
             return highway_unary_op_fallback(e,
-                []([[maybe_unused]] auto d, auto a_vec) { return a_vec; },
-                [](auto x) { return std::exp(x); });
+                                             []([[maybe_unused]] auto d, auto a_vec) { return a_vec; },
+                                             [](auto x) { return std::exp(x); });
         }
 
-        template<typename E>
-        static auto log(const E &e) {
+        template <typename E>
+        static auto log(const E& e) {
             return highway_unary_op_fallback(e,
-                []([[maybe_unused]] auto d, auto a_vec) { return a_vec; },
-                [](auto x) { return std::log(x); });
+                                             []([[maybe_unused]] auto d, auto a_vec) { return a_vec; },
+                                             [](auto x) { return std::log(x); });
         }
 
-        template<typename E>
-        static auto abs(const E &e) {
+        template <typename E>
+        static auto abs(const E& e) {
             namespace hn = hwy::HWY_NAMESPACE;
             return highway_unary_op_fallback(e,
-                []([[maybe_unused]] auto d, auto a_vec) { return hn::Abs(a_vec); },
-                [](auto x) { return std::abs(x); });
+                                             []([[maybe_unused]] auto d, auto a_vec) { return hn::Abs(a_vec); },
+                                             [](auto x) { return std::abs(x); });
         }
 
-        template<typename E1, typename E2>
-        static auto dot(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto dot(const E1& a, const E2& b) {
             return DefaultComputationPolicy::dot(a, b);
         }
 
-        template<typename E>
-        static auto max(const E &expr) {
+        template <typename E>
+        static auto max(const E& expr) {
             using T = typename E::value_type;
-            const auto &tensor = expr.self();
+            const auto& tensor = expr.self();
             auto shape = get_shape(tensor);
             const size_t total_size = calculate_size_dyn(shape);
 
@@ -279,7 +288,7 @@ namespace ts {
             constexpr bool is_scalar = is_scalar_wrapper<E>::value;
 
             if constexpr (!is_scalar) {
-                const T *data = tensor.data();
+                const T* data = tensor.data();
                 if (data) {
                     namespace hn = hwy::HWY_NAMESPACE;
                     const hn::ScalableTag<T> d;
@@ -322,10 +331,10 @@ namespace ts {
             return result;
         }
 
-        template<typename E>
-        static auto min(const E &expr) {
+        template <typename E>
+        static auto min(const E& expr) {
             using T = typename E::value_type;
-            const auto &tensor = expr.self();
+            const auto& tensor = expr.self();
             auto shape = get_shape(tensor);
             const size_t total_size = calculate_size_dyn(shape);
 
@@ -334,7 +343,7 @@ namespace ts {
             constexpr bool is_scalar = is_scalar_wrapper<E>::value;
 
             if constexpr (!is_scalar) {
-                const T *data = tensor.data();
+                const T* data = tensor.data();
                 if (data) {
                     namespace hn = hwy::HWY_NAMESPACE;
                     const hn::ScalableTag<T> d;
@@ -365,10 +374,10 @@ namespace ts {
             return DefaultComputationPolicy::min(expr);
         }
 
-        template<typename E1, typename E2>
-        static auto greater(const E1 &a, const E2 &b) {
-            const auto &tensor_a = a.self();
-            const auto &tensor_b = b.self();
+        template <typename E1, typename E2>
+        static auto greater(const E1& a, const E2& b) {
+            const auto& tensor_a = a.self();
+            const auto& tensor_b = b.self();
 
             auto shape = get_shape(tensor_a);
             const size_t total_size = calculate_size_dyn(shape);
@@ -392,60 +401,60 @@ namespace ts {
                 shape, bool_result.begin(), bool_result.end());
         }
 
-        template<typename E>
-        static auto variance(const E &expr) {
+        template <typename E>
+        static auto variance(const E& expr) {
             return DefaultComputationPolicy::variance(expr);
         }
 
-        template<typename E>
-        static auto std_dev(const E &expr) {
+        template <typename E>
+        static auto std_dev(const E& expr) {
             return DefaultComputationPolicy::std_dev(expr);
         }
 
-        template<typename E>
-        static auto normalize(const E &expr) {
+        template <typename E>
+        static auto normalize(const E& expr) {
             return DefaultComputationPolicy::normalize(expr);
         }
 
-        template<typename E>
-        static auto reshape(const E &expr, const TensorShape &new_shape) {
+        template <typename E>
+        static auto reshape(const E& expr, const TensorShape& new_shape) {
             return DefaultComputationPolicy::reshape(expr, new_shape);
         }
 
-        template<typename E>
-        static auto flatten(const E &expr) {
+        template <typename E>
+        static auto flatten(const E& expr) {
             return DefaultComputationPolicy::flatten(expr);
         }
 
-        template<typename E>
-        static auto transpose(const E &expr) {
+        template <typename E>
+        static auto transpose(const E& expr) {
             return DefaultComputationPolicy::transpose(expr);
         }
 
-        template<typename E>
-        static auto sin(const E &e) { return DefaultComputationPolicy::sin(e); }
+        template <typename E>
+        static auto sin(const E& e) { return DefaultComputationPolicy::sin(e); }
 
-        template<typename E>
-        static auto cos(const E &e) { return DefaultComputationPolicy::cos(e); }
+        template <typename E>
+        static auto cos(const E& e) { return DefaultComputationPolicy::cos(e); }
 
-        template<typename E>
-        static auto tan(const E &e) { return DefaultComputationPolicy::tan(e); }
+        template <typename E>
+        static auto tan(const E& e) { return DefaultComputationPolicy::tan(e); }
 
-        template<typename E>
-        static auto square(const E &e) {
+        template <typename E>
+        static auto square(const E& e) {
             namespace hn = hwy::HWY_NAMESPACE;
             return highway_unary_op_fallback(e,
-                []([[maybe_unused]] auto d, auto a_vec) { return hn::Mul(a_vec, a_vec); },
-                [](auto x) { return x * x; });
+                                             []([[maybe_unused]] auto d, auto a_vec) { return hn::Mul(a_vec, a_vec); },
+                                             [](auto x) { return x * x; });
         }
 
-        template<typename E1, typename E2>
-        static auto power(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto power(const E1& a, const E2& b) {
             return DefaultComputationPolicy::power(a, b);
         }
 
-        template<typename E, typename T>
-        static auto clip(const E &expr, T min_val, T max_val) {
+        template <typename E, typename T>
+        static auto clip(const E& expr, T min_val, T max_val) {
             return DefaultComputationPolicy::clip(expr, min_val, max_val);
         }
 
@@ -454,12 +463,12 @@ namespace ts {
         // ----------------------------------------------------------------
 
         // gemm: C ← α·A·B + β·C  (blocked, SIMD inner-loop on k-dimension)
-        template<typename T, typename SP, typename CP>
+        template <typename T, typename SP, typename CP>
         static void gemm(T alpha,
-                         const DynamicTensor<T,SP,CP>& A,
-                         const DynamicTensor<T,SP,CP>& B,
+                         const DynamicTensor<T, SP, CP>& A,
+                         const DynamicTensor<T, SP, CP>& B,
                          T beta,
-                         DynamicTensor<T,SP,CP>& C) {
+                         DynamicTensor<T, SP, CP>& C) {
             const auto& as = A.shape();
             const auto& bs = B.shape();
             const auto& cs = C.shape();
@@ -471,7 +480,7 @@ namespace ts {
 
             const T* a = A.data();
             const T* b = B.data();
-            T*       c = C.data();
+            T* c = C.data();
             if (!a || !b || !c) throw std::runtime_error("gemm: null data pointer");
 
             if (beta == T{0}) std::fill(c, c + M * N, T{0});
@@ -489,7 +498,7 @@ namespace ts {
                         const size_t nb = std::min(NC, N - jj);
                         for (size_t i = 0; i < ib; ++i) {
                             const T* ar = a + (ii + i) * K + kk;
-                            T*       cr = c + (ii + i) * N + jj;
+                            T* cr = c + (ii + i) * N + jj;
                             for (size_t j = 0; j < nb; ++j) {
                                 // SIMD dot over k-dimension
                                 const T* bj = b + kk * N + (jj + j);
@@ -499,7 +508,9 @@ namespace ts {
                                 size_t k = 0;
                                 // stride-N gather not available portably; fall back scalar for j loop
                                 // (inner-k SIMD viable only with col-major B; we use scalar for portability)
-                                (void)lanes; (void)sum_v; (void)bj;
+                                (void)lanes;
+                                (void)sum_v;
+                                (void)bj;
                                 T sum = T{0};
                                 for (; k < kb; ++k)
                                     sum += ar[k] * b[(kk + k) * N + (jj + j)];
@@ -512,12 +523,12 @@ namespace ts {
         }
 
         // gemv: y ← α·A·x + β·y  (SIMD row dot product)
-        template<typename T, typename SP, typename CP>
+        template <typename T, typename SP, typename CP>
         static void gemv(T alpha,
-                         const DynamicTensor<T,SP,CP>& A,
-                         const DynamicTensor<T,SP,CP>& x,
+                         const DynamicTensor<T, SP, CP>& A,
+                         const DynamicTensor<T, SP, CP>& x,
                          T beta,
-                         DynamicTensor<T,SP,CP>& y) {
+                         DynamicTensor<T, SP, CP>& y) {
             const auto& as = A.shape();
             const auto& xs = x.shape();
             const auto& ys = y.shape();
@@ -529,7 +540,7 @@ namespace ts {
 
             const T* ap = A.data();
             const T* xp = x.data();
-            T*       yp = y.data();
+            T* yp = y.data();
             if (!ap || !xp || !yp) throw std::runtime_error("gemv: null data pointer");
 
             if (beta == T{0}) std::fill(yp, yp + M, T{0});
@@ -552,15 +563,15 @@ namespace ts {
         }
 
         // axpy: y ← α·x + y  (SIMD)
-        template<typename T, typename SP, typename CP>
+        template <typename T, typename SP, typename CP>
         static void axpy(T alpha,
-                         const DynamicTensor<T,SP,CP>& x,
-                         DynamicTensor<T,SP,CP>& y) {
+                         const DynamicTensor<T, SP, CP>& x,
+                         DynamicTensor<T, SP, CP>& y) {
             const size_t n = x.size();
             if (y.size() != n)
                 throw std::invalid_argument("axpy: x and y must have the same size");
             const T* xp = x.data();
-            T*       yp = y.data();
+            T* yp = y.data();
             if (!xp || !yp) throw std::runtime_error("axpy: null data pointer");
 
             namespace hn = hwy::HWY_NAMESPACE;
@@ -575,8 +586,8 @@ namespace ts {
         }
 
         // nrm2: ‖x‖₂  (SIMD)
-        template<typename T, typename SP, typename CP>
-        static T nrm2(const DynamicTensor<T,SP,CP>& x) {
+        template <typename T, typename SP, typename CP>
+        static T nrm2(const DynamicTensor<T, SP, CP>& x) {
             const size_t n = x.size();
             const T* xp = x.data();
             if (!xp) throw std::runtime_error("nrm2: null data pointer");
@@ -596,33 +607,32 @@ namespace ts {
         }
 
         // syrk: C ← α·A·Aᵀ + β·C  (delegates to scalar; symmetric pattern hard to SIMD portably)
-        template<typename T, typename SP, typename CP>
+        template <typename T, typename SP, typename CP>
         static void syrk(T alpha,
-                         const DynamicTensor<T,SP,CP>& A,
+                         const DynamicTensor<T, SP, CP>& A,
                          T beta,
-                         DynamicTensor<T,SP,CP>& C,
+                         DynamicTensor<T, SP, CP>& C,
                          bool upper = true) {
-            DefaultComputationPolicy::template syrk<T,SP,CP>(alpha, A, beta, C, upper);
+            DefaultComputationPolicy::template syrk<T, SP, CP>(alpha, A, beta, C, upper);
         }
 
         // matmul: C = A·B
-        template<typename T, typename SP, typename CP>
-        static DynamicTensor<T,SP,CP> matmul(
-                const DynamicTensor<T,SP,CP>& A,
-                const DynamicTensor<T,SP,CP>& B) {
+        template <typename T, typename SP, typename CP>
+        static DynamicTensor<T, SP, CP> matmul(
+            const DynamicTensor<T, SP, CP>& A,
+            const DynamicTensor<T, SP, CP>& B) {
             const auto& as = A.shape();
             const auto& bs = B.shape();
             if (as.size() != 2 || bs.size() != 2)
                 throw std::invalid_argument("matmul: both tensors must be rank-2");
-            DynamicTensor<T,SP,CP> C({as[0], bs[1]});
-            gemm<T,SP,CP>(T{1}, A, B, T{0}, C);
+            DynamicTensor<T, SP, CP> C({as[0], bs[1]});
+            gemm<T, SP, CP>(T{1}, A, B, T{0}, C);
             return C;
         }
     };
 
     using highway_storage_policy = HighwayStoragePolicy;
     using highway_computation_policy = HighwayComputationPolicy;
-
 } // namespace ts
 
 // Global convenience aliases

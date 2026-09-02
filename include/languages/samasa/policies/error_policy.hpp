@@ -10,7 +10,6 @@
 #include <cstdint>
 
 namespace lang::samasa {
-
     struct error_policy_off {
         static constexpr bool recovery_enabled = false;
     };
@@ -19,5 +18,4 @@ namespace lang::samasa {
         static constexpr bool recovery_enabled = true;
         std::uint32_t max_repairs = 64;
     };
-
 } // namespace lang::samasa

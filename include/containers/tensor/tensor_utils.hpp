@@ -14,17 +14,16 @@
 #include <vector>
 
 namespace ts {
-
-    template<typename E, typename T, typename S, typename C>
-    void print_tensor(const TensorExpression<E, T, S, C> &expr, const size_t indent = 0, std::ostream& os = std::cout) {
-        const auto &tensor = expr.self();
+    template <typename E, typename T, typename S, typename C>
+    void print_tensor(const TensorExpression<E, T, S, C>& expr, const size_t indent = 0, std::ostream& os = std::cout) {
+        const auto& tensor = expr.self();
         auto shape = get_shape(tensor);
         if (shape.empty()) {
             os << tensor(std::vector<size_t>{}) << "\n";
             return;
         }
         std::vector<size_t> idx(shape.size(), 0);
-        auto print_rec = [&](auto &self, size_t dim) -> void {
+        auto print_rec = [&](auto& self, size_t dim) -> void {
             if (dim == shape.size() - 1) {
                 os << std::string(indent, ' ') << "[";
                 for (size_t i = 0; i < shape[dim]; ++i) {
@@ -33,7 +32,8 @@ namespace ts {
                     if (i + 1 < shape[dim]) os << ", ";
                 }
                 os << "]";
-            } else {
+            }
+            else {
                 os << std::string(indent, ' ') << "[\n";
                 for (size_t i = 0; i < shape[dim]; ++i) {
                     idx[dim] = i;
@@ -47,22 +47,22 @@ namespace ts {
         os << "\n";
     }
 
-    template<typename T>
+    template <typename T>
         requires std::is_arithmetic_v<T>
-    void print_tensor(const T &scalar, std::ostream& os = std::cout) {
+    void print_tensor(const T& scalar, std::ostream& os = std::cout) {
         os << scalar << "\n";
     }
 
-    template<typename E, typename T, typename S, typename C>
-    [[nodiscard]] std::string tensor_to_string(const TensorExpression<E, T, S, C> &expr) {
-        const auto &tensor = expr.self();
+    template <typename E, typename T, typename S, typename C>
+    [[nodiscard]] std::string tensor_to_string(const TensorExpression<E, T, S, C>& expr) {
+        const auto& tensor = expr.self();
         auto shape = get_shape(tensor);
         if (shape.empty()) {
             return std::to_string(tensor(std::vector<size_t>{}));
         }
         std::string result;
         std::vector<size_t> idx(shape.size(), 0);
-        auto format_rec = [&](auto &self, size_t dim) -> void {
+        auto format_rec = [&](auto& self, size_t dim) -> void {
             if (dim == shape.size() - 1) {
                 result += "[";
                 for (size_t i = 0; i < shape[dim]; ++i) {
@@ -71,7 +71,8 @@ namespace ts {
                     if (i + 1 < shape[dim]) result += ", ";
                 }
                 result += "]";
-            } else {
+            }
+            else {
                 result += "[";
                 for (size_t i = 0; i < shape[dim]; ++i) {
                     idx[dim] = i;
@@ -84,7 +85,6 @@ namespace ts {
         format_rec(format_rec, 0);
         return result;
     }
-
 } // namespace ts
 
 namespace containers::tensor {

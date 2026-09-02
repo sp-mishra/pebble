@@ -46,12 +46,15 @@ namespace tarka::native {
     [[nodiscard]] constexpr Polarity operator|(Polarity a, Polarity b) noexcept {
         return static_cast<Polarity>(static_cast<std::uint8_t>(a) | static_cast<std::uint8_t>(b));
     }
+
     [[nodiscard]] constexpr bool has_pos(Polarity p) noexcept {
         return (static_cast<std::uint8_t>(p) & 1u) != 0u;
     }
+
     [[nodiscard]] constexpr bool has_neg(Polarity p) noexcept {
         return (static_cast<std::uint8_t>(p) & 2u) != 0u;
     }
+
     [[nodiscard]] constexpr Polarity flip(Polarity p) noexcept {
         const std::uint8_t v = static_cast<std::uint8_t>(p);
         return static_cast<Polarity>(((v & 1u) << 1) | ((v & 2u) >> 1));
@@ -66,26 +69,26 @@ namespace tarka::native {
         // Route an atom to the theory that owns its semantics, from op + sorts.
         [[nodiscard]] static AtomTheory classify(Term t) noexcept {
             switch (t.op()) {
-                case Op::BvUlt:
-                case Op::BvUle:
-                case Op::BvSlt:
-                case Op::BvSle:
-                    return AtomTheory::bv;
-                case Op::Select:
-                case Op::Store:
-                    return AtomTheory::array;
-                case Op::Apply:
-                    return AtomTheory::uf;
-                case Op::Lt:
-                case Op::Le:
-                case Op::Gt:
-                case Op::Ge:
-                    return arith_theory(t);
-                case Op::Eq:
-                case Op::Distinct:
-                    return eq_theory(t);
-                default:
-                    return AtomTheory::core; // Bool Sym / opaque predicate
+            case Op::BvUlt:
+            case Op::BvUle:
+            case Op::BvSlt:
+            case Op::BvSle:
+                return AtomTheory::bv;
+            case Op::Select:
+            case Op::Store:
+                return AtomTheory::array;
+            case Op::Apply:
+                return AtomTheory::uf;
+            case Op::Lt:
+            case Op::Le:
+            case Op::Gt:
+            case Op::Ge:
+                return arith_theory(t);
+            case Op::Eq:
+            case Op::Distinct:
+                return eq_theory(t);
+            default:
+                return AtomTheory::core; // Bool Sym / opaque predicate
             }
         }
 
@@ -103,11 +106,11 @@ namespace tarka::native {
             auto ch = t.children();
             if (ch.empty() || !ch[0].sort().valid()) return AtomTheory::core;
             switch (ch[0].sort().kind()) {
-                case SortKind::BitVec: return AtomTheory::bv;
-                case SortKind::Real: return AtomTheory::lra;
-                case SortKind::Int: return AtomTheory::lia;
-                case SortKind::Array: return AtomTheory::array;
-                default: return AtomTheory::uf; // uninterpreted / function-sorted
+            case SortKind::BitVec: return AtomTheory::bv;
+            case SortKind::Real: return AtomTheory::lra;
+            case SortKind::Int: return AtomTheory::lia;
+            case SortKind::Array: return AtomTheory::array;
+            default: return AtomTheory::uf; // uninterpreted / function-sorted
             }
         }
 
@@ -150,13 +153,13 @@ namespace tarka::native {
         // polarity-appropriate defining clauses.
         Lit encode_fresh(Term t, Polarity pol) {
             switch (t.op()) {
-                case Op::True: return const_lit(true);
-                case Op::False: return const_lit(false);
-                case Op::Not: {
-                    // ¬ is free: encode child in flipped polarity, negate literal.
-                    return lit_neg(encode(t.children()[0], flip(pol)));
-                }
-                default: break;
+            case Op::True: return const_lit(true);
+            case Op::False: return const_lit(false);
+            case Op::Not: {
+                // ¬ is free: encode child in flipped polarity, negate literal.
+                return lit_neg(encode(t.children()[0], flip(pol)));
+            }
+            default: break;
             }
 
             if (is_boolean_connective(t)) {
@@ -174,14 +177,21 @@ namespace tarka::native {
         // freshly-added polarity bits in `pol`.
         void emit_definition(Term t, Lit l, Polarity pol) {
             switch (t.op()) {
-                case Op::And: emit_and(t, l, pol); break;
-                case Op::Or: emit_or(t, l, pol); break;
-                case Op::Implies: emit_implies(t, l, pol); break;
-                case Op::Xor: emit_xor(t, l, pol); break;
-                case Op::Ite: emit_ite(t, l, pol); break;
-                case Op::Eq: emit_iff(t, l, pol); break; // Bool Eq == iff (checked by caller)
-                case Op::Distinct: emit_xor(t, l, pol); break; // Bool Distinct == xor
-                default: break;
+            case Op::And: emit_and(t, l, pol);
+                break;
+            case Op::Or: emit_or(t, l, pol);
+                break;
+            case Op::Implies: emit_implies(t, l, pol);
+                break;
+            case Op::Xor: emit_xor(t, l, pol);
+                break;
+            case Op::Ite: emit_ite(t, l, pol);
+                break;
+            case Op::Eq: emit_iff(t, l, pol);
+                break; // Bool Eq == iff (checked by caller)
+            case Op::Distinct: emit_xor(t, l, pol);
+                break; // Bool Distinct == xor
+            default: break;
             }
         }
 
@@ -281,29 +291,28 @@ namespace tarka::native {
 
         [[nodiscard]] static bool is_boolean_connective(Term t) noexcept {
             switch (t.op()) {
-                case Op::And:
-                case Op::Or:
-                case Op::Xor:
-                case Op::Implies:
-                    return true;
-                case Op::Ite: {
-                    // Only Bool-sorted ite is a formula connective; arithmetic /
-                    // BV ite is a term handled inside a theory atom.
-                    return t.sort().valid() && t.sort().kind() == SortKind::Bool;
-                }
-                case Op::Eq:
-                case Op::Distinct: {
-                    // Boolean equality is iff (a connective); Eq over other sorts
-                    // is a theory atom.
-                    auto ch = t.children();
-                    return !ch.empty() && ch[0].sort().valid() &&
-                           ch[0].sort().kind() == SortKind::Bool;
-                }
-                default:
-                    return false;
+            case Op::And:
+            case Op::Or:
+            case Op::Xor:
+            case Op::Implies:
+                return true;
+            case Op::Ite: {
+                // Only Bool-sorted ite is a formula connective; arithmetic /
+                // BV ite is a term handled inside a theory atom.
+                return t.sort().valid() && t.sort().kind() == SortKind::Bool;
+            }
+            case Op::Eq:
+            case Op::Distinct: {
+                // Boolean equality is iff (a connective); Eq over other sorts
+                // is a theory atom.
+                auto ch = t.children();
+                return !ch.empty() && ch[0].sort().valid() &&
+                    ch[0].sort().kind() == SortKind::Bool;
+            }
+            default:
+                return false;
             }
         }
-
 
 
         cdcl_solver& sat_;

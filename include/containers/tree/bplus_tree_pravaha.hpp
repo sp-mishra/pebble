@@ -30,7 +30,6 @@
 #include <vector>
 
 namespace pebble::containers::pravaha {
-
     using DefaultRunner = ::pravaha::Runner<::pravaha::JThreadBackend>;
 
     namespace detail {
@@ -86,20 +85,20 @@ namespace pebble::containers::pravaha {
         for (std::size_t i = 0; i < num_leaves; i += chunk_size) {
             const std::size_t end_idx = std::min(num_leaves, i + chunk_size);
             (void)run.submit(::pravaha::task("bplus_parallel_scan",
-                [&leaves, i, end_idx, &min_key, &max_key, &comp, &fn]() {
-                    for (std::size_t idx = i; idx < end_idx; ++idx) {
-                        const auto* leaf = leaves[idx];
-                        const auto* keys = leaf->keys();
-                        const auto* vals = leaf->values();
-                        for (std::size_t j = 0; j < leaf->header.count; ++j) {
-                            if (comp(keys[j], min_key)) continue;
-                            // Sorted within the leaf: once past max_key, the rest of THIS leaf
-                            // cannot match — break the leaf loop, not the whole partition.
-                            if (comp(max_key, keys[j])) break;
-                            fn(keys[j], vals[j]);
-                        }
-                    }
-                }));
+                                             [&leaves, i, end_idx, &min_key, &max_key, &comp, &fn]() {
+                                                 for (std::size_t idx = i; idx < end_idx; ++idx) {
+                                                     const auto* leaf = leaves[idx];
+                                                     const auto* keys = leaf->keys();
+                                                     const auto* vals = leaf->values();
+                                                     for (std::size_t j = 0; j < leaf->header.count; ++j) {
+                                                         if (comp(keys[j], min_key)) continue;
+                                                         // Sorted within the leaf: once past max_key, the rest of THIS leaf
+                                                         // cannot match — break the leaf loop, not the whole partition.
+                                                         if (comp(max_key, keys[j])) break;
+                                                         fn(keys[j], vals[j]);
+                                                     }
+                                                 }
+                                             }));
         }
         run.backend_ref().drain();
     }
@@ -156,20 +155,21 @@ namespace pebble::containers::pravaha {
             const std::size_t end_idx = std::min(num_leaves, start_idx + chunk_size);
 
             (void)run.submit(::pravaha::task("bplus_parallel_reduce",
-                [&leaves, start_idx, end_idx, chunk_idx, &partial_results, &min_key, &max_key, &comp, &reduce_op, &map_op]() {
-                    InitT local_accum = partial_results[chunk_idx];
-                    for (std::size_t idx = start_idx; idx < end_idx; ++idx) {
-                        const auto* leaf = leaves[idx];
-                        const auto* keys = leaf->keys();
-                        const auto* vals = leaf->values();
-                        for (std::size_t j = 0; j < leaf->header.count; ++j) {
-                            if (comp(keys[j], min_key)) continue;
-                            if (comp(max_key, keys[j])) break;
-                            local_accum = reduce_op(local_accum, map_op(keys[j], vals[j]));
-                        }
-                    }
-                    partial_results[chunk_idx] = local_accum;
-                }));
+                                             [&leaves, start_idx, end_idx, chunk_idx, &partial_results, &min_key, &
+                                                 max_key, &comp, &reduce_op, &map_op]() {
+                                                 InitT local_accum = partial_results[chunk_idx];
+                                                 for (std::size_t idx = start_idx; idx < end_idx; ++idx) {
+                                                     const auto* leaf = leaves[idx];
+                                                     const auto* keys = leaf->keys();
+                                                     const auto* vals = leaf->values();
+                                                     for (std::size_t j = 0; j < leaf->header.count; ++j) {
+                                                         if (comp(keys[j], min_key)) continue;
+                                                         if (comp(max_key, keys[j])) break;
+                                                         local_accum = reduce_op(local_accum, map_op(keys[j], vals[j]));
+                                                     }
+                                                 }
+                                                 partial_results[chunk_idx] = local_accum;
+                                             }));
         }
         run.backend_ref().drain();
 
@@ -209,18 +209,17 @@ namespace pebble::containers::pravaha {
         for (std::size_t i = 0; i < count; i += chunk_size) {
             const std::size_t end_idx = std::min(count, i + chunk_size);
             (void)run.submit(::pravaha::task("bplus_parallel_find",
-                [&tree, &query_keys, &results, i, end_idx]() {
-                    for (std::size_t j = i; j < end_idx; ++j) {
-                        auto it = tree.find(query_keys[j]);
-                        if (it != tree.end()) {
-                            results[j] = it->second;
-                        }
-                    }
-                }));
+                                             [&tree, &query_keys, &results, i, end_idx]() {
+                                                 for (std::size_t j = i; j < end_idx; ++j) {
+                                                     auto it = tree.find(query_keys[j]);
+                                                     if (it != tree.end()) {
+                                                         results[j] = it->second;
+                                                     }
+                                                 }
+                                             }));
         }
         run.backend_ref().drain();
 
         return results;
     }
-
 } // namespace pebble::containers::pravaha

@@ -43,35 +43,34 @@
 #include <vector>
 
 namespace lang {
-
     // =========================================================================
     // Re-export vakya proof_status so lang:: callers don't need to spell
     // vakya::types:: everywhere.
     // =========================================================================
 
-    using proof_status       = vakya::types::proof_status;
-    using proof_obligation   = vakya::types::proof_obligation;
-    using obligation_result  = vakya::types::obligation_result;
+    using proof_status = vakya::types::proof_status;
+    using proof_obligation = vakya::types::proof_obligation;
+    using obligation_result = vakya::types::obligation_result;
     using verification_report = vakya::types::verification_report;
-    using analysis_store     = vakya::types::analysis_store;
-    using analysis_record    = vakya::types::analysis_record;
+    using analysis_store = vakya::types::analysis_store;
+    using analysis_record = vakya::types::analysis_record;
 
     // =========================================================================
     // verify_policy — frontend policy knob for how aggressively to discharge
     // =========================================================================
 
     enum class verify_policy : std::uint8_t {
-        off,      // skip all proof attempts; treat all as deferred
-        assume,   // trust annotations; mark all proven without SMT call
-        check,    // attempt SMT proof; deferred/unknown → insert runtime guard
+        off, // skip all proof attempts; treat all as deferred
+        assume, // trust annotations; mark all proven without SMT call
+        check, // attempt SMT proof; deferred/unknown → insert runtime guard
         paranoid, // attempt SMT proof; deferred/unknown → compile error
     };
 
     [[nodiscard]] constexpr std::string_view to_string(verify_policy p) noexcept {
         switch (p) {
-        case verify_policy::off:      return "off";
-        case verify_policy::assume:   return "assume";
-        case verify_policy::check:    return "check";
+        case verify_policy::off: return "off";
+        case verify_policy::assume: return "assume";
+        case verify_policy::check: return "check";
         case verify_policy::paranoid: return "paranoid";
         }
         return "unknown";
@@ -82,7 +81,7 @@ namespace lang {
     // =========================================================================
 
     enum class proof_construct_kind : std::uint8_t {
-        proof,   // derivable property — can be statically discharged
+        proof, // derivable property — can be statically discharged
         assert_, // runtime assertion — always inserts guard when not proven
     };
 
@@ -91,10 +90,10 @@ namespace lang {
     // =========================================================================
 
     struct discharge_outcome {
-        proof_status status         = proof_status::unknown;
-        bool         guard_inserted = false; // runtime guard was emitted
-        std::string  description;
-        std::string  diagnostic_code;
+        proof_status status = proof_status::unknown;
+        bool guard_inserted = false; // runtime guard was emitted
+        std::string description;
+        std::string diagnostic_code;
     };
 
     // =========================================================================
@@ -102,12 +101,12 @@ namespace lang {
     // =========================================================================
 
     struct obligation_record {
-        std::string            description;
-        proof_construct_kind   kind    = proof_construct_kind::proof;
-        verify_policy          policy  = verify_policy::check;
-        std::string            proof_term;   // symbolic hint for the SMT encoder
-        std::uint64_t          expr_hash = 0; // vakya analysis_store key
-        discharge_outcome      outcome;       // filled by discharge_driver::discharge()
+        std::string description;
+        proof_construct_kind kind = proof_construct_kind::proof;
+        verify_policy policy = verify_policy::check;
+        std::string proof_term; // symbolic hint for the SMT encoder
+        std::uint64_t expr_hash = 0; // vakya analysis_store key
+        discharge_outcome outcome; // filled by discharge_driver::discharge()
     };
 
     // =========================================================================
@@ -116,7 +115,7 @@ namespace lang {
 
     struct assumption_context {
         std::vector<std::string> assumptions;
-        verify_policy            policy = verify_policy::check;
+        verify_policy policy = verify_policy::check;
     };
 
     // =========================================================================
@@ -125,11 +124,12 @@ namespace lang {
 
     struct proof_diag_kind {
         enum class kind : std::uint8_t {
-            refuted,        // LANG-PROOF-001: obligation statically false
+            refuted, // LANG-PROOF-001: obligation statically false
             guard_inserted, // LANG-PROOF-002: runtime guard inserted
-            deferred,       // LANG-PROOF-003: no SMT backend; proof deferred
-            paranoid_fail,  // LANG-PROOF-004: paranoid policy + not proven = error
+            deferred, // LANG-PROOF-003: no SMT backend; proof deferred
+            paranoid_fail, // LANG-PROOF-004: paranoid policy + not proven = error
         };
+
         kind value = kind::refuted;
 
         constexpr proof_diag_kind() = default;
@@ -137,10 +137,10 @@ namespace lang {
 
         [[nodiscard]] static constexpr std::string_view to_code(proof_diag_kind k) noexcept {
             switch (k.value) {
-            case kind::refuted:        return "LANG-PROOF-001";
+            case kind::refuted: return "LANG-PROOF-001";
             case kind::guard_inserted: return "LANG-PROOF-002";
-            case kind::deferred:       return "LANG-PROOF-003";
-            case kind::paranoid_fail:  return "LANG-PROOF-004";
+            case kind::deferred: return "LANG-PROOF-003";
+            case kind::paranoid_fail: return "LANG-PROOF-004";
             }
             return "LANG-PROOF-000";
         }
@@ -171,7 +171,7 @@ namespace lang {
     public:
         struct discharge_result {
             std::vector<discharge_outcome> outcomes;
-            std::vector<proof_diagnostic>  diagnostics;
+            std::vector<proof_diagnostic> diagnostics;
 
             [[nodiscard]] bool ok() const noexcept {
                 for (const auto& d : diagnostics)
@@ -194,59 +194,62 @@ namespace lang {
                     vakya::types::verify(ob.expr_hash, astore, solver);
 
                 const verify_policy effective = (ob.policy == verify_policy::check &&
-                                                  actx.policy == verify_policy::paranoid)
-                                                ? verify_policy::paranoid
-                                                : ob.policy;
+                                                    actx.policy == verify_policy::paranoid)
+                                                    ? verify_policy::paranoid
+                                                    : ob.policy;
 
                 discharge_outcome out;
                 out.description = ob.description;
 
                 switch (effective) {
                 case verify_policy::off:
-                    out.status         = proof_status::unknown;
+                    out.status = proof_status::unknown;
                     out.guard_inserted = false;
                     break;
 
                 case verify_policy::assume:
-                    out.status         = proof_status::proven;
+                    out.status = proof_status::proven;
                     out.guard_inserted = false;
                     break;
 
                 case verify_policy::check:
                 case verify_policy::paranoid: {
                     if (vr.overall == proof_status::refuted) {
-                        out.status         = proof_status::refuted;
+                        out.status = proof_status::refuted;
                         out.guard_inserted = false;
                         out.diagnostic_code = "LANG-PROOF-001";
                         proof_diagnostic d;
-                        d.kind    = proof_diag_kind{proof_diag_kind::kind::refuted};
-                        d.symbol  = std::string(fn_name);
+                        d.kind = proof_diag_kind{proof_diag_kind::kind::refuted};
+                        d.symbol = std::string(fn_name);
                         d.message = "obligation refuted: '" + ob.description + "'";
-                        d.level   = severity::error;
+                        d.level = severity::error;
                         result.diagnostics.push_back(std::move(d));
-                    } else if (vr.overall == proof_status::proven) {
-                        out.status         = proof_status::proven;
+                    }
+                    else if (vr.overall == proof_status::proven) {
+                        out.status = proof_status::proven;
                         out.guard_inserted = false;
-                    } else {
+                    }
+                    else {
                         // deferred or unknown
                         out.status = proof_status::unknown;
                         if (effective == verify_policy::paranoid) {
-                            out.guard_inserted  = false;
+                            out.guard_inserted = false;
                             out.diagnostic_code = "LANG-PROOF-004";
                             proof_diagnostic d;
-                            d.kind    = proof_diag_kind{proof_diag_kind::kind::paranoid_fail};
-                            d.symbol  = std::string(fn_name);
+                            d.kind = proof_diag_kind{proof_diag_kind::kind::paranoid_fail};
+                            d.symbol = std::string(fn_name);
                             d.message = "paranoid: could not prove '" + ob.description + "'";
-                            d.level   = severity::error;
+                            d.level = severity::error;
                             result.diagnostics.push_back(std::move(d));
-                        } else {
-                            out.guard_inserted  = true;
+                        }
+                        else {
+                            out.guard_inserted = true;
                             out.diagnostic_code = "LANG-PROOF-002";
                             proof_diagnostic d;
-                            d.kind    = proof_diag_kind{proof_diag_kind::kind::guard_inserted};
-                            d.symbol  = std::string(fn_name);
+                            d.kind = proof_diag_kind{proof_diag_kind::kind::guard_inserted};
+                            d.symbol = std::string(fn_name);
                             d.message = "runtime guard inserted for '" + ob.description + "'";
-                            d.level   = severity::note;
+                            d.level = severity::note;
                             result.diagnostics.push_back(std::move(d));
                         }
                     }
@@ -261,5 +264,4 @@ namespace lang {
             return result;
         }
     };
-
 } // namespace lang

@@ -11,7 +11,7 @@
 #endif
 
 #if __has_include("edsl/backends/lithe_codegen_vulkan_spirv_ir.hpp") && \
-    __has_include("edsl/backends/lithe_codegen_vulkan.hpp")
+__has_include("edsl/backends/lithe_codegen_vulkan.hpp")
 #define PEBBLE_PRAVAHA_DETAIL_HAS_LITHE_VULKAN 1
 #else
 #define PEBBLE_PRAVAHA_DETAIL_HAS_LITHE_VULKAN 0

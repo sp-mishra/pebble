@@ -29,7 +29,6 @@
 #include <vector>
 
 namespace litegraph::pravaha {
-
     // =========================================================================
     // 1. Parallel Level-Synchronous BFS
     // =========================================================================
@@ -192,8 +191,8 @@ namespace litegraph::pravaha {
                         for (std::size_t u = begin; u < end; ++u) {
                             const std::size_t out_degree = offsets[u + 1] - offsets[u];
                             contrib[u] = out_degree == 0
-                                ? 0.0
-                                : d * rank[u] / static_cast<double>(out_degree);
+                                             ? 0.0
+                                             : d * rank[u] / static_cast<double>(out_degree);
                         }
                     };
                     (void)runner.submit(::pravaha::task("litegraph_pr_contrib", std::move(task_fn)));
@@ -206,7 +205,7 @@ namespace litegraph::pravaha {
                     const auto& ch = chunks[c_idx];
                     auto* part_delta = &partial_deltas[c_idx];
                     auto task_fn = [&in_offsets, &in_sources, &contrib, &rank, &next_rank,
-                                    base_teleport, part_delta, begin = ch.begin, end = ch.end]() {
+                            base_teleport, part_delta, begin = ch.begin, end = ch.end]() {
                         double local_delta = 0.0;
                         for (std::size_t v = begin; v < end; ++v) {
                             double acc = base_teleport;
@@ -223,7 +222,8 @@ namespace litegraph::pravaha {
                 runner.backend_ref().drain();
 
                 for (double dval : partial_deltas) total_delta += dval;
-            } else {
+            }
+            else {
                 // 2. Parallel rank distribution & delta calculation (atomic scatter).
                 std::vector<std::atomic<double>> next_rank_atomic(n);
                 for (std::size_t i = 0; i < n; ++i) {
@@ -241,7 +241,8 @@ namespace litegraph::pravaha {
                                 const std::size_t target = targets[i].value;
                                 // Lock-free atomic addition on next_rank
                                 double cur = next_rank_atomic[target].load(std::memory_order_relaxed);
-                                while (!next_rank_atomic[target].compare_exchange_weak(cur, cur + contrib, std::memory_order_relaxed)) {}
+                                while (!next_rank_atomic[target].compare_exchange_weak(
+                                    cur, cur + contrib, std::memory_order_relaxed)) {}
                             }
                         }
                     };
@@ -254,7 +255,8 @@ namespace litegraph::pravaha {
                 for (std::size_t c_idx = 0; c_idx < chunks.size(); ++c_idx) {
                     const auto& ch = chunks[c_idx];
                     auto* part_delta = &partial_deltas[c_idx];
-                    auto task_fn = [&rank, &next_rank, &next_rank_atomic, part_delta, begin = ch.begin, end = ch.end]() {
+                    auto task_fn = [&rank, &next_rank, &next_rank_atomic, part_delta, begin = ch.begin, end = ch.end
+                        ]() {
                         double local_delta = 0.0;
                         for (std::size_t i = begin; i < end; ++i) {
                             next_rank[i] = next_rank_atomic[i].load(std::memory_order_relaxed);
@@ -461,7 +463,8 @@ namespace litegraph::pravaha {
         double normalizer = 0.0;
         if constexpr (std::is_same_v<typename GraphT::directed_tag, Directed>) {
             normalizer = static_cast<double>(node_count - 1) * static_cast<double>(node_count - 2);
-        } else {
+        }
+        else {
             normalizer = static_cast<double>(node_count - 1) * static_cast<double>(node_count - 2) / 2.0;
         }
 
@@ -479,7 +482,6 @@ namespace litegraph::pravaha {
         ::pravaha::Runner<::pravaha::JThreadBackend> runner;
         return parallel_betweenness_centrality(g, runner);
     }
-
 } // namespace litegraph::pravaha
 
 #endif // LITEGRAPH_PRAVAHA_HPP

@@ -75,7 +75,7 @@ namespace tarka {
         using first_backend_t = std::conditional_t<
             sizeof...(Backends) == 0,
             backend::no_solver_backend,
-            std::tuple_element_t<0, std::tuple<Backends..., backend::no_solver_backend>>
+            std::tuple_element_t < 0, std::tuple<Backends..., backend::no_solver_backend>>
         >;
 
         RouterEngine() = default;
@@ -96,6 +96,7 @@ namespace tarka {
 
         void push(std::uint32_t n = 1) { dispatch([&](auto& b) { b.push(n); }); }
         void pop(std::uint32_t n = 1) { dispatch([&](auto& b) { b.pop(n); }); }
+
         void reset() {
             active_idx_ = 0;
             dispatch([&](auto& b) { b.reset(); });
@@ -148,7 +149,8 @@ namespace tarka {
         // Pick the first backend covering `mask`; leave active_idx_ at 0 when none
         // fully covers (backend[0] is the conservative default / superset backend).
         void select_for(theory_mask mask) noexcept {
-            active_idx_ = first_covering(mask, std::make_index_sequence<kBackendCount>{});
+            active_idx_ = first_covering(mask, std::make_index_sequence < kBackendCount >
+            {});
         }
 
         template <std::size_t... Is>
@@ -158,7 +160,7 @@ namespace tarka {
             bool found = false;
             // Fold over backends in order; first whose caps ⊇ mask wins.
             (void)((!found &&
-                    ((std::tuple_element_t<Is, BackendTuple>::capabilities() & mask) == mask)
+                    ((std::tuple_element_t < Is, BackendTuple > ::capabilities() & mask) == mask)
                         ? (chosen = Is, found = true)
                         : false) || ...);
             return chosen;
@@ -167,28 +169,31 @@ namespace tarka {
         // Invoke fn on the tuple element at active_idx_ (runtime index → static call).
         template <typename Fn>
         decltype(auto) dispatch(Fn&& fn) {
-            return dispatch_impl(std::forward<Fn>(fn), std::make_index_sequence<kBackendCount>{});
+            return dispatch_impl(std::forward<Fn>(fn), std::make_index_sequence < kBackendCount >
+            {});
         }
 
         template <typename Fn>
         decltype(auto) dispatch(Fn&& fn) const {
-            return dispatch_impl(std::forward<Fn>(fn), std::make_index_sequence<kBackendCount>{});
+            return dispatch_impl(std::forward<Fn>(fn), std::make_index_sequence < kBackendCount >
+            {});
         }
 
         template <typename Fn, std::size_t... Is>
         decltype(auto) dispatch_impl(Fn&& fn, std::index_sequence<Is...>) {
-            using R = std::invoke_result_t<Fn&, std::tuple_element_t<0, BackendTuple>&>;
+            using R = std::invoke_result_t<Fn&, std::tuple_element_t < 0, BackendTuple>&>;
             if constexpr (std::is_void_v<R>) {
                 // Branchless jump table: O(1) dispatch via constexpr vtable
                 using Trampoline = void(*)(BackendTuple&, Fn&);
                 static constexpr Trampoline vtable[] = {
-                    +[](BackendTuple& t, Fn& f) { f(std::get<Is>(t)); }...
+                    +[](BackendTuple& t, Fn& f) { f(std::get < Is > (t)); }...
                 };
                 vtable[active_idx_](backends_, fn);
-            } else {
+            }
+            else {
                 using Trampoline = R(*)(BackendTuple&, Fn&);
                 static constexpr Trampoline vtable[] = {
-                    +[](BackendTuple& t, Fn& f) -> R { return f(std::get<Is>(t)); }...
+                    +[](BackendTuple& t, Fn& f) -> R { return f(std::get < Is > (t)); }...
                 };
                 return vtable[active_idx_](backends_, fn);
             }
@@ -200,13 +205,14 @@ namespace tarka {
             if constexpr (std::is_void_v<R>) {
                 using Trampoline = void(*)(const BackendTuple&, Fn&);
                 static constexpr Trampoline vtable[] = {
-                    +[](const BackendTuple& t, Fn& f) { f(std::get<Is>(t)); }...
+                    +[](const BackendTuple& t, Fn& f) { f(std::get < Is > (t)); }...
                 };
                 vtable[active_idx_](backends_, fn);
-            } else {
+            }
+            else {
                 using Trampoline = R(*)(const BackendTuple&, Fn&);
                 static constexpr Trampoline vtable[] = {
-                    +[](const BackendTuple& t, Fn& f) -> R { return f(std::get<Is>(t)); }...
+                    +[](const BackendTuple& t, Fn& f) -> R { return f(std::get < Is > (t)); }...
                 };
                 return vtable[active_idx_](backends_, fn);
             }

@@ -25,14 +25,13 @@
 #include <string_view>
 
 namespace lang::samasa {
-
     // ---- grammar_fingerprint<G>() ------------------------------------------
 
     template <class G>
     consteval lang::descriptor_fingerprint grammar_fingerprint() {
         lang::descriptor_fingerprint fp = lang::detail::fp_from_string("samasa.grammar");
 
-        meta::for_each<typename G::rules>([&fp](auto rule_instance) {
+        meta::for_each < typename G::rules > ([&fp](auto rule_instance) {
             using Rule = std::remove_cvref_t<decltype(rule_instance)>;
             fp = lang::detail::fp_combine(
                 fp, akshara::fnv1a64(static_cast<std::string_view>(Rule::name)));
@@ -47,10 +46,11 @@ namespace lang::samasa {
 
     struct green_fingerprint {
         std::uint64_t grammar_hash = 0; // grammar_fingerprint<G>()
-        std::uint64_t source_hash  = 0; // fnv1a64 of source text
-        std::uint64_t tree_hash    = 0; // structural_hash of root green node
+        std::uint64_t source_hash = 0; // fnv1a64 of source text
+        std::uint64_t tree_hash = 0; // structural_hash of root green node
 
         [[nodiscard]] bool operator==(const green_fingerprint&) const noexcept = default;
+
         [[nodiscard]] bool valid() const noexcept {
             return grammar_hash != 0 && source_hash != 0;
         }
@@ -72,15 +72,14 @@ namespace lang::samasa {
 
     template <class SK, class TK>
     [[nodiscard]] green_fingerprint fingerprint(
-        const parse_output<SK,TK>& output,
+        const parse_output<SK, TK>& output,
         lang::descriptor_fingerprint grammar_fp,
-        std::string_view source) noexcept
-    {
-        const std::uint64_t src_hash  = detail::fnv1a64_rt(source);
+        std::string_view source) noexcept {
+        const std::uint64_t src_hash = detail::fnv1a64_rt(source);
         const std::uint64_t tree_hash =
-            output.tree.empty() ? 0
-            : output.tree[output.tree.root()].structural_hash;
+            output.tree.empty()
+                ? 0
+                : output.tree[output.tree.root()].structural_hash;
         return {grammar_fp, src_hash, tree_hash};
     }
-
 } // namespace lang::samasa

@@ -27,184 +27,183 @@
 #include <cmath>
 
 namespace prakriti {
+    // A solver stack is any tuple-like of PhysicsSolver policies applied in order.
+    template <class... Solvers>
+    struct SolverStack {
+        std::tuple<Solvers...> solvers;
 
-// A solver stack is any tuple-like of PhysicsSolver policies applied in order.
-template <class... Solvers>
-struct SolverStack {
-    std::tuple<Solvers...> solvers;
+        template <MaterialLaw Law>
+        void run(SolverContext<Law>& ctx) {
+            std::apply([&](auto&... s) { (s.solve(ctx), ...); }, solvers);
+        }
+    };
 
-    template <MaterialLaw Law>
-    void run(SolverContext<Law>& ctx) {
-        std::apply([&](auto&... s) { (s.solve(ctx), ...); }, solvers);
-    }
-};
-
-// Default stack: mechanics (XPBD) + fluids (density) each iteration; damage runs once per substep.
-using DefaultMechanicsStack = SolverStack<XpbdSolver, DensitySolver>;
+    // Default stack: mechanics (XPBD) + fluids (density) each iteration; damage runs once per substep.
+    using DefaultMechanicsStack = SolverStack<XpbdSolver, DensitySolver>;
 
 #if defined(PRAKRITI_HAS_PRAVAHA_BACKEND)
-using DefaultComputeBackend = PravahaBackend;
+    using DefaultComputeBackend = PravahaBackend;
 #elif defined(PRAKRITI_HAS_HIGHWAY_BACKEND)
-using DefaultComputeBackend = HighwayBackend;
+    using DefaultComputeBackend = HighwayBackend;
 #else
-using DefaultComputeBackend = ScalarBackend;
+    using DefaultComputeBackend = ScalarBackend;
 #endif
 
-// The mechanics stack is a template parameter so integrators can compose extra PhysicsSolvers
-// (e.g. akruti-backed ObstacleSolver / JointSolver) without touching the engine. It defaults to
-// DefaultMechanicsStack, so existing World<> uses are unchanged. A custom stack is passed in at
-// construction (solvers may hold references to external obstacle/joint data).
-template <MaterialLaw Law = DefaultMaterialLaw, ComputeBackend CB = DefaultComputeBackend,
-          class MechanicsStack = DefaultMechanicsStack>
-class World {
-public:
-    explicit World(WorldConfig cfg = {}) : cfg_(cfg), grid_(cfg.cell_size) {}
-    World(WorldConfig cfg, MechanicsStack stack) : cfg_(cfg), grid_(cfg.cell_size),
-                                                   mechanics_(std::move(stack)) {}
+    // The mechanics stack is a template parameter so integrators can compose extra PhysicsSolvers
+    // (e.g. akruti-backed ObstacleSolver / JointSolver) without touching the engine. It defaults to
+    // DefaultMechanicsStack, so existing World<> uses are unchanged. A custom stack is passed in at
+    // construction (solvers may hold references to external obstacle/joint data).
+    template <MaterialLaw Law = DefaultMaterialLaw, ComputeBackend CB = DefaultComputeBackend,
+              class MechanicsStack = DefaultMechanicsStack>
+    class World {
+    public:
+        explicit World(WorldConfig cfg = {}) : cfg_(cfg), grid_(cfg.cell_size) {}
 
-    // ── scene construction ──────────────────────────────────────────────────
-    ParticleStore&          particles() noexcept { return particles_; }
-    EdgeStore&              edges()     noexcept { return edges_; }
-    MaterialRegistry&       materials() noexcept { return materials_; }
-    const WorldConfig&      config()    const noexcept { return cfg_; }
-    WorldConfig&            config()    noexcept { return cfg_; }
+        World(WorldConfig cfg, MechanicsStack stack) : cfg_(cfg), grid_(cfg.cell_size),
+                                                       mechanics_(std::move(stack)) {}
 
-    ThermalSolver& thermal() noexcept { return thermal_; }
-    DamageSolver&  damage()  noexcept { return damage_; }
+        // ── scene construction ──────────────────────────────────────────────────
+        ParticleStore& particles() noexcept { return particles_; }
+        EdgeStore& edges() noexcept { return edges_; }
+        MaterialRegistry& materials() noexcept { return materials_; }
+        const WorldConfig& config() const noexcept { return cfg_; }
+        WorldConfig& config() noexcept { return cfg_; }
 
-    // ── one frame ───────────────────────────────────────────────────────────
-    void step() {
-        const Scalar dt_sub = cfg_.dt / static_cast<Scalar>(cfg_.substeps);
-        grid_.set_cell_size(cfg_.cell_size);
-        for (int s = 0; s < cfg_.substeps; ++s) substep(dt_sub);
-    }
+        ThermalSolver& thermal() noexcept { return thermal_; }
+        DamageSolver& damage() noexcept { return damage_; }
 
-    // ── external forces ───────────────────────────────────────────────────────
-    // Apply an outward radial impulse to every dynamic particle within `radius` of `center`.
-    // Impulse magnitude scales by inv_mass (heavier = less velocity gain) and a distance
-    // falloff (1 - d/radius)^falloff_pow. Statics (inv_mass==0) are skipped. Allocation-free.
-    void apply_radial_impulse(pebble::math::vec2 center, Scalar radius, Scalar magnitude,
-                              Scalar falloff_pow = Scalar(1)) noexcept {
-        if (radius <= Scalar(0)) return;
-        const Index n = particles_.size();
-        const Scalar inv_radius = Scalar(1) / radius;
-        for (Index i = 0; i < n; ++i) {
-            if (particles_.is_static(i)) continue;
-            const Scalar dx = particles_.pos_x[i] - center[0];
-            const Scalar dy = particles_.pos_y[i] - center[1];
-            const Scalar d = std::sqrt(dx * dx + dy * dy);
-            if (d > radius) continue;
-            const Scalar falloff = std::pow(std::max(Scalar(0), Scalar(1) - d * inv_radius), falloff_pow);
-            const Scalar scale = magnitude * particles_.inv_mass[i] * falloff;
-            if (d > Scalar(1e-6)) {
-                const Scalar inv_d = Scalar(1) / d;
-                particles_.vel_x[i] += dx * inv_d * scale;
-                particles_.vel_y[i] += dy * inv_d * scale;
-            }
-        }
-    }
-
-    // ── diagnostics ─────────────────────────────────────────────────────────
-    [[nodiscard]] Scalar kinetic_energy() const noexcept {
-        const Index n = particles_.size();
-        return compute_.kinetic_energy(
-            {particles_.vel_x.data(), n},
-            {particles_.vel_y.data(), n},
-            {particles_.inv_mass.data(), n}
-        );
-    }
-
-private:
-    // Refresh the active mask (0 = static, 1 = dynamic) to match the current particle count.
-    void refresh_masks(Index n) {
-        active_.resize(n);
-        damp_.resize(n);
-        for (Index i = 0; i < n; ++i)
-            active_[i] = particles_.is_static(i) ? Scalar(0) : Scalar(1);
-    }
-
-    void substep(Scalar dt_sub) {
-        auto& P = particles_;
-        const Index n = P.size();
-        refresh_masks(n);
-        const CSpan mask{active_.data(), n};
-
-        // 1. external accumulation: vel += active * gravity * dt.
-        compute_.axpy_const_masked({P.vel_x.data(), n}, mask, cfg_.gravity[0] * dt_sub);
-        compute_.axpy_const_masked({P.vel_y.data(), n}, mask, cfg_.gravity[1] * dt_sub);
-
-        // 4. predict motion: pred = pos + active * vel * dt  (static => pred = pos).
-        compute_.predict({P.pred_x.data(), n}, {P.pos_x.data(), n}, mask, {P.vel_x.data(), n}, dt_sub);
-        compute_.predict({P.pred_y.data(), n}, {P.pos_y.data(), n}, mask, {P.vel_y.data(), n}, dt_sub);
-
-        // 5. build neighborhoods over predicted positions.
-        grid_.build({P.pred_x.data(), n}, {P.pred_y.data(), n});
-
-        SolverContext<Law> ctx{P, edges_, materials_, grid_, law_, cfg_, dt_sub};
-
-        // 2. thermal + phase update (uses neighbor grid).
-        thermal_.solve(ctx);
-
-        // 6. mechanics solve loop (constraint iterations).
-        for (int it = 0; it < cfg_.solver_iters; ++it) {
-            mechanics_.run(ctx);
-            apply_boundary(n);
+        // ── one frame ───────────────────────────────────────────────────────────
+        void step() {
+            const Scalar dt_sub = cfg_.dt / static_cast<Scalar>(cfg_.substeps);
+            grid_.set_cell_size(cfg_.cell_size);
+            for (int s = 0; s < cfg_.substeps; ++s) substep(dt_sub);
         }
 
-        // 7. damage + plasticity.
-        damage_.solve(ctx);
-
-        // 8. velocity update + viscous damping; 9. commit.
-        const Scalar inv_dt = dt_sub > Scalar(0) ? Scalar(1) / dt_sub : Scalar(0);
-        for (Index i = 0; i < n; ++i) {
-            const Scalar mu = law_.effective_viscosity(ctx.params_of(i), ctx.phase_of(i));
-            const Scalar total_damp = (mu + cfg_.global_damping) * dt_sub;
-            damp_[i] = active_[i] * std::clamp(Scalar(1) - total_damp, Scalar(0), Scalar(1));
-        }
-        const CSpan dampc{damp_.data(), n};
-        // vel = (pred - pos) * inv_dt, then vel *= damp (damp folds in the static mask => 0).
-        compute_.sub_scale({P.vel_x.data(), n}, {P.pred_x.data(), n}, {P.pos_x.data(), n}, inv_dt);
-        compute_.sub_scale({P.vel_y.data(), n}, {P.pred_y.data(), n}, {P.pos_y.data(), n}, inv_dt);
-        compute_.mul_col({P.vel_x.data(), n}, dampc);
-        compute_.mul_col({P.vel_y.data(), n}, dampc);
-
-        // Velocity magnitude cap to guarantee physical stability under extreme compressive loads
-        constexpr Scalar kMaxSpeed = Scalar(2000.0);
-        constexpr Scalar kMaxSpeedSq = kMaxSpeed * kMaxSpeed;
-        for (Index i = 0; i < n; ++i) {
-            const Scalar spd2 = P.vel_x[i] * P.vel_x[i] + P.vel_y[i] * P.vel_y[i];
-            if (spd2 > kMaxSpeedSq) {
-                const Scalar s = kMaxSpeed / std::sqrt(spd2);
-                P.vel_x[i] *= s;
-                P.vel_y[i] *= s;
+        // ── external forces ───────────────────────────────────────────────────────
+        // Apply an outward radial impulse to every dynamic particle within `radius` of `center`.
+        // Impulse magnitude scales by inv_mass (heavier = less velocity gain) and a distance
+        // falloff (1 - d/radius)^falloff_pow. Statics (inv_mass==0) are skipped. Allocation-free.
+        void apply_radial_impulse(pebble::math::vec2 center, Scalar radius, Scalar magnitude,
+                                  Scalar falloff_pow = Scalar(1)) noexcept {
+            if (radius <= Scalar(0)) return;
+            const Index n = particles_.size();
+            const Scalar inv_radius = Scalar(1) / radius;
+            for (Index i = 0; i < n; ++i) {
+                if (particles_.is_static(i)) continue;
+                const Scalar dx = particles_.pos_x[i] - center[0];
+                const Scalar dy = particles_.pos_y[i] - center[1];
+                const Scalar d = std::sqrt(dx * dx + dy * dy);
+                if (d > radius) continue;
+                const Scalar falloff = std::pow(std::max(Scalar(0), Scalar(1) - d * inv_radius), falloff_pow);
+                const Scalar scale = magnitude * particles_.inv_mass[i] * falloff;
+                if (d > Scalar(1e-6)) {
+                    const Scalar inv_d = Scalar(1) / d;
+                    particles_.vel_x[i] += dx * inv_d * scale;
+                    particles_.vel_y[i] += dy * inv_d * scale;
+                }
             }
         }
 
-        // commit: pos = pred (static pred already == pos from the masked predict).
-        compute_.copy({P.pos_x.data(), n}, {P.pred_x.data(), n});
-        compute_.copy({P.pos_y.data(), n}, {P.pred_y.data(), n});
-    }
+        // ── diagnostics ─────────────────────────────────────────────────────────
+        [[nodiscard]] Scalar kinetic_energy() const noexcept {
+            const Index n = particles_.size();
+            return compute_.kinetic_energy(
+                {particles_.vel_x.data(), n},
+                {particles_.vel_y.data(), n},
+                {particles_.inv_mass.data(), n}
+            );
+        }
 
-    // Boundary containment via AABB clamp on predicted positions (anti-tunneling with substeps).
-    // Static particles keep pred == pos (bounds assumed to contain them), so a uniform clamp is safe.
-    void apply_boundary(Index n) {
-        auto& P = particles_;
-        compute_.clamp({P.pred_x.data(), n}, cfg_.bounds.lo[0], cfg_.bounds.hi[0]);
-        compute_.clamp({P.pred_y.data(), n}, cfg_.bounds.lo[1], cfg_.bounds.hi[1]);
-    }
+    private:
+        // Refresh the active mask (0 = static, 1 = dynamic) to match the current particle count.
+        void refresh_masks(Index n) {
+            active_.resize(n);
+            damp_.resize(n);
+            for (Index i = 0; i < n; ++i)
+                active_[i] = particles_.is_static(i) ? Scalar(0) : Scalar(1);
+        }
 
-    WorldConfig            cfg_;
-    ParticleStore          particles_;
-    EdgeStore              edges_;
-    MaterialRegistry       materials_;
-    SpatialHash            grid_;
-    std::vector<Scalar>    active_;   // per-particle 0/1 static mask (scratch)
-    std::vector<Scalar>    damp_;     // per-particle velocity damping (scratch)
-    [[no_unique_address]] Law law_{};
-    [[no_unique_address]] CB  compute_{};
-    [[no_unique_address]] MechanicsStack mechanics_{};
-    ThermalSolver          thermal_{};
-    DamageSolver           damage_{};
-};
+        void substep(Scalar dt_sub) {
+            auto& P = particles_;
+            const Index n = P.size();
+            refresh_masks(n);
+            const CSpan mask{active_.data(), n};
 
+            // 1. external accumulation: vel += active * gravity * dt.
+            compute_.axpy_const_masked({P.vel_x.data(), n}, mask, cfg_.gravity[0] * dt_sub);
+            compute_.axpy_const_masked({P.vel_y.data(), n}, mask, cfg_.gravity[1] * dt_sub);
+
+            // 4. predict motion: pred = pos + active * vel * dt  (static => pred = pos).
+            compute_.predict({P.pred_x.data(), n}, {P.pos_x.data(), n}, mask, {P.vel_x.data(), n}, dt_sub);
+            compute_.predict({P.pred_y.data(), n}, {P.pos_y.data(), n}, mask, {P.vel_y.data(), n}, dt_sub);
+
+            // 5. build neighborhoods over predicted positions.
+            grid_.build({P.pred_x.data(), n}, {P.pred_y.data(), n});
+
+            SolverContext < Law > ctx{P, edges_, materials_, grid_, law_, cfg_, dt_sub};
+
+            // 2. thermal + phase update (uses neighbor grid).
+            thermal_.solve(ctx);
+
+            // 6. mechanics solve loop (constraint iterations).
+            for (int it = 0; it < cfg_.solver_iters; ++it) {
+                mechanics_.run(ctx);
+                apply_boundary(n);
+            }
+
+            // 7. damage + plasticity.
+            damage_.solve(ctx);
+
+            // 8. velocity update + viscous damping; 9. commit.
+            const Scalar inv_dt = dt_sub > Scalar(0) ? Scalar(1) / dt_sub : Scalar(0);
+            for (Index i = 0; i < n; ++i) {
+                const Scalar mu = law_.effective_viscosity(ctx.params_of(i), ctx.phase_of(i));
+                const Scalar total_damp = (mu + cfg_.global_damping) * dt_sub;
+                damp_[i] = active_[i] * std::clamp(Scalar(1) - total_damp, Scalar(0), Scalar(1));
+            }
+            const CSpan dampc{damp_.data(), n};
+            // vel = (pred - pos) * inv_dt, then vel *= damp (damp folds in the static mask => 0).
+            compute_.sub_scale({P.vel_x.data(), n}, {P.pred_x.data(), n}, {P.pos_x.data(), n}, inv_dt);
+            compute_.sub_scale({P.vel_y.data(), n}, {P.pred_y.data(), n}, {P.pos_y.data(), n}, inv_dt);
+            compute_.mul_col({P.vel_x.data(), n}, dampc);
+            compute_.mul_col({P.vel_y.data(), n}, dampc);
+
+            // Velocity magnitude cap to guarantee physical stability under extreme compressive loads
+            constexpr Scalar kMaxSpeed = Scalar(2000.0);
+            constexpr Scalar kMaxSpeedSq = kMaxSpeed * kMaxSpeed;
+            for (Index i = 0; i < n; ++i) {
+                const Scalar spd2 = P.vel_x[i] * P.vel_x[i] + P.vel_y[i] * P.vel_y[i];
+                if (spd2 > kMaxSpeedSq) {
+                    const Scalar s = kMaxSpeed / std::sqrt(spd2);
+                    P.vel_x[i] *= s;
+                    P.vel_y[i] *= s;
+                }
+            }
+
+            // commit: pos = pred (static pred already == pos from the masked predict).
+            compute_.copy({P.pos_x.data(), n}, {P.pred_x.data(), n});
+            compute_.copy({P.pos_y.data(), n}, {P.pred_y.data(), n});
+        }
+
+        // Boundary containment via AABB clamp on predicted positions (anti-tunneling with substeps).
+        // Static particles keep pred == pos (bounds assumed to contain them), so a uniform clamp is safe.
+        void apply_boundary(Index n) {
+            auto& P = particles_;
+            compute_.clamp({P.pred_x.data(), n}, cfg_.bounds.lo[0], cfg_.bounds.hi[0]);
+            compute_.clamp({P.pred_y.data(), n}, cfg_.bounds.lo[1], cfg_.bounds.hi[1]);
+        }
+
+        WorldConfig cfg_;
+        ParticleStore particles_;
+        EdgeStore edges_;
+        MaterialRegistry materials_;
+        SpatialHash grid_;
+        std::vector<Scalar> active_; // per-particle 0/1 static mask (scratch)
+        std::vector<Scalar> damp_; // per-particle velocity damping (scratch)
+        [[no_unique_address]] Law law_{};
+        [[no_unique_address]] CB compute_{};
+        [[no_unique_address]] MechanicsStack mechanics_{};
+        ThermalSolver thermal_{};
+        DamageSolver damage_{};
+    };
 } // namespace prakriti

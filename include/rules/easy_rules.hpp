@@ -547,7 +547,8 @@ namespace easy_rules {
         [[nodiscard]] bool before_evaluate(this auto& self, const Rule& rule, const ExecutionContext& context) {
             if constexpr (requires { self.before_evaluate_impl(rule, context); }) {
                 return self.before_evaluate_impl(rule, context);
-            } else {
+            }
+            else {
                 return true;
             }
         }
@@ -696,30 +697,35 @@ namespace easy_rules {
             before_listeners_.emplace_back([&listener](const Rule& rule, const ExecutionContext& ctx) {
                 if constexpr (requires { listener.before_evaluate(rule, ctx); }) {
                     return listener.before_evaluate(rule, ctx);
-                } else if constexpr (requires { listener.before_evaluate_impl(rule, ctx); }) {
+                }
+                else if constexpr (requires { listener.before_evaluate_impl(rule, ctx); }) {
                     return listener.before_evaluate_impl(rule, ctx);
-                } else {
+                }
+                else {
                     return true;
                 }
             });
             success_listeners_.emplace_back([&listener](const Rule& rule, ExecutionContext& ctx) {
                 if constexpr (requires { listener.on_success(rule, ctx); }) {
                     listener.on_success(rule, ctx);
-                } else if constexpr (requires { listener.on_success_impl(rule, ctx); }) {
+                }
+                else if constexpr (requires { listener.on_success_impl(rule, ctx); }) {
                     listener.on_success_impl(rule, ctx);
                 }
             });
             failure_listeners_.emplace_back([&listener](const Rule& rule, ExecutionContext& ctx) {
                 if constexpr (requires { listener.on_failure(rule, ctx); }) {
                     listener.on_failure(rule, ctx);
-                } else if constexpr (requires { listener.on_failure_impl(rule, ctx); }) {
+                }
+                else if constexpr (requires { listener.on_failure_impl(rule, ctx); }) {
                     listener.on_failure_impl(rule, ctx);
                 }
             });
             skip_listeners_.emplace_back([&listener](const Rule& rule) {
                 if constexpr (requires { listener.on_skipped(rule); }) {
                     listener.on_skipped(rule);
-                } else if constexpr (requires { listener.on_skipped_impl(rule); }) {
+                }
+                else if constexpr (requires { listener.on_skipped_impl(rule); }) {
                     listener.on_skipped_impl(rule);
                 }
             });

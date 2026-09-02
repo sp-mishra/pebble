@@ -36,7 +36,6 @@
 #include <observability/nadi.hpp>
 
 namespace ts {
-
     struct Greater;
 
     // --- Core Typedefs and Small-Buffer Optimized Dimensions ---
@@ -47,51 +46,52 @@ namespace ts {
     using tensor_strides = TensorStrides;
 
     struct all_slice_t {};
+
     inline constexpr all_slice_t all;
     using AllSlice = all_slice_t;
 
     using Slice = std::variant<size_t, std::pair<size_t, size_t>, all_slice_t>;
     using slice = Slice;
 
-    template<class>
+    template <class>
     inline constexpr bool always_false = false;
 
     // --- Forward Declarations ---
     struct DefaultStoragePolicy;
     struct DefaultComputationPolicy;
 
-    template<typename E, typename T, typename StoragePolicy, typename CompPolicy>
+    template <typename E, typename T, typename StoragePolicy, typename CompPolicy>
     class TensorExpression;
 
-    template<typename T, typename SP, typename CP>
+    template <typename T, typename SP, typename CP>
     class ScalarWrapper;
 
     // --- Expression Storage Traits ---
     // Determines whether to store an expression operand by value or by reference
-    template<typename T>
+    template <typename T>
     struct expression_storage_traits {
         using type = const T&; // Default: store by reference
     };
 
     // Specialize for ScalarWrapper: store by value (lightweight, zero heap allocation)
-    template<typename T, typename SP, typename CP>
+    template <typename T, typename SP, typename CP>
     struct expression_storage_traits<ScalarWrapper<T, SP, CP>> {
         using type = ScalarWrapper<T, SP, CP>;
     };
 
-    template<typename T>
+    template <typename T>
     using expression_storage_t = typename expression_storage_traits<T>::type;
 
-    template<typename T, typename StoragePolicy = DefaultStoragePolicy, typename CompPolicy = DefaultComputationPolicy>
+    template <typename T, typename StoragePolicy = DefaultStoragePolicy, typename CompPolicy = DefaultComputationPolicy>
     class DynamicTensor;
 
-    template<typename T, typename StoragePolicy, typename CompPolicy, size_t... Dims>
+    template <typename T, typename StoragePolicy, typename CompPolicy, size_t... Dims>
     class StaticTensor;
 
-    template<typename Op, typename Lhs, typename Rhs>
+    template <typename Op, typename Lhs, typename Rhs>
     class BinaryExpression;
 
-    template<typename Op, typename E>
+    template <typename Op, typename E>
     class UnaryExpression;
 
     struct Add;
@@ -112,43 +112,44 @@ namespace ts {
     struct TanOp;
     struct SquareOp;
 
-    inline TensorShape broadcast_shapes_unif(const TensorShape &lhs, const TensorShape &rhs);
+    inline TensorShape broadcast_shapes_unif(const TensorShape& lhs, const TensorShape& rhs);
 
-    template<typename E>
+    template <typename E>
     TensorShape get_shape(
-        const TensorExpression<E, typename E::value_type, typename E::storage_policy, typename E::computation_policy> &expr);
+        const TensorExpression<E, typename E::value_type, typename E::storage_policy, typename E::computation_policy>&
+        expr);
 
-    inline size_t calculate_size_dyn(const TensorShape &shape);
-    inline TensorStrides calculate_strides_dyn(const TensorShape &shape);
+    inline size_t calculate_size_dyn(const TensorShape& shape);
+    inline TensorStrides calculate_strides_dyn(const TensorShape& shape);
 
     // Result type trait for binary expressions
-    template<typename Op, typename Lhs>
+    template <typename Op, typename Lhs>
     struct binary_expr_result_type {
         using type = typename Lhs::value_type;
     };
 
-    template<typename Lhs>
+    template <typename Lhs>
     struct binary_expr_result_type<Greater, Lhs> {
         using type = bool;
     };
 
-    template<typename Lhs>
+    template <typename Lhs>
     struct binary_expr_result_type<Less, Lhs> {
         using type = bool;
     };
 
-    template<typename Lhs>
+    template <typename Lhs>
     struct binary_expr_result_type<Equal, Lhs> {
         using type = bool;
     };
 
-    template<typename Lhs>
+    template <typename Lhs>
     struct binary_expr_result_type<NotEqual, Lhs> {
         using type = bool;
     };
 
     // --- Core Expression Base Class (C++23 Deducing This) ---
-    template<typename E, typename T, typename StoragePolicy, typename CompPolicy>
+    template <typename E, typename T, typename StoragePolicy, typename CompPolicy>
     class TensorExpression {
     public:
         using value_type = T;
@@ -159,14 +160,15 @@ namespace ts {
         constexpr auto&& self(this Self&& self) noexcept {
             if constexpr (std::is_const_v<std::remove_reference_t<Self>>) {
                 return static_cast<const E&>(self);
-            } else {
+            }
+            else {
                 return static_cast<E&>(self);
             }
         }
     };
 
     // --- ScalarWrapper: Lightweight scalar representation ---
-    template<typename T, typename SP = DefaultStoragePolicy, typename CP = DefaultComputationPolicy>
+    template <typename T, typename SP = DefaultStoragePolicy, typename CP = DefaultComputationPolicy>
     class ScalarWrapper : public TensorExpression<ScalarWrapper<T, SP, CP>, T, SP, CP> {
     public:
         using value_type = T;
@@ -178,7 +180,9 @@ namespace ts {
         [[nodiscard]] TensorShape shape() const { return {}; }
 
         T operator()(const std::vector<size_t>&) const { return value_; }
-        template<typename... Is> T operator()(Is...) const { return value_; }
+
+        template <typename... Is>
+        T operator()(Is...) const { return value_; }
 
         const T* data() const { return nullptr; }
         T* data() { return nullptr; }
@@ -242,7 +246,10 @@ namespace ts {
         }
 
         void push_back(const char* cstr) {
-            if (!cstr) { push_back(std::string_view{}); return; }
+            if (!cstr) {
+                push_back(std::string_view{});
+                return;
+            }
             push_back(std::string_view(cstr));
         }
 
@@ -280,8 +287,18 @@ namespace ts {
                 : storage_(storage), index_(index) {}
 
             reference operator*() const { return (*storage_)[index_]; }
-            Iterator& operator++() { ++index_; return *this; }
-            Iterator operator++(int) { Iterator tmp = *this; ++index_; return tmp; }
+
+            Iterator& operator++() {
+                ++index_;
+                return *this;
+            }
+
+            Iterator operator++(int) {
+                Iterator tmp = *this;
+                ++index_;
+                return tmp;
+            }
+
             bool operator==(const Iterator& other) const { return index_ == other.index_; }
             bool operator!=(const Iterator& other) const { return index_ != other.index_; }
 
@@ -298,75 +315,80 @@ namespace ts {
         std::vector<size_t> offsets_;
 
         static size_t total_chars(const std::vector<std::string>& strings) {
-            size_t n = 0; for (const auto& s : strings) n += s.size(); return n;
+            size_t n = 0;
+            for (const auto& s : strings) n += s.size();
+            return n;
         }
+
         static size_t total_chars(std::initializer_list<std::string> strings) {
-            size_t n = 0; for (const auto& s : strings) n += s.size(); return n;
+            size_t n = 0;
+            for (const auto& s : strings) n += s.size();
+            return n;
         }
     };
 
     // --- Policy Definitions ---
     struct DefaultStoragePolicy {
-        template<typename T>
+        template <typename T>
         using DynamicStorage = std::vector<T>;
 
-        template<typename T, size_t Size>
+        template <typename T, size_t Size>
         using StaticStorage = std::array<T, Size>;
 
         using StringStorage = ArrowStringStorage;
     };
 
     // Small-Buffer Optimized Storage Policy (e.g. 64 or 128 bytes inline buffer)
-    template<size_t InlineBytes = 64>
+    template <size_t InlineBytes = 64>
     struct SmallTensorStoragePolicy {
-        template<typename T>
+        template <typename T>
         using DynamicStorage = containers::dynamic::SmallVector<T, InlineBytes>;
 
-        template<typename T, size_t Size>
+        template <typename T, size_t Size>
         using StaticStorage = std::array<T, Size>;
 
         using StringStorage = ArrowStringStorage;
     };
 
     // Smriti Arena / Pool Storage Policy
-    template<typename ResourceT>
+    template <typename ResourceT>
     struct SmritiStoragePolicy {
-        template<typename T>
+        template <typename T>
         using DynamicStorage = std::vector<T, smriti::SmritiAllocator<T, ResourceT>>;
 
         using StringStorage = ArrowStringStorage;
     };
 
     // Structure-of-Arrays (SoA) Storage Policy using Pebble's reflection system
-    template<typename StructT, size_t InlineCapacity = 64>
+    template <typename StructT, size_t InlineCapacity = 64>
         requires meta::Reflectable<StructT>
     struct SoAStoragePolicy {
-        template<typename T>
+        template <typename T>
         using DynamicStorage = meta::soa_storage<StructT, InlineCapacity>;
 
-        template<typename T, size_t Size>
+        template <typename T, size_t Size>
         using StaticStorage = meta::soa_storage<StructT, Size>;
 
         using StringStorage = ArrowStringStorage;
     };
 
-    template<typename B, typename T>
+    template <typename B, typename T>
     concept TensorBackend = requires(B b, const B cb, size_t i) {
         typename B::value_type;
         requires std::same_as<typename B::value_type, T>;
         { b.size() } -> std::convertible_to<size_t>;
-        { b.data() } -> std::same_as<T *>;
-        { cb.data() } -> std::same_as<const T *>;
-        { b[i] } -> std::same_as<T &>;
+        { b.data() } -> std::same_as<T*>;
+        { cb.data() } -> std::same_as<const T*>;
+        { b[i] } -> std::same_as<T&>;
         requires std::constructible_from<B, size_t>;
     };
 
-    inline size_t calculate_size_dyn(const TensorShape &shape) {
+    inline size_t calculate_size_dyn(const TensorShape& shape) {
         if (shape.empty()) return 1;
         return std::accumulate(shape.begin(), shape.end(), static_cast<size_t>(1), std::multiplies<size_t>());
     }
 
-    inline TensorStrides calculate_strides_dyn(const TensorShape &shape) {
+    inline TensorStrides calculate_strides_dyn(const TensorShape& shape) {
         if (shape.empty()) return {};
         TensorStrides strides(shape.size());
         strides.back() = 1;
@@ -376,90 +398,92 @@ namespace ts {
         return strides;
     }
 
-    template<typename E>
+    template <typename E>
     TensorShape get_shape(
-        const TensorExpression<E, typename E::value_type, typename E::storage_policy, typename E::computation_policy> &expr) {
-        const auto &s = expr.self().shape();
+        const TensorExpression<E, typename E::value_type, typename E::storage_policy, typename E::computation_policy>&
+        expr) {
+        const auto& s = expr.self().shape();
         return TensorShape(s.begin(), s.end());
     }
 
     // --- View Classes ---
-    template<typename T>
+    template <typename T>
     class TensorView : public TensorExpression<TensorView<T>, T, DefaultStoragePolicy, DefaultComputationPolicy> {
     public:
-        TensorView(T *data, TensorShape shape, TensorStrides strides, const size_t offset = 0)
+        TensorView(T* data, TensorShape shape, TensorStrides strides, const size_t offset = 0)
             : data_(data), shape_(std::move(shape)), strides_(std::move(strides)), offset_(offset) {}
 
-        [[nodiscard]] const TensorShape &shape() const { return shape_; }
+        [[nodiscard]] const TensorShape& shape() const { return shape_; }
 
-        T &operator()(const std::vector<size_t> &indices) const {
+        T& operator()(const std::vector<size_t>& indices) const {
             size_t flat_index = offset_;
             for (size_t i = 0; i < indices.size(); ++i) flat_index += indices[i] * strides_[i];
             return data_[flat_index];
         }
 
-        template<std::integral... Is>
-        T &operator()(Is... idx) const {
+        template <std::integral... Is>
+        T& operator()(Is... idx) const {
             return (*this)({static_cast<size_t>(idx)...});
         }
 
-        template<std::integral... Is>
-        T &operator[](Is... idx) const {
+        template <std::integral... Is>
+        T& operator[](Is... idx) const {
             return (*this)({static_cast<size_t>(idx)...});
         }
 
     private:
-        T *data_;
+        T* data_;
         TensorShape shape_;
         TensorStrides strides_;
         size_t offset_;
     };
 
-    template<typename T>
-    class StaticTensorView : public TensorExpression<StaticTensorView<T>, T, DefaultStoragePolicy, DefaultComputationPolicy> {
+    template <typename T>
+    class StaticTensorView : public TensorExpression<
+            StaticTensorView<T>, T, DefaultStoragePolicy, DefaultComputationPolicy> {
     public:
-        StaticTensorView(T *data, TensorShape shape, TensorStrides strides, const size_t offset = 0)
+        StaticTensorView(T* data, TensorShape shape, TensorStrides strides, const size_t offset = 0)
             : data_(data), shape_(std::move(shape)), strides_(std::move(strides)), offset_(offset) {}
 
-        [[nodiscard]] const TensorShape &shape() const { return shape_; }
+        [[nodiscard]] const TensorShape& shape() const { return shape_; }
 
-        T &operator()(const std::vector<size_t> &indices) const {
+        T& operator()(const std::vector<size_t>& indices) const {
             if (indices.size() != shape_.size()) throw std::out_of_range("StaticTensorView: wrong number of indices");
             size_t flat = offset_;
             for (size_t i = 0; i < shape_.size(); ++i) flat += indices[i] * strides_[i];
             return data_[flat];
         }
 
-        template<std::integral... Is>
-        T &operator()(Is... idx) const {
+        template <std::integral... Is>
+        T& operator()(Is... idx) const {
             return (*this)({static_cast<size_t>(idx)...});
         }
 
-        template<std::integral... Is>
-        T &operator[](Is... idx) const {
+        template <std::integral... Is>
+        T& operator[](Is... idx) const {
             return (*this)({static_cast<size_t>(idx)...});
         }
 
     private:
-        T *data_;
+        T* data_;
         TensorShape shape_;
         TensorStrides strides_;
         size_t offset_;
     };
 
     // --- Expression Template Classes ---
-    template<typename Op, typename Lhs, typename Rhs>
+    template <typename Op, typename Lhs, typename Rhs>
     class BinaryExpression : public TensorExpression<BinaryExpression<Op, Lhs, Rhs>,
-                typename binary_expr_result_type<Op, Lhs>::type,
-                typename Lhs::storage_policy, typename Lhs::computation_policy> {
+                                                     typename binary_expr_result_type<Op, Lhs>::type,
+                                                     typename Lhs::storage_policy, typename Lhs::computation_policy> {
     public:
-        BinaryExpression(const Lhs &lhs, const Rhs &rhs)
+        BinaryExpression(const Lhs& lhs, const Rhs& rhs)
             : lhs_(lhs), rhs_(rhs),
               shape_(broadcast_shapes_unif(get_shape(lhs), get_shape(rhs))) {}
 
-        [[nodiscard]] const TensorShape &shape() const { return shape_; }
+        [[nodiscard]] const TensorShape& shape() const { return shape_; }
 
-        auto operator()(const std::vector<size_t> &indices) const {
+        auto operator()(const std::vector<size_t>& indices) const {
             return Op::apply(get_value(lhs_, indices), get_value(rhs_, indices));
         }
 
@@ -468,8 +492,8 @@ namespace ts {
         typename expression_storage_traits<std::remove_cvref_t<Rhs>>::type rhs_;
         TensorShape shape_;
 
-        template<typename E>
-        auto get_value(const E &expr, const std::vector<size_t> &indices) const {
+        template <typename E>
+        auto get_value(const E& expr, const std::vector<size_t>& indices) const {
             auto expr_shape = get_shape(expr);
             if (expr_shape.empty()) {
                 return expr({});
@@ -490,17 +514,17 @@ namespace ts {
         }
     };
 
-    template<typename Op, typename E>
+    template <typename Op, typename E>
     class UnaryExpression : public TensorExpression<UnaryExpression<Op, E>, typename E::value_type, typename
-                E::storage_policy, typename E::computation_policy> {
+                                                    E::storage_policy, typename E::computation_policy> {
     public:
-        explicit UnaryExpression(const E &expr) : expr_(expr) {}
+        explicit UnaryExpression(const E& expr) : expr_(expr) {}
 
-        const auto &shape() const { return expr_.shape(); }
-        auto operator()(const std::vector<size_t> &indices) const { return Op::apply(expr_(indices)); }
+        const auto& shape() const { return expr_.shape(); }
+        auto operator()(const std::vector<size_t>& indices) const { return Op::apply(expr_(indices)); }
 
     private:
-        const E &expr_;
+        const E& expr_;
     };
 
     // --- Op Structs ---
@@ -537,9 +561,9 @@ namespace ts {
     };
 
     struct Power {
-        static auto apply(auto a, auto b) { 
+        static auto apply(auto a, auto b) {
             using std::pow;
-            return pow(a, b); 
+            return pow(a, b);
         }
     };
 
@@ -548,7 +572,8 @@ namespace ts {
             using T = decltype(v);
             if constexpr (std::is_unsigned_v<T>) {
                 return v;
-            } else {
+            }
+            else {
                 using std::abs;
                 return abs(v);
             }
@@ -603,10 +628,10 @@ namespace ts {
         }
     };
 
-    inline TensorShape broadcast_shapes_unif(const TensorShape &lhs, const TensorShape &rhs) {
+    inline TensorShape broadcast_shapes_unif(const TensorShape& lhs, const TensorShape& rhs) {
         const size_t max_dim = std::max(lhs.size(), rhs.size());
         TensorShape result_shape(max_dim);
-        auto get_dim = [](const auto &shape, size_t i) {
+        auto get_dim = [](const auto& shape, size_t i) {
             return i < shape.size() ? shape[shape.size() - 1 - i] : 1;
         };
         for (size_t i = 0; i < max_dim; ++i) {
@@ -620,9 +645,9 @@ namespace ts {
     }
 
     // --- Static Tensor Implementation ---
-    template<typename T, typename StoragePolicy, typename CompPolicy, size_t... Dims>
+    template <typename T, typename StoragePolicy, typename CompPolicy, size_t... Dims>
     class StaticTensor : public TensorExpression<StaticTensor<T, StoragePolicy, CompPolicy, Dims...>, T, StoragePolicy,
-                CompPolicy> {
+                                                 CompPolicy> {
     public:
         using storage_policy = StoragePolicy;
         using computation_policy = CompPolicy;
@@ -637,14 +662,15 @@ namespace ts {
             if constexpr (Size > 0) std::copy(list.begin(), list.end(), data_.data());
         }
 
-        template<typename... Vals>
+        template <typename... Vals>
             requires (sizeof...(Vals) == Size && (std::is_convertible_v<Vals, T> && ...))
         constexpr explicit StaticTensor(Vals... vals) : data_{static_cast<T>(vals)...} {}
 
-        template<typename E>
-        constexpr StaticTensor &operator=(const TensorExpression<E, T, StoragePolicy, CompPolicy> &expr) {
-            const auto &expression = expr.self();
-            if (auto expr_shape = get_shape(expression); !std::equal(shape().begin(), shape().end(), expr_shape.begin(), expr_shape.end()))
+        template <typename E>
+        constexpr StaticTensor& operator=(const TensorExpression<E, T, StoragePolicy, CompPolicy>& expr) {
+            const auto& expression = expr.self();
+            if (auto expr_shape = get_shape(expression); !std::equal(shape().begin(), shape().end(), expr_shape.begin(),
+                                                                     expr_shape.end()))
                 throw std::runtime_error("Incompatible shape in assignment to static tensor.");
 
             if constexpr (Rank > 0) {
@@ -663,92 +689,100 @@ namespace ts {
             return *this;
         }
 
-        constexpr const storage_type &storage() const { return data_; }
-        constexpr T *data() { 
+        constexpr const storage_type& storage() const { return data_; }
+
+        constexpr T* data() {
             if constexpr (std::is_same_v<storage_type, std::vector<bool>>) {
                 return nullptr;
-            } else {
-                return data_.data(); 
+            }
+            else {
+                return data_.data();
             }
         }
-        constexpr const T *data() const { 
+
+        constexpr const T* data() const {
             if constexpr (std::is_same_v<storage_type, std::vector<bool>>) {
                 return nullptr;
-            } else {
-                return data_.data(); 
+            }
+            else {
+                return data_.data();
             }
         }
-        constexpr const std::array<size_t, Rank> &shape() const { return shape_; }
 
-        constexpr T &operator()(const std::vector<size_t> &indices) { return data_[get_flat_index_dyn(indices)]; }
-        constexpr const T &operator()(const std::vector<size_t> &indices) const { return data_[get_flat_index_dyn(indices)]; }
+        constexpr const std::array<size_t, Rank>& shape() const { return shape_; }
 
-        template<std::integral... Is>
-        constexpr T &operator()(Is... indices) {
+        constexpr T& operator()(const std::vector<size_t>& indices) { return data_[get_flat_index_dyn(indices)]; }
+
+        constexpr const T& operator()(const std::vector<size_t>& indices) const {
+            return data_[get_flat_index_dyn(indices)];
+        }
+
+        template <std::integral... Is>
+        constexpr T& operator()(Is... indices) {
             static_assert(sizeof...(Is) == Rank, "Incorrect number of indices.");
             return data_[get_flat_index({static_cast<size_t>(indices)...})];
         }
 
-        template<std::integral... Is>
-        constexpr const T &operator()(Is... indices) const {
+        template <std::integral... Is>
+        constexpr const T& operator()(Is... indices) const {
             static_assert(sizeof...(Is) == Rank, "Incorrect number of indices.");
             return data_[get_flat_index({static_cast<size_t>(indices)...})];
         }
 
         // C++23 multidimensional subscript operator
-        template<std::integral... Is>
-        constexpr T &operator[](Is... indices) {
+        template <std::integral... Is>
+        constexpr T& operator[](Is... indices) {
             static_assert(sizeof...(Is) == Rank, "Incorrect number of indices.");
             return data_[get_flat_index({static_cast<size_t>(indices)...})];
         }
 
-        template<std::integral... Is>
-        constexpr const T &operator[](Is... indices) const {
+        template <std::integral... Is>
+        constexpr const T& operator[](Is... indices) const {
             static_assert(sizeof...(Is) == Rank, "Incorrect number of indices.");
             return data_[get_flat_index({static_cast<size_t>(indices)...})];
         }
 
         // --- StaticTensor Equality ---
-        friend constexpr bool operator==(const StaticTensor &a, const StaticTensor &b) noexcept {
+        friend constexpr bool operator==(const StaticTensor& a, const StaticTensor& b) noexcept {
             return a.data_ == b.data_;
         }
 
         // --- StaticTensor Element-wise Vector Arithmetic (Direct return of StaticTensor, no dynamic allocation) ---
-        friend constexpr StaticTensor operator+(const StaticTensor &a, const StaticTensor &b) noexcept {
+        friend constexpr StaticTensor operator+(const StaticTensor& a, const StaticTensor& b) noexcept {
             StaticTensor res;
             for (size_t i = 0; i < Size; ++i) res.data_[i] = a.data_[i] + b.data_[i];
             return res;
         }
 
-        friend constexpr StaticTensor operator-(const StaticTensor &a, const StaticTensor &b) noexcept {
+        friend constexpr StaticTensor operator-(const StaticTensor& a, const StaticTensor& b) noexcept {
             StaticTensor res;
             for (size_t i = 0; i < Size; ++i) res.data_[i] = a.data_[i] - b.data_[i];
             return res;
         }
 
-        friend constexpr StaticTensor operator-(const StaticTensor &v) noexcept {
+        friend constexpr StaticTensor operator-(const StaticTensor& v) noexcept {
             StaticTensor res;
             for (size_t i = 0; i < Size; ++i) res.data_[i] = -v.data_[i];
             return res;
         }
 
-        template<typename S>
+        template <typename S>
             requires std::is_arithmetic_v<S>
-        friend constexpr StaticTensor operator*(const StaticTensor &v, S s) noexcept {
+        friend constexpr StaticTensor operator*(const StaticTensor& v, S s) noexcept {
             StaticTensor res;
             for (size_t i = 0; i < Size; ++i) res.data_[i] = static_cast<T>(v.data_[i] * s);
             return res;
         }
 
-        template<typename S>
+        template <typename S>
             requires std::is_arithmetic_v<S>
-        friend constexpr StaticTensor operator*(S s, const StaticTensor &v) noexcept {
+        friend constexpr StaticTensor operator*(S s, const StaticTensor& v) noexcept {
             return v * s;
         }
 
-        template<typename S>
+        template <typename S>
             requires std::is_arithmetic_v<S>
-        friend constexpr StaticTensor operator/(const StaticTensor &v, S s) noexcept {
+        friend constexpr StaticTensor operator/(const StaticTensor& v, S s) noexcept {
             StaticTensor res;
             for (size_t i = 0; i < Size; ++i) res.data_[i] = static_cast<T>(v.data_[i] / s);
             return res;
@@ -766,13 +800,13 @@ namespace ts {
             return s;
         }();
 
-        constexpr size_t get_flat_index(const std::array<size_t, Rank> &indices) const {
+        constexpr size_t get_flat_index(const std::array<size_t, Rank>& indices) const {
             size_t flat_index = 0;
             for (size_t i = 0; i < Rank; ++i) flat_index += indices[i] * strides_[i];
             return flat_index;
         }
 
-        [[nodiscard]] size_t get_flat_index_dyn(const std::vector<size_t> &indices) const {
+        [[nodiscard]] size_t get_flat_index_dyn(const std::vector<size_t>& indices) const {
             size_t flat_index = 0;
             for (size_t i = 0; i < Rank; ++i) flat_index += indices[i] * strides_[i];
             return flat_index;
@@ -780,9 +814,9 @@ namespace ts {
     };
 
     // --- Dynamic Tensor Implementation ---
-    template<typename T, typename StoragePolicy, typename CompPolicy>
+    template <typename T, typename StoragePolicy, typename CompPolicy>
     class DynamicTensor : public TensorExpression<DynamicTensor<T, StoragePolicy, CompPolicy>, T, StoragePolicy,
-                CompPolicy> {
+                                                  CompPolicy> {
     public:
         using storage_policy = StoragePolicy;
         using computation_policy = CompPolicy;
@@ -798,9 +832,11 @@ namespace ts {
               strides_(calculate_strides_dyn(shape_)),
               data_(calculate_size_dyn(shape_)) {}
 
-        template<typename ResourceOrAlloc>
-            requires (requires(ResourceOrAlloc& r, size_t n) { storage_type(n, smriti::SmritiAllocator<T, ResourceOrAlloc>{r}); } ||
-                      requires(ResourceOrAlloc& a, size_t n) { storage_type(n, a); })
+        template <typename ResourceOrAlloc>
+            requires (requires(ResourceOrAlloc& r, size_t n) {
+                    storage_type(n, smriti::SmritiAllocator<T, ResourceOrAlloc>{r});
+                } ||
+                requires(ResourceOrAlloc& a, size_t n) { storage_type(n, a); })
         DynamicTensor(TensorShape shape, ResourceOrAlloc& res)
             : shape_(std::move(shape)),
               strides_(calculate_strides_dyn(shape_)),
@@ -808,7 +844,8 @@ namespace ts {
                   const size_t n = calculate_size_dyn(shape_);
                   if constexpr (requires { storage_type(n, smriti::SmritiAllocator<T, ResourceOrAlloc>{res}); }) {
                       return storage_type(n, smriti::SmritiAllocator<T, ResourceOrAlloc>{res});
-                  } else {
+                  }
+                  else {
                       return storage_type(n, res);
                   }
               }()) {}
@@ -818,7 +855,7 @@ namespace ts {
         DynamicTensor& operator=(const DynamicTensor&) = default;
         DynamicTensor& operator=(DynamicTensor&&) noexcept = default;
 
-        template<typename InputIt>
+        template <typename InputIt>
         DynamicTensor(TensorShape shape, InputIt first, InputIt last)
             : shape_(std::move(shape)),
               strides_(calculate_strides_dyn(shape_)),
@@ -828,22 +865,24 @@ namespace ts {
             }
         }
 
-        template<typename OtherStorage, typename OtherComp>
-        explicit DynamicTensor(const DynamicTensor<T, OtherStorage, OtherComp> &other)
+        template <typename OtherStorage, typename OtherComp>
+        explicit DynamicTensor(const DynamicTensor<T, OtherStorage, OtherComp>& other)
             : shape_(other.shape()), strides_(calculate_strides_dyn(other.shape())) {
             if constexpr (std::is_same_v<T, bool> && requires { other.data(); } &&
-                          std::is_same_v<typename OtherStorage::template DynamicStorage<T>, std::vector<bool>>) {
+                std::is_same_v < typename OtherStorage::template DynamicStorage<T>, std::vector<bool> >) {
                 const size_t n = calculate_size_dyn(other.shape());
-                const auto &other_storage = other.storage();
+                const auto& other_storage = other.storage();
                 std::vector<bool> temp;
                 temp.reserve(n);
                 for (size_t i = 0; i < n; ++i) {
                     temp.push_back(static_cast<bool>(other_storage[i]));
                 }
                 data_ = storage_type(temp.begin(), temp.end());
-            } else if (other.data() != nullptr) {
+            }
+            else if (other.data() != nullptr) {
                 data_ = storage_type(other.data(), other.data() + calculate_size_dyn(other.shape()));
-            } else {
+            }
+            else {
                 data_ = storage_type(calculate_size_dyn(other.shape()));
                 std::vector<size_t> idx(shape_.size(), 0);
                 for (size_t i = 0; i < calculate_size_dyn(shape_); ++i) {
@@ -873,9 +912,9 @@ namespace ts {
               strides_(calculate_strides_dyn(shape_)),
               data_(std::move(storage)) {}
 
-        template<typename E>
-        explicit DynamicTensor(const TensorExpression<E, T, StoragePolicy, CompPolicy> &expr) {
-            const auto &expression = expr.self();
+        template <typename E>
+        explicit DynamicTensor(const TensorExpression<E, T, StoragePolicy, CompPolicy>& expr) {
+            const auto& expression = expr.self();
             shape_ = get_shape(expression);
             strides_ = calculate_strides_dyn(shape_);
 
@@ -899,14 +938,15 @@ namespace ts {
                         temp_i /= shape_[d];
                     }
                 }
-                if constexpr (requires(storage_type &s, size_t j, T v) { s.set(j, v); }) {
+                if constexpr (requires(storage_type& s, size_t j, T v) { s.set(j, v); }) {
                     data_.set(i, expression(idx));
-                } else if constexpr (std::is_same_v<T, bool> && requires { data_.get(); }) {
+                }
+                else if constexpr (std::is_same_v<T, bool> && requires { data_.get(); }) {
                     if (data_.data() == nullptr) {
                         std::vector<bool> temp_buf;
                         temp_buf.reserve(calculate_size_dyn(shape_));
                         std::vector<size_t> idx2(shape_.size(), 0);
-                        for(size_t k = 0; k < calculate_size_dyn(shape_); ++k) {
+                        for (size_t k = 0; k < calculate_size_dyn(shape_); ++k) {
                             size_t temp_k = k;
                             for (int d = static_cast<int>(shape_.size()) - 1; d >= 0; --d) {
                                 if (shape_[d] > 0) {
@@ -918,18 +958,20 @@ namespace ts {
                         }
                         data_ = storage_type(temp_buf.begin(), temp_buf.end());
                         return;
-                    } else {
+                    }
+                    else {
                         throw std::runtime_error("Direct indexing not supported for MLX bool arrays");
                     }
-                } else {
+                }
+                else {
                     data_[i] = expression(idx);
                 }
             }
         }
 
-        template<typename E>
-        DynamicTensor &operator=(const TensorExpression<E, T, StoragePolicy, CompPolicy> &expr) {
-            const auto &expression = expr.self();
+        template <typename E>
+        DynamicTensor& operator=(const TensorExpression<E, T, StoragePolicy, CompPolicy>& expr) {
+            const auto& expression = expr.self();
             shape_ = get_shape(expression);
             strides_ = calculate_strides_dyn(shape_);
             data_ = storage_type(calculate_size_dyn(shape_));
@@ -943,13 +985,14 @@ namespace ts {
                         temp_i /= shape_[d];
                     }
                 }
-                if constexpr (requires(storage_type &s, size_t j, T v) { s.set(j, v); }) {
+                if constexpr (requires(storage_type& s, size_t j, T v) { s.set(j, v); }) {
                     data_.set(i, expression(idx));
-                } else if constexpr (std::is_same_v<T, bool> && requires { data_.get(); }) {
+                }
+                else if constexpr (std::is_same_v<T, bool> && requires { data_.get(); }) {
                     if (data_.data() == nullptr) {
                         std::vector<bool> temp_buf;
                         temp_buf.reserve(calculate_size_dyn(shape_));
-                        for(size_t k = 0; k < calculate_size_dyn(shape_); ++k) {
+                        for (size_t k = 0; k < calculate_size_dyn(shape_); ++k) {
                             size_t temp_k = k;
                             for (int d = static_cast<int>(idx.size()) - 1; d >= 0; --d) {
                                 if (shape_[d] > 0) {
@@ -961,67 +1004,75 @@ namespace ts {
                         }
                         data_ = storage_type(temp_buf.begin(), temp_buf.end());
                         return *this;
-                    } else {
+                    }
+                    else {
                         throw std::runtime_error("Direct indexing not supported for MLX bool arrays");
                     }
-                } else {
+                }
+                else {
                     data_[i] = expression(idx);
                 }
             }
             return *this;
         }
 
-        const storage_type &storage() const { return data_; }
-        T *data() { 
-            if constexpr (std::is_same_v<storage_type, std::vector<bool>>) {
-                return nullptr;
-            } else {
-                return data_.data(); 
-            }
-        }
-        const T *data() const { 
-            if constexpr (std::is_same_v<storage_type, std::vector<bool>>) {
-                return nullptr;
-            } else {
-                return data_.data(); 
-            }
-        }
-        [[nodiscard]] const TensorShape &shape() const { return shape_; }
+        const storage_type& storage() const { return data_; }
 
-        decltype(auto) operator()(const std::vector<size_t> &indices) {
+        T* data() {
+            if constexpr (std::is_same_v<storage_type, std::vector<bool>>) {
+                return nullptr;
+            }
+            else {
+                return data_.data();
+            }
+        }
+
+        const T* data() const {
+            if constexpr (std::is_same_v<storage_type, std::vector<bool>>) {
+                return nullptr;
+            }
+            else {
+                return data_.data();
+            }
+        }
+
+        [[nodiscard]] const TensorShape& shape() const { return shape_; }
+
+        decltype(auto) operator()(const std::vector<size_t>& indices) {
             const size_t flat = get_flat_index_dyn(indices);
-            if constexpr (std::is_same_v<T, bool> && requires(const storage_type &s, size_t i) { s.get_value(i); }) {
+            if constexpr (std::is_same_v<T, bool> && requires(const storage_type& s, size_t i) { s.get_value(i); }) {
                 return data_.get_value(flat);
             }
             return data_[flat];
         }
-        T operator()(const std::vector<size_t> &indices) const { return data_[get_flat_index_dyn(indices)]; }
 
-        template<std::integral... Is>
+        T operator()(const std::vector<size_t>& indices) const { return data_[get_flat_index_dyn(indices)]; }
+
+        template <std::integral... Is>
         decltype(auto) operator()(Is... indices) {
             const size_t flat = get_flat_index_dyn({static_cast<size_t>(indices)...});
-            if constexpr (std::is_same_v<T, bool> && requires(const storage_type &s, size_t i) { s.get_value(i); }) {
+            if constexpr (std::is_same_v<T, bool> && requires(const storage_type& s, size_t i) { s.get_value(i); }) {
                 return data_.get_value(flat);
             }
             return data_[flat];
         }
 
-        template<std::integral... Is>
+        template <std::integral... Is>
         T operator()(Is... indices) const {
             return data_[get_flat_index_dyn({static_cast<size_t>(indices)...})];
         }
 
         // C++23 multidimensional subscript operator
-        template<std::integral... Is>
+        template <std::integral... Is>
         decltype(auto) operator[](Is... indices) {
             const size_t flat = get_flat_index_dyn({static_cast<size_t>(indices)...});
-            if constexpr (std::is_same_v<T, bool> && requires(const storage_type &s, size_t i) { s.get_value(i); }) {
+            if constexpr (std::is_same_v<T, bool> && requires(const storage_type& s, size_t i) { s.get_value(i); }) {
                 return data_.get_value(flat);
             }
             return data_[flat];
         }
 
-        template<std::integral... Is>
+        template <std::integral... Is>
         T operator[](Is... indices) const {
             return data_[get_flat_index_dyn({static_cast<size_t>(indices)...})];
         }
@@ -1030,8 +1081,8 @@ namespace ts {
             return calculate_size_dyn(shape_);
         }
 
-        template<typename... Slices>
-        auto operator()(const Slices &... slices) const
+        template <typename... Slices>
+        auto operator()(const Slices&... slices) const
             requires (sizeof...(Slices) > 0 && (std::is_convertible_v<Slices, Slice> && ...)) {
             if (sizeof...(Slices) != shape_.size())
                 throw std::invalid_argument("Number of slices must match tensor rank.");
@@ -1042,23 +1093,25 @@ namespace ts {
             size_t offset = 0;
 
             for (size_t i = 0; i < slice_arr.size(); ++i) {
-                if (const auto &s = slice_arr[i]; std::holds_alternative<size_t>(s)) {
+                if (const auto& s = slice_arr[i]; std::holds_alternative<size_t>(s)) {
                     const size_t idx = std::get<size_t>(s);
                     if (idx >= shape_[i]) throw std::out_of_range("Slice index out of bounds");
                     offset += idx * strides_[i];
-                } else if (std::holds_alternative<std::pair<size_t, size_t>>(s)) {
+                }
+                else if (std::holds_alternative<std::pair<size_t, size_t>>(s)) {
                     auto [start, stop] = std::get<std::pair<size_t, size_t>>(s);
                     if (start > stop || stop > shape_[i]) throw std::out_of_range("Slice range out of bounds");
                     view_shape.push_back(stop - start);
                     view_strides.push_back(strides_[i]);
                     offset += start * strides_[i];
-                } else if (std::holds_alternative<AllSlice>(s)) {
+                }
+                else if (std::holds_alternative<AllSlice>(s)) {
                     view_shape.push_back(shape_[i]);
                     view_strides.push_back(strides_[i]);
                 }
             }
 
-            return TensorView<T>(const_cast<T *>(data()), view_shape, view_strides, offset);
+            return TensorView<T>(const_cast<T*>(data()), view_shape, view_strides, offset);
         }
 
     private:
@@ -1066,7 +1119,7 @@ namespace ts {
         TensorStrides strides_;
         storage_type data_;
 
-        [[nodiscard]] size_t get_flat_index_dyn(const std::vector<size_t> &indices) const {
+        [[nodiscard]] size_t get_flat_index_dyn(const std::vector<size_t>& indices) const {
             if (indices.size() > shape_.size())
                 throw std::out_of_range("Incorrect number of indices for DynamicTensor access.");
 
@@ -1085,8 +1138,8 @@ namespace ts {
     // --- Default Computation Policy ---
     struct DefaultComputationPolicy {
     private:
-        template<typename T, typename SP, typename CP, typename E1, typename E2>
-        static auto vv_dot(const E1 &A, const E2 &B, const TensorShape &ashape, const TensorShape &bshape) {
+        template <typename T, typename SP, typename CP, typename E1, typename E2>
+        static auto vv_dot(const E1& A, const E2& B, const TensorShape& ashape, const TensorShape& bshape) {
             if (ashape[0] != bshape[0]) throw std::invalid_argument("dot: Vectors must have the same length");
 
             T sum_val = T{0};
@@ -1096,8 +1149,8 @@ namespace ts {
             return DynamicTensor<T, SP, CP>({}, {sum_val});
         }
 
-        template<typename T, typename SP, typename CP, typename E1, typename E2>
-        static auto mv_dot(const E1 &A, const E2 &B, const TensorShape &ashape, const TensorShape &bshape) {
+        template <typename T, typename SP, typename CP, typename E1, typename E2>
+        static auto mv_dot(const E1& A, const E2& B, const TensorShape& ashape, const TensorShape& bshape) {
             if (ashape[1] != bshape[0]) throw std::invalid_argument("dot: Inner dimensions must match");
 
             DynamicTensor<T, SP, CP> result({ashape[0]});
@@ -1111,14 +1164,14 @@ namespace ts {
             return result;
         }
 
-        template<typename T, typename SP, typename CP, typename E1, typename E2>
-        static auto mm_dot(const E1 &A, const E2 &B, const TensorShape &ashape, const TensorShape &bshape) {
+        template <typename T, typename SP, typename CP, typename E1, typename E2>
+        static auto mm_dot(const E1& A, const E2& B, const TensorShape& ashape, const TensorShape& bshape) {
             if (ashape[1] != bshape[0]) throw std::invalid_argument("dot: Inner dimensions must match");
 
             DynamicTensor<T, SP, CP> result({ashape[0], bshape[1]});
-            const T *a_ptr = A.data();
-            const T *b_ptr = B.data();
-            T *r_ptr = result.data();
+            const T* a_ptr = A.data();
+            const T* b_ptr = B.data();
+            T* r_ptr = result.data();
             const size_t M = ashape[0];
             const size_t K = ashape[1];
             const size_t N = bshape[1];
@@ -1133,7 +1186,8 @@ namespace ts {
                         r_ptr[i * N + j] = sum_val;
                     }
                 }
-            } else {
+            }
+            else {
                 for (size_t i = 0; i < M; ++i) {
                     for (size_t j = 0; j < N; ++j) {
                         T sum_val = T{0};
@@ -1147,8 +1201,8 @@ namespace ts {
             return result;
         }
 
-        template<typename T, typename SP, typename CP, typename E1, typename E2>
-        static auto generic_dot(const E1 &A, const E2 &B, const TensorShape &ashape, const TensorShape &bshape) {
+        template <typename T, typename SP, typename CP, typename E1, typename E2>
+        static auto generic_dot(const E1& A, const E2& B, const TensorShape& ashape, const TensorShape& bshape) {
             if (ashape.size() == 1 && bshape.size() == 1) {
                 return vv_dot<T, SP, CP>(A, B, ashape, bshape);
             }
@@ -1162,34 +1216,34 @@ namespace ts {
         }
 
     public:
-        template<typename E1, typename E2>
-        static auto add(const E1 &a, const E2 &b) { return BinaryExpression<Add, E1, E2>(a, b); }
+        template <typename E1, typename E2>
+        static auto add(const E1& a, const E2& b) { return BinaryExpression<Add, E1, E2>(a, b); }
 
-        template<typename E1, typename E2>
-        static auto subtract(const E1 &a, const E2 &b) { return BinaryExpression<Subtract, E1, E2>(a, b); }
+        template <typename E1, typename E2>
+        static auto subtract(const E1& a, const E2& b) { return BinaryExpression<Subtract, E1, E2>(a, b); }
 
-        template<typename E1, typename E2>
-        static auto multiply(const E1 &a, const E2 &b) { return BinaryExpression<Multiply, E1, E2>(a, b); }
+        template <typename E1, typename E2>
+        static auto multiply(const E1& a, const E2& b) { return BinaryExpression<Multiply, E1, E2>(a, b); }
 
-        template<typename E1, typename E2>
-        static auto divide(const E1 &a, const E2 &b) { return BinaryExpression<Divide, E1, E2>(a, b); }
+        template <typename E1, typename E2>
+        static auto divide(const E1& a, const E2& b) { return BinaryExpression<Divide, E1, E2>(a, b); }
 
-        template<typename E>
-        static auto abs(const E &e) { return UnaryExpression<AbsOp, E>(e); }
+        template <typename E>
+        static auto abs(const E& e) { return UnaryExpression<AbsOp, E>(e); }
 
-        template<typename E>
-        static auto sqrt(const E &e) { return UnaryExpression<SqrtOp, E>(e); }
+        template <typename E>
+        static auto sqrt(const E& e) { return UnaryExpression<SqrtOp, E>(e); }
 
-        template<typename E>
-        static auto exp(const E &e) { return UnaryExpression<ExpOp, E>(e); }
+        template <typename E>
+        static auto exp(const E& e) { return UnaryExpression<ExpOp, E>(e); }
 
-        template<typename E>
-        static auto log(const E &e) { return UnaryExpression<LogOp, E>(e); }
+        template <typename E>
+        static auto log(const E& e) { return UnaryExpression<LogOp, E>(e); }
 
-        template<typename E>
-        static auto sum(const E &expr) {
+        template <typename E>
+        static auto sum(const E& expr) {
             using T = typename E::value_type;
-            const auto &tensor = expr.self();
+            const auto& tensor = expr.self();
             auto dyn_shape = get_shape(tensor);
             const size_t N = calculate_size_dyn(dyn_shape);
             T total = T{0};
@@ -1208,18 +1262,18 @@ namespace ts {
             return total;
         }
 
-        template<typename E>
-        static auto mean(const E &expr) {
-            const auto &tensor = expr.self();
+        template <typename E>
+        static auto mean(const E& expr) {
+            const auto& tensor = expr.self();
             auto dyn_shape = get_shape(tensor);
             const size_t size = calculate_size_dyn(dyn_shape);
             return size > 0 ? DefaultComputationPolicy::sum(expr) / static_cast<double>(size) : 0.0;
         }
 
-        template<typename E>
-        static auto max(const E &expr) {
+        template <typename E>
+        static auto max(const E& expr) {
             using T = typename E::value_type;
-            const auto &tensor = expr.self();
+            const auto& tensor = expr.self();
             auto dyn_shape = get_shape(tensor);
             const size_t N = calculate_size_dyn(dyn_shape);
             if (N == 0) throw std::runtime_error("max() on empty tensor not supported");
@@ -1238,10 +1292,10 @@ namespace ts {
             return result;
         }
 
-        template<typename E1, typename E2>
-        static auto dot(const E1 &a, const E2 &b) {
-            const auto &A = a.self();
-            const auto &B = b.self();
+        template <typename E1, typename E2>
+        static auto dot(const E1& a, const E2& b) {
+            const auto& A = a.self();
+            const auto& B = b.self();
             auto ashape = get_shape(A);
             auto bshape = get_shape(B);
             using T = typename E1::value_type;
@@ -1251,15 +1305,15 @@ namespace ts {
             return generic_dot<T, StoragePolicy, CompPolicy>(A, B, ashape, bshape);
         }
 
-        template<typename E1, typename E2>
-        static auto greater(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto greater(const E1& a, const E2& b) {
             return BinaryExpression<Greater, E1, E2>(a, b);
         }
 
-        template<typename E>
-        static auto min(const E &expr) {
+        template <typename E>
+        static auto min(const E& expr) {
             using T = typename E::value_type;
-            const auto &tensor = expr.self();
+            const auto& tensor = expr.self();
             auto dyn_shape = get_shape(tensor);
             const size_t N = calculate_size_dyn(dyn_shape);
             if (N == 0) throw std::runtime_error("min() on empty tensor not supported");
@@ -1278,13 +1332,13 @@ namespace ts {
             return result;
         }
 
-        template<typename E>
-        static auto variance(const E &expr) {
-            const auto &tensor = expr.self();
+        template <typename E>
+        static auto variance(const E& expr) {
+            const auto& tensor = expr.self();
             auto dyn_shape = get_shape(tensor);
             const size_t size = calculate_size_dyn(dyn_shape);
             if (size <= 1) return 0.0;
-            
+
             auto mean_val = DefaultComputationPolicy::mean(expr);
             double var_sum = 0.0;
             std::vector<size_t> idx(dyn_shape.size(), 0);
@@ -1302,30 +1356,31 @@ namespace ts {
             return var_sum / static_cast<double>(size - 1);
         }
 
-        template<typename E>
-        static auto std_dev(const E &expr) {
+        template <typename E>
+        static auto std_dev(const E& expr) {
             return std::sqrt(DefaultComputationPolicy::variance(expr));
         }
 
-        template<typename E>
-        static auto normalize(const E &expr) {
+        template <typename E>
+        static auto normalize(const E& expr) {
             using T = typename E::value_type;
             using StoragePolicy = typename E::storage_policy;
             using CompPolicy = typename E::computation_policy;
-            
-            const auto &tensor = expr.self();
+
+            const auto& tensor = expr.self();
             auto shape = get_shape(tensor);
             auto mean_val = DefaultComputationPolicy::mean(expr);
             auto std_val = DefaultComputationPolicy::std_dev(expr);
-            
+
             if (std_val == 0.0) {
-                return DynamicTensor<T, StoragePolicy, CompPolicy>(shape, std::vector<T>(calculate_size_dyn(shape), T{0}));
+                return DynamicTensor<T, StoragePolicy, CompPolicy>(
+                    shape, std::vector<T>(calculate_size_dyn(shape), T{0}));
             }
-            
+
             DynamicTensor<T, StoragePolicy, CompPolicy> result(shape);
             std::vector<size_t> idx(shape.size(), 0);
             const size_t size = calculate_size_dyn(shape);
-            
+
             for (size_t i = 0; i < size; ++i) {
                 size_t temp_i = i;
                 for (int d = static_cast<int>(idx.size()) - 1; d >= 0; --d) {
@@ -1339,26 +1394,27 @@ namespace ts {
             return result;
         }
 
-        template<typename E>
-        static auto reshape(const E &expr, const TensorShape &new_shape) {
+        template <typename E>
+        static auto reshape(const E& expr, const TensorShape& new_shape) {
             using T = typename E::value_type;
             using StoragePolicy = typename E::storage_policy;
             using CompPolicy = typename E::computation_policy;
-            
-            const auto &tensor = expr.self();
+
+            const auto& tensor = expr.self();
             auto old_shape = get_shape(tensor);
             auto old_size = calculate_size_dyn(old_shape);
             auto new_size = calculate_size_dyn(new_shape);
-            
+
             if (old_size != new_size) {
                 throw std::invalid_argument("reshape: new shape must have same number of elements");
             }
-            
+
             DynamicTensor<T, StoragePolicy, CompPolicy> result(new_shape);
-            
+
             if (const T* data_ptr = tensor.data(); data_ptr != nullptr) {
                 std::copy(data_ptr, data_ptr + old_size, result.data());
-            } else {
+            }
+            else {
                 std::vector<size_t> idx(old_shape.size(), 0);
                 for (size_t i = 0; i < old_size; ++i) {
                     size_t temp_i = i;
@@ -1374,29 +1430,29 @@ namespace ts {
             return result;
         }
 
-        template<typename E>
-        static auto flatten(const E &expr) {
+        template <typename E>
+        static auto flatten(const E& expr) {
             auto shape = get_shape(expr.self());
             auto size = calculate_size_dyn(shape);
             return DefaultComputationPolicy::reshape(expr, TensorShape{size});
         }
 
-        template<typename E>
-        static auto transpose(const E &expr) {
+        template <typename E>
+        static auto transpose(const E& expr) {
             using T = typename E::value_type;
             using StoragePolicy = typename E::storage_policy;
             using CompPolicy = typename E::computation_policy;
-            
-            const auto &tensor = expr.self();
+
+            const auto& tensor = expr.self();
             auto shape = get_shape(tensor);
-            
+
             if (shape.size() != 2) {
                 throw std::invalid_argument("transpose: only 2D tensors are supported");
             }
-            
+
             TensorShape new_shape = {shape[1], shape[0]};
             DynamicTensor<T, StoragePolicy, CompPolicy> result(new_shape);
-            
+
             for (size_t i = 0; i < shape[0]; ++i) {
                 for (size_t j = 0; j < shape[1]; ++j) {
                     result({j, i}) = tensor({i, j});
@@ -1405,36 +1461,36 @@ namespace ts {
             return result;
         }
 
-        template<typename E1, typename E2>
-        static auto less(const E1 &a, const E2 &b) { return BinaryExpression<Less, E1, E2>(a, b); }
+        template <typename E1, typename E2>
+        static auto less(const E1& a, const E2& b) { return BinaryExpression<Less, E1, E2>(a, b); }
 
-        template<typename E1, typename E2>
-        static auto equal(const E1 &a, const E2 &b) { return BinaryExpression<Equal, E1, E2>(a, b); }
+        template <typename E1, typename E2>
+        static auto equal(const E1& a, const E2& b) { return BinaryExpression<Equal, E1, E2>(a, b); }
 
-        template<typename E1, typename E2>
-        static auto not_equal(const E1 &a, const E2 &b) { return BinaryExpression<NotEqual, E1, E2>(a, b); }
+        template <typename E1, typename E2>
+        static auto not_equal(const E1& a, const E2& b) { return BinaryExpression<NotEqual, E1, E2>(a, b); }
 
-        template<typename E>
-        static auto sin(const E &e) { return UnaryExpression<SinOp, E>(e); }
+        template <typename E>
+        static auto sin(const E& e) { return UnaryExpression<SinOp, E>(e); }
 
-        template<typename E>
-        static auto cos(const E &e) { return UnaryExpression<CosOp, E>(e); }
+        template <typename E>
+        static auto cos(const E& e) { return UnaryExpression<CosOp, E>(e); }
 
-        template<typename E>
-        static auto tan(const E &e) { return UnaryExpression<TanOp, E>(e); }
+        template <typename E>
+        static auto tan(const E& e) { return UnaryExpression<TanOp, E>(e); }
 
-        template<typename E>
-        static auto square(const E &e) { return UnaryExpression<SquareOp, E>(e); }
+        template <typename E>
+        static auto square(const E& e) { return UnaryExpression<SquareOp, E>(e); }
 
-        template<typename E1, typename E2>
-        static auto power(const E1 &a, const E2 &b) { return BinaryExpression<Power, E1, E2>(a, b); }
+        template <typename E1, typename E2>
+        static auto power(const E1& a, const E2& b) { return BinaryExpression<Power, E1, E2>(a, b); }
 
-        template<typename E, typename T>
-        static auto clip(const E &expr, T min_val, T max_val) {
+        template <typename E, typename T>
+        static auto clip(const E& expr, T min_val, T max_val) {
             using StoragePolicy = typename E::storage_policy;
             using CompPolicy = typename E::computation_policy;
 
-            const auto &tensor = expr.self();
+            const auto& tensor = expr.self();
             auto shape = get_shape(tensor);
             DynamicTensor<T, StoragePolicy, CompPolicy> result(shape);
 
@@ -1462,12 +1518,12 @@ namespace ts {
 
         // gemm: C ← α·A·B + β·C   (row-major, cache-blocked)
         // A: M×K, B: K×N, C: M×N
-        template<typename T, typename SP, typename CP>
+        template <typename T, typename SP, typename CP>
         static void gemm(T alpha,
-                         const DynamicTensor<T,SP,CP>& A,
-                         const DynamicTensor<T,SP,CP>& B,
+                         const DynamicTensor<T, SP, CP>& A,
+                         const DynamicTensor<T, SP, CP>& B,
                          T beta,
-                         DynamicTensor<T,SP,CP>& C) {
+                         DynamicTensor<T, SP, CP>& C) {
             const auto& as = A.shape();
             const auto& bs = B.shape();
             const auto& cs = C.shape();
@@ -1479,13 +1535,14 @@ namespace ts {
 
             const T* a = A.data();
             const T* b = B.data();
-            T*       c = C.data();
+            T* c = C.data();
             if (!a || !b || !c) throw std::runtime_error("gemm: null data pointer");
 
             // scale C by beta first
             if (beta == T{0}) {
                 std::fill(c, c + M * N, T{0});
-            } else if (beta != T{1}) {
+            }
+            else if (beta != T{1}) {
                 for (size_t i = 0; i < M * N; ++i) c[i] *= beta;
             }
 
@@ -1500,7 +1557,7 @@ namespace ts {
                         // micro-kernel: ib × nb panel
                         for (size_t i = 0; i < ib; ++i) {
                             const T* ar = a + (ii + i) * K + kk;
-                            T*       cr = c + (ii + i) * N + jj;
+                            T* cr = c + (ii + i) * N + jj;
                             for (size_t j = 0; j < nb; ++j) {
                                 T sum = T{0};
                                 for (size_t k = 0; k < kb; ++k)
@@ -1514,12 +1571,12 @@ namespace ts {
         }
 
         // gemv: y ← α·A·x + β·y   A: M×N, x: N, y: M
-        template<typename T, typename SP, typename CP>
+        template <typename T, typename SP, typename CP>
         static void gemv(T alpha,
-                         const DynamicTensor<T,SP,CP>& A,
-                         const DynamicTensor<T,SP,CP>& x,
+                         const DynamicTensor<T, SP, CP>& A,
+                         const DynamicTensor<T, SP, CP>& x,
                          T beta,
-                         DynamicTensor<T,SP,CP>& y) {
+                         DynamicTensor<T, SP, CP>& y) {
             const auto& as = A.shape();
             const auto& xs = x.shape();
             const auto& ys = y.shape();
@@ -1531,7 +1588,7 @@ namespace ts {
 
             const T* ap = A.data();
             const T* xp = x.data();
-            T*       yp = y.data();
+            T* yp = y.data();
             if (!ap || !xp || !yp) throw std::runtime_error("gemv: null data pointer");
 
             if (beta == T{0}) std::fill(yp, yp + M, T{0});
@@ -1546,22 +1603,22 @@ namespace ts {
         }
 
         // axpy: y ← α·x + y   (vectors of same length)
-        template<typename T, typename SP, typename CP>
+        template <typename T, typename SP, typename CP>
         static void axpy(T alpha,
-                         const DynamicTensor<T,SP,CP>& x,
-                         DynamicTensor<T,SP,CP>& y) {
+                         const DynamicTensor<T, SP, CP>& x,
+                         DynamicTensor<T, SP, CP>& y) {
             const size_t n = x.size();
             if (y.size() != n)
                 throw std::invalid_argument("axpy: x and y must have the same number of elements");
             const T* xp = x.data();
-            T*       yp = y.data();
+            T* yp = y.data();
             if (!xp || !yp) throw std::runtime_error("axpy: null data pointer");
             for (size_t i = 0; i < n; ++i) yp[i] += alpha * xp[i];
         }
 
         // nrm2: ‖x‖₂ (Euclidean norm)
-        template<typename T, typename SP, typename CP>
-        static T nrm2(const DynamicTensor<T,SP,CP>& x) {
+        template <typename T, typename SP, typename CP>
+        static T nrm2(const DynamicTensor<T, SP, CP>& x) {
             const size_t n = x.size();
             const T* xp = x.data();
             if (!xp) throw std::runtime_error("nrm2: null data pointer");
@@ -1572,11 +1629,11 @@ namespace ts {
 
         // syrk: C ← α·A·Aᵀ + β·C   (symmetric rank-k update, upper/lower tri)
         // A: M×K, C: M×M symmetric
-        template<typename T, typename SP, typename CP>
+        template <typename T, typename SP, typename CP>
         static void syrk(T alpha,
-                         const DynamicTensor<T,SP,CP>& A,
+                         const DynamicTensor<T, SP, CP>& A,
                          T beta,
-                         DynamicTensor<T,SP,CP>& C,
+                         DynamicTensor<T, SP, CP>& C,
                          bool upper = true) {
             const auto& as = A.shape();
             const auto& cs = C.shape();
@@ -1587,7 +1644,7 @@ namespace ts {
                 throw std::invalid_argument("syrk: C must be M×M");
 
             const T* ap = A.data();
-            T*       cp = C.data();
+            T* cp = C.data();
             if (!ap || !cp) throw std::runtime_error("syrk: null data pointer");
 
             if (beta == T{0}) std::fill(cp, cp + M * M, T{0});
@@ -1596,7 +1653,7 @@ namespace ts {
             // only fill upper (or lower) triangle + diagonal
             for (size_t i = 0; i < M; ++i) {
                 const size_t j_start = upper ? i : 0;
-                const size_t j_end   = upper ? M : i + 1;
+                const size_t j_end = upper ? M : i + 1;
                 for (size_t j = j_start; j < j_end; ++j) {
                     T sum = T{0};
                     for (size_t k = 0; k < K; ++k)
@@ -1609,354 +1666,353 @@ namespace ts {
         }
 
         // matmul convenience: C = A·B  (calls gemm with α=1, β=0)
-        template<typename T, typename SP, typename CP>
-        static DynamicTensor<T,SP,CP> matmul(
-                const DynamicTensor<T,SP,CP>& A,
-                const DynamicTensor<T,SP,CP>& B) {
+        template <typename T, typename SP, typename CP>
+        static DynamicTensor<T, SP, CP> matmul(
+            const DynamicTensor<T, SP, CP>& A,
+            const DynamicTensor<T, SP, CP>& B) {
             const auto& as = A.shape();
             const auto& bs = B.shape();
             if (as.size() != 2 || bs.size() != 2)
                 throw std::invalid_argument("matmul: both tensors must be rank-2");
-            DynamicTensor<T,SP,CP> C({as[0], bs[1]});
-            gemm<T,SP,CP>(T{1}, A, B, T{0}, C);
+            DynamicTensor<T, SP, CP> C({as[0], bs[1]});
+            gemm<T, SP, CP>(T{1}, A, B, T{0}, C);
             return C;
         }
     };
 
     // --- Scalar-Tensor Dispatchers ---
-    template<typename E, typename T, typename SP, typename CP, typename S>
+    template <typename E, typename T, typename SP, typename CP, typename S>
         requires std::is_arithmetic_v<S>
-    auto operator+(const TensorExpression<E, T, SP, CP> &expr, const S &scalar) {
+    auto operator+(const TensorExpression<E, T, SP, CP>& expr, const S& scalar) {
         auto rhs = ScalarWrapper<std::decay_t<S>, SP, CP>(scalar);
         auto lazy_expr = CP::add(expr.self(), rhs);
         return DynamicTensor<T, SP, CP>(lazy_expr);
     }
 
-    template<typename S, typename E, typename T, typename SP, typename CP>
+    template <typename S, typename E, typename T, typename SP, typename CP>
         requires std::is_arithmetic_v<S>
-    auto operator+(const S &scalar, const TensorExpression<E, T, SP, CP> &expr) {
+    auto operator+(const S& scalar, const TensorExpression<E, T, SP, CP>& expr) {
         auto lhs = ScalarWrapper<std::decay_t<S>, SP, CP>(scalar);
         auto lazy_expr = CP::add(lhs, expr.self());
         return DynamicTensor<T, SP, CP>(lazy_expr);
     }
 
-    template<typename E, typename T, typename SP, typename CP, typename S>
+    template <typename E, typename T, typename SP, typename CP, typename S>
         requires std::is_arithmetic_v<S>
-    auto operator-(const TensorExpression<E, T, SP, CP> &expr, const S &scalar) {
+    auto operator-(const TensorExpression<E, T, SP, CP>& expr, const S& scalar) {
         auto rhs = ScalarWrapper<std::decay_t<S>, SP, CP>(scalar);
         auto lazy_expr = CP::subtract(expr.self(), rhs);
         return DynamicTensor<T, SP, CP>(lazy_expr);
     }
 
-    template<typename S, typename E, typename T, typename SP, typename CP>
+    template <typename S, typename E, typename T, typename SP, typename CP>
         requires std::is_arithmetic_v<S>
-    auto operator-(const S &scalar, const TensorExpression<E, T, SP, CP> &expr) {
+    auto operator-(const S& scalar, const TensorExpression<E, T, SP, CP>& expr) {
         auto lhs = ScalarWrapper<std::decay_t<S>, SP, CP>(scalar);
         auto lazy_expr = CP::subtract(lhs, expr.self());
         return DynamicTensor<T, SP, CP>(lazy_expr);
     }
 
-    template<typename E, typename T, typename SP, typename CP, typename S>
+    template <typename E, typename T, typename SP, typename CP, typename S>
         requires std::is_arithmetic_v<S>
-    auto operator*(const TensorExpression<E, T, SP, CP> &expr, const S &scalar) {
+    auto operator*(const TensorExpression<E, T, SP, CP>& expr, const S& scalar) {
         auto rhs = ScalarWrapper<std::decay_t<S>, SP, CP>(scalar);
         auto lazy_expr = CP::multiply(expr.self(), rhs);
         return DynamicTensor<T, SP, CP>(lazy_expr);
     }
 
-    template<typename S, typename E, typename T, typename SP, typename CP>
+    template <typename S, typename E, typename T, typename SP, typename CP>
         requires std::is_arithmetic_v<S>
-    auto operator*(const S &scalar, const TensorExpression<E, T, SP, CP> &expr) {
+    auto operator*(const S& scalar, const TensorExpression<E, T, SP, CP>& expr) {
         auto lhs = ScalarWrapper<std::decay_t<S>, SP, CP>(scalar);
         auto lazy_expr = CP::multiply(lhs, expr.self());
         return DynamicTensor<T, SP, CP>(lazy_expr);
     }
 
-    template<typename E, typename T, typename SP, typename CP, typename S>
+    template <typename E, typename T, typename SP, typename CP, typename S>
         requires std::is_arithmetic_v<S>
-    auto operator/(const TensorExpression<E, T, SP, CP> &expr, const S &scalar) {
+    auto operator/(const TensorExpression<E, T, SP, CP>& expr, const S& scalar) {
         auto rhs = ScalarWrapper<std::decay_t<S>, SP, CP>(scalar);
         auto lazy_expr = CP::divide(expr.self(), rhs);
         return DynamicTensor<T, SP, CP>(lazy_expr);
     }
 
-    template<typename S, typename E, typename T, typename SP, typename CP>
+    template <typename S, typename E, typename T, typename SP, typename CP>
         requires std::is_arithmetic_v<S>
-    auto operator/(const S &scalar, const TensorExpression<E, T, SP, CP> &expr) {
+    auto operator/(const S& scalar, const TensorExpression<E, T, SP, CP>& expr) {
         auto lhs = ScalarWrapper<std::decay_t<S>, SP, CP>(scalar);
         auto lazy_expr = CP::divide(lhs, expr.self());
         return DynamicTensor<T, SP, CP>(lazy_expr);
     }
 
-    template<typename E, typename T, typename SP, typename CP, typename S>
+    template <typename E, typename T, typename SP, typename CP, typename S>
         requires std::is_arithmetic_v<S>
-    auto operator>(const TensorExpression<E, T, SP, CP> &expr, const S &scalar) {
+    auto operator>(const TensorExpression<E, T, SP, CP>& expr, const S& scalar) {
         auto rhs = ScalarWrapper<std::decay_t<S>, SP, CP>(scalar);
         auto lazy_expr = CP::greater(expr.self(), rhs);
         return DynamicTensor<bool, SP, CP>(lazy_expr);
     }
 
-    template<typename S, typename E, typename T, typename SP, typename CP>
+    template <typename S, typename E, typename T, typename SP, typename CP>
         requires std::is_arithmetic_v<S>
-    auto operator>(const S &scalar, const TensorExpression<E, T, SP, CP> &expr) {
+    auto operator>(const S& scalar, const TensorExpression<E, T, SP, CP>& expr) {
         auto lhs = ScalarWrapper<std::decay_t<S>, SP, CP>(scalar);
         auto lazy_expr = CP::greater(lhs, expr.self());
         return DynamicTensor<bool, SP, CP>(lazy_expr);
     }
 
     // --- Tensor-Tensor Binary Operators ---
-    template<typename E1, typename T1, typename SP1, typename CP1,
-        typename E2, typename T2, typename SP2, typename CP2>
-    auto operator+(const TensorExpression<E1, T1, SP1, CP1> &lhs,
-                   const TensorExpression<E2, T2, SP2, CP2> &rhs) {
+    template <typename E1, typename T1, typename SP1, typename CP1,
+              typename E2, typename T2, typename SP2, typename CP2>
+    auto operator+(const TensorExpression<E1, T1, SP1, CP1>& lhs,
+                   const TensorExpression<E2, T2, SP2, CP2>& rhs) {
         static_assert(std::is_same_v<CP1, CP2>, "Computation policies must match.");
         auto lazy_expr = CP1::add(lhs.self(), rhs.self());
         return DynamicTensor<T1, SP1, CP1>(lazy_expr);
     }
 
-    template<typename E1, typename T1, typename SP1, typename CP1,
-        typename E2, typename T2, typename SP2, typename CP2>
-    auto operator-(const TensorExpression<E1, T1, SP1, CP1> &lhs,
-                   const TensorExpression<E2, T2, SP2, CP2> &rhs) {
+    template <typename E1, typename T1, typename SP1, typename CP1,
+              typename E2, typename T2, typename SP2, typename CP2>
+    auto operator-(const TensorExpression<E1, T1, SP1, CP1>& lhs,
+                   const TensorExpression<E2, T2, SP2, CP2>& rhs) {
         static_assert(std::is_same_v<CP1, CP2>, "Computation policies must match.");
         auto lazy_expr = CP1::subtract(lhs.self(), rhs.self());
         return DynamicTensor<T1, SP1, CP1>(lazy_expr);
     }
 
-    template<typename E1, typename T1, typename SP1, typename CP1,
-        typename E2, typename T2, typename SP2, typename CP2>
-    auto operator*(const TensorExpression<E1, T1, SP1, CP1> &lhs,
-                   const TensorExpression<E2, T2, SP2, CP2> &rhs) {
+    template <typename E1, typename T1, typename SP1, typename CP1,
+              typename E2, typename T2, typename SP2, typename CP2>
+    auto operator*(const TensorExpression<E1, T1, SP1, CP1>& lhs,
+                   const TensorExpression<E2, T2, SP2, CP2>& rhs) {
         static_assert(std::is_same_v<CP1, CP2>, "Computation policies must match.");
         auto lazy_expr = CP1::multiply(lhs.self(), rhs.self());
         return DynamicTensor<T1, SP1, CP1>(lazy_expr);
     }
 
-    template<typename E1, typename T1, typename SP1, typename CP1,
-        typename E2, typename T2, typename SP2, typename CP2>
-    auto operator/(const TensorExpression<E1, T1, SP1, CP1> &lhs,
-                   const TensorExpression<E2, T2, SP2, CP2> &rhs) {
+    template <typename E1, typename T1, typename SP1, typename CP1,
+              typename E2, typename T2, typename SP2, typename CP2>
+    auto operator/(const TensorExpression<E1, T1, SP1, CP1>& lhs,
+                   const TensorExpression<E2, T2, SP2, CP2>& rhs) {
         static_assert(std::is_same_v<CP1, CP2>, "Computation policies must match.");
         auto lazy_expr = CP1::divide(lhs.self(), rhs.self());
         return DynamicTensor<T1, SP1, CP1>(lazy_expr);
     }
 
-    template<typename E1, typename T1, typename SP1, typename CP1,
-        typename E2, typename T2, typename SP2, typename CP2>
-    auto operator>(const TensorExpression<E1, T1, SP1, CP1> &lhs,
-                   const TensorExpression<E2, T2, SP2, CP2> &rhs) {
+    template <typename E1, typename T1, typename SP1, typename CP1,
+              typename E2, typename T2, typename SP2, typename CP2>
+    auto operator>(const TensorExpression<E1, T1, SP1, CP1>& lhs,
+                   const TensorExpression<E2, T2, SP2, CP2>& rhs) {
         static_assert(std::is_same_v<CP1, CP2>, "Computation policies must match.");
         auto lazy_expr = CP1::greater(lhs.self(), rhs.self());
         return DynamicTensor<bool, SP1, CP1>(lazy_expr);
     }
 
     // --- Global Tensor Functions ---
-    template<typename E, typename T, typename SP, typename CP>
-    auto sum(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto sum(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::sum(expr.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto mean(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto mean(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::mean(expr.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto max(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto max(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::max(expr.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto min(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto min(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::min(expr.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto abs(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto abs(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::abs(expr.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto sqrt(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto sqrt(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::sqrt(expr.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto exp(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto exp(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::exp(expr.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto log(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto log(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::log(expr.self());
     }
 
-    template<typename E1, typename T1, typename S1, typename C1,
-             typename E2, typename T2, typename S2, typename C2>
-    auto dot(const TensorExpression<E1, T1, S1, C1> &a,
-             const TensorExpression<E2, T2, S2, C2> &b) {
+    template <typename E1, typename T1, typename S1, typename C1,
+              typename E2, typename T2, typename S2, typename C2>
+    auto dot(const TensorExpression<E1, T1, S1, C1>& a,
+             const TensorExpression<E2, T2, S2, C2>& b) {
         static_assert(std::is_same_v<C1, C2>, "Computation policies must match.");
         return C1::dot(a.self(), b.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto variance(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto variance(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::variance(expr.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto std_dev(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto std_dev(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::std_dev(expr.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto normalize(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto normalize(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::normalize(expr.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto reshape(const TensorExpression<E, T, SP, CP> &expr, const TensorShape &new_shape) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto reshape(const TensorExpression<E, T, SP, CP>& expr, const TensorShape& new_shape) {
         return CP::reshape(expr.self(), new_shape);
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto flatten(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto flatten(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::flatten(expr.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto transpose(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto transpose(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::transpose(expr.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto sin(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto sin(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::sin(expr.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto cos(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto cos(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::cos(expr.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto tan(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto tan(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::tan(expr.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP>
-    auto square(const TensorExpression<E, T, SP, CP> &expr) {
+    template <typename E, typename T, typename SP, typename CP>
+    auto square(const TensorExpression<E, T, SP, CP>& expr) {
         return CP::square(expr.self());
     }
 
-    template<typename E1, typename T1, typename SP1, typename CP1,
-             typename E2, typename T2, typename SP2, typename CP2>
-    auto power(const TensorExpression<E1, T1, SP1, CP1> &a,
-               const TensorExpression<E2, T2, SP2, CP2> &b) {
+    template <typename E1, typename T1, typename SP1, typename CP1,
+              typename E2, typename T2, typename SP2, typename CP2>
+    auto power(const TensorExpression<E1, T1, SP1, CP1>& a,
+               const TensorExpression<E2, T2, SP2, CP2>& b) {
         static_assert(std::is_same_v<CP1, CP2>, "Computation policies must match.");
         return CP1::power(a.self(), b.self());
     }
 
-    template<typename E, typename T, typename SP, typename CP, typename V>
-    auto clip(const TensorExpression<E, T, SP, CP> &expr, V min_val, V max_val) {
+    template <typename E, typename T, typename SP, typename CP, typename V>
+    auto clip(const TensorExpression<E, T, SP, CP>& expr, V min_val, V max_val) {
         return CP::clip(expr.self(), static_cast<T>(min_val), static_cast<T>(max_val));
     }
 
-    template<typename E1, typename T1, typename SP1, typename CP1,
-             typename E2, typename T2, typename SP2, typename CP2>
-    auto equal(const TensorExpression<E1, T1, SP1, CP1> &a,
-               const TensorExpression<E2, T2, SP2, CP2> &b) {
+    template <typename E1, typename T1, typename SP1, typename CP1,
+              typename E2, typename T2, typename SP2, typename CP2>
+    auto equal(const TensorExpression<E1, T1, SP1, CP1>& a,
+               const TensorExpression<E2, T2, SP2, CP2>& b) {
         static_assert(std::is_same_v<CP1, CP2>, "Computation policies must match.");
         return CP1::equal(a.self(), b.self());
     }
 
     // --- Convenient Ecosystem Aliases ---
     // Small-Buffer-Optimized Dynamic Tensor (64-byte inline capacity)
-    template<typename T, size_t InlineBytes = 64, typename CompPolicy = DefaultComputationPolicy>
+    template <typename T, size_t InlineBytes = 64, typename CompPolicy = DefaultComputationPolicy>
     using SmallTensor = DynamicTensor<T, SmallTensorStoragePolicy<InlineBytes>, CompPolicy>;
 
     // Smriti Arena-Backed Dynamic Tensor
-    template<typename T, typename ResourceT, typename CompPolicy = DefaultComputationPolicy>
+    template <typename T, typename ResourceT, typename CompPolicy = DefaultComputationPolicy>
     using SmritiTensor = DynamicTensor<T, SmritiStoragePolicy<ResourceT>, CompPolicy>;
 
     // --- Standard C++ Lowercase / snake_case Aliases ---
-    template<typename T, typename StoragePolicy = DefaultStoragePolicy, typename CompPolicy = DefaultComputationPolicy>
+    template <typename T, typename StoragePolicy = DefaultStoragePolicy, typename CompPolicy = DefaultComputationPolicy>
     using dynamic_tensor = DynamicTensor<T, StoragePolicy, CompPolicy>;
 
-    template<typename T, typename StoragePolicy = DefaultStoragePolicy, typename CompPolicy = DefaultComputationPolicy>
+    template <typename T, typename StoragePolicy = DefaultStoragePolicy, typename CompPolicy = DefaultComputationPolicy>
     using tensor = DynamicTensor<T, StoragePolicy, CompPolicy>;
 
-    template<typename T, typename StoragePolicy, typename CompPolicy, size_t... Dims>
+    template <typename T, typename StoragePolicy, typename CompPolicy, size_t... Dims>
     using static_tensor = StaticTensor<T, StoragePolicy, CompPolicy, Dims...>;
 
-    template<typename T, size_t InlineBytes = 64, typename CompPolicy = DefaultComputationPolicy>
+    template <typename T, size_t InlineBytes = 64, typename CompPolicy = DefaultComputationPolicy>
     using small_tensor = SmallTensor<T, InlineBytes, CompPolicy>;
 
-    template<typename T, typename ResourceT, typename CompPolicy = DefaultComputationPolicy>
+    template <typename T, typename ResourceT, typename CompPolicy = DefaultComputationPolicy>
     using smriti_tensor = SmritiTensor<T, ResourceT, CompPolicy>;
 
     using default_storage_policy = DefaultStoragePolicy;
     using default_computation_policy = DefaultComputationPolicy;
-    template<size_t InlineBytes = 64>
+    template <size_t InlineBytes = 64>
     using small_tensor_storage_policy = SmallTensorStoragePolicy<InlineBytes>;
-    template<typename ResourceT>
+    template <typename ResourceT>
     using smriti_storage_policy = SmritiStoragePolicy<ResourceT>;
-    template<typename StructT, size_t InlineCap = 64>
+    template <typename StructT, size_t InlineCap = 64>
     using soa_storage_policy = SoAStoragePolicy<StructT, InlineCap>;
     using arrow_string_storage = ArrowStringStorage;
 
     // --- BLAS free functions (delegate to CP static methods) ---
     // gemm: C ← α·A·B + β·C
-    template<typename T, typename SP, typename CP>
+    template <typename T, typename SP, typename CP>
     void gemm(T alpha,
-              const DynamicTensor<T,SP,CP>& A,
-              const DynamicTensor<T,SP,CP>& B,
+              const DynamicTensor<T, SP, CP>& A,
+              const DynamicTensor<T, SP, CP>& B,
               T beta,
-              DynamicTensor<T,SP,CP>& C) {
-        CP::template gemm<T,SP,CP>(alpha, A, B, beta, C);
+              DynamicTensor<T, SP, CP>& C) {
+        CP::template gemm<T, SP, CP>(alpha, A, B, beta, C);
     }
 
     // gemv: y ← α·A·x + β·y
-    template<typename T, typename SP, typename CP>
+    template <typename T, typename SP, typename CP>
     void gemv(T alpha,
-              const DynamicTensor<T,SP,CP>& A,
-              const DynamicTensor<T,SP,CP>& x,
+              const DynamicTensor<T, SP, CP>& A,
+              const DynamicTensor<T, SP, CP>& x,
               T beta,
-              DynamicTensor<T,SP,CP>& y) {
-        CP::template gemv<T,SP,CP>(alpha, A, x, beta, y);
+              DynamicTensor<T, SP, CP>& y) {
+        CP::template gemv<T, SP, CP>(alpha, A, x, beta, y);
     }
 
     // axpy: y ← α·x + y
-    template<typename T, typename SP, typename CP>
+    template <typename T, typename SP, typename CP>
     void axpy(T alpha,
-              const DynamicTensor<T,SP,CP>& x,
-              DynamicTensor<T,SP,CP>& y) {
-        CP::template axpy<T,SP,CP>(alpha, x, y);
+              const DynamicTensor<T, SP, CP>& x,
+              DynamicTensor<T, SP, CP>& y) {
+        CP::template axpy<T, SP, CP>(alpha, x, y);
     }
 
     // nrm2: ‖x‖₂
-    template<typename T, typename SP, typename CP>
-    T nrm2(const DynamicTensor<T,SP,CP>& x) {
-        return CP::template nrm2<T,SP,CP>(x);
+    template <typename T, typename SP, typename CP>
+    T nrm2(const DynamicTensor<T, SP, CP>& x) {
+        return CP::template nrm2<T, SP, CP>(x);
     }
 
     // syrk: C ← α·A·Aᵀ + β·C (symmetric rank-k update)
-    template<typename T, typename SP, typename CP>
+    template <typename T, typename SP, typename CP>
     void syrk(T alpha,
-              const DynamicTensor<T,SP,CP>& A,
+              const DynamicTensor<T, SP, CP>& A,
               T beta,
-              DynamicTensor<T,SP,CP>& C,
+              DynamicTensor<T, SP, CP>& C,
               bool upper = true) {
-        CP::template syrk<T,SP,CP>(alpha, A, beta, C, upper);
+        CP::template syrk<T, SP, CP>(alpha, A, beta, C, upper);
     }
 
     // matmul: C = A·B (convenience; calls gemm with α=1, β=0)
-    template<typename T, typename SP, typename CP>
-    DynamicTensor<T,SP,CP> matmul(const DynamicTensor<T,SP,CP>& A,
-                                   const DynamicTensor<T,SP,CP>& B) {
-        return CP::template matmul<T,SP,CP>(A, B);
+    template <typename T, typename SP, typename CP>
+    DynamicTensor<T, SP, CP> matmul(const DynamicTensor<T, SP, CP>& A,
+                                    const DynamicTensor<T, SP, CP>& B) {
+        return CP::template matmul<T, SP, CP>(A, B);
     }
-
 } // namespace ts
 
 namespace containers::tensor {

@@ -60,8 +60,10 @@ namespace vakya::types {
     // Recover the two region indices packed into a disjoint constraint payload.
     [[nodiscard]] inline std::pair<std::uint32_t, std::uint32_t>
     unpack_disjoint(const constraint& c) noexcept {
-        return {static_cast<std::uint32_t>(c.payload & 0xFFFFFFFFULL),
-                static_cast<std::uint32_t>(c.payload >> 32)};
+        return {
+            static_cast<std::uint32_t>(c.payload & 0xFFFFFFFFULL),
+            static_cast<std::uint32_t>(c.payload >> 32)
+        };
     }
 
     // ============================================================================
@@ -76,7 +78,7 @@ namespace vakya::types {
     [[nodiscard]] inline bool
     may_alias(region_arena& arena, region_ref a, region_ref b) noexcept {
         if (a.is_null() || b.is_null()) return true; // unknown region → assume aliasing
-        if (arena.aliases(a, b)) return true;        // proven same class
+        if (arena.aliases(a, b)) return true; // proven same class
         if (regions_syntactically_disjoint(arena, a, b)) return false;
         return true;
     }
@@ -101,7 +103,10 @@ namespace vakya::types {
         [[nodiscard]] solve_result solve(std::span<const constraint> batch,
                                          solve_context /*ctx*/) {
             solve_result r;
-            if (!arena_) { r.status = solve_status::deferred; return r; }
+            if (!arena_) {
+                r.status = solve_status::deferred;
+                return r;
+            }
 
             for (const constraint& c : batch) {
                 if (!handles(c.kind)) continue;
@@ -122,12 +127,16 @@ namespace vakya::types {
                 if (arena_->aliases(a, b)) {
                     r.status = solve_status::unsatisfiable;
                     r.diagnostics.push_back(
-                        solver_diagnostic{"regions proven aliased; disjointness refuted",
-                                          constraint_ref{}});
+                        solver_diagnostic{
+                            "regions proven aliased; disjointness refuted",
+                            constraint_ref{}
+                        });
                     return r;
-                } else if (regions_syntactically_disjoint(*arena_, a, b)) {
+                }
+                else if (regions_syntactically_disjoint(*arena_, a, b)) {
                     r.status = join_status(r.status, solve_status::solved);
-                } else {
+                }
+                else {
                     // Can't decide (symbolic index / cross-projection) → defer to SMT.
                     r.status = join_status(r.status, solve_status::deferred);
                 }

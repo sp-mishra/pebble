@@ -21,7 +21,6 @@
 #include <stdexcept>
 
 namespace ts::edsl {
-
     // Forward declarations
     struct expr_node;
     using expr_ptr = std::shared_ptr<const expr_node>;
@@ -35,26 +34,24 @@ namespace ts::edsl {
 
         constexpr explicit param_key(std::string_view n) : name(n) {}
 
-        bool operator==(const param_key &other) const noexcept {
+        bool operator==(const param_key& other) const noexcept {
             return name == other.name;
         }
     };
-
 } // namespace ts::edsl
 
-template<>
+template <>
 struct std::hash<ts::edsl::param_key> {
-    std::size_t operator()(const ts::edsl::param_key &k) const noexcept {
+    std::size_t operator()(const ts::edsl::param_key& k) const noexcept {
         return std::hash<std::string>{}(k.name);
     }
 };
 
 namespace ts::edsl {
-
     // ========================================================================
     // 2. Binding Pair (e.g. "param"_p = 3.14f or "weight"_t = tensor_w)
     // ========================================================================
-    template<typename T>
+    template <typename T>
     struct binding {
         std::string name;
         T value;
@@ -73,8 +70,8 @@ namespace ts::edsl {
 
         explicit constexpr param(std::string_view n) : name(n) {}
 
-        template<typename ValT>
-        auto operator=(ValT &&val) const {
+        template <typename ValT>
+        auto operator=(ValT&& val) const {
             return binding<std::decay_t<ValT>>(name, std::forward<ValT>(val));
         }
 
@@ -84,7 +81,7 @@ namespace ts::edsl {
     // ========================================================================
     // 4. Tensor Parameter Handle
     // ========================================================================
-    template<size_t Rank = 0>
+    template <size_t Rank = 0>
     struct tensor_param {
         std::string name;
         tensor_shape expected_shape;
@@ -92,8 +89,8 @@ namespace ts::edsl {
         explicit tensor_param(std::string_view n, tensor_shape shape = {})
             : name(n), expected_shape(std::move(shape)) {}
 
-        template<typename TensorT>
-        auto operator=(TensorT &&tensor_val) const {
+        template <typename TensorT>
+        auto operator=(TensorT&& tensor_val) const {
             return binding<std::decay_t<TensorT>>(name, std::forward<TensorT>(tensor_val));
         }
 
@@ -104,11 +101,11 @@ namespace ts::edsl {
     // 5. User-Defined Literals ("_p" and "_t")
     // ========================================================================
     namespace literals {
-        inline param operator""_p(const char *str, std::size_t len) {
+        inline param operator""_p(const char* str, std::size_t len) {
             return param(std::string_view(str, len));
         }
 
-        inline tensor_param<0> operator""_t(const char *str, std::size_t len) {
+        inline tensor_param<0> operator""_t(const char* str, std::size_t len) {
             return tensor_param<0>(std::string_view(str, len));
         }
     } // namespace literals
@@ -118,7 +115,7 @@ namespace ts::edsl {
     // ========================================================================
     // 6. Symbolic Tensor Leaf Carrier (sym_tensor<Rank>)
     // ========================================================================
-    template<size_t Rank = 0>
+    template <size_t Rank = 0>
     class sym_tensor {
     public:
         std::string name;
@@ -137,8 +134,8 @@ namespace ts::edsl {
             return Rank > 0 ? Rank : shape.size();
         }
 
-        template<typename TensorT>
-        auto operator=(TensorT &&tensor_val) const {
+        template <typename TensorT>
+        auto operator=(TensorT&& tensor_val) const {
             return binding<std::decay_t<TensorT>>(name, std::forward<TensorT>(tensor_val));
         }
 
@@ -147,7 +144,6 @@ namespace ts::edsl {
 
     // Deduction guide
     sym_tensor(std::string_view, tensor_shape) -> sym_tensor<0>;
-
 } // namespace ts::edsl
 
 #endif // PEBBLE_CONTAINERS_TENSOR_EDSL_SYM_LEAF_HPP

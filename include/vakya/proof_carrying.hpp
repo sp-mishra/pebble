@@ -50,6 +50,7 @@ namespace vakya::types {
 
     // Certificate handle (own phantom tag; 1-based like every optimization-layer arena).
     struct certificate_tag {};
+
     using certificate_ref = containers::generational_handle<certificate_tag, std::uint32_t>;
 
     // ============================================================================
@@ -139,7 +140,7 @@ namespace vakya::types {
     // ============================================================================
 
     enum class rewrite_policy : std::uint8_t {
-        proven_only = 0,   // apply iff status == proven (safest)
+        proven_only = 0, // apply iff status == proven (safest)
         allow_deferred = 1, // apply proven + deferred (flagged); reject only refuted
     };
 
@@ -179,7 +180,7 @@ namespace vakya::types {
             const bool permitted =
                 cert.status == proof_status::proven ||
                 (cert.status == proof_status::deferred &&
-                 policy_ == rewrite_policy::allow_deferred);
+                    policy_ == rewrite_policy::allow_deferred);
 
             if (permitted) {
                 std::forward<Apply>(apply)();

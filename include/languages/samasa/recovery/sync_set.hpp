@@ -17,10 +17,9 @@
 #include <cstdint>
 
 namespace lang::samasa {
-
     template <auto... TokenKinds>
     struct sync_set {
-      private:
+    private:
         using token_type = std::common_type_t<decltype(TokenKinds)...>;
 
         static constexpr auto sorted = [] {
@@ -31,11 +30,12 @@ namespace lang::samasa {
             return arr;
         }();
 
-      public:
+    public:
         template <class TokenKind>
         [[nodiscard]] static constexpr bool contains(TokenKind k) noexcept {
             return std::ranges::binary_search(sorted, static_cast<token_type>(k));
         }
+
         static constexpr std::size_t size = sizeof...(TokenKinds);
     };
 
@@ -44,7 +44,7 @@ namespace lang::samasa {
     struct sync_set<> {
         template <class TokenKind>
         [[nodiscard]] static constexpr bool contains(TokenKind) noexcept { return false; }
+
         static constexpr std::size_t size = 0;
     };
-
 } // namespace lang::samasa

@@ -42,7 +42,6 @@
 #include <vector>
 
 namespace lang {
-
     // =========================================================================
     // sym_mutability
     // =========================================================================
@@ -50,7 +49,7 @@ namespace lang {
     enum class sym_mutability : std::uint8_t {
         immutable,
         mutable_,
-        constant,    // compile-time constant — can be folded
+        constant, // compile-time constant — can be folded
     };
 
     // =========================================================================
@@ -58,8 +57,8 @@ namespace lang {
     // =========================================================================
 
     enum class sym_visibility : std::uint8_t {
-        module_local,  // private to the module
-        exported,      // visible to importing modules
+        module_local, // private to the module
+        exported, // visible to importing modules
     };
 
     // =========================================================================
@@ -81,14 +80,14 @@ namespace lang {
     // =========================================================================
 
     struct symbol_entry {
-        std::string      name;
-        sym_kind         kind       = sym_kind::variable;
-        sym_mutability   mutability = sym_mutability::immutable;
-        sym_visibility   visibility = sym_visibility::module_local;
-        std::string      type_name;          // resolved type name (may be empty)
-        std::string      module_origin;      // which module defined this symbol
-        std::size_t      scope_depth = 0;    // assigned by symbol_table on define()
-        bool             is_extern   = false; // declared via extern fn
+        std::string name;
+        sym_kind kind = sym_kind::variable;
+        sym_mutability mutability = sym_mutability::immutable;
+        sym_visibility visibility = sym_visibility::module_local;
+        std::string type_name; // resolved type name (may be empty)
+        std::string module_origin; // which module defined this symbol
+        std::size_t scope_depth = 0; // assigned by symbol_table on define()
+        bool is_extern = false; // declared via extern fn
     };
 
     // =========================================================================
@@ -97,6 +96,7 @@ namespace lang {
 
     struct shadow_diag_kind {
         enum class kind : std::uint8_t { shadowed };
+
         kind value = kind::shadowed;
 
         constexpr shadow_diag_kind() = default;
@@ -183,10 +183,10 @@ namespace lang {
                     for (const auto& sym : scope) {
                         if (sym.name == entry.name) {
                             shadow_diagnostic d;
-                            d.kind    = shadow_diag_kind{shadow_diag_kind::kind::shadowed};
-                            d.symbol  = entry.name;
+                            d.kind = shadow_diag_kind{shadow_diag_kind::kind::shadowed};
+                            d.symbol = entry.name;
                             d.message = "symbol '" + entry.name + "' shadows outer definition";
-                            d.level   = severity::warning;
+                            d.level = severity::warning;
                             shadow_sink->on_diagnostic(std::move(d));
                             break;
                         }
@@ -244,5 +244,4 @@ namespace lang {
     private:
         std::vector<std::vector<symbol_entry>> scopes_;
     };
-
 } // namespace lang

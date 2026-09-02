@@ -16,7 +16,6 @@
 #include <string_view>
 
 namespace lang {
-
     [[nodiscard]] inline std::string
     strip_digit_sep(std::string_view sv, char sep = '_') {
         std::string out;
@@ -25,5 +24,4 @@ namespace lang {
             if (c != sep) out.push_back(c);
         return out;
     }
-
 } // namespace lang

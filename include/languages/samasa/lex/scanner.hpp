@@ -31,11 +31,10 @@
 #include "languages/generic/core/diagnostics.hpp"
 
 namespace lang::samasa {
-
     // Runtime ct_char_set::contains — the member is consteval; reimplement for runtime use.
     [[nodiscard]] inline bool cs_contains_rt(const akshara::ct_char_set& s, char c) noexcept {
         const unsigned idx = static_cast<unsigned char>(c) & 0x7Fu;
-        if (idx < 64) return (s.low  >> idx) & 1u;
+        if (idx < 64) return (s.low >> idx) & 1u;
         return (s.high >> (idx - 64)) & 1u;
     }
 
@@ -74,7 +73,7 @@ namespace lang::samasa {
     template <class TokenKind>
     struct scanner_policy {
         static constexpr bool nested_block_comments = false;
-        static constexpr bool unicode_identifiers   = false;
+        static constexpr bool unicode_identifiers = false;
 
         template <class ScannerView>
         static bool scan_custom_token([[maybe_unused]] ScannerView& sv) { return false; }
@@ -89,6 +88,7 @@ namespace lang::samasa {
         [[nodiscard]] static constexpr bool is_ident_start(char32_t c) noexcept {
             return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
         }
+
         [[nodiscard]] static constexpr bool is_ident_continue(char32_t c) noexcept {
             return is_ident_start(c) || (c >= '0' && c <= '9');
         }
@@ -131,19 +131,19 @@ namespace lang::samasa {
 
     private:
         std::array<scanner_mode_id, kMaxDepth> stack_{};
-        std::size_t                             depth_ = 0;
+        std::size_t depth_ = 0;
     };
 
     // ---- Internal scanner view passed to scanner_policy::scan_custom_token ---
 
     template <class TokenKind, class EmitTok, class EmitTrivia>
     struct scanner_view {
-        std::string_view                         source;
-        std::uint32_t&                           pos;
-        EmitTok&                                 emit_tok;
-        EmitTrivia&                              emit_trivia;
-        lang::collecting_sink<diagnostic>&       sink;
-        const scan_token_kinds<TokenKind>&       kinds;
+        std::string_view source;
+        std::uint32_t& pos;
+        EmitTok& emit_tok;
+        EmitTrivia& emit_trivia;
+        lang::collecting_sink<diagnostic>& sink;
+        const scan_token_kinds<TokenKind>& kinds;
     };
 
     // ---- scan<KWTable, OpTrie, LinePolicyT, TokenKind, ScannerPolicy> -------
@@ -151,12 +151,11 @@ namespace lang::samasa {
     template <class KWTable, class OpTrie, class LinePolicyT, class TokenKind,
               class ScannerPolicy = scanner_policy<TokenKind>>
     [[nodiscard]] token_buffer<TokenKind> scan(
-        std::string_view                        source,
-        const scan_token_kinds<TokenKind>&      kinds,
-        const LinePolicyT&                      lp,
-        ::lang::collecting_sink<diagnostic>&    sink,
-        [[maybe_unused]] const ScannerPolicy&   policy = {})
-    {
+        std::string_view source,
+        const scan_token_kinds<TokenKind>& kinds,
+        const LinePolicyT& lp,
+        ::lang::collecting_sink<diagnostic>& sink,
+        [[maybe_unused]] const ScannerPolicy& policy = {}) {
         token_buffer<TokenKind> buf;
         buf.data.reserve(source.size() / 4 + 8);
         buf.trivia_arena.reserve(source.size() / 8 + 4);
@@ -169,12 +168,12 @@ namespace lang::samasa {
         };
 
         static constexpr akshara::ct_char_set kIdentStart = akshara::cs_ident_start();
-        static constexpr akshara::ct_char_set kIdentCont  = akshara::cs_ident_cont();
-        static constexpr akshara::ct_char_set kDigits     = akshara::cs_digits();
+        static constexpr akshara::ct_char_set kIdentCont = akshara::cs_ident_cont();
+        static constexpr akshara::ct_char_set kDigits = akshara::cs_digits();
 
         const std::uint32_t N = static_cast<std::uint32_t>(source.size());
         std::uint32_t pos = 0;
-        TokenKind     prev_kind = kinds.eof;
+        TokenKind prev_kind = kinds.eof;
 
         while (pos < N) {
             const std::uint32_t start = pos;
@@ -214,21 +213,24 @@ namespace lang::samasa {
             }
 
             // Line comment
-            if (c == '/' && pos + 1 < N && source[pos+1] == '/') {
+            if (c == '/' && pos + 1 < N && source[pos + 1] == '/') {
                 while (pos < N && source[pos] != '\n') ++pos;
                 emit_trivia_fn(trivia_kind::line_comment, start, pos - start);
                 continue;
             }
 
             // Block comment
-            if (c == '/' && pos + 1 < N && source[pos+1] == '*') {
+            if (c == '/' && pos + 1 < N && source[pos + 1] == '*') {
                 pos += 2;
-                while (pos + 1 < N && !(source[pos] == '*' && source[pos+1] == '/')) ++pos;
+                while (pos + 1 < N && !(source[pos] == '*' && source[pos + 1] == '/')) ++pos;
                 if (pos + 1 < N) {
                     pos += 2;
-                } else {
-                    sink.on_diagnostic({samasa_diag_code::lex_unterminated_comment, {},
-                        "unterminated block comment", ::lang::severity::error});
+                }
+                else {
+                    sink.on_diagnostic({
+                        samasa_diag_code::lex_unterminated_comment, {},
+                        "unterminated block comment", ::lang::severity::error
+                    });
                 }
                 emit_trivia_fn(trivia_kind::block_comment, start, pos - start);
                 continue;
@@ -250,11 +252,13 @@ namespace lang::samasa {
                 while (pos < N && cs_contains_rt(kDigits, source[pos])) ++pos;
                 bool is_float = false;
                 if (pos < N && source[pos] == '.') {
-                    is_float = true; ++pos;
+                    is_float = true;
+                    ++pos;
                     while (pos < N && cs_contains_rt(kDigits, source[pos])) ++pos;
                 }
                 if (pos < N && (source[pos] == 'e' || source[pos] == 'E')) {
-                    is_float = true; ++pos;
+                    is_float = true;
+                    ++pos;
                     if (pos < N && (source[pos] == '+' || source[pos] == '-')) ++pos;
                     while (pos < N && cs_contains_rt(kDigits, source[pos])) ++pos;
                 }
@@ -266,16 +270,26 @@ namespace lang::samasa {
 
             // String literal
             if (c == '"' || c == '\'') {
-                const char delim = c; ++pos;
+                const char delim = c;
+                ++pos;
                 bool terminated = false;
                 while (pos < N) {
-                    if (source[pos] == '\\') { pos += 2; continue; }
-                    if (source[pos] == delim) { ++pos; terminated = true; break; }
+                    if (source[pos] == '\\') {
+                        pos += 2;
+                        continue;
+                    }
+                    if (source[pos] == delim) {
+                        ++pos;
+                        terminated = true;
+                        break;
+                    }
                     ++pos;
                 }
                 if (!terminated)
-                    sink.on_diagnostic({samasa_diag_code::lex_unterminated_string, {},
-                        "unterminated string literal", ::lang::severity::error});
+                    sink.on_diagnostic({
+                        samasa_diag_code::lex_unterminated_string, {},
+                        "unterminated string literal", ::lang::severity::error
+                    });
                 emit_tok(kinds.string_literal, start, pos - start);
                 prev_kind = kinds.string_literal;
                 continue;
@@ -294,8 +308,10 @@ namespace lang::samasa {
             }
 
             // Unknown character
-            sink.on_diagnostic({samasa_diag_code::lex_unknown_char, {},
-                std::string("unknown character: ") + c, ::lang::severity::error});
+            sink.on_diagnostic({
+                samasa_diag_code::lex_unknown_char, {},
+                std::string("unknown character: ") + c, ::lang::severity::error
+            });
             emit_tok(kinds.unknown, start, 1);
             prev_kind = kinds.unknown;
             ++pos;
@@ -304,5 +320,4 @@ namespace lang::samasa {
         emit_tok(kinds.eof, N, 0);
         return buf;
     }
-
 } // namespace lang::samasa

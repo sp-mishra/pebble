@@ -124,11 +124,12 @@ namespace tarka {
                     while (!tok.stop_requested()) {
                         if (auto t = queue_.try_pop()) {
                             (*t)();
-                        } else {
+                        }
+                        else {
                             // Block until work arrives or stop is requested — no CPU spin
                             std::unique_lock lock(wake_mutex_);
                             wake_cv_.wait_for(lock, std::chrono::milliseconds(1),
-                                [&] { return !queue_.empty() || tok.stop_requested(); });
+                                              [&] { return !queue_.empty() || tok.stop_requested(); });
                         }
                     }
                     // drain remaining tasks on stop

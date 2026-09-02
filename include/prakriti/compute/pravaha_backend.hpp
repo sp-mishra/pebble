@@ -17,112 +17,111 @@
 #include <memory>
 
 namespace prakriti {
+    class PravahaBackend {
+    public:
+        explicit PravahaBackend(unsigned threads = 0, std::size_t chunk_size = 1024)
+            : chunk_size_(chunk_size),
+              backend_(std::make_shared<pravaha::JThreadBackend>(
+                  threads ? threads : std::thread::hardware_concurrency())),
+              runner_(std::make_shared<pravaha::Runner<pravaha::JThreadBackend>>(*backend_)) {}
 
-class PravahaBackend {
-public:
-    explicit PravahaBackend(unsigned threads = 0, std::size_t chunk_size = 1024)
-        : chunk_size_(chunk_size),
-          backend_(std::make_shared<pravaha::JThreadBackend>(threads ? threads : std::thread::hardware_concurrency())),
-          runner_(std::make_shared<pravaha::Runner<pravaha::JThreadBackend>>(*backend_)) {}
-
-    void axpy_const_masked(MSpan out, CSpan mask, Scalar k) const {
-        const std::size_t n = out.size();
-        if (n < chunk_size_) {
-            for (std::size_t i = 0; i < n; ++i) out[i] += mask[i] * k;
-            return;
-        }
-        auto r = std::views::iota(std::size_t{0}, n);
-        auto expr = pravaha::lazy_parallel_for(
-            r, [out, mask, k](std::size_t i) { out[i] += mask[i] * k; }, chunk_size_);
-        (void)runner_->submit(std::move(expr));
-    }
-
-    void predict(MSpan out, CSpan base, CSpan mask, CSpan v, Scalar k) const {
-        const std::size_t n = out.size();
-        if (n < chunk_size_) {
-            for (std::size_t i = 0; i < n; ++i) out[i] = base[i] + mask[i] * v[i] * k;
-            return;
-        }
-        auto r = std::views::iota(std::size_t{0}, n);
-        auto expr = pravaha::lazy_parallel_for(
-            r, [out, base, mask, v, k](std::size_t i) { out[i] = base[i] + mask[i] * v[i] * k; }, chunk_size_);
-        (void)runner_->submit(std::move(expr));
-    }
-
-    void sub_scale(MSpan out, CSpan p, CSpan q, Scalar k) const {
-        const std::size_t n = out.size();
-        if (n < chunk_size_) {
-            for (std::size_t i = 0; i < n; ++i) out[i] = (p[i] - q[i]) * k;
-            return;
-        }
-        auto r = std::views::iota(std::size_t{0}, n);
-        auto expr = pravaha::lazy_parallel_for(
-            r, [out, p, q, k](std::size_t i) { out[i] = (p[i] - q[i]) * k; }, chunk_size_);
-        (void)runner_->submit(std::move(expr));
-    }
-
-    void mul_col(MSpan out, CSpan s) const {
-        const std::size_t n = out.size();
-        if (n < chunk_size_) {
-            for (std::size_t i = 0; i < n; ++i) out[i] *= s[i];
-            return;
-        }
-        auto r = std::views::iota(std::size_t{0}, n);
-        auto expr = pravaha::lazy_parallel_for(
-            r, [out, s](std::size_t i) { out[i] *= s[i]; }, chunk_size_);
-        (void)runner_->submit(std::move(expr));
-    }
-
-    void copy(MSpan out, CSpan src) const {
-        std::copy(src.begin(), src.end(), out.begin());
-    }
-
-    void clamp(MSpan out, Scalar lo, Scalar hi) const {
-        const std::size_t n = out.size();
-        if (n < chunk_size_) {
-            for (std::size_t i = 0; i < n; ++i) out[i] = std::min(std::max(out[i], lo), hi);
-            return;
-        }
-        auto r = std::views::iota(std::size_t{0}, n);
-        auto expr = pravaha::lazy_parallel_for(
-            r, [out, lo, hi](std::size_t i) { out[i] = std::min(std::max(out[i], lo), hi); }, chunk_size_);
-        (void)runner_->submit(std::move(expr));
-    }
-
-    [[nodiscard]] Scalar kinetic_energy(CSpan vx, CSpan vy, CSpan inv_mass) const noexcept {
-        const std::size_t n = vx.size();
-        Scalar total = Scalar(0);
-        for (std::size_t i = 0; i < n; ++i) {
-            if (inv_mass[i] > Scalar(0)) {
-                const Scalar m = Scalar(1) / inv_mass[i];
-                total += Scalar(0.5) * m * (vx[i] * vx[i] + vy[i] * vy[i]);
+        void axpy_const_masked(MSpan out, CSpan mask, Scalar k) const {
+            const std::size_t n = out.size();
+            if (n < chunk_size_) {
+                for (std::size_t i = 0; i < n; ++i) out[i] += mask[i] * k;
+                return;
             }
+            auto r = std::views::iota(std::size_t{0}, n);
+            auto expr = pravaha::lazy_parallel_for(
+                r, [out, mask, k](std::size_t i) { out[i] += mask[i] * k; }, chunk_size_);
+            (void)runner_->submit(std::move(expr));
         }
-        return total;
-    }
 
-    // Parallel 4-color checkerboard bucket dispatch via Pravaha task-graph execution
-    template <typename Fn>
-    void parallel_for_color(const std::vector<Index>& color_bucket, Fn&& fn) const {
-        const std::size_t n = color_bucket.size();
-        if (n < chunk_size_) {
-            for (std::size_t idx = 0; idx < n; ++idx) fn(color_bucket[idx]);
-            return;
+        void predict(MSpan out, CSpan base, CSpan mask, CSpan v, Scalar k) const {
+            const std::size_t n = out.size();
+            if (n < chunk_size_) {
+                for (std::size_t i = 0; i < n; ++i) out[i] = base[i] + mask[i] * v[i] * k;
+                return;
+            }
+            auto r = std::views::iota(std::size_t{0}, n);
+            auto expr = pravaha::lazy_parallel_for(
+                r, [out, base, mask, v, k](std::size_t i) { out[i] = base[i] + mask[i] * v[i] * k; }, chunk_size_);
+            (void)runner_->submit(std::move(expr));
         }
-        auto r = std::views::iota(std::size_t{0}, n);
-        auto expr = pravaha::lazy_parallel_for(
-            r, [&color_bucket, fn = std::forward<Fn>(fn)](std::size_t idx) { fn(color_bucket[idx]); }, chunk_size_);
-        (void)runner_->submit(std::move(expr));
-    }
 
-private:
-    std::size_t chunk_size_{1024};
-    std::shared_ptr<pravaha::JThreadBackend> backend_;
-    std::shared_ptr<pravaha::Runner<pravaha::JThreadBackend>> runner_;
-};
+        void sub_scale(MSpan out, CSpan p, CSpan q, Scalar k) const {
+            const std::size_t n = out.size();
+            if (n < chunk_size_) {
+                for (std::size_t i = 0; i < n; ++i) out[i] = (p[i] - q[i]) * k;
+                return;
+            }
+            auto r = std::views::iota(std::size_t{0}, n);
+            auto expr = pravaha::lazy_parallel_for(
+                r, [out, p, q, k](std::size_t i) { out[i] = (p[i] - q[i]) * k; }, chunk_size_);
+            (void)runner_->submit(std::move(expr));
+        }
 
-static_assert(ComputeBackend<PravahaBackend>);
+        void mul_col(MSpan out, CSpan s) const {
+            const std::size_t n = out.size();
+            if (n < chunk_size_) {
+                for (std::size_t i = 0; i < n; ++i) out[i] *= s[i];
+                return;
+            }
+            auto r = std::views::iota(std::size_t{0}, n);
+            auto expr = pravaha::lazy_parallel_for(
+                r, [out, s](std::size_t i) { out[i] *= s[i]; }, chunk_size_);
+            (void)runner_->submit(std::move(expr));
+        }
 
+        void copy(MSpan out, CSpan src) const {
+            std::copy(src.begin(), src.end(), out.begin());
+        }
+
+        void clamp(MSpan out, Scalar lo, Scalar hi) const {
+            const std::size_t n = out.size();
+            if (n < chunk_size_) {
+                for (std::size_t i = 0; i < n; ++i) out[i] = std::min(std::max(out[i], lo), hi);
+                return;
+            }
+            auto r = std::views::iota(std::size_t{0}, n);
+            auto expr = pravaha::lazy_parallel_for(
+                r, [out, lo, hi](std::size_t i) { out[i] = std::min(std::max(out[i], lo), hi); }, chunk_size_);
+            (void)runner_->submit(std::move(expr));
+        }
+
+        [[nodiscard]] Scalar kinetic_energy(CSpan vx, CSpan vy, CSpan inv_mass) const noexcept {
+            const std::size_t n = vx.size();
+            Scalar total = Scalar(0);
+            for (std::size_t i = 0; i < n; ++i) {
+                if (inv_mass[i] > Scalar(0)) {
+                    const Scalar m = Scalar(1) / inv_mass[i];
+                    total += Scalar(0.5) * m * (vx[i] * vx[i] + vy[i] * vy[i]);
+                }
+            }
+            return total;
+        }
+
+        // Parallel 4-color checkerboard bucket dispatch via Pravaha task-graph execution
+        template <typename Fn>
+        void parallel_for_color(const std::vector<Index>& color_bucket, Fn&& fn) const {
+            const std::size_t n = color_bucket.size();
+            if (n < chunk_size_) {
+                for (std::size_t idx = 0; idx < n; ++idx) fn(color_bucket[idx]);
+                return;
+            }
+            auto r = std::views::iota(std::size_t{0}, n);
+            auto expr = pravaha::lazy_parallel_for(
+                r, [&color_bucket, fn = std::forward<Fn>(fn)](std::size_t idx) { fn(color_bucket[idx]); }, chunk_size_);
+            (void)runner_->submit(std::move(expr));
+        }
+
+    private:
+        std::size_t chunk_size_{1024};
+        std::shared_ptr<pravaha::JThreadBackend> backend_;
+        std::shared_ptr<pravaha::Runner<pravaha::JThreadBackend>> runner_;
+    };
+
+    static_assert(ComputeBackend<PravahaBackend>);
 } // namespace prakriti
 
 #endif // PRAKRITI_ENABLE_PRAVAHA
