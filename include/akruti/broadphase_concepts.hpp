@@ -1,13 +1,11 @@
 #pragma once
 // akruti/broadphase_concepts.hpp — Plug-and-Play Policy Concepts for Geometry & Spatial Acceleration.
-#include "shape.hpp"
 #include "primitives.hpp"
 #include "narrowphase.hpp"
 #include "fracture.hpp"
 #include <concepts>
 #include <vector>
 #include <span>
-#include <cstdint>
 
 namespace akruti {
     // ── Broadphase: spatial acceleration structure ─────────────────────────

@@ -11,7 +11,6 @@
 #include "math.hpp"
 #include "transformed.hpp"
 #include <containers/numeric/math_vector.hpp>
-#include <cmath>
 #include <algorithm>
 
 namespace akruti {
@@ -34,7 +33,7 @@ namespace akruti {
 
         constexpr DynamicBody() noexcept = default;
 
-        constexpr explicit DynamicBody(S s, Scalar m = 1.0f, Scalar i = 1.0f) noexcept
+        constexpr explicit DynamicBody(S s, const Scalar m = 1.0f, const Scalar i = 1.0f) noexcept
             : shape(std::move(s)), mass(m), inv_mass(m > 0.0f ? 1.0f / m : 0.0f),
               inertia(i), inv_inertia(i > 0.0f ? 1.0f / i : 0.0f) {}
 
@@ -58,7 +57,7 @@ namespace akruti {
             return ts.centroid();
         }
 
-        void step(Scalar dt, pebble::math::vec2 gravity = {0.0f, 0.0f}) noexcept {
+        void step(const Scalar dt, const pebble::math::vec2 gravity = {0.0f, 0.0f}) noexcept {
             if (inv_mass <= 0.0f) return;
             linear_vel = linear_vel + (gravity + force * inv_mass) * dt;
             position = position + linear_vel * dt;
@@ -68,7 +67,7 @@ namespace akruti {
             torque = 0.0f;
         }
 
-        void apply_impulse(pebble::math::vec2 impulse, pebble::math::vec2 world_pt) noexcept {
+        void apply_impulse(pebble::math::vec2 impulse, const pebble::math::vec2 world_pt) noexcept {
             linear_vel = linear_vel + impulse * inv_mass;
             pebble::math::vec2 r = world_pt - position;
             torque += (r[0] * impulse[1] - r[1] * impulse[0]);

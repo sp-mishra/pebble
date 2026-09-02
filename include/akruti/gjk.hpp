@@ -10,7 +10,7 @@
 namespace akruti {
     // Minkowski-difference support: farthest point of (A - B) along d.
     template <Shape A, Shape B>
-    [[nodiscard]] inline Vec2<Scalar> support_diff(const A& a, const B& b, Vec2<Scalar> d) noexcept {
+    [[nodiscard]] Vec2<Scalar> support_diff(const A& a, const B& b, Vec2<Scalar> d) noexcept {
         return a.support(d) - b.support(-d);
     }
 
@@ -32,8 +32,8 @@ namespace akruti {
 
     // GJK boolean: do convex A and B overlap? Fills the final simplex for EPA if requested.
     template <Shape A, Shape B>
-    [[nodiscard]] inline bool gjk_overlap(const A& a, const B& b,
-                                          containers::static_vector<Vec2<Scalar>, 3>* out_simplex = nullptr) noexcept {
+    [[nodiscard]] bool gjk_overlap(const A& a, const B& b,
+                                   containers::static_vector<Vec2<Scalar>, 3>* out_simplex = nullptr) noexcept {
         using V = Vec2<Scalar>;
         // Initial direction: vector from shape A center toward shape B center
         V d = b.support(V{1, 0}) - a.support(V{-1, 0});
@@ -100,7 +100,7 @@ namespace akruti {
     // EPA: expand the GJK simplex along the Minkowski boundary to recover the minimum
     // penetration vector (normal + depth). Requires an overlapping pair.
     template <Shape A, Shape B>
-    [[nodiscard]] inline Contact epa(const A& a, const B& b) noexcept {
+    [[nodiscard]] Contact epa(const A& a, const B& b) noexcept {
         using V = Vec2<Scalar>;
         containers::static_vector<V, 3> simp;
         if (!gjk_overlap(a, b, &simp) || simp.size() < 3) return Contact{};
@@ -145,9 +145,8 @@ namespace akruti {
             if (best_dist >= Scalar(1e17)) break;
 
             const V p = support_diff(a, b, best_normal);
-            const Scalar d = p.dot(best_normal);
 
-            if (d - best_dist < Scalar(1e-4) || poly.size() >= 63) {
+            if (const Scalar d = p.dot(best_normal); d - best_dist < Scalar(1e-4) || poly.size() >= 63) {
                 // best_normal points outward from Minkowski difference (A - B), which means from A toward B.
                 return Contact{true, best_dist, best_normal};
             }
@@ -172,7 +171,7 @@ namespace akruti {
     };
 
     template <Shape A, Shape B>
-    [[nodiscard]] inline Separation gjk_distance(const A& a, const B& b) noexcept {
+    [[nodiscard]] Separation gjk_distance(const A& a, const B& b) noexcept {
         using V = Vec2<Scalar>;
         V d{1, 0};
         containers::static_vector<V, 3> s;

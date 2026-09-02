@@ -12,7 +12,6 @@
 #include <variant>
 #include <vector>
 #include <algorithm>
-#include <cmath>
 
 #include "spline.hpp"
 
@@ -27,11 +26,11 @@ namespace akruti {
     };
 
     using CsgLeaf = std::variant<Circle, Segment, Capsule, Box, OrientedBox, Triangle, RoundedBox, HalfPlane, ConvexPoly
-                                 < 8>
-    ,
-    CubicBezierCurve
-    ,
-    CatmullRomSpline
+                                 <8>
+                                 ,
+                                 CubicBezierCurve
+                                 ,
+                                 CatmullRomSpline
     >;
 
     struct CsgNode {
@@ -61,20 +60,20 @@ namespace akruti {
             }
             case CsgOp::SmoothUnion: {
                 const Scalar da = a->sdf(p), db = b->sdf(p);
-                const Scalar h = std::clamp(Scalar(0.5) + Scalar(0.5) * (db - da) / std::max(k, Scalar(1e-6)),
-                                            Scalar(0), Scalar(1));
+                const Scalar h = std::clamp(static_cast<Scalar>(0.5) + static_cast<Scalar>(0.5) * (db - da) / std::max(k, static_cast<Scalar>(1e-6)),
+                                            static_cast<Scalar>(0), static_cast<Scalar>(1));
                 return db * (1 - h) + da * h - k * h * (1 - h);
             }
             case CsgOp::SmoothSubtract: {
                 const Scalar da = a->sdf(p), db = b->sdf(p);
-                const Scalar h = std::clamp(Scalar(0.5) - Scalar(0.5) * (da + db) / std::max(k, Scalar(1e-6)),
-                                            Scalar(0), Scalar(1));
+                const Scalar h = std::clamp(static_cast<Scalar>(0.5) - static_cast<Scalar>(0.5) * (da + db) / std::max(k, static_cast<Scalar>(1e-6)),
+                                            static_cast<Scalar>(0), static_cast<Scalar>(1));
                 return da * (1 - h) + (-db) * h + k * h * (1 - h);
             }
             case CsgOp::SmoothIntersect: {
                 const Scalar da = a->sdf(p), db = b->sdf(p);
-                const Scalar h = std::clamp(Scalar(0.5) - Scalar(0.5) * (db - da) / std::max(k, Scalar(1e-6)),
-                                            Scalar(0), Scalar(1));
+                const Scalar h = std::clamp(static_cast<Scalar>(0.5) - static_cast<Scalar>(0.5) * (db - da) / std::max(k, static_cast<Scalar>(1e-6)),
+                                            static_cast<Scalar>(0), static_cast<Scalar>(1));
                 return db * (1 - h) + da * h + k * h * (1 - h);
             }
             case CsgOp::ChamferUnion: {
@@ -86,10 +85,10 @@ namespace akruti {
                 return a->sdf(q);
             }
             }
-            return Scalar(1e18);
+            return static_cast<Scalar>(1e18);
         }
 
-        [[nodiscard]] Scalar operator()(Vec p) const noexcept { return sdf(p); }
+        [[nodiscard]] Scalar operator()(const Vec p) const noexcept { return sdf(p); }
     };
 
     // ── Builders for Dynamic Tree ──────────────────────────────────────────────────────
@@ -128,7 +127,7 @@ namespace akruti {
         return n;
     }
 
-    [[nodiscard]] inline CsgPtr csg_smooth_union(CsgPtr a, CsgPtr b, Scalar k) {
+    [[nodiscard]] inline CsgPtr csg_smooth_union(CsgPtr a, CsgPtr b, const Scalar k) {
         auto n = std::make_unique<CsgNode>();
         n->is_leaf = false;
         n->op = CsgOp::SmoothUnion;
@@ -138,7 +137,7 @@ namespace akruti {
         return n;
     }
 
-    [[nodiscard]] inline CsgPtr csg_chamfer_union(CsgPtr a, CsgPtr b, Scalar k) {
+    [[nodiscard]] inline CsgPtr csg_chamfer_union(CsgPtr a, CsgPtr b, const Scalar k) {
         auto n = std::make_unique<CsgNode>();
         n->is_leaf = false;
         n->op = CsgOp::ChamferUnion;
@@ -148,7 +147,7 @@ namespace akruti {
         return n;
     }
 
-    [[nodiscard]] inline CsgPtr csg_shell(CsgPtr a, Scalar thickness) {
+    [[nodiscard]] inline CsgPtr csg_shell(CsgPtr a, const Scalar thickness) {
         auto n = std::make_unique<CsgNode>();
         n->is_leaf = false;
         n->op = CsgOp::Shell;
@@ -157,7 +156,7 @@ namespace akruti {
         return n;
     }
 
-    [[nodiscard]] inline CsgPtr csg_morph(CsgPtr a, CsgPtr b, Scalar t) {
+    [[nodiscard]] inline CsgPtr csg_morph(CsgPtr a, CsgPtr b, const Scalar t) {
         auto n = std::make_unique<CsgNode>();
         n->is_leaf = false;
         n->op = CsgOp::Morph;
@@ -167,7 +166,7 @@ namespace akruti {
         return n;
     }
 
-    [[nodiscard]] inline CsgPtr csg_offset(CsgPtr a, Scalar r) {
+    [[nodiscard]] inline CsgPtr csg_offset(CsgPtr a, const Scalar r) {
         auto n = std::make_unique<CsgNode>();
         n->is_leaf = false;
         n->op = CsgOp::Offset;
@@ -176,7 +175,7 @@ namespace akruti {
         return n;
     }
 
-    [[nodiscard]] inline CsgPtr csg_smooth_subtract(CsgPtr a, CsgPtr b, Scalar k) {
+    [[nodiscard]] inline CsgPtr csg_smooth_subtract(CsgPtr a, CsgPtr b, const Scalar k) {
         auto n = std::make_unique<CsgNode>();
         n->is_leaf = false;
         n->op = CsgOp::SmoothSubtract;
@@ -186,7 +185,7 @@ namespace akruti {
         return n;
     }
 
-    [[nodiscard]] inline CsgPtr csg_smooth_intersect(CsgPtr a, CsgPtr b, Scalar k) {
+    [[nodiscard]] inline CsgPtr csg_smooth_intersect(CsgPtr a, CsgPtr b, const Scalar k) {
         auto n = std::make_unique<CsgNode>();
         n->is_leaf = false;
         n->op = CsgOp::SmoothIntersect;
@@ -196,7 +195,7 @@ namespace akruti {
         return n;
     }
 
-    [[nodiscard]] inline CsgPtr csg_transform(CsgPtr a, Mat2<Scalar> rot, Vec t) {
+    [[nodiscard]] inline CsgPtr csg_transform(CsgPtr a, const Mat2<Scalar> rot, const Vec t) {
         auto n = std::make_unique<CsgNode>();
         n->is_leaf = false;
         n->op = CsgOp::Transform;
@@ -229,32 +228,32 @@ namespace akruti {
         };
 
         struct OpUnion {
-            static constexpr Scalar eval(Scalar a, Scalar b) noexcept { return std::min(a, b); }
+            static constexpr Scalar eval(const Scalar a, const Scalar b) noexcept { return std::min(a, b); }
         };
 
         struct OpIntersect {
-            static constexpr Scalar eval(Scalar a, Scalar b) noexcept { return std::max(a, b); }
+            static constexpr Scalar eval(const Scalar a, const Scalar b) noexcept { return std::max(a, b); }
         };
 
         struct OpSubtract {
-            static constexpr Scalar eval(Scalar a, Scalar b) noexcept { return std::max(a, -b); }
+            static constexpr Scalar eval(const Scalar a, const Scalar b) noexcept { return std::max(a, -b); }
         };
 
         struct OpShell {
-            static constexpr Scalar eval(Scalar a, Scalar t) noexcept { return std::fabs(a) - t; }
+            static constexpr Scalar eval(const Scalar a, const Scalar t) noexcept { return std::fabs(a) - t; }
         };
 
         struct OpOffset {
-            static constexpr Scalar eval(Scalar a, Scalar r) noexcept { return a - r; }
+            static constexpr Scalar eval(const Scalar a, const Scalar r) noexcept { return a - r; }
         };
 
         // Smooth subtract: polynomial variant — negative inside B-carved region of A
         struct OpSmoothSubtract {
             Scalar k{0.1f};
 
-            [[nodiscard]] Scalar operator()(Scalar da, Scalar db) const noexcept {
-                const Scalar h = std::clamp(Scalar(0.5) - Scalar(0.5) * (da + db) / std::max(k, Scalar(1e-6)),
-                                            Scalar(0), Scalar(1));
+            [[nodiscard]] Scalar operator()(const Scalar da, const Scalar db) const noexcept {
+                const Scalar h = std::clamp(static_cast<Scalar>(0.5) - static_cast<Scalar>(0.5) * (da + db) / std::max(k, static_cast<Scalar>(1e-6)),
+                                            static_cast<Scalar>(0), static_cast<Scalar>(1));
                 return da * (1 - h) + (-db) * h + k * h * (1 - h);
             }
         };
@@ -263,9 +262,9 @@ namespace akruti {
         struct OpSmoothIntersect {
             Scalar k{0.1f};
 
-            [[nodiscard]] Scalar operator()(Scalar da, Scalar db) const noexcept {
-                const Scalar h = std::clamp(Scalar(0.5) - Scalar(0.5) * (db - da) / std::max(k, Scalar(1e-6)),
-                                            Scalar(0), Scalar(1));
+            [[nodiscard]] Scalar operator()(const Scalar da, const Scalar db) const noexcept {
+                const Scalar h = std::clamp(static_cast<Scalar>(0.5) - static_cast<Scalar>(0.5) * (db - da) / std::max(k, static_cast<Scalar>(1e-6)),
+                                            static_cast<Scalar>(0), static_cast<Scalar>(1));
                 return db * (1 - h) + da * h + k * h * (1 - h);
             }
         };
@@ -282,12 +281,12 @@ namespace akruti {
         };
 
         template <class L, class R>
-        [[nodiscard]] constexpr auto csg_smooth_subtract(L l, R r, Scalar k = 0.1f) noexcept {
+        [[nodiscard]] constexpr auto csg_smooth_subtract(L l, R r, const Scalar k = 0.1f) noexcept {
             return BinaryExprK<OpSmoothSubtract, L, R>{l, r, OpSmoothSubtract{k}};
         }
 
         template <class L, class R>
-        [[nodiscard]] constexpr auto csg_smooth_intersect(L l, R r, Scalar k = 0.1f) noexcept {
+        [[nodiscard]] constexpr auto csg_smooth_intersect(L l, R r, const Scalar k = 0.1f) noexcept {
             return BinaryExprK<OpSmoothIntersect, L, R>{l, r, OpSmoothIntersect{k}};
         }
 
@@ -328,7 +327,7 @@ namespace akruti {
 
         // ── Exact Dual-Number / Auto-Diff Surface Normal for CSG Expressions ──────────────
         template <class Expr>
-        [[nodiscard]] inline Vec normal_auto_diff(const Expr& expr, Vec p, Scalar eps = 1e-4f) noexcept {
+        [[nodiscard]] inline Vec normal_auto_diff(const Expr& expr, const Vec p, const Scalar eps = 1e-4f) noexcept {
             const Scalar dx = expr.sdf(Vec{p.x + eps, p.y}) - expr.sdf(Vec{p.x - eps, p.y});
             const Scalar dy = expr.sdf(Vec{p.x, p.y + eps}) - expr.sdf(Vec{p.x, p.y - eps});
             const Vec grad{dx, dy};
@@ -360,7 +359,7 @@ namespace akruti {
             return static_cast<std::uint32_t>(nodes_.size() - 1);
         }
 
-        std::uint32_t add_op(CsgOp op, std::uint32_t left, std::uint32_t right, Scalar param = 0) {
+        std::uint32_t add_op(const CsgOp op, const std::uint32_t left, const std::uint32_t right, const Scalar param = 0) {
             FlatNode n;
             n.is_leaf = false;
             n.op = op;
@@ -371,7 +370,7 @@ namespace akruti {
             return static_cast<std::uint32_t>(nodes_.size() - 1);
         }
 
-        [[nodiscard]] Scalar eval(std::uint32_t root, Vec p) const noexcept {
+        [[nodiscard]] Scalar eval(const std::uint32_t root, Vec p) const noexcept {
             if (root >= nodes_.size()) return 1e18f;
             const auto& n = nodes_[root];
             if (n.is_leaf) {

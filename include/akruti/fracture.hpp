@@ -16,28 +16,25 @@
 // dependent scans — plain C++, not kernelized.
 #include "math.hpp"
 #include "primitives.hpp"
-#include "containers/static/static_vector.hpp"
 #include "containers/dynamic/SmallVector.hpp"
 #include <vector>
-#include <cmath>
 
 namespace akruti {
     using Poly = containers::dynamic::SmallVector<Vec2<Scalar>>;
 
     // ── Single half-plane clip: keep the portion of `subject` on the side where
     //    normal·(p - point) <= 0 (the "inside" / solid side). ─────────────────────────
-    [[nodiscard]] inline Poly clip_halfplane(const Poly& subject, Vec2<Scalar> normal, Vec2<Scalar> point) {
+    [[nodiscard]] inline Poly clip_halfplane(const Poly& subject, const Vec2<Scalar> normal, const Vec2<Scalar> point) {
         Poly out;
         const std::size_t n = subject.size();
         if (n == 0) return out;
-        auto side = [&](Vec2<Scalar> p) { return normal.dot(p - point); };
+        auto side = [&](const Vec2<Scalar> p) { return normal.dot(p - point); };
         for (std::size_t i = 0; i < n; ++i) {
             const Vec2<Scalar> cur = subject[i];
             const Vec2<Scalar> prev = subject[(i + n - 1) % n];
             const Scalar dc = side(cur), dp = side(prev);
-            const bool cur_in = dc <= Scalar(0);
-            const bool prev_in = dp <= Scalar(0);
-            if (cur_in != prev_in) {
+            const bool cur_in = dc <= static_cast<Scalar>(0);
+            if (const bool prev_in = dp <= static_cast<Scalar>(0); cur_in != prev_in) {
                 const Scalar t = dp / (dp - dc); // crossing param on prev->cur
                 out.push_back(prev + (cur - prev) * t);
             }
@@ -50,14 +47,14 @@ namespace akruti {
     [[nodiscard]] inline Poly clip_polygon(const Poly& subject, const Poly& clip) {
         Poly result = subject;
         const std::size_t m = clip.size();
-        for (std::size_t i = 0; i < m && result.size() > 0; ++i) {
+        for (std::size_t i = 0; i < m && !result.empty(); ++i) {
             const Vec2<Scalar> a = clip[i];
             const Vec2<Scalar> b = clip[(i + 1) % m];
             const Vec2<Scalar> edge = b - a;
             // Inward normal for CCW clip polygon points to the left of the edge.
             const Vec2<Scalar> inward{-edge.y, edge.x};
             // clip_halfplane keeps normal·(p-point)<=0; we want the inward (left) side => use -inward.
-            result = clip_halfplane(result, inward * Scalar(-1), a);
+            result = clip_halfplane(result, inward * static_cast<Scalar>(-1), a);
         }
         return result;
     }
@@ -65,10 +62,10 @@ namespace akruti {
     // ── Polygon area (signed, CCW positive). ───────────────────────────────────────────
     [[nodiscard]] inline Scalar polygon_area(const Poly& p) noexcept {
         const std::size_t n = p.size();
-        if (n < 3) return Scalar(0);
+        if (n < 3) return static_cast<Scalar>(0);
         Scalar a = 0;
         for (std::size_t i = 0; i < n; ++i) a += cross(p[i], p[(i + 1) % n]);
-        return a * Scalar(0.5);
+        return a * static_cast<Scalar>(0.5);
     }
 
     // ── Polygon centroid ───────────────────────────────────────────────────────────────
@@ -76,12 +73,12 @@ namespace akruti {
         const std::size_t n = p.size();
         if (n == 0) return Vec2<Scalar>{0, 0};
         if (n == 1) return p[0];
-        if (n == 2) return (p[0] + p[1]) * Scalar(0.5);
+        if (n == 2) return (p[0] + p[1]) * static_cast<Scalar>(0.5);
         const Scalar a = polygon_area(p);
-        if (std::fabs(a) < Scalar(1e-12)) {
+        if (std::fabs(a) < static_cast<Scalar>(1e-12)) {
             Vec2<Scalar> c{0, 0};
             for (std::size_t i = 0; i < n; ++i) c += p[i];
-            return c * (Scalar(1) / static_cast<Scalar>(n));
+            return c * (static_cast<Scalar>(1) / static_cast<Scalar>(n));
         }
         Vec2<Scalar> c{0, 0};
         for (std::size_t i = 0; i < n; ++i) {
@@ -91,7 +88,7 @@ namespace akruti {
             c.x += (p0.x + p1.x) * factor;
             c.y += (p0.y + p1.y) * factor;
         }
-        return c / (Scalar(6) * a);
+        return c / (static_cast<Scalar>(6) * a);
     }
 
     // ── Voronoi shatter: split a convex boundary polygon into one cell per seed. ────────
@@ -105,12 +102,12 @@ namespace akruti {
         for (std::size_t s = 0; s < seeds.size(); ++s) {
             Poly cell = boundary;
             const Vec2<Scalar> si = seeds[s];
-            for (std::size_t o = 0; o < seeds.size() && cell.size() > 0; ++o) {
+            for (std::size_t o = 0; o < seeds.size() && !cell.empty(); ++o) {
                 if (o == s) continue;
                 const Vec2<Scalar> so = seeds[o];
                 // Bisector: points equidistant. Keep side closer to si => normal toward so, point at midpoint.
                 const Vec2<Scalar> normal = so - si; // points from si to so
-                const Vec2<Scalar> mid = (si + so) * Scalar(0.5);
+                const Vec2<Scalar> mid = (si + so) * static_cast<Scalar>(0.5);
                 cell = clip_halfplane(cell, normal, mid); // keep normal·(p-mid)<=0 (si's side)
             }
             cells.push_back(std::move(cell));

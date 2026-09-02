@@ -5,7 +5,6 @@
 #include "voronoi.hpp"
 #include "cdt.hpp"
 #include "khanda.hpp"
-#include "scene/scene.hpp"
 
 namespace akruti {
     // ── AutoTriangulator: EarClip (< 12 verts) vs CDT (>= 12 verts) ───────────
@@ -16,13 +15,13 @@ namespace akruti {
         [[nodiscard]] std::vector<Triangle> operator()(const Poly& poly) const {
             if (poly.size() < 12) {
                 std::vector<Vec> v(poly.begin(), poly.end());
-                auto t = ear_clip(v, {});
+                auto [vertices, indices] = ear_clip(v, {});
                 std::vector<Triangle> res;
-                for (std::size_t i = 0; i + 2 < t.indices.size(); i += 3) {
+                for (std::size_t i = 0; i + 2 < indices.size(); i += 3) {
                     res.push_back(Triangle{
-                        t.vertices[t.indices[i]],
-                        t.vertices[t.indices[i + 1]],
-                        t.vertices[t.indices[i + 2]]
+                        .a = vertices[indices[i]],
+                        .b = vertices[indices[i + 1]],
+                        .c = vertices[indices[i + 2]]
                     });
                 }
                 return res;
@@ -38,7 +37,7 @@ namespace akruti {
         NaiveVoronoiBuilder naive{};
         FortuneVoronoiBuilder fortune{};
 
-        [[nodiscard]] std::vector<Poly> operator()(const Poly& boundary, std::span<const Vec2<Scalar>> seeds) const {
+        [[nodiscard]] std::vector<Poly> operator()(const Poly& boundary, const std::span<const Vec2<Scalar>> seeds) const {
             return seeds.size() < 20 ? naive(boundary, seeds) : fortune(boundary, seeds);
         }
     };
@@ -53,17 +52,17 @@ namespace akruti {
 
         [[nodiscard]] bool use_hash() const noexcept { return entity_count >= kThreshold; }
 
-        uint32_t insert(AABB<Scalar> box, uint32_t id) {
+        uint32_t insert(const AABB<Scalar> box, const uint32_t id) {
             ++entity_count;
             return hash.insert(box, id);
         }
 
-        void remove(uint32_t id) {
+        void remove(const uint32_t id) {
             if (entity_count > 0) --entity_count;
             hash.remove(id);
         }
 
-        bool update(uint32_t id, AABB<Scalar> box) {
+        bool update(const uint32_t id, const AABB<Scalar> box) {
             return hash.update(id, box);
         }
 

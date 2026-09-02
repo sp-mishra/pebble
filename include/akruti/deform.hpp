@@ -18,10 +18,10 @@ namespace akruti::deform {
     template <Shape S>
     struct BentShape {
         S shape{};
-        Scalar curvature = Scalar(0.02); // k = 1 / R
+        Scalar curvature = static_cast<Scalar>(0.02); // k = 1 / R
 
         [[nodiscard]] Scalar sdf(Vec2<Scalar> p) const noexcept {
-            if (std::abs(curvature) < Scalar(1e-6)) {
+            if (std::abs(curvature) < static_cast<Scalar>(1e-6)) {
                 return shape.sdf(p);
             }
             // Coordinate transformation for circular bend
@@ -34,7 +34,7 @@ namespace akruti::deform {
 
         [[nodiscard]] AABB<Scalar> aabb() const noexcept {
             auto box = shape.aabb();
-            const Scalar pad = std::abs(curvature) * (box.hi[0] - box.lo[0]) * Scalar(5.0);
+            const Scalar pad = std::abs(curvature) * (box.hi[0] - box.lo[0]) * static_cast<Scalar>(5.0);
             return AABB<Scalar>{
                 pebble::math::vec2(box.lo[0] - pad, box.lo[1] - pad),
                 pebble::math::vec2(box.hi[0] + pad, box.hi[1] + pad)
@@ -47,7 +47,7 @@ namespace akruti::deform {
     };
 
     template <Shape S>
-    [[nodiscard]] constexpr BentShape<S> bend(S shape, Scalar curvature = Scalar(0.02)) noexcept {
+    [[nodiscard]] constexpr BentShape<S> bend(S shape, Scalar curvature = static_cast<Scalar>(0.02)) noexcept {
         return BentShape<S>{std::move(shape), curvature};
     }
 
@@ -55,17 +55,17 @@ namespace akruti::deform {
     template <Shape S>
     struct TaperedShape {
         S shape{};
-        Scalar k = Scalar(0.1); // Taper slope per unit Y
+        Scalar k = static_cast<Scalar>(0.1); // Taper slope per unit Y
 
-        [[nodiscard]] Scalar sdf(Vec2<Scalar> p) const noexcept {
-            const Scalar scale = std::max(Scalar(1e-4), Scalar(1.0) + k * p.y);
+        [[nodiscard]] Scalar sdf(const Vec2<Scalar> p) const noexcept {
+            const Scalar scale = std::max(static_cast<Scalar>(1e-4), static_cast<Scalar>(1.0) + k * p.y);
             const Vec2<Scalar> q{p.x / scale, p.y};
             return shape.sdf(q) * scale;
         }
 
         [[nodiscard]] AABB<Scalar> aabb() const noexcept {
             auto box = shape.aabb();
-            const Scalar max_scale = std::max(Scalar(1.0) + k * box.lo[1], Scalar(1.0) + k * box.hi[1]);
+            const Scalar max_scale = std::max(static_cast<Scalar>(1.0) + k * box.lo[1], static_cast<Scalar>(1.0) + k * box.hi[1]);
             return AABB<Scalar>{
                 pebble::math::vec2(box.lo[0] * max_scale, box.lo[1]),
                 pebble::math::vec2(box.hi[0] * max_scale, box.hi[1])
@@ -78,7 +78,7 @@ namespace akruti::deform {
     };
 
     template <Shape S>
-    [[nodiscard]] constexpr TaperedShape<S> taper(S shape, Scalar k = Scalar(0.1)) noexcept {
+    [[nodiscard]] constexpr TaperedShape<S> taper(S shape, Scalar k = static_cast<Scalar>(0.1)) noexcept {
         return TaperedShape<S>{std::move(shape), k};
     }
 
@@ -86,11 +86,11 @@ namespace akruti::deform {
     template <Shape S>
     struct SquashStretchShape {
         S shape{};
-        Scalar factor = Scalar(1.0); // > 1: horizontal stretch, < 1: vertical stretch
+        Scalar factor = static_cast<Scalar>(1.0); // > 1: horizontal stretch, < 1: vertical stretch
 
-        [[nodiscard]] Scalar sdf(Vec2<Scalar> p) const noexcept {
-            const Scalar sx = std::max(Scalar(1e-4), factor);
-            const Scalar sy = Scalar(1.0) / sx; // Preserves 2D area (det = 1.0)
+        [[nodiscard]] Scalar sdf(const Vec2<Scalar> p) const noexcept {
+            const Scalar sx = std::max(static_cast<Scalar>(1e-4), factor);
+            const Scalar sy = static_cast<Scalar>(1.0) / sx; // Preserves 2D area (det = 1.0)
             const Vec2<Scalar> q{p.x / sx, p.y / sy};
             return shape.sdf(q) * std::min(sx, sy);
         }
@@ -98,23 +98,23 @@ namespace akruti::deform {
         [[nodiscard]] AABB<Scalar> aabb() const noexcept {
             auto box = shape.aabb();
             const Scalar sx = factor;
-            const Scalar sy = Scalar(1.0) / sx;
+            const Scalar sy = static_cast<Scalar>(1.0) / sx;
             return AABB<Scalar>{
                 pebble::math::vec2(box.lo[0] * sx, box.lo[1] * sy),
                 pebble::math::vec2(box.hi[0] * sx, box.hi[1] * sy)
             };
         }
 
-        [[nodiscard]] Vec2<Scalar> support(Vec2<Scalar> d) const noexcept {
+        [[nodiscard]] Vec2<Scalar> support(const Vec2<Scalar> d) const noexcept {
             const Scalar sx = factor;
-            const Scalar sy = Scalar(1.0) / sx;
+            const Scalar sy = static_cast<Scalar>(1.0) / sx;
             auto s = shape.support(Vec2<Scalar>{d.x * sx, d.y * sy});
             return Vec2<Scalar>{s.x * sx, s.y * sy};
         }
     };
 
     template <Shape S>
-    [[nodiscard]] constexpr SquashStretchShape<S> squash_stretch(S shape, Scalar factor = Scalar(1.0)) noexcept {
+    [[nodiscard]] constexpr SquashStretchShape<S> squash_stretch(S shape, Scalar factor = static_cast<Scalar>(1.0)) noexcept {
         return SquashStretchShape<S>{std::move(shape), factor};
     }
 } // namespace akruti::deform

@@ -5,9 +5,6 @@
 #include "fracture.hpp"
 #include <span>
 #include <vector>
-#include <cmath>
-#include <algorithm>
-#include <unordered_map>
 
 namespace akruti {
     struct CdtTriangulator {
@@ -15,15 +12,15 @@ namespace akruti {
             return triangulate(poly);
         }
 
-        [[nodiscard]] std::vector<Triangle> operator()(std::span<const Vec2<Scalar>> poly) const {
+        [[nodiscard]] std::vector<Triangle> operator()(const std::span<const Vec2<Scalar>> poly) const {
             return triangulate(poly);
         }
 
-        [[nodiscard]] std::vector<Triangle> triangulate(std::span<const Vec2<Scalar>> vertices) const {
+        [[nodiscard]] std::vector<Triangle> triangulate(const std::span<const Vec2<Scalar>> vertices) const {
             const std::size_t n = vertices.size();
             if (n < 3) return {};
             if (n == 3) {
-                return {Triangle{vertices[0], vertices[1], vertices[2]}};
+                return {Triangle{.a = vertices[0], .b = vertices[1], .c = vertices[2]}};
             }
 
             // Fast Ear-Clipping / Fan triangulation with Delaunay edge flipping
@@ -33,7 +30,7 @@ namespace akruti {
             // Simple convex / simple polygon fan triangulation as baseline
             const Vec2<Scalar> v0 = vertices[0];
             for (std::size_t i = 1; i + 1 < n; ++i) {
-                tris.push_back(Triangle{v0, vertices[i], vertices[i + 1]});
+                tris.push_back(Triangle{.a = v0, .b = vertices[i], .c = vertices[i + 1]});
             }
 
             return tris;
