@@ -6,7 +6,12 @@
 #include "kalpana/color/paint_field.hpp"
 #include "kalpana/brush/brush_creator.hpp"
 
-TEST_CASE("Regression: existing BrushPresets produce valid deposition", "[kalpana][regression]") {
+TEST_CASE (
+"Regression: existing BrushPresets produce valid deposition"
+,
+"[kalpana][regression]"
+)
+ {
     using namespace kalpana;
 
     auto presets = {
@@ -28,7 +33,12 @@ TEST_CASE("Regression: existing BrushPresets produce valid deposition", "[kalpan
     }
 }
 
-TEST_CASE("Regression: BrushPipeline stroke_segment backward-compatible", "[kalpana][regression]") {
+TEST_CASE (
+"Regression: BrushPipeline stroke_segment backward-compatible"
+,
+"[kalpana][regression]"
+)
+ {
     using namespace kalpana;
     SpectralBrush brush;
     brush.size(20.0f).spacing(0.25f);
@@ -46,7 +56,12 @@ TEST_CASE("Regression: BrushPipeline stroke_segment backward-compatible", "[kalp
     }
 }
 
-TEST_CASE("Regression: DepositionParams default compute_opacity in [0,1]", "[kalpana][regression]") {
+TEST_CASE (
+"Regression: DepositionParams default compute_opacity in [0,1]"
+,
+"[kalpana][regression]"
+)
+ {
     using namespace kalpana::deposit;
     DepositionParams dp{.mode = Mode::Default, .flow = 1.0f};
     for (float alpha : {0.0f, 0.25f, 0.5f, 0.75f, 1.0f}) {
@@ -56,13 +71,23 @@ TEST_CASE("Regression: DepositionParams default compute_opacity in [0,1]", "[kal
     }
 }
 
-TEST_CASE("Regression: PaintField valid() false on default-constructed", "[kalpana][regression]") {
+TEST_CASE (
+"Regression: PaintField valid() false on default-constructed"
+,
+"[kalpana][regression]"
+)
+ {
     using namespace kalpana;
     PaintField<> empty;
     REQUIRE(!empty.valid());
 }
 
-TEST_CASE("Regression: BrushProfile to_toml / from_toml round-trips", "[kalpana][regression]") {
+TEST_CASE (
+"Regression: BrushProfile to_toml / from_toml round-trips"
+,
+"[kalpana][regression]"
+)
+ {
     using namespace kalpana;
     BrushProfile orig;
     orig.size = 24.0f;

@@ -21,12 +21,13 @@ namespace {
     // Separable quadratic  Σ (xᵢ − i)²  — minimum at xᵢ = i, f* = 0.
     // Scales to any n; the analytic optimum is trivial to check.
     struct SepQuad {
-        template<typename V> auto operator()(const V& x) const {
+        template <typename V>
+        auto operator()(const V& x) const {
             using S = typename V::value_type;
             S s{};
             for (std::size_t i = 0; i < x.size(); ++i) {
                 S d = x[i] - S(static_cast<double>(i));
-                s = s + d*d;
+                s = s + d * d;
             }
             return s;
         }
@@ -34,16 +35,21 @@ namespace {
 
     ga::Vector<double> zeros(std::size_t n) { return ga::Vector<double>(n, 0.0); }
 
-    template<typename Algo, typename LS>
+    template <typename Algo, typename LS>
     double run_solver(std::size_t n) {
         auto prob = make_problem<double>(SepQuad{});
-        Solver<Algo, Derivatives<Dual,double>, LS> s;
+        Solver<Algo, Derivatives<Dual, double>, LS> s;
         auto r = s.solve(prob, zeros(n));
         return r.has_value() ? r->grad_norm : 1e9;
     }
 }
 
-TEST_CASE("kalpa bench: L-BFGS scaling", "[kalpa][bench][!benchmark]") {
+TEST_CASE (
+"kalpa bench: L-BFGS scaling"
+,
+"[kalpa][bench][!benchmark]"
+)
+ {
     // correctness guard at a representative size
     CHECK(run_solver<LBFGS<double>, Wolfe<double>>(50) < 1e-4);
 
@@ -52,21 +58,36 @@ TEST_CASE("kalpa bench: L-BFGS scaling", "[kalpa][bench][!benchmark]") {
     BENCHMARK("L-BFGS  n=400") { return run_solver<LBFGS<double>, Wolfe<double>>(400); };
 }
 
-TEST_CASE("kalpa bench: gradient descent scaling", "[kalpa][bench][!benchmark]") {
+TEST_CASE (
+"kalpa bench: gradient descent scaling"
+,
+"[kalpa][bench][!benchmark]"
+)
+ {
     CHECK(run_solver<GradientDescent<double>, Armijo<double>>(50) < 1e-2);
 
     BENCHMARK("GD  n=20")  { return run_solver<GradientDescent<double>, Armijo<double>>(20); };
     BENCHMARK("GD  n=100") { return run_solver<GradientDescent<double>, Armijo<double>>(100); };
 }
 
-TEST_CASE("kalpa bench: Newton on a separable quadratic", "[kalpa][bench][!benchmark]") {
+TEST_CASE (
+"kalpa bench: Newton on a separable quadratic"
+,
+"[kalpa][bench][!benchmark]"
+)
+ {
     CHECK(run_solver<Newton<double>, Wolfe<double>>(30) < 1e-6);
 
     BENCHMARK("Newton  n=10") { return run_solver<Newton<double>, Wolfe<double>>(10); };
     BENCHMARK("Newton  n=30") { return run_solver<Newton<double>, Wolfe<double>>(30); };
 }
 
-TEST_CASE("kalpa bench: serial vs parallel population evaluation", "[kalpa][bench][!benchmark]") {
+TEST_CASE (
+"kalpa bench: serial vs parallel population evaluation"
+,
+"[kalpa][bench][!benchmark]"
+)
+ {
     // Cross-check: serial and pravaha-parallel DE reach the same neighborhood
     // of the optimum from a fixed seed (differential validation of the parallel
     // eval path against the scalar path).
@@ -102,16 +123,21 @@ namespace {
     // index; file scope for the templated call operator.
     struct ResIdx {
         std::size_t i;
-        template<typename V> auto operator()(const V& x) const {
+
+        template <typename V>
+        auto operator()(const V& x) const {
             using S = typename V::value_type;
             return x[i] - S(static_cast<double>(i));
         }
     };
+
     std::vector<ResIdx> make_residuals(std::size_t n) {
-        std::vector<ResIdx> r; r.reserve(n);
+        std::vector<ResIdx> r;
+        r.reserve(n);
         for (std::size_t i = 0; i < n; ++i) r.push_back(ResIdx{i});
         return r;
     }
+
     double run_lm(std::size_t n) {
         LevenbergMarquardt<double> lm;
         auto r = lm.solve(make_residuals(n), zeros(n));
@@ -119,7 +145,12 @@ namespace {
     }
 }
 
-TEST_CASE("kalpa bench: Levenberg–Marquardt scaling", "[kalpa][bench][!benchmark]") {
+TEST_CASE (
+"kalpa bench: Levenberg–Marquardt scaling"
+,
+"[kalpa][bench][!benchmark]"
+)
+ {
     CHECK(run_lm(50) < 1e-6);      // correctness guard
 
     BENCHMARK("LM  n=10")  { return run_lm(10); };
@@ -132,26 +163,36 @@ TEST_CASE("kalpa bench: Levenberg–Marquardt scaling", "[kalpa][bench][!benchma
 // ===========================================================================
 namespace {
     struct BenchSumSq2 {
-        template<typename V> auto operator()(const V& x) const { return x[0]*x[0] + x[1]*x[1]; }
+        template <typename V>
+        auto operator()(const V& x) const { return x[0] * x[0] + x[1] * x[1]; }
     };
+
     struct BenchIneqGe2 {
-        template<typename V> auto operator()(const V& x) const {
-            using S = typename V::value_type; return S{2} - x[0] - x[1];
+        template <typename V>
+        auto operator()(const V& x) const {
+            using S = typename V::value_type;
+            return S{2} - x[0] - x[1];
         }
     };
+
     double run_sqp_ineq() {
-        std::vector<BenchIneqGe2> ineq{ BenchIneqGe2{} };
-        std::vector<BenchIneqGe2> eq{};                 // empty; reuse type
+        std::vector<BenchIneqGe2> ineq{BenchIneqGe2{}};
+        std::vector<BenchIneqGe2> eq{}; // empty; reuse type
         SQP_Ineq<double> sqp;
         ga::Vector<double> x0(2, 0.0);
         // empty eq set of a distinct dummy type would work too; use no equalities
         std::vector<BenchSumSq2> none{};
-        auto r = sqp.solve(BenchSumSq2{}, x0, Derivatives<Dual,double>{}, none, ineq);
+        auto r = sqp.solve(BenchSumSq2{}, x0, Derivatives<Dual, double>{}, none, ineq);
         return r.has_value() ? r->f : 1e9;
     }
 }
 
-TEST_CASE("kalpa bench: inequality SQP timing", "[kalpa][bench][!benchmark]") {
+TEST_CASE (
+"kalpa bench: inequality SQP timing"
+,
+"[kalpa][bench][!benchmark]"
+)
+ {
     CHECK(run_sqp_ineq() == Catch::Approx(2.0).margin(1e-2));
 
     BENCHMARK("SQP_Ineq  (2 var, 1 ineq)") { return run_sqp_ineq(); };

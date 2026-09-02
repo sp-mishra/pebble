@@ -1,7 +1,12 @@
 #include "catch_amalgamated.hpp"
 #include "kalpana/kalpana.hpp"
 
-TEST_CASE("Kalpana: Declarative Scene Authoring EDSL", "[kalpana][edsl]") {
+TEST_CASE (
+"Kalpana: Declarative Scene Authoring EDSL"
+,
+"[kalpana][edsl]"
+)
+ {
     using namespace kalpana;
     using namespace kalpana::edsl;
 

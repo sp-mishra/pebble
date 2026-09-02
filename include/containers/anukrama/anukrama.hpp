@@ -25,8 +25,12 @@ namespace anukrama {
     // default clock so the enum/result signatures below stay stable.
     using timestamp = std::uint64_t;
 
-    enum class error { not_found, conflict, invalid_snapshot, transaction_finished, stale_timestamp, allocation_failure };
-    template <class T> using result = std::expected<T, error>;
+    enum class error {
+        not_found, conflict, invalid_snapshot, transaction_finished, stale_timestamp, allocation_failure
+    };
+
+    template <class T>
+    using result = std::expected<T, error>;
 
     template <class Clock>
     concept logical_clock = requires(Clock clock) {
@@ -39,12 +43,14 @@ namespace anukrama {
         using timestamp_type = timestamp;
         [[nodiscard]] timestamp now() const noexcept { return committed_.load(std::memory_order_acquire); }
         [[nodiscard]] timestamp next() noexcept { return committed_.fetch_add(1, std::memory_order_acq_rel) + 1; }
+
         [[nodiscard]] bool advance_to(const timestamp value) noexcept {
             auto observed = committed_.load(std::memory_order_acquire);
             while (observed < value && !committed_.compare_exchange_weak(
                 observed, value, std::memory_order_acq_rel, std::memory_order_acquire)) {}
             return observed < value;
         }
+
     private:
         std::atomic<timestamp> committed_{0};
     };
@@ -54,8 +60,13 @@ namespace anukrama {
         { clock.advance_to(value) } noexcept -> std::convertible_to<bool>;
     };
 
-    struct snapshot_isolation { static constexpr bool validate_reads = false; };
-    struct optimistic_point_serializable { static constexpr bool validate_reads = true; };
+    struct snapshot_isolation {
+        static constexpr bool validate_reads = false;
+    };
+
+    struct optimistic_point_serializable {
+        static constexpr bool validate_reads = true;
+    };
 
     template <class Policy>
     concept conflict_policy = requires { { Policy::validate_reads } -> std::convertible_to<bool>; };
@@ -99,6 +110,7 @@ namespace anukrama {
     struct heap_node_pool {
         template <class... Args>
         [[nodiscard]] Node* allocate(Args&&... args) { return new Node(std::forward<Args>(args)...); }
+
         void deallocate(Node* node) noexcept { delete node; }
         void reset() noexcept {}
     };
@@ -110,19 +122,23 @@ namespace anukrama {
     class basic_smriti_node_pool {
         static constexpr std::size_t block_size = sizeof(Node) < sizeof(void*) ? sizeof(void*) : sizeof(Node);
         smriti::pools::FixedPool<block_size, Domain> pool_;
+
     public:
         explicit basic_smriti_node_pool(std::size_t nodes_per_slab = 256) : pool_{nodes_per_slab} {}
+
         template <class... Args>
         [[nodiscard]] Node* allocate(Args&&... args) {
             void* raw = pool_.allocate(block_size, alignof(Node));
             if (!raw) throw std::bad_alloc{};
-            return new (raw) Node(std::forward<Args>(args)...);
+            return new(raw) Node(std::forward<Args>(args)...);
         }
+
         void deallocate(Node* node) noexcept {
             if (!node) return;
             node->~Node();
             pool_.deallocate(node, block_size);
         }
+
         void reset() noexcept { pool_.reset(); }
     };
 
@@ -142,21 +158,31 @@ namespace anukrama {
     // Today's exact behaviour: one shared_mutex over the whole store.
     class global_shared_lock {
         mutable std::shared_mutex mutex_;
+
     public:
         [[nodiscard]] std::shared_lock<std::shared_mutex> read_lock() const { return std::shared_lock{mutex_}; }
+
         template <class Key>
-        [[nodiscard]] std::unique_lock<std::shared_mutex> write_lock(const Key&) const { return std::unique_lock{mutex_}; }
+        [[nodiscard]] std::unique_lock<std::shared_mutex> write_lock(const Key&) const {
+            return std::unique_lock{mutex_};
+        }
+
         template <class WriteSet>
-        [[nodiscard]] std::unique_lock<std::shared_mutex> commit_lock(const WriteSet&) const { return std::unique_lock{mutex_}; }
+        [[nodiscard]] std::unique_lock<std::shared_mutex> commit_lock(const WriteSet&) const {
+            return std::unique_lock{mutex_};
+        }
     };
 
     // Single-threaded tier: zero synchronisation overhead. Guards are empty objects.
     class null_lock {
         struct empty_guard {};
+
     public:
         [[nodiscard]] empty_guard read_lock() const noexcept { return {}; }
+
         template <class Key>
         [[nodiscard]] empty_guard write_lock(const Key&) const noexcept { return {}; }
+
         template <class WriteSet>
         [[nodiscard]] empty_guard commit_lock(const WriteSet&) const noexcept { return {}; }
     };
@@ -186,30 +212,50 @@ namespace anukrama {
         class multi_guard {
             std::array<std::shared_mutex, N>* stripes_{};
             std::array<bool, N> held_{};
+
         public:
             multi_guard() = default;
             explicit multi_guard(std::array<std::shared_mutex, N>& stripes) : stripes_{&stripes}, held_{} {}
-            void acquire(std::size_t index) { if (!held_[index]) { stripes_->operator[](index).lock(); held_[index] = true; } }
+
+            void acquire(std::size_t index) {
+                if (!held_[index]) {
+                    stripes_->operator[](index).lock();
+                    held_[index] = true;
+                }
+            }
+
             multi_guard(const multi_guard&) = delete;
             multi_guard& operator=(const multi_guard&) = delete;
-            multi_guard(multi_guard&& other) noexcept : stripes_{std::exchange(other.stripes_, nullptr)}, held_{other.held_} { other.held_.fill(false); }
+
+            multi_guard(multi_guard&& other) noexcept : stripes_{std::exchange(other.stripes_, nullptr)},
+                                                        held_{other.held_} { other.held_.fill(false); }
+
             multi_guard& operator=(multi_guard&&) = delete;
-            ~multi_guard() { if (stripes_) for (std::size_t i = N; i-- > 0;) if (held_[i]) stripes_->operator[](i).unlock(); }
+
+            ~multi_guard() {
+                if (stripes_) for (std::size_t i = N; i-- > 0;) if (held_[i]) stripes_->operator[](i).unlock();
+            }
         };
 
         // RAII guard holding every stripe shared, for whole-store reads.
         class shared_all_guard {
             std::array<std::shared_mutex, N>* stripes_{};
+
         public:
             shared_all_guard() = default;
+
             explicit shared_all_guard(std::array<std::shared_mutex, N>& stripes) : stripes_{&stripes} {
                 for (auto& stripe : *stripes_) stripe.lock_shared();
             }
+
             shared_all_guard(const shared_all_guard&) = delete;
             shared_all_guard& operator=(const shared_all_guard&) = delete;
             shared_all_guard(shared_all_guard&& other) noexcept : stripes_{std::exchange(other.stripes_, nullptr)} {}
             shared_all_guard& operator=(shared_all_guard&&) = delete;
-            ~shared_all_guard() { if (stripes_) for (std::size_t i = N; i-- > 0;) stripes_->operator[](i).unlock_shared(); }
+
+            ~shared_all_guard() {
+                if (stripes_) for (std::size_t i = N; i-- > 0;) stripes_->operator[](i).unlock_shared();
+            }
         };
 
     public:
@@ -260,9 +306,11 @@ namespace anukrama {
     // Default: multiset gives O(log k) insert/erase, O(1) begin(), and duplicate keys.
     class multiset_snapshot_registry {
         std::multiset<timestamp> active_;
+
     public:
         void insert(const timestamp value) { active_.insert(value); }
         void erase(const timestamp value) { if (auto it = active_.find(value); it != active_.end()) active_.erase(it); }
+
         [[nodiscard]] std::optional<timestamp> min() const {
             return active_.empty() ? std::nullopt : std::optional{*active_.begin()};
         }
@@ -286,34 +334,47 @@ namespace anukrama {
             node_pool* pool{};
             void operator()(version_node* node) const noexcept { if (pool) pool->deallocate(node); }
         };
+
         using node_ptr = std::unique_ptr<version_node, node_deleter>;
 
         struct version_node {
             timestamp stamp{};
             std::optional<Value> value{};
             node_ptr previous{};
+
             version_node(timestamp version, std::optional<Value> payload)
                 : stamp{version}, value{std::move(payload)} {}
         };
+
         static_assert(version_node_pool<node_pool, version_node, timestamp, std::optional<Value>>);
-        struct chain { node_ptr head{}; };
+
+        struct chain {
+            node_ptr head{};
+        };
+
         using index_type = IndexPolicy<Key, chain, Compare>;
         static_assert(ordered_version_index<index_type, Key, chain>,
                       "IndexPolicy must model ordered_version_index: find/lower_bound/begin/end, "
                       "insert_or_assign, erase, and a value_type with .first/.second");
-        struct observed_key { Key key; timestamp head_stamp{}; };
+
+        struct observed_key {
+            Key key;
+            timestamp head_stamp{};
+        };
 
     public:
         struct write {
             Key key;
             std::optional<Value> value;
         };
+
         // A caller-provided optimistic validation token. A zero version means
         // the key was absent when it was observed.
         struct observation {
             Key key;
             timestamp version{};
         };
+
         class snapshot;
         class transaction;
         store() = default;
@@ -328,19 +389,24 @@ namespace anukrama {
             registry_.insert(boundary);
             return snapshot{*this, boundary};
         }
+
         [[nodiscard]] transaction begin() { return transaction{*this, snapshot_at_current()}; }
+
         [[nodiscard]] result<Value> get(const Key& key) const {
             auto guard = sync_.read_lock();
             return read_at_locked(key, clock_.now());
         }
+
         [[nodiscard]] result<Value> get_at(const Key& key, const timestamp boundary) const {
             auto guard = sync_.read_lock();
             return read_at_locked(key, boundary);
         }
+
         [[nodiscard]] timestamp version_of(const Key& key) const {
             auto guard = sync_.read_lock();
             return head_stamp_locked(key);
         }
+
         [[nodiscard]] timestamp version_at(const Key& key, const timestamp boundary) const {
             auto guard = sync_.read_lock();
             const auto it = index_.find(key);
@@ -349,6 +415,7 @@ namespace anukrama {
             while (node && node->stamp > boundary) node = node->previous.get();
             return node ? node->stamp : 0;
         }
+
         [[nodiscard]] bool contains(const Key& key) const { return get(key).has_value(); }
         [[nodiscard]] std::size_t size() const { return live_keys_.load(std::memory_order_acquire); }
 
@@ -385,11 +452,13 @@ namespace anukrama {
             auto guard = sync_.commit_lock(nothing);
             const auto boundary = oldest_active_snapshot().value_or(clock_.now());
             for (auto it = index_.begin(); it != index_.end();) {
-                auto next = it; ++next;
+                auto next = it;
+                ++next;
                 auto& head = it->second.head;
                 if (head && !head->value && head->stamp <= boundary) {
                     index_.erase(it->first);
-                } else if (head) {
+                }
+                else if (head) {
                     auto* retained = head.get();
                     while (retained->stamp > boundary && retained->previous) retained = retained->previous.get();
                     retained->previous.reset();
@@ -403,19 +472,29 @@ namespace anukrama {
             snapshot() = default;
             snapshot(const snapshot&) = delete;
             snapshot& operator=(const snapshot&) = delete;
-            snapshot(snapshot&& other) noexcept : owner_{std::exchange(other.owner_, nullptr)}, boundary_{other.boundary_} {}
+
+            snapshot(snapshot&& other) noexcept : owner_{std::exchange(other.owner_, nullptr)},
+                                                  boundary_{other.boundary_} {}
+
             snapshot& operator=(snapshot&& other) noexcept {
-                if (this != &other) { reset(); owner_ = std::exchange(other.owner_, nullptr); boundary_ = other.boundary_; }
+                if (this != &other) {
+                    reset();
+                    owner_ = std::exchange(other.owner_, nullptr);
+                    boundary_ = other.boundary_;
+                }
                 return *this;
             }
+
             ~snapshot() { reset(); }
             [[nodiscard]] timestamp timestamp_value() const noexcept { return boundary_; }
             [[nodiscard]] bool valid() const noexcept { return owner_ != nullptr; }
+
             [[nodiscard]] result<Value> get(const Key& key) const {
                 if (!owner_) return std::unexpected(error::invalid_snapshot);
                 auto guard = owner_->sync_.read_lock();
                 return owner_->read_at_locked(key, boundary_);
             }
+
             template <class Callback>
             void scan(const Key& first, const Key& last, Callback&& callback) const {
                 if (!owner_) return;
@@ -427,6 +506,7 @@ namespace anukrama {
                     if (node && node->value) callback(it->first, *node->value, node->stamp);
                 }
             }
+
             template <class Callback>
             void for_each(Callback&& callback) const {
                 if (!owner_) return;
@@ -437,15 +517,18 @@ namespace anukrama {
                     if (node && node->value) callback(it->first, *node->value, node->stamp);
                 }
             }
+
         private:
             friend class store;
             snapshot(const store& owner, timestamp boundary) noexcept : owner_{&owner}, boundary_{boundary} {}
+
             void reset() noexcept {
                 if (!owner_) return;
                 std::scoped_lock registry_guard{owner_->registry_mutex_};
                 owner_->registry_.erase(boundary_);
                 owner_ = nullptr;
             }
+
             const store* owner_{};
             timestamp boundary_{};
         };
@@ -456,25 +539,42 @@ namespace anukrama {
             transaction& operator=(const transaction&) = delete;
             transaction(transaction&&) noexcept = default;
             transaction& operator=(transaction&&) noexcept = default;
+
             [[nodiscard]] result<Value> get(const Key& key) {
                 for (auto it = mutations_.rbegin(); it != mutations_.rend(); ++it) {
-                    if (equivalent(it->key, key)) return it->value ? result<Value>{*it->value} : std::unexpected(error::not_found);
+                    if (equivalent(it->key, key))
+                        return it->value
+                                   ? result<Value>{*it->value}
+                                   : std::unexpected(error::not_found);
                 }
                 auto guard = owner_->sync_.read_lock();
                 observe_locked(key);
                 return owner_->read_at_locked(key, snapshot_.boundary_);
             }
-            transaction& put(Key key, Value value) { mutations_.push_back({std::move(key), std::move(value)}); return *this; }
-            transaction& erase(Key key) { mutations_.push_back({std::move(key), std::nullopt}); return *this; }
+
+            transaction& put(Key key, Value value) {
+                mutations_.push_back({std::move(key), std::move(value)});
+                return *this;
+            }
+
+            transaction& erase(Key key) {
+                mutations_.push_back({std::move(key), std::nullopt});
+                return *this;
+            }
+
             [[nodiscard]] result<timestamp> commit() {
                 if (!owner_) return std::unexpected(error::invalid_snapshot);
                 if (finished_) return std::unexpected(error::transaction_finished);
                 auto guard = owner_->sync_.commit_lock(mutations_);
                 for (const auto& write : mutations_)
-                    if (owner_->head_stamp_locked(write.key) > snapshot_.boundary_) return std::unexpected(error::conflict);
+                    if (owner_->head_stamp_locked(write.key) > snapshot_.boundary_)
+                        return std::unexpected(
+                            error::conflict);
                 if constexpr (ConflictPolicy::validate_reads)
                     for (const auto& read : reads_)
-                        if (owner_->head_stamp_locked(read.key) != read.head_stamp) return std::unexpected(error::conflict);
+                        if (owner_->head_stamp_locked(read.key) != read.head_stamp)
+                            return std::unexpected(
+                                error::conflict);
 
                 const auto committed = owner_->clock_.next();
                 if (auto applied = owner_->publish_writes(mutations_, committed); !applied)
@@ -482,7 +582,13 @@ namespace anukrama {
                 finished_ = true;
                 return committed;
             }
-            void abort() noexcept { mutations_.clear(); reads_.clear(); finished_ = true; }
+
+            void abort() noexcept {
+                mutations_.clear();
+                reads_.clear();
+                finished_ = true;
+            }
+
             // Lift the accumulated optimistic read-set as OCC tokens for an external
             // coordinator, without re-deriving versions. Valid until the next get().
             [[nodiscard]] std::vector<observation> read_set() const {
@@ -491,16 +597,23 @@ namespace anukrama {
                 for (const auto& read : reads_) tokens.push_back({read.key, read.head_stamp});
                 return tokens;
             }
+
         private:
             friend class store;
             transaction(store& owner, snapshot snap) : owner_{&owner}, snapshot_{std::move(snap)} {}
+
             [[nodiscard]] bool equivalent(const Key& left, const Key& right) const {
                 return !owner_->compare_(left, right) && !owner_->compare_(right, left);
             }
+
             void observe_locked(const Key& key) {
-                if (std::ranges::any_of(reads_, [this, &key](const observed_key& read) { return equivalent(read.key, key); })) return;
+                if (std::ranges::any_of(reads_, [this, &key](const observed_key& read) {
+                    return equivalent(read.key, key);
+                }))
+                    return;
                 reads_.push_back({key, owner_->head_stamp_locked(key)});
             }
+
             store* owner_{};
             snapshot snapshot_;
             std::vector<write> mutations_;
@@ -536,7 +649,8 @@ namespace anukrama {
                         index_.insert_or_assign(write.key, chain{});
                     }
                 }
-            } catch (...) {
+            }
+            catch (...) {
                 for (const auto& key : inserted) index_.erase(key);
                 return std::unexpected(error::allocation_failure);
             }
@@ -563,10 +677,12 @@ namespace anukrama {
             const auto it = index_.find(key);
             return it == index_.end() || !it->second.head ? 0 : it->second.head->stamp;
         }
+
         [[nodiscard]] std::optional<timestamp> oldest_active_snapshot() const {
             std::scoped_lock registry_guard{registry_mutex_};
             return registry_.min();
         }
+
         mutable SynchronizationPolicy sync_{};
         mutable Clock clock_{};
         [[no_unique_address]] Compare compare_{};

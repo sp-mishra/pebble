@@ -33,6 +33,7 @@ using containers::union_find;
 
 TEST_CASE (
 
+
 "union_find: make_set / find / unite / connected"
 ,
 "[vakya][types][union_find]"
@@ -57,6 +58,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "union_find: path-splitting — repeated find gives same root"
 ,
@@ -83,6 +85,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "union_find: unite OnMerge fires exactly once per distinct merge"
 ,
 "[vakya][types][union_find]"
@@ -107,6 +110,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "type_arena: intern same type twice yields identical handles"
 ,
 "[vakya][types]"
@@ -129,6 +133,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "type_arena: different types yield different handles"
 ,
 "[vakya][types]"
@@ -146,6 +151,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "type_arena: primitive types Integer/Bool/Float are all distinct"
 ,
@@ -168,6 +174,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "type_arena: variables with same var_id produce same handle"
 ,
 "[vakya][types]"
@@ -187,6 +194,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "type_arena: constructor types with same descriptor+children == same handle"
 ,
@@ -216,6 +224,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "type_arena: alias canonicalize expands to definition"
 ,
 "[vakya][types]"
@@ -239,6 +248,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "type_arena: alias cycle detected"
 ,
@@ -286,6 +296,7 @@ struct vakya::types::type_descriptor<my_custom_type_tag> {
 
 TEST_CASE (
 
+
 "type_descriptor: extension stable_id >= 1000 round-trips through type_hash"
 ,
 "[vakya][types]"
@@ -313,6 +324,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "type_hash: structurally equal nodes produce the same hash"
 ,

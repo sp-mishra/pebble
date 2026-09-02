@@ -8,7 +8,12 @@ using namespace ga;
 // test_expr.cpp — algebra EDSL expression fusion
 // ============================================================================
 
-TEST_CASE("expr: matrix addition A+B", "[expr][add]") {
+TEST_CASE (
+"expr: matrix addition A+B"
+,
+"[expr][add]"
+)
+ {
     Matrix<float> A(2, 2), B(2, 2);
     A(0,0)=1; A(0,1)=2; A(1,0)=3; A(1,1)=4;
     B(0,0)=5; B(0,1)=6; B(1,0)=7; B(1,1)=8;
@@ -19,7 +24,12 @@ TEST_CASE("expr: matrix addition A+B", "[expr][add]") {
     CHECK(C(1,1) == 12.f);
 }
 
-TEST_CASE("expr: matrix subtraction A-B", "[expr][sub]") {
+TEST_CASE (
+"expr: matrix subtraction A-B"
+,
+"[expr][sub]"
+)
+ {
     Matrix<float> A(2, 2, 5.f), B(2, 2, 3.f);
     auto C = A - B;
     for (std::size_t i=0;i<2;++i)
@@ -27,7 +37,12 @@ TEST_CASE("expr: matrix subtraction A-B", "[expr][sub]") {
             CHECK(C(i,j) == 2.f);
 }
 
-TEST_CASE("expr: scalar multiply A*s", "[expr][scale]") {
+TEST_CASE (
+"expr: scalar multiply A*s"
+,
+"[expr][scale]"
+)
+ {
     Matrix<float> A(2, 2, 3.f);
     auto B = A * 2.f;
     for (std::size_t i=0;i<2;++i)
@@ -35,7 +50,12 @@ TEST_CASE("expr: scalar multiply A*s", "[expr][scale]") {
             CHECK(B(i,j) == 6.f);
 }
 
-TEST_CASE("expr: scalar multiply s*A (commutative)", "[expr][scale_comm]") {
+TEST_CASE (
+"expr: scalar multiply s*A (commutative)"
+,
+"[expr][scale_comm]"
+)
+ {
     Matrix<float> A(2, 2, 3.f);
     auto B = 4.f * A;
     for (std::size_t i=0;i<2;++i)
@@ -43,7 +63,12 @@ TEST_CASE("expr: scalar multiply s*A (commutative)", "[expr][scale_comm]") {
             CHECK(B(i,j) == 12.f);
 }
 
-TEST_CASE("expr: matrix multiply A*B (gemm)", "[expr][matmul]") {
+TEST_CASE (
+"expr: matrix multiply A*B (gemm)"
+,
+"[expr][matmul]"
+)
+ {
     Matrix<float> A(2, 3), B(3, 2);
     // A = [[1,2,3],[4,5,6]], B = [[7,8],[9,10],[11,12]]
     A(0,0)=1; A(0,1)=2; A(0,2)=3;
@@ -57,7 +82,12 @@ TEST_CASE("expr: matrix multiply A*B (gemm)", "[expr][matmul]") {
     CHECK(C(1,1) == Catch::Approx(154.f));
 }
 
-TEST_CASE("expr: transpose", "[expr][transpose]") {
+TEST_CASE (
+"expr: transpose"
+,
+"[expr][transpose]"
+)
+ {
     Matrix<float> A(2, 3);
     A(0,0)=1; A(0,1)=2; A(0,2)=3;
     A(1,0)=4; A(1,1)=5; A(1,2)=6;
@@ -70,7 +100,12 @@ TEST_CASE("expr: transpose", "[expr][transpose]") {
     CHECK(At(2,1) == 6.f);
 }
 
-TEST_CASE("expr: chain A+B+C", "[expr][chain_add]") {
+TEST_CASE (
+"expr: chain A+B+C"
+,
+"[expr][chain_add]"
+)
+ {
     Matrix<float> A(2, 2, 1.f), B(2, 2, 2.f), C(2, 2, 3.f);
     auto D = A + B + C;
     for (std::size_t i=0;i<2;++i)
@@ -78,7 +113,12 @@ TEST_CASE("expr: chain A+B+C", "[expr][chain_add]") {
             CHECK(D(i,j) == 6.f);
 }
 
-TEST_CASE("expr: identity matrix multiply", "[expr][identity_mul]") {
+TEST_CASE (
+"expr: identity matrix multiply"
+,
+"[expr][identity_mul]"
+)
+ {
     constexpr std::size_t N = 3;
     Matrix<float> A(N, N, 0.f);
     A(0,0)=2; A(1,1)=3; A(2,2)=4;
@@ -89,13 +129,23 @@ TEST_CASE("expr: identity matrix multiply", "[expr][identity_mul]") {
             CHECK(B(i,j) == Catch::Approx(A(i,j)));
 }
 
-TEST_CASE("expr: matrix trace", "[expr][trace]") {
+TEST_CASE (
+"expr: matrix trace"
+,
+"[expr][trace]"
+)
+ {
     Matrix<float> A(3, 3, 0.f);
     A(0,0)=1; A(1,1)=2; A(2,2)=3;
     CHECK(A.trace() == Catch::Approx(6.f));
 }
 
-TEST_CASE("expr: StaticMatrix + StaticMatrix", "[expr][static_add]") {
+TEST_CASE (
+"expr: StaticMatrix + StaticMatrix"
+,
+"[expr][static_add]"
+)
+ {
     StaticMatrix<float, 2, 2> A, B;
     A(0,0)=1; A(0,1)=2; A(1,0)=3; A(1,1)=4;
     B(0,0)=5; B(0,1)=6; B(1,0)=7; B(1,1)=8;
@@ -104,7 +154,12 @@ TEST_CASE("expr: StaticMatrix + StaticMatrix", "[expr][static_add]") {
     CHECK(C(1,1) == 12.f);
 }
 
-TEST_CASE("expr: StaticMatrix * StaticMatrix", "[expr][static_mul]") {
+TEST_CASE (
+"expr: StaticMatrix * StaticMatrix"
+,
+"[expr][static_mul]"
+)
+ {
     StaticMatrix<float, 2, 2> A, B;
     A(0,0)=1; A(0,1)=0; A(1,0)=0; A(1,1)=2;
     B(0,0)=3; B(0,1)=0; B(1,0)=0; B(1,1)=4;

@@ -6,7 +6,12 @@
 using namespace akruti;
 using V = Vec2<Scalar>;
 
-TEST_CASE("akruti: expression-template inlined CSG EDSL", "[akruti][csg][expr]") {
+TEST_CASE (
+"akruti: expression-template inlined CSG EDSL"
+,
+"[akruti][csg][expr]"
+)
+ {
     using namespace akruti::expr;
     Circle c1{{0, 0}, 1.0f};
     Box b1{{0.5f, 0}, {0.5f, 0.5f}};
@@ -24,7 +29,12 @@ TEST_CASE("akruti: expression-template inlined CSG EDSL", "[akruti][csg][expr]")
     REQUIRE(expr_shell.sdf({0, 0}) > 0);                                    // hollow inside
 }
 
-TEST_CASE("akruti: flat arena contiguous CSG tree", "[akruti][csg][flat]") {
+TEST_CASE (
+"akruti: flat arena contiguous CSG tree"
+,
+"[akruti][csg][flat]"
+)
+ {
     FlatCsgTree tree;
     auto l1 = tree.add_leaf(Circle{{0, 0}, 1.0f});
     auto l2 = tree.add_leaf(Box{{0.5f, 0}, {0.5f, 0.5f}});
@@ -34,7 +44,12 @@ TEST_CASE("akruti: flat arena contiguous CSG tree", "[akruti][csg][flat]") {
     REQUIRE(tree.eval(root, {0.5f, 0}) > 0);
 }
 
-TEST_CASE("akruti: extended CSG operators (chamfer, morph, shell)", "[akruti][csg][ops]") {
+TEST_CASE (
+"akruti: extended CSG operators (chamfer, morph, shell)"
+,
+"[akruti][csg][ops]"
+)
+ {
     auto c1 = csg_leaf(Circle{{-0.5f, 0}, 1.0f});
     auto c2 = csg_leaf(Circle{{0.5f, 0}, 1.0f});
 

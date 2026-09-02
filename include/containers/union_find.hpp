@@ -19,10 +19,10 @@
 
 namespace containers {
     template <std::unsigned_integral Id = std::uint32_t,
-        std::unsigned_integral Rank = std::uint8_t>
+              std::unsigned_integral Rank = std::uint8_t>
     class union_find {
     public:
-        static constexpr Id kInvalidId = std::numeric_limits<Id>::max();
+        static constexpr Id kInvalidId = std::numeric_limits < Id > ::max();
 
         // Make a fresh singleton set; returns the new id.
         Id make_set() {
@@ -76,7 +76,7 @@ namespace containers {
             if (rank_[ra] < rank_[rb]) std::swap(ra, rb);
             parent_[rb] = ra;
             if (rank_[ra] == rank_[rb]) ++rank_[ra];
-            std::forward<OnMerge>(on_merge)(ra, rb);
+            std::forward < OnMerge > (on_merge)(ra, rb);
             return true;
         }
 

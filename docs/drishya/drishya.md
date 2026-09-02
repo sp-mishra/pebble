@@ -1,13 +1,17 @@
 # Drishya (दृश्य) — Backend-Agnostic Retained-Mode Widget & UI Engine
 
-Header-only C++23. No virtual dispatch, no macros, no RTTI, zero heap on hot paths.
-Drishya composes UI from concept-satisfying value types, lays them out with `akruti::layout`, routes pointer/keyboard input, animates layout changes with `spandana` springs, and paints through any `Painter` adapter. `[[no_unique_address]]` policies mean you pay only for the widgets, backends, and motion you actually instantiate. One widget vocabulary serves both AI/ML dashboards and game HUDs.
+Header-only C++23. No virtual dispatch, no macros, no RTTI, zero heap on hot paths. Drishya composes UI from
+concept-satisfying value types, lays them out with `akruti::layout`, routes pointer/keyboard input, animates layout
+changes with `spandana` springs, and paints through any `Painter` adapter. `[[no_unique_address]]` policies mean you pay
+only for the widgets, backends, and motion you actually instantiate. One widget vocabulary serves both AI/ML dashboards
+and game HUDs.
 
 Include: `#include <drishya/drishya.hpp>`
 
 ---
 
 ## Table of Contents
+
 1. [Design Principles](#1-design-principles)
 2. [Architecture](#2-architecture)
 3. [The Widget & Painter Concepts](#3-the-widget--painter-concepts)
@@ -30,19 +34,30 @@ Include: `#include <drishya/drishya.hpp>`
 
 ## 1. Design Principles
 
-- **Concept-based, monomorphic.** A widget is any value type modeling the `Widget<W, Metrics>` and `PaintableWith<W, P>` concepts — no base class, no vtable, no registration. A `Button` painting to two backends is two monomorphized functions with no shared virtual dispatch.
-- **Reuse, don't reinvent.** Geometry is `akruti::layout::{Rect2D, Size2D, Bounds2D, Edges}`; colors are packed `0xAARRGGBB` `std::uint32_t`; reactive cells are `containers::reactive::Signal`; motion is `spandana`. Drishya introduces no parallel vocabularies.
-- **Backend-agnostic.** Drishya never talks to a GPU/terminal/window. It emits an immediate-mode drawing vocabulary against a `Painter` concept and pulls input from a host-supplied `InputFrame`. `KalpanaPainter` is the reference adapter; the same widget code drives a headless capture canvas, a GPU canvas, or a terminal cell grid.
-- **Pay for what you use.** Empty policies (`NullMotion`) are stored `[[no_unique_address]]` and cost zero bytes. Static trees carry no per-node heap; type-erasure and reflow springs are opt-in.
-- **Retained.** Widgets persist across frames in a flat SoA arena; only dirty subtrees re-solve, matching `akruti::layout`'s incremental model.
+- **Concept-based, monomorphic.** A widget is any value type modeling the `Widget<W, Metrics>` and `PaintableWith<W, P>`
+  concepts — no base class, no vtable, no registration. A `Button` painting to two backends is two monomorphized
+  functions with no shared virtual dispatch.
+- **Reuse, don't reinvent.** Geometry is `akruti::layout::{Rect2D, Size2D, Bounds2D, Edges}`; colors are packed
+  `0xAARRGGBB` `std::uint32_t`; reactive cells are `containers::reactive::Signal`; motion is `spandana`. Drishya
+  introduces no parallel vocabularies.
+- **Backend-agnostic.** Drishya never talks to a GPU/terminal/window. It emits an immediate-mode drawing vocabulary
+  against a `Painter` concept and pulls input from a host-supplied `InputFrame`. `KalpanaPainter` is the reference
+  adapter; the same widget code drives a headless capture canvas, a GPU canvas, or a terminal cell grid.
+- **Pay for what you use.** Empty policies (`NullMotion`) are stored `[[no_unique_address]]` and cost zero bytes. Static
+  trees carry no per-node heap; type-erasure and reflow springs are opt-in.
+- **Retained.** Widgets persist across frames in a flat SoA arena; only dirty subtrees re-solve, matching
+  `akruti::layout`'s incremental model.
 
-**Non-goals.** Drishya does not own a window/GL context, a font rasterizer, or an OS event loop — it consumes them through concepts. It does not simulate physics or run a clock; it reads a host-supplied frame `dt`.
+**Non-goals.** Drishya does not own a window/GL context, a font rasterizer, or an OS event loop — it consumes them
+through concepts. It does not simulate physics or run a clock; it reads a host-supplied frame `dt`.
 
 ---
 
 ## 2. Architecture
 
-`App<Metrics, Painter, Motion, InlineBytes>` owns a frame's worth of state: the retained tree, the layout bridge, the input router, and the reflow motion policy. The `(Metrics, Painter)` pair is fixed once — it determines the erased widget type — and `Motion` defaults to `NullMotion` (snap).
+`App<Metrics, Painter, Motion, InlineBytes>` owns a frame's worth of state: the retained tree, the layout bridge, the
+input router, and the reflow motion policy. The `(Metrics, Painter)` pair is fixed once — it determines the erased
+widget type — and `Motion` defaults to `NullMotion` (snap).
 
 ```cpp
 template <typename Metrics, typename Painter_, typename Motion = NullMotion,
@@ -55,19 +70,19 @@ using DefaultApp = App<MonospaceMetrics, DefaultPainter>;   // headless, snap re
 
 The public surface:
 
-| Method | Effect |
-|:---|:---|
-| `set_root(w) -> NodeId` | Replace the root subtree; marks the tree structurally dirty. |
-| `add_child(parent, w) -> NodeId` | Append a child; marks the tree structurally dirty. |
-| `remove(NodeId)` | Remove a node and its subtree. |
-| `set_viewport(Rect2D)` | Set the solve viewport; marks geometry dirty if it changed. |
-| `solve()` | (Re)layout only if dirty. Structural change → full rebuild + solve; geometry/style change → incremental solve; no-op when clean. |
-| `pump(InputFrame, scale=1) -> RouteResult` | Solve, then route the input frame to widgets. |
-| `tick(dt) -> bool` | Advance reflow motion; returns `true` while still animating (`NullMotion` always `false`). |
-| `paint(Painter&)` | Solve, then walk the tree pre-order painting each widget at its motion-adjusted rect. |
-| `clear()` | Reset tree, focus, and motion. |
-| `invalidate_style(NodeId)` / `invalidate_paint(NodeId)` | Mark a node stale for the next solve/paint. |
-| `tree()` / `layout()` / `router()` / `motion()` | Subsystem accessors. |
+| Method                                                  | Effect                                                                                                                           |
+|:--------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------|
+| `set_root(w) -> NodeId`                                 | Replace the root subtree; marks the tree structurally dirty.                                                                     |
+| `add_child(parent, w) -> NodeId`                        | Append a child; marks the tree structurally dirty.                                                                               |
+| `remove(NodeId)`                                        | Remove a node and its subtree.                                                                                                   |
+| `set_viewport(Rect2D)`                                  | Set the solve viewport; marks geometry dirty if it changed.                                                                      |
+| `solve()`                                               | (Re)layout only if dirty. Structural change → full rebuild + solve; geometry/style change → incremental solve; no-op when clean. |
+| `pump(InputFrame, scale=1) -> RouteResult`              | Solve, then route the input frame to widgets.                                                                                    |
+| `tick(dt) -> bool`                                      | Advance reflow motion; returns `true` while still animating (`NullMotion` always `false`).                                       |
+| `paint(Painter&)`                                       | Solve, then walk the tree pre-order painting each widget at its motion-adjusted rect.                                            |
+| `clear()`                                               | Reset tree, focus, and motion.                                                                                                   |
+| `invalidate_style(NodeId)` / `invalidate_paint(NodeId)` | Mark a node stale for the next solve/paint.                                                                                      |
+| `tree()` / `layout()` / `router()` / `motion()`         | Subsystem accessors.                                                                                                             |
 
 A typical frame drives the subsystems in order:
 
@@ -82,7 +97,8 @@ void frame(float dt, const InputFrame& in, DefaultPainter& painter) {
 }
 ```
 
-`pump()` and `paint()` each call `solve()` internally, so an explicit `solve()` is only needed when you want the resolved geometry between those steps.
+`pump()` and `paint()` each call `solve()` internally, so an explicit `solve()` is only needed when you want the
+resolved geometry between those steps.
 
 ---
 
@@ -111,7 +127,8 @@ template <typename W, typename Metrics>
 concept Widget = MeasurableWith<W, Metrics> && Styled<W> && EventHandler<W>;
 ```
 
-`measure`/`style` feed the layout solver directly (no translation layer). Painting is checked separately against the concrete backend so it stays monomorphic:
+`measure`/`style` feed the layout solver directly (no translation layer). Painting is checked separately against the
+concrete backend so it stays monomorphic:
 
 ```cpp
 template <typename W, typename P>
@@ -120,9 +137,14 @@ concept PaintableWith = Painter<P> && requires(const W& w, P& painter, Rect2D bo
 };
 ```
 
-**Context types.** `MeasureCtxT<Metrics>` carries a `const Metrics&` (a compile-time `ITextMetrics`, no virtual) plus a display `scale`. `EventCtx` carries the immutable `InputFrame`, the widget's resolved `box`, the active `clip`, and `scale`, with helpers `pointer_inside()` and `local_pointer()` — routing has already resolved the hit, so widgets never re-run hit tests.
+**Context types.** `MeasureCtxT<Metrics>` carries a `const Metrics&` (a compile-time `ITextMetrics`, no virtual) plus a
+display `scale`. `EventCtx` carries the immutable `InputFrame`, the widget's resolved `box`, the active `clip`, and
+`scale`, with helpers `pointer_inside()` and `local_pointer()` — routing has already resolved the hit, so widgets never
+re-run hit tests.
 
-**Input.** Drishya owns its `InputFrame` (pointer position/delta, held/previous button bitmasks, wheel, a span of `KeyEvent`, committed UTF-8 `text`) because `gati` models input as abstract axes only. Edge detection is built in via `pressed()`/`released()`/`held()`.
+**Input.** Drishya owns its `InputFrame` (pointer position/delta, held/previous button bitmasks, wheel, a span of
+`KeyEvent`, committed UTF-8 `text`) because `gati` models input as abstract axes only. Edge detection is built in via
+`pressed()`/`released()`/`held()`.
 
 **Event result.**
 
@@ -158,23 +180,36 @@ Widgets guard `set_color` with `if constexpr (ColorPainter<P>)`, so they remain 
 
 ## 4. Type-Erasure: `AnyWidgetT`
 
-Widgets are stored in the tree type-erased through `AnyWidgetT<Metrics, Painter, InlineBytes = 512>`. It holds any value satisfying `Widget<W, Metrics>` and `PaintableWith<W, Painter>` inline in a fixed byte buffer and dispatches through a `static constexpr` free-function vtable — no virtual, no RTTI, no heap for widgets that fit. This mirrors `spandana::BasicAction`'s erasure pattern.
+Widgets are stored in the tree type-erased through `AnyWidgetT<Metrics, Painter, InlineBytes = 512>`. It holds any value
+satisfying `Widget<W, Metrics>` and `PaintableWith<W, Painter>` inline in a fixed byte buffer and dispatches through a
+`static constexpr` free-function vtable — no virtual, no RTTI, no heap for widgets that fit. This mirrors
+`spandana::BasicAction`'s erasure pattern.
 
 - The vtable holds `{measure, style, on_event, paint, move_construct, destroy}`, each a stateless lambda.
-- The holder is **move-only**. Construction `static_assert`s that the widget fits `InlineBytes`, is not over-aligned, and is nothrow-move-constructible.
-- `InlineBytes` defaults to **512**: every stock widget embeds a full `LayoutStyle` (~336 B) plus its own state, so the largest (`TextField`, `Button`) land near 480 B. A project using only small custom widgets can instantiate a narrower `AnyWidgetT<..., 128>` to shrink each tree node.
+- The holder is **move-only**. Construction `static_assert`s that the widget fits `InlineBytes`, is not over-aligned,
+  and is nothrow-move-constructible.
+- `InlineBytes` defaults to **512**: every stock widget embeds a full `LayoutStyle` (~336 B) plus its own state, so the
+  largest (`TextField`, `Button`) land near 480 B. A project using only small custom widgets can instantiate a narrower
+  `AnyWidgetT<..., 128>` to shrink each tree node.
 
-The `(Metrics, Painter)` pair is a template parameter because `measure()` takes a `MeasureCtxT<Metrics>` and `paint()` takes a `Painter&`. Pick one pair per app; `DefaultApp` uses `MonospaceMetrics` + `DefaultPainter`.
+The `(Metrics, Painter)` pair is a template parameter because `measure()` takes a `MeasureCtxT<Metrics>` and `paint()`
+takes a `Painter&`. Pick one pair per app; `DefaultApp` uses `MonospaceMetrics` + `DefaultPainter`.
 
 ---
 
 ## 5. The Retained Tree: Handles & Dirty Tracking
 
-`WidgetTree<Metrics, Painter, InlineBytes>` is a flat structure-of-arrays arena addressed by a contiguous `NodeId` (`std::uint32_t`; `kInvalidNode = 0xFFFFFFFF`). Links are `first_child` / `next_sibling` / `parent` indices — the same contiguous-index addressing `akruti`'s layout engine uses, so the layout bridge maps a `NodeId` onto a layout node with no hashing.
+`WidgetTree<Metrics, Painter, InlineBytes>` is a flat structure-of-arrays arena addressed by a contiguous `NodeId`
+(`std::uint32_t`; `kInvalidNode = 0xFFFFFFFF`). Links are `first_child` / `next_sibling` / `parent` indices — the same
+contiguous-index addressing `akruti`'s layout engine uses, so the layout bridge maps a `NodeId` onto a layout node with
+no hashing.
 
-`containers::NAryTree` is deliberately *not* used: it heap-allocates a node per element. The arena stays flat and reuses `containers` only where they fit:
+`containers::NAryTree` is deliberately *not* used: it heap-allocates a node per element. The arena stays flat and reuses
+`containers` only where they fit:
 
-- `containers::slot_map<NodeId, WidgetHandle>` mints **stable, generation-checked handles** (`WidgetHandle`) the app holds across rebuilds. A raw `NodeId` is a slot index; a `WidgetHandle` survives churn — `make_handle(id)`, `resolve(h) -> NodeId`, `alive(h)`.
+- `containers::slot_map<NodeId, WidgetHandle>` mints **stable, generation-checked handles** (`WidgetHandle`) the app
+  holds across rebuilds. A raw `NodeId` is a slot index; a `WidgetHandle` survives churn — `make_handle(id)`,
+  `resolve(h) -> NodeId`, `alive(h)`.
 - `sparseset::SparseSet<NodeId, std::uint8_t>` is the `O(1)` **dirty set**.
 
 Dirty bits are merged, not overwritten:
@@ -188,32 +223,43 @@ enum DirtyBits : std::uint8_t {
 };
 ```
 
-Traversal helpers: `walk(id, fn)` / `walk(fn)` (pre-order DFS, `fn(NodeId, depth)`), `for_each_child(id, fn)`, plus `widget(id)`, `parent(id)`, `first_child(id)`, `next_sibling(id)`, and `valid(id)`. `drain_dirty(fn)` consumes and clears the dirty set once per frame. `set_root` and `add_child` mark the appropriate bits automatically; `remove` frees the subtree iteratively (no recursion-depth risk) and reclaims handles.
+Traversal helpers: `walk(id, fn)` / `walk(fn)` (pre-order DFS, `fn(NodeId, depth)`), `for_each_child(id, fn)`, plus
+`widget(id)`, `parent(id)`, `first_child(id)`, `next_sibling(id)`, and `valid(id)`. `drain_dirty(fn)` consumes and
+clears the dirty set once per frame. `set_root` and `add_child` mark the appropriate bits automatically; `remove` frees
+the subtree iteratively (no recursion-depth risk) and reclaims handles.
 
 ---
 
 ## 6. Layout Bridge & Size Units
 
-`LayoutBridge<Metrics, Painter, InlineBytes>` translates the retained tree into an `akruti::layout::Engine` solve and exposes each widget's resolved rect back by `NodeId`.
+`LayoutBridge<Metrics, Painter, InlineBytes>` translates the retained tree into an `akruti::layout::Engine` solve and
+exposes each widget's resolved rect back by `NodeId`.
 
-- **Rebuild** (on any structural change): author an `akruti::layout::LayoutTree` in widget pre-order, stamping each layout node's `user_tag` with its source `NodeId`, then `bake`. A `NodeId ↔ layout-index` map is reconstructed from the baked `user_tag` column.
-- **Incremental** (style-only change): `update_style(tree, id)` re-pushes a widget's `LayoutStyle` and marks the affected node dirty, so `solve_incremental(viewport)` reprocesses only that subtree.
-- **Text metrics** reach the solver via `akruti::layout::make_text_measure(metrics)` — a zero-alloc trampoline over the host's `ITextMetrics` (the same object the painter measures with).
+- **Rebuild** (on any structural change): author an `akruti::layout::LayoutTree` in widget pre-order, stamping each
+  layout node's `user_tag` with its source `NodeId`, then `bake`. A `NodeId ↔ layout-index` map is reconstructed from
+  the baked `user_tag` column.
+- **Incremental** (style-only change): `update_style(tree, id)` re-pushes a widget's `LayoutStyle` and marks the
+  affected node dirty, so `solve_incremental(viewport)` reprocesses only that subtree.
+- **Text metrics** reach the solver via `akruti::layout::make_text_measure(metrics)` — a zero-alloc trampoline over the
+  host's `ITextMetrics` (the same object the painter measures with).
 
 Resolved geometry is addressed by `NodeId`: `rect(id) -> Rect2D`, `clip(id) -> Bounds2D`, and `hit(x, y) -> NodeId`.
 
 **Size units** live in `akruti::layout::SizeSpec` (used directly, no wrapper):
 
-| Constructor | Meaning |
-|:---|:---|
-| `SizeSpec::Px(v)` | Absolute pixels. |
-| `SizeSpec::Percent(v)` | Percent of the parent content box. |
-| `SizeSpec::Fr(v)` | Fractional weight — distributes free main-axis space (CSS-grid `fr`). |
-| `SizeSpec::Content` | Intrinsic (`measure`) size. |
-| `SizeSpec::Aspect(r)` | Cross axis derived from the resolved main axis. |
-| `SizeSpec::Auto` | Solver default. |
+| Constructor            | Meaning                                                               |
+|:-----------------------|:----------------------------------------------------------------------|
+| `SizeSpec::Px(v)`      | Absolute pixels.                                                      |
+| `SizeSpec::Percent(v)` | Percent of the parent content box.                                    |
+| `SizeSpec::Fr(v)`      | Fractional weight — distributes free main-axis space (CSS-grid `fr`). |
+| `SizeSpec::Content`    | Intrinsic (`measure`) size.                                           |
+| `SizeSpec::Aspect(r)`  | Cross axis derived from the resolved main axis.                       |
+| `SizeSpec::Auto`       | Solver default.                                                       |
 
-Bounded sizing uses `SizeSpecClamp{min, pref, max}` set through `LayoutStyle::width_clamp` / `LayoutStyle::height_clamp`, where each field may itself be any `SizeSpec`. Alongside `LayoutStyle::{axis, align_items, justify_content, padding, flex_grow, overflow_x, overflow_y, scroll_offset}`, this is the full styling surface — Drishya adds no parallel style model.
+Bounded sizing uses `SizeSpecClamp{min, pref, max}` set through `LayoutStyle::width_clamp` /
+`LayoutStyle::height_clamp`, where each field may itself be any `SizeSpec`. Alongside
+`LayoutStyle::{axis, align_items, justify_content, padding, flex_grow, overflow_x, overflow_y, scroll_offset}`, this is
+the full styling surface — Drishya adds no parallel style model.
 
 ```cpp
 auto sidebar = w::vstack(8.0f);
@@ -225,21 +271,23 @@ content.style_.width = SizeSpec::Fr(1.0f);   // eats remaining space
 
 ## 7. Reactive State: Signals & Binding
 
-`drishya/reactive.hpp` re-exports the generic `containers::reactive` primitives unchanged and adds UI-facing binding helpers. Signals are generic value cells, so any subsystem can use them; Drishya only supplies the conveniences.
+`drishya/reactive.hpp` re-exports the generic `containers::reactive` primitives unchanged and adds UI-facing binding
+helpers. Signals are generic value cells, so any subsystem can use them; Drishya only supplies the conveniences.
 
 `Signal<T, ObserverInlineBytes = 256>`:
 
-| Member | Effect |
-|:---|:---|
-| `get()` / `operator()` | Read the current value. |
-| `set(next)` | Assign and always notify observers. |
-| `set_if_changed(next) -> bool` | Assign and notify only on inequality. |
-| `mutate(fn)` | Mutate in place, then notify. |
-| `subscribe(fn) -> ObserverId` | Register a zero-argument observer; the id survives other subscribe/unsubscribe. |
-| `unsubscribe(id)` | Remove an observer. |
-| `observer_count()` | Live observer count. |
+| Member                         | Effect                                                                          |
+|:-------------------------------|:--------------------------------------------------------------------------------|
+| `get()` / `operator()`         | Read the current value.                                                         |
+| `set(next)`                    | Assign and always notify observers.                                             |
+| `set_if_changed(next) -> bool` | Assign and notify only on inequality.                                           |
+| `mutate(fn)`                   | Mutate in place, then notify.                                                   |
+| `subscribe(fn) -> ObserverId`  | Register a zero-argument observer; the id survives other subscribe/unsubscribe. |
+| `unsubscribe(id)`              | Remove an observer.                                                             |
+| `observer_count()`             | Live observer count.                                                            |
 
-`Computed<F>` is a memoized derived value: call `depend_on(signal)` for each dependency; a dependency change marks it dirty and the next `get()` / `operator()` recomputes.
+`Computed<F>` is a memoized derived value: call `depend_on(signal)` for each dependency; a dependency change marks it
+dirty and the next `get()` / `operator()` recomputes.
 
 Binding helpers:
 
@@ -251,7 +299,8 @@ bind(count, [&](const int& v){ label.set_text(std::to_string(v)); });
 // bind_signal(dst, src): keep dst equal to src.
 ```
 
-Because widgets are value types erased in the tree (no RTTI reach-in), the retained-mode idiom for reactive UI is: mutate the `Signal`, rebuild the affected node's widget from its new value, and mark it `kDirtyPaint`:
+Because widgets are value types erased in the tree (no RTTI reach-in), the retained-mode idiom for reactive UI is:
+mutate the `Signal`, rebuild the affected node's widget from its new value, and mark it `kDirtyPaint`:
 
 ```cpp
 Signal<float> health{1.0f};
@@ -270,19 +319,28 @@ bind(health, [&](const float& hpv) {
 
 ## 8. Input Routing
 
-`Router<Metrics, Painter, InlineBytes>::route(tree, bridge, input, scale)` turns one `InputFrame` into `on_event()` calls on the widgets that should see it, using the solved layout to decide who is under the pointer and who owns focus. `App::pump()` wraps it. The pipeline:
+`Router<Metrics, Painter, InlineBytes>::route(tree, bridge, input, scale)` turns one `InputFrame` into `on_event()`
+calls on the widgets that should see it, using the solved layout to decide who is under the pointer and who owns focus.
+`App::pump()` wraps it. The pipeline:
 
-1. **Pointer capture** takes priority. A widget that returned `CapturePointer` (a slider thumb, a drag) receives every subsequent pointer frame directly, bypassing hit-testing, until it returns `ReleasePointer` or dies.
-2. **Hit + bubble.** Otherwise `akruti`'s `hit_test_chain` yields the node under the pointer and its ancestor chain (leaf → root). Delivery is leaf-first, stopping at the first handled result. A left-press that lands claims keyboard focus.
-3. **Focus + keys.** Key/text frames go to the focused widget. `Tab` / `Shift+Tab` advance focus through leaves in layout order (`for_each_leaf` = tab order) — handled by the router itself, not delivered as a key.
+1. **Pointer capture** takes priority. A widget that returned `CapturePointer` (a slider thumb, a drag) receives every
+   subsequent pointer frame directly, bypassing hit-testing, until it returns `ReleasePointer` or dies.
+2. **Hit + bubble.** Otherwise `akruti`'s `hit_test_chain` yields the node under the pointer and its ancestor chain
+   (leaf → root). Delivery is leaf-first, stopping at the first handled result. A left-press that lands claims keyboard
+   focus.
+3. **Focus + keys.** Key/text frames go to the focused widget. `Tab` / `Shift+Tab` advance focus through leaves in
+   layout order (`for_each_leaf` = tab order) — handled by the router itself, not delivered as a key.
 
-`route` returns a `RouteResult { hovered, consumed_by, pointer_handled, key_handled }`. Focus can be driven explicitly with `set_focus(id)`, `focus_next(bridge)`, `focus_prev(bridge)`. Scratch buffers for the chain (64) and leaf enumeration (256) are stack-bounded — no heap on the hot path.
+`route` returns a `RouteResult { hovered, consumed_by, pointer_handled, key_handled }`. Focus can be driven explicitly
+with `set_focus(id)`, `focus_next(bridge)`, `focus_prev(bridge)`. Scratch buffers for the chain (64) and leaf
+enumeration (256) are stack-bounded — no heap on the hot path.
 
 ---
 
 ## 9. Reflow Motion
 
-When the solver produces a new rect for a node, the `ReflowMotion` policy decides how the node travels from its previous rect to the new one:
+When the solver produces a new rect for a node, the `ReflowMotion` policy decides how the node travels from its previous
+rect to the new one:
 
 ```cpp
 template <typename M>
@@ -292,8 +350,12 @@ concept ReflowMotion = requires(M& m, NodeId id, Rect2D target, float dt) {
 };
 ```
 
-- **`NullMotion`** (default) — snaps to the target instantly. Empty type, `[[no_unique_address]]`-friendly, zero cost. Correct for HUDs and anything that must reflect state immediately.
-- **`SpringReflow`** — eases each moved node from its previous rect to the target through a `spandana::RectSpring` (component-wise closed-form damped spring over the 4-float rect). Springs are created lazily on the first move and dropped once settled, so steady-state cost is zero. They live in a `SparseSet` keyed by `NodeId`; constructible as `SpringReflow{stiffness, damping}` (defaults `180.0f` / `20.0f`).
+- **`NullMotion`** (default) — snaps to the target instantly. Empty type, `[[no_unique_address]]`-friendly, zero cost.
+  Correct for HUDs and anything that must reflect state immediately.
+- **`SpringReflow`** — eases each moved node from its previous rect to the target through a `spandana::RectSpring`
+  (component-wise closed-form damped spring over the 4-float rect). Springs are created lazily on the first move and
+  dropped once settled, so steady-state cost is zero. They live in a `SparseSet` keyed by `NodeId`; constructible as
+  `SpringReflow{stiffness, damping}` (defaults `180.0f` / `20.0f`).
 
 ```cpp
 App<M, P, SpringReflow> app(metrics);   // panels glide to new rects on resize/insert/remove
@@ -305,7 +367,9 @@ App<M, P, SpringReflow> app(metrics);   // panels glide to new rects on resize/i
 
 ## 10. The Painter & Backends
 
-`KalpanaPainter<Canvas, Metrics>` is the reference adapter. `kalpana` is a *retained* scene-graph renderer; the `Painter` concept is *immediate-mode*. The adapter bridges the two: each immediate call appends a `kalpana::Node` to a `kalpana::Scene` it owns for the current frame, and `present()` hands the finished scene to `canvas.render(scene)`.
+`KalpanaPainter<Canvas, Metrics>` is the reference adapter. `kalpana` is a *retained* scene-graph renderer; the
+`Painter` concept is *immediate-mode*. The adapter bridges the two: each immediate call appends a `kalpana::Node` to a
+`kalpana::Scene` it owns for the current frame, and `present()` hands the finished scene to `canvas.render(scene)`.
 
 Frame lifecycle and primitives:
 
@@ -323,37 +387,66 @@ painter.present();                     // canvas.render(scene)
 ```
 
 - **Color** — a packed `0xAARRGGBB` `std::uint32_t` is converted to a linear `kalpana::Color` via `argb_to_color`.
-- **Clipping** — `kalpana` has no clip API, so the adapter maintains a scissor stack drishya-side and intersects/skips draws against the top clip.
-- **Text metrics** — `kalpana` has no text metrics, so the painter holds a `const Metrics&` and delegates `measure_text` to it. `MonospaceMetrics` (fixed 8 px advance, 16 px line) is the fallback for headless tests and blocky HUDs.
+- **Clipping** — `kalpana` has no clip API, so the adapter maintains a scissor stack drishya-side and intersects/skips
+  draws against the top clip.
+- **Text metrics** — `kalpana` has no text metrics, so the painter holds a `const Metrics&` and delegates `measure_text`
+  to it. `MonospaceMetrics` (fixed 8 px advance, 16 px line) is the fallback for headless tests and blocky HUDs.
 
-`DefaultPainter = KalpanaPainter<kalpana::DefaultCanvas, MonospaceMetrics>` is a capture-backed, headless-friendly painter. Swapping `DefaultCanvas` for a GPU or terminal canvas leaves widget code unchanged.
+`DefaultPainter = KalpanaPainter<kalpana::DefaultCanvas, MonospaceMetrics>` is a capture-backed, headless-friendly
+painter. Swapping `DefaultCanvas` for a GPU or terminal canvas leaves widget code unchanged.
 
-**`DrawList`** (`painter/draw_list.hpp`) is an optional SoA command buffer: `set_color` / `push_clip` / `pop_clip` / `fill_rect` / `stroke_rect` / `round_rect` / `line` / `text` record into parallel `std::vector`s keyed by an op stream, and `replay(painter)` flushes them against a real `Painter`. `clear()` keeps capacity so a reused list never re-allocates. It is a cold-path recording aid, not per-frame-critical.
+**`DrawList`** (`painter/draw_list.hpp`) is an optional SoA command buffer: `set_color` / `push_clip` / `pop_clip` /
+`fill_rect` / `stroke_rect` / `round_rect` / `line` / `text` record into parallel `std::vector`s keyed by an op stream,
+and `replay(painter)` flushes them against a real `Painter`. `clear()` keeps capacity so a reused list never
+re-allocates. It is a cold-path recording aid, not per-frame-critical.
 
 ---
 
 ## 11. Widget Catalog
 
-All stock widgets live in `drishya/widgets/` (one header per family; each is independently includable). Most inherit `widgets::WidgetBase`, which supplies trivial defaults (`style()` returning `style_`, empty `measure`, `Ignored` events, no-op `paint`) — a widget overrides only what differs. Inheritance here is pure code reuse: dispatch stays static through `AnyWidgetT`'s vtable.
+All stock widgets live in `drishya/widgets/` (one header per family; each is independently includable). Most inherit
+`widgets::WidgetBase`, which supplies trivial defaults (`style()` returning `style_`, empty `measure`, `Ignored` events,
+no-op `paint`) — a widget overrides only what differs. Inheritance here is pure code reuse: dispatch stays static
+through `AnyWidgetT`'s vtable.
 
 **Containers** (`containers.hpp`) — carry layout intent and optionally a backdrop; children are separate tree nodes.
-`Stack` (`vstack(pad)` / `hstack(pad)`), `Grid` (`grid(cols, pad)`), `Spacer` (`spacer()` grows, `strut(px)` fixed), `Panel` (`panel()`) and `Card` (`card(surface, radius=8)` — paints a rounded fill), `ScrollArea` (`scroll_area()` — clipping viewport, `overflow_y=Scroll`), `Splitter` (`hsplit(ratio)` / `vsplit(ratio)` — two `Fr`-weighted panes), `Tabs` (`tabs(active)`). `akruti`'s `LayoutStyle` has no inter-child gap field; spacing is expressed with `spacer`/`strut` or per-child style.
+`Stack` (`vstack(pad)` / `hstack(pad)`), `Grid` (`grid(cols, pad)`), `Spacer` (`spacer()` grows, `strut(px)` fixed),
+`Panel` (`panel()`) and `Card` (`card(surface, radius=8)` — paints a rounded fill), `ScrollArea` (`scroll_area()` —
+clipping viewport, `overflow_y=Scroll`), `Splitter` (`hsplit(ratio)` / `vsplit(ratio)` — two `Fr`-weighted panes),
+`Tabs` (`tabs(active)`). `akruti`'s `LayoutStyle` has no inter-child gap field; spacing is expressed with `spacer`/
+`strut` or per-child style.
 
-**Display** (`display.hpp`) — `Label` (`label(text)`; `.set_text/.set_color/.size`), `Icon`, `Separator`, `Badge`, `Progress` (`value` in [0,1], `track`/`fill` colors), `Spinner`, `Tooltip`.
+**Display** (`display.hpp`) — `Label` (`label(text)`; `.set_text/.set_color/.size`), `Icon`, `Separator`, `Badge`,
+`Progress` (`value` in [0,1], `track`/`fill` colors), `Spinner`, `Tooltip`.
 
-**Inputs** (`inputs.hpp`) — `Button` (`button(text)`; rounded label, fires `Callback on_click` on left press+release inside the box, tracks `hovered`/`pressed`), `Toggle`, `Checkbox` (both flip on click and fire a `BasicCallback<64> on_change`), `Slider` (drags via the capture protocol: `CapturePointer` on press, writes `value` in `[min,max]` and fires `on_change` each move, `ReleasePointer` on release), `TextField` (single-line edit: appends committed text, handles `Backspace`, paints a focus border), `Select` (click cycles options).
+**Inputs** (`inputs.hpp`) — `Button` (`button(text)`; rounded label, fires `Callback on_click` on left press+release
+inside the box, tracks `hovered`/`pressed`), `Toggle`, `Checkbox` (both flip on click and fire a
+`BasicCallback<64> on_change`), `Slider` (drags via the capture protocol: `CapturePointer` on press, writes `value` in
+`[min,max]` and fires `on_change` each move, `ReleasePointer` on release), `TextField` (single-line edit: appends
+committed text, handles `Backspace`, paints a focus border), `Select` (click cycles options).
 
-**Data / dashboards** (`data.hpp`) — `Sparkline` (`values`, `color`; a polyline auto-scaled to the box), `StatTile` (`caption`/`value`/`delta` with `value_color`/`caption_color`/`delta_color`/`value_size`), `ListView` (**virtualized** — `row_count`, `row_height`, `scroll_y`; only visible rows are painted, so millions of logical rows stay bounded), `Table` (virtualized rows + header), `Chat` (`ChatMessage` list + composer, for LLM UIs).
+**Data / dashboards** (`data.hpp`) — `Sparkline` (`values`, `color`; a polyline auto-scaled to the box), `StatTile`
+(`caption`/`value`/`delta` with `value_color`/`caption_color`/`delta_color`/`value_size`), `ListView` (**virtualized** —
+`row_count`, `row_height`, `scroll_y`; only visible rows are painted, so millions of logical rows stay bounded), `Table`
+(virtualized rows + header), `Chat` (`ChatMessage` list + composer, for LLM UIs).
 
-**Game / HUD** (`game.hpp`) — `Gauge` (`value` in [0,1], `fill`/`low_color` switching below `low_threshold`; `health_bar(v)` is a preset), `Crosshair` (`color`, `center_dot`), `RadialMenu`, `DamageNumber` (float-up with alpha scaled by life), `NinePatch`, `WorldAnchor` (screen-projects a world position each frame).
+**Game / HUD** (`game.hpp`) — `Gauge` (`value` in [0,1], `fill`/`low_color` switching below `low_threshold`;
+`health_bar(v)` is a preset), `Crosshair` (`color`, `center_dot`), `RadialMenu`, `DamageNumber` (float-up with alpha
+scaled by life), `NinePatch`, `WorldAnchor` (screen-projects a world position each frame).
 
-**Stubs** (`stubs.hpp`) — ~25 concept-complete placeholders that satisfy `Widget`/`PaintableWith` (via `StubBase`) so they compose and lay out today, awaiting full paint bodies: `Markdown`, `CodeEditor`, `TextArea`, `LogView`, `TreeView`, `Chart`, `Heatmap`, `ImageGrid`, `ColorPicker`, `DatePicker`, `FileDrop`, `Combo`, `RangeSlider`, `NumberField`, `RadioGroup`, `Accordion`, `Overlay`, `Modal`, `Popover`, `Drawer`, `Avatar`, `Image`, `InventoryGrid`, `Minimap`, `DialogueBox`, `Hotbar`.
+**Stubs** (`stubs.hpp`) — ~25 concept-complete placeholders that satisfy `Widget`/`PaintableWith` (via `StubBase`) so
+they compose and lay out today, awaiting full paint bodies: `Markdown`, `CodeEditor`, `TextArea`, `LogView`, `TreeView`,
+`Chart`, `Heatmap`, `ImageGrid`, `ColorPicker`, `DatePicker`, `FileDrop`, `Combo`, `RangeSlider`, `NumberField`,
+`RadioGroup`, `Accordion`, `Overlay`, `Modal`, `Popover`, `Drawer`, `Avatar`, `Image`, `InventoryGrid`, `Minimap`,
+`DialogueBox`, `Hotbar`.
 
 ---
 
 ## 12. Authoring a Custom Widget
 
-A new widget is any value type satisfying `Widget<W, Metrics>` and `PaintableWith<W, P>`. No base class, macro, or registration is required — inherit `WidgetBase` purely to skip the trivial hooks, or write them all out. It must be nothrow-move-constructible and fit the `AnyWidget` buffer.
+A new widget is any value type satisfying `Widget<W, Metrics>` and `PaintableWith<W, P>`. No base class, macro, or
+registration is required — inherit `WidgetBase` purely to skip the trivial hooks, or write them all out. It must be
+nothrow-move-constructible and fit the `AnyWidget` buffer.
 
 ```cpp
 #include <drishya/drishya.hpp>
@@ -404,7 +497,8 @@ static_assert(Widget<VuMeter, MonospaceMetrics> && PaintableWith<VuMeter, Defaul
 static_assert(Widget<Dot, MonospaceMetrics> && PaintableWith<Dot, DefaultPainter>);
 ```
 
-Both drop straight into the same `App` tree; each is monomorphized into every backend it paints to. Nothing in Drishya's core changes.
+Both drop straight into the same `App` tree; each is monomorphized into every backend it paints to. Nothing in Drishya's
+core changes.
 
 ---
 
@@ -412,7 +506,9 @@ Both drop straight into the same `App` tree; each is monomorphized into every ba
 
 Two front ends, one widget vocabulary.
 
-**Fluent (runtime).** `ui::root(app, w)` mounts a root and returns a `Builder`; `.child(w)` mounts a leaf and returns `*this` for flat chaining; `.nest(w)` mounts a container child and returns a `Builder` positioned at it so you can descend. Mounting is eager (each call reaches into `App::add_child`); this is the cold build path.
+**Fluent (runtime).** `ui::root(app, w)` mounts a root and returns a `Builder`; `.child(w)` mounts a leaf and returns
+`*this` for flat chaining; `.nest(w)` mounts a container child and returns a `Builder` positioned at it so you can
+descend. Mounting is eager (each call reaches into `App::add_child`); this is the cold build path.
 
 ```cpp
 using namespace pebble::drishya;
@@ -423,7 +519,11 @@ auto row = root.nest(widgets::hstack());
 row.child(widgets::button("Yes")).child(widgets::button("No"));
 ```
 
-**EDSL (compile-time tree).** `edsl::node(widget, child, child, ...)` nests into a `std::tuple`, so the whole hierarchy is one value with its shape known at compile time. `mount(app)` realizes the tuple into the retained tree (type-erasing each widget exactly as the fluent builder does — the tuple only shapes construction order, not storage). Style modifiers compose with `operator|`, each returning the same widget by value with one `style_` field set (`pad`, `flex`, `align`, `justify`, `width`, `height`), and the `_px` literal yields a `SizeSpec::Px`:
+**EDSL (compile-time tree).** `edsl::node(widget, child, child, ...)` nests into a `std::tuple`, so the whole hierarchy
+is one value with its shape known at compile time. `mount(app)` realizes the tuple into the retained tree (type-erasing
+each widget exactly as the fluent builder does — the tuple only shapes construction order, not storage). Style modifiers
+compose with `operator|`, each returning the same widget by value with one `style_` field set (`pad`, `flex`, `align`,
+`justify`, `width`, `height`), and the `_px` literal yields a `SizeSpec::Px`:
 
 ```cpp
 using namespace pebble::drishya::edsl;
@@ -439,24 +539,28 @@ view.mount(app);
 
 ## 14. Tree Operations
 
-`drishya/ops.hpp` provides free-function algorithms over a `WidgetTree` (and, where geometry matters, a solved `LayoutBridge`). All are non-owning and heap-free on the hot path — result sets are written into a caller-supplied span.
+`drishya/ops.hpp` provides free-function algorithms over a `WidgetTree` (and, where geometry matters, a solved
+`LayoutBridge`). All are non-owning and heap-free on the hot path — result sets are written into a caller-supplied span.
 
-| Operation | Signature (sketch) | Notes |
-|:---|:---|:---|
-| `visit(tree, fn)` | `fn(NodeId, depth)` | Pre-order walk. |
-| `find(tree, pred)` | `-> NodeId` | First node matching `pred`; `kInvalidNode` if none. |
-| `find_all(tree, pred, out)` | `-> std::size_t` | Count matches; writes up to `out.size()` (overflow detectable). |
-| `subtree_size(tree, id)` | `-> std::size_t` | Node count in a subtree. |
-| `depth_of(tree, id)` | `-> std::size_t` | Distance from root. |
-| `hit(tree, bridge, x, y)` | `-> NodeId` | Delegates to `bridge.hit`. |
-| `subtree_bounds(tree, bridge, id)` | `-> Rect2D` | Union of solved rects. |
-| `measure(tree, id, metrics, scale)` | `-> Size2D` | Intrinsic size of one widget. |
+| Operation                           | Signature (sketch)  | Notes                                                           |
+|:------------------------------------|:--------------------|:----------------------------------------------------------------|
+| `visit(tree, fn)`                   | `fn(NodeId, depth)` | Pre-order walk.                                                 |
+| `find(tree, pred)`                  | `-> NodeId`         | First node matching `pred`; `kInvalidNode` if none.             |
+| `find_all(tree, pred, out)`         | `-> std::size_t`    | Count matches; writes up to `out.size()` (overflow detectable). |
+| `subtree_size(tree, id)`            | `-> std::size_t`    | Node count in a subtree.                                        |
+| `depth_of(tree, id)`                | `-> std::size_t`    | Distance from root.                                             |
+| `hit(tree, bridge, x, y)`           | `-> NodeId`         | Delegates to `bridge.hit`.                                      |
+| `subtree_bounds(tree, bridge, id)`  | `-> Rect2D`         | Union of solved rects.                                          |
+| `measure(tree, id, metrics, scale)` | `-> Size2D`         | Intrinsic size of one widget.                                   |
 
 ---
 
 ## 15. Theming
 
-`drishya/theme.hpp` supplies constexpr design tokens. A `Theme` bundles a `Palette` (semantic color roles), a `Spacing` ramp, `Radii`, a `TypeScale`, and a `ChartColors` categorical palette (8 hues chosen for perceptual separation on dark backgrounds). Tokens are packed `0xAARRGGBB` so they cross the `Painter` boundary without conversion; `to_color(argb)` yields the linear `kalpana::Color` form. `dark()` and `light()` presets ship built in.
+`drishya/theme.hpp` supplies constexpr design tokens. A `Theme` bundles a `Palette` (semantic color roles), a `Spacing`
+ramp, `Radii`, a `TypeScale`, and a `ChartColors` categorical palette (8 hues chosen for perceptual separation on dark
+backgrounds). Tokens are packed `0xAARRGGBB` so they cross the `Painter` boundary without conversion; `to_color(argb)`
+yields the linear `kalpana::Color` form. `dark()` and `light()` presets ship built in.
 
 ```cpp
 constexpr auto t = theme::dark();
@@ -468,7 +572,8 @@ sparkline.color   = t.chart.at(0);
 
 ## 16. Testing: Headless Snapshot
 
-The `DefaultPainter` renders into a `kalpana::DefaultCanvas` capture backend, giving deterministic snapshot pixels with no GPU or terminal — regression-safe rendering tests. The pattern (matching the shipped examples):
+The `DefaultPainter` renders into a `kalpana::DefaultCanvas` capture backend, giving deterministic snapshot pixels with
+no GPU or terminal — regression-safe rendering tests. The pattern (matching the shipped examples):
 
 ```cpp
 MonospaceMetrics metrics;
@@ -490,7 +595,8 @@ const std::vector<std::uint32_t> px = canvas.snapshot();   // 640*400 ARGB pixel
 // assert px.size() and app.tree().node_count()
 ```
 
-Concept conformance is checked at compile time: `static_assert(Widget<W, MonospaceMetrics>)`, `static_assert(PaintableWith<W, DefaultPainter>)`.
+Concept conformance is checked at compile time: `static_assert(Widget<W, MonospaceMetrics>)`,
+`static_assert(PaintableWith<W, DefaultPainter>)`.
 
 ---
 
@@ -498,7 +604,10 @@ Concept conformance is checked at compile time: `static_assert(Widget<W, Monospa
 
 Runnable, headless examples covering every path above:
 
-- `src/examples/drishya_ml_dashboard.cpp` — KPI `StatTile`s, a loss `Sparkline`, and a `Progress` bar composed onto a headless canvas.
-- `src/examples/drishya_game_hud.cpp` — `health_bar`/`Gauge` bound to a reactive `Signal`, a `Crosshair`, an ability row, pointer routing, and `SpringReflow`.
+- `src/examples/drishya_ml_dashboard.cpp` — KPI `StatTile`s, a loss `Sparkline`, and a `Progress` bar composed onto a
+  headless canvas.
+- `src/examples/drishya_game_hud.cpp` — `health_bar`/`Gauge` bound to a reactive `Signal`, a `Crosshair`, an ability
+  row, pointer routing, and `SpringReflow`.
 - `src/examples/drishya_custom_widget.cpp` — authoring a `VuMeter` (via `WidgetBase`) and a standalone `Dot`.
-- `src/examples/drishya_terminal_dashboard.cpp` — the same vocabulary sized to a small blocky canvas: an `hsplit` of a status column and a virtualized `ListView`.
+- `src/examples/drishya_terminal_dashboard.cpp` — the same vocabulary sized to a small blocky canvas: an `hsplit` of a
+  status column and a virtualized `ListView`.

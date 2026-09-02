@@ -14,6 +14,7 @@
 // ============================================================================
 
 TEST_CASE (
+
 "fixed_string: construction and length"
 ,
 "[akshara][fixed_string]"
@@ -30,6 +31,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "fixed_string: CTAD deduction"
 ,
 "[akshara][fixed_string]"
@@ -40,6 +42,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "fixed_string: operator[]"
 ,
 "[akshara][fixed_string]"
@@ -53,6 +56,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "fixed_string: view() and operator std::string_view"
 ,
 "[akshara][fixed_string]"
@@ -67,6 +71,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "fixed_string: begin/end iterators"
 ,
 "[akshara][fixed_string]"
@@ -80,6 +85,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "fixed_string: ranges::equal"
 ,
 "[akshara][fixed_string]"
@@ -93,6 +99,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "fixed_string: operator== and operator!="
 ,
 "[akshara][fixed_string]"
@@ -106,6 +113,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "fixed_string: operator<=>"
 ,
 "[akshara][fixed_string]"
@@ -120,6 +128,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "fixed_string: operator+ concatenation"
 ,
 "[akshara][fixed_string]"
@@ -133,6 +142,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "fixed_string: operator+ with char"
 ,
 "[akshara][fixed_string]"
@@ -151,6 +161,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "detail::fs: is_upper / is_lower / is_alpha"
 ,
 "[akshara][classifiers]"
@@ -173,6 +184,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "detail::fs: is_digit / is_alnum / is_hex"
 ,
 "[akshara][classifiers]"
@@ -195,6 +207,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "detail::fs: is_space"
 ,
 "[akshara][classifiers]"
@@ -210,6 +223,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "detail::fs: is_ident_start / is_ident_cont"
 ,
 "[akshara][classifiers]"
@@ -229,6 +243,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "detail::fs: is_print / is_punct"
 ,
 "[akshara][classifiers]"
@@ -247,6 +262,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "detail::fs: to_upper / to_lower"
 ,
 "[akshara][classifiers]"
@@ -267,6 +283,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "substr"
 ,
 "[akshara][algorithms]"
@@ -281,6 +298,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "find_char / rfind_char / contains_char"
 ,
 "[akshara][algorithms]"
@@ -295,6 +313,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "find_substr"
 ,
 "[akshara][algorithms]"
@@ -308,6 +327,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "starts_with / ends_with"
 ,
 "[akshara][algorithms]"
@@ -325,6 +345,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "to_upper / to_lower"
 ,
 "[akshara][algorithms]"
@@ -339,6 +360,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "replace_char"
 ,
 "[akshara][algorithms]"
@@ -350,6 +372,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "repeat"
 ,
 "[akshara][algorithms]"
@@ -364,6 +387,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "trim_view"
 ,
 "[akshara][algorithms]"
@@ -379,6 +403,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "uint_to_str / str_to_uint"
 ,
 "[akshara][algorithms]"
@@ -400,6 +425,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "ct_string_builder: push and append"
 ,
 "[akshara][builder]"
@@ -416,6 +442,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "ct_string_builder: size tracking"
 ,
 "[akshara][builder]"
@@ -431,6 +458,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "ct_string_builder: string_view append"
 ,
 "[akshara][builder]"
@@ -449,6 +477,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "kmp_find: basic cases"
 ,
 "[akshara][kmp]"
@@ -464,6 +493,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "kmp_find: edge cases — empty needle, needle longer than hay"
 ,
 "[akshara][kmp]"
@@ -477,6 +507,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "kmp_count: non-overlapping occurrences"
 ,
 "[akshara][kmp]"
@@ -491,6 +522,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "kmp_count: single occurrence"
 ,
 "[akshara][kmp]"
@@ -506,6 +538,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "join: two fixed_strings with separator"
 ,
 "[akshara][join]"
@@ -519,6 +552,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "join: single-char separator"
 ,
 "[akshara][join]"
@@ -536,6 +570,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "ct_char_set: construction from fixed_string"
 ,
 "[akshara][char_set]"
@@ -550,6 +585,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "ct_char_set: factory functions"
 ,
 "[akshara][char_set]"
@@ -583,6 +619,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "ct_char_set: ident_start / ident_cont"
 ,
 "[akshara][char_set]"
@@ -604,6 +641,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "ct_char_set: bitwise union operator|"
 ,
 "[akshara][char_set]"
@@ -618,6 +656,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "ct_char_set: bitwise intersection operator&"
 ,
 "[akshara][char_set]"
@@ -632,6 +671,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "ct_char_set: bitwise xor operator^"
 ,
 "[akshara][char_set]"
@@ -646,6 +686,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "ct_char_set: complement"
 ,
 "[akshara][char_set]"
@@ -660,6 +701,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "ct_char_set: add_range"
 ,
 "[akshara][char_set]"
@@ -677,6 +719,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "ct_char_set: add single char"
 ,
 "[akshara][char_set]"
@@ -694,6 +737,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "ct_char_set: NTTP usability"
 ,
 "[akshara][char_set]"
@@ -712,6 +756,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "fnv1a64: string_view overload"
 ,
 "[akshara][hash]"
@@ -726,6 +771,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "fnv1a64: fixed_string overload"
 ,
 "[akshara][hash]"
@@ -737,6 +783,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "fnv1a64: empty string"
 ,
 "[akshara][hash]"
@@ -747,6 +794,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "fnv1a64: distinct values for different strings"
 ,
 "[akshara][hash]"
@@ -762,6 +810,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "pad_right: basic usage"
 ,
 "[akshara][padding]"
@@ -774,6 +823,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "pad_right: custom fill char"
 ,
 "[akshara][padding]"
@@ -785,6 +835,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "pad_right: already at width"
 ,
 "[akshara][padding]"
@@ -796,6 +847,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "pad_left: basic usage"
 ,
 "[akshara][padding]"
@@ -808,6 +860,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "pad_left: custom fill char"
 ,
 "[akshara][padding]"
@@ -823,6 +876,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "intern_tag: same string same type"
 ,
 "[akshara][intern]"
@@ -834,6 +888,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "intern_tag: different strings different types"
 ,
 "[akshara][intern]"
@@ -845,6 +900,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "intern_tag: str() / hash() / length()"
 ,
 "[akshara][intern]"
@@ -857,6 +913,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "intern_tag: same_as()"
 ,
 "[akshara][intern]"
@@ -869,6 +926,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "intern_equal variable template"
 ,
 "[akshara][intern]"
@@ -883,6 +941,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "path::filename"
 ,
 "[akshara][path]"
@@ -899,6 +958,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "path::stem"
 ,
 "[akshara][path]"
@@ -916,6 +976,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "path::extension"
 ,
 "[akshara][path]"
@@ -932,6 +993,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "path::parent_path"
 ,
 "[akshara][path]"
@@ -948,6 +1010,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "path::normalize: strip ./ prefix"
 ,
 "[akshara][path]"
@@ -961,6 +1024,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "path::normalize: strip trailing /"
 ,
 "[akshara][path]"
@@ -974,6 +1038,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "path::normalize: no-op on clean path"
 ,
 "[akshara][path]"
@@ -988,6 +1053,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "fixed_string as NTTP — dispatch via if constexpr"
 ,
 "[akshara][composite]"
@@ -1005,6 +1071,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "ct_char_set as NTTP — lexer pattern"
 ,
 "[akshara][composite]"

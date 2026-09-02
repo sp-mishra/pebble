@@ -29,6 +29,7 @@ using namespace vakya::types;
 
 TEST_CASE (
 
+
 "unify: same interned handle → trivial success"
 ,
 "[vakya][unification]"
@@ -48,6 +49,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "unify: variable binds to concrete type"
 ,
@@ -78,6 +80,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "unify: callable types unify pairwise"
 ,
@@ -123,6 +126,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "unify: occurs-check → infinite_type error"
 ,
 "[vakya][unification]"
@@ -151,6 +155,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "unify: constructor clash → constructor_clash error"
 ,
 "[vakya][unification]"
@@ -172,6 +177,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "unify: callable arity mismatch → arity_mismatch error"
 ,
@@ -201,6 +207,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "apply: replaces bound vars in a type"
 ,
@@ -235,6 +242,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "generalize: unconstrained variable becomes polymorphic scheme"
 ,
 "[vakya][unification]"
@@ -261,6 +269,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "instantiate: quantified type gets fresh vars per instantiation"
 ,
@@ -294,6 +303,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "unify: std::expected errors — no exceptions thrown"
 ,

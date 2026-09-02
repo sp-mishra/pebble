@@ -1,6 +1,8 @@
 # Structure-of-Arrays (SoA) & Inline Vector Containers
 
-Pebble provides high-performance data-oriented array containers in `include/containers/dynamic/soa_vector.hpp` and `include/containers/static/static_vector.hpp`. They are engineered for SIMD vectorization, zero cache pollution, and predictable memory footprints in physics engines and numerical simulations.
+Pebble provides high-performance data-oriented array containers in `include/containers/dynamic/soa_vector.hpp` and
+`include/containers/static/static_vector.hpp`. They are engineered for SIMD vectorization, zero cache pollution, and
+predictable memory footprints in physics engines and numerical simulations.
 
 ---
 
@@ -33,13 +35,13 @@ Pebble provides high-performance data-oriented array containers in `include/cont
 
 ## 2. Storage Policies
 
-| Storage Policy | Memory Location | Alignment | Best Use Case |
-|:---|:---|:---|:---|
-| **`StaticStoragePolicy<N>`** | Stack | Default | Small particle clusters, contact manifolds ($N \le 64$) |
-| **`SmallVectorStoragePolicy<N>`** | Inline SBO → Heap | Default | Dynamic physics islands, local query results |
-| **`DynamicStoragePolicy<Alloc>`** | Heap / PMR Arena | Default | Global particle systems, massive entity pools |
-| **`Aligned32StoragePolicy`** | Heap | **32-byte** | AVX2 — enables `vmovaps`, eliminates unaligned load penalties |
-| **`Aligned64StoragePolicy`** | Heap | **64-byte** | AVX-512 / cache-line — optimal store alignment |
+| Storage Policy                    | Memory Location   | Alignment   | Best Use Case                                                 |
+|:----------------------------------|:------------------|:------------|:--------------------------------------------------------------|
+| **`StaticStoragePolicy<N>`**      | Stack             | Default     | Small particle clusters, contact manifolds ($N \le 64$)       |
+| **`SmallVectorStoragePolicy<N>`** | Inline SBO → Heap | Default     | Dynamic physics islands, local query results                  |
+| **`DynamicStoragePolicy<Alloc>`** | Heap / PMR Arena  | Default     | Global particle systems, massive entity pools                 |
+| **`Aligned32StoragePolicy`**      | Heap              | **32-byte** | AVX2 — enables `vmovaps`, eliminates unaligned load penalties |
+| **`Aligned64StoragePolicy`**      | Heap              | **64-byte** | AVX-512 / cache-line — optimal store alignment                |
 
 `AlignedStoragePolicy` is an alias for `Aligned64StoragePolicy`.
 
@@ -50,7 +52,8 @@ Pebble provides high-performance data-oriented array containers in `include/cont
 Built-in `integrate_verlet_simd(dt)` (float or double) on columns [0]=x [1]=y [2]=vx [3]=vy [4]=ax [5]=ay:
 $$\mathbf{p}_{n+1} = \mathbf{p}_n + \mathbf{v}_n \Delta t + \frac{1}{2} \mathbf{a}_n \Delta t^2 \qquad \mathbf{v}_{n+1} = \mathbf{v}_n + \mathbf{a}_n \Delta t$$
 
-`transform_columns<Is...>(fn)` dispatches any user-supplied SIMD kernel with aligned raw pointers — the kernel owns the loop, `SoAVector` guarantees contiguous aligned storage.
+`transform_columns<Is...>(fn)` dispatches any user-supplied SIMD kernel with aligned raw pointers — the kernel owns the
+loop, `SoAVector` guarantees contiguous aligned storage.
 
 Portable `SOA_VECTORIZE` macro (Clang / GCC / MSVC) enables auto-vectorization on all compilers.
 
@@ -58,24 +61,24 @@ Portable `SOA_VECTORIZE` macro (Clang / GCC / MSVC) enables auto-vectorization o
 
 ## 4. Full API Reference
 
-| Method | Description |
-|:---|:---|
-| `push_back(vals...)` | Append one row |
-| `pop_back()` | Remove last row |
-| `resize(n)` | Fill to n, default-construct |
-| `resize(n, vals...)` | Fill to n with provided values |
-| `swap_pop_back(i)` | O(1) removal — swap with last, pop |
-| `erase_if(pred)` | Bulk O(N) removal; returns count |
-| `append_range(other)` | O(M) batch merge (any storage policy) |
-| `get_column<I>()` | `std::span` over column I |
-| `data<I>()` | Raw pointer to column I data |
-| `get<I>(i)` | Single element access at row i |
-| `row(i)` | All columns at row i as `std::tuple` |
-| `transform_columns<Is...>(fn)` | Kernel dispatch: `fn(ptr<I0>, ptr<I1>, ..., n)` |
-| `scale_column<I>(scale, bias)` | col[i] = col[i]*scale + bias (vectorized) |
-| `clamp_column<I>(lo, hi)` | Element-wise clamp (vectorized) |
-| `integrate_verlet_simd(dt)` | Built-in Verlet: float or double |
-| `size()` / `empty()` / `clear()` / `reserve(n)` | Standard capacity ops |
+| Method                                          | Description                                     |
+|:------------------------------------------------|:------------------------------------------------|
+| `push_back(vals...)`                            | Append one row                                  |
+| `pop_back()`                                    | Remove last row                                 |
+| `resize(n)`                                     | Fill to n, default-construct                    |
+| `resize(n, vals...)`                            | Fill to n with provided values                  |
+| `swap_pop_back(i)`                              | O(1) removal — swap with last, pop              |
+| `erase_if(pred)`                                | Bulk O(N) removal; returns count                |
+| `append_range(other)`                           | O(M) batch merge (any storage policy)           |
+| `get_column<I>()`                               | `std::span` over column I                       |
+| `data<I>()`                                     | Raw pointer to column I data                    |
+| `get<I>(i)`                                     | Single element access at row i                  |
+| `row(i)`                                        | All columns at row i as `std::tuple`            |
+| `transform_columns<Is...>(fn)`                  | Kernel dispatch: `fn(ptr<I0>, ptr<I1>, ..., n)` |
+| `scale_column<I>(scale, bias)`                  | col[i] = col[i]*scale + bias (vectorized)       |
+| `clamp_column<I>(lo, hi)`                       | Element-wise clamp (vectorized)                 |
+| `integrate_verlet_simd(dt)`                     | Built-in Verlet: float or double                |
+| `size()` / `empty()` / `clear()` / `reserve(n)` | Standard capacity ops                           |
 
 ---
 
@@ -138,7 +141,9 @@ vec.push_back(20);
 for (int val : vec) std::cout << val << " ";
 ```
 
-Pebble provides high-performance data-oriented array containers in `include/containers/dynamic/soa_vector.hpp` and `include/containers/static/static_vector.hpp`. They are engineered for SIMD vectorization, zero cache pollution, and predictable memory footprints in physics engines and numerical simulations.
+Pebble provides high-performance data-oriented array containers in `include/containers/dynamic/soa_vector.hpp` and
+`include/containers/static/static_vector.hpp`. They are engineered for SIMD vectorization, zero cache pollution, and
+predictable memory footprints in physics engines and numerical simulations.
 
 ---
 
@@ -172,11 +177,11 @@ Pebble provides high-performance data-oriented array containers in `include/cont
 
 `containers::dynamic::SoAVector<T, StoragePolicy>` provides compile-time storage policy injection:
 
-| Storage Policy | Memory Location | Reallocation Behavior | Best Use Case |
-|:---|:---|:---|:---|
-| **`StaticStoragePolicy<N>`** | Stack (`std::array`) | Never allocates; compile-time fixed capacity $N$ | Small particle clusters, contact manifolds ($N \le 64$) |
-| **`SmallVectorStoragePolicy<InlineBytes>`** | Inline SBO $\to$ Heap | Inline until capacity exceeded, then spills to arena/heap | Dynamic physics islands, local query results |
-| **`DynamicStoragePolicy<Alloc>`** | Heap / PMR Arena | Dynamically grows with $1.5\times$ expansion | Global particle systems, massive entity pools |
+| Storage Policy                              | Memory Location       | Reallocation Behavior                                     | Best Use Case                                           |
+|:--------------------------------------------|:----------------------|:----------------------------------------------------------|:--------------------------------------------------------|
+| **`StaticStoragePolicy<N>`**                | Stack (`std::array`)  | Never allocates; compile-time fixed capacity $N$          | Small particle clusters, contact manifolds ($N \le 64$) |
+| **`SmallVectorStoragePolicy<InlineBytes>`** | Inline SBO $\to$ Heap | Inline until capacity exceeded, then spills to arena/heap | Dynamic physics islands, local query results            |
+| **`DynamicStoragePolicy<Alloc>`**           | Heap / PMR Arena      | Dynamically grows with $1.5\times$ expansion              | Global particle systems, massive entity pools           |
 
 ---
 
@@ -186,13 +191,15 @@ Pebble provides high-performance data-oriented array containers in `include/cont
 $$\mathbf{p}_{n+1} = \mathbf{p}_n + \mathbf{v}_n \Delta t + \frac{1}{2} \mathbf{a}_n \Delta t^2$$
 $$\mathbf{v}_{n+1} = \mathbf{v}_n + \mathbf{a}_n \Delta t$$
 
-Because contiguous floats are loaded 8 elements at a time directly into vector registers (AVX2 / ARM NEON), memory bandwidth utilization approaches $100\%$ of theoretical hardware maximums.
+Because contiguous floats are loaded 8 elements at a time directly into vector registers (AVX2 / ARM NEON), memory
+bandwidth utilization approaches $100\%$ of theoretical hardware maximums.
 
 ---
 
 ## 4. End-to-End API Examples
 
 ### 4.1 SoAVector SIMD Integration
+
 ```cpp
 #include "containers/dynamic/soa_vector.hpp"
 #include <iostream>
@@ -229,6 +236,7 @@ int main() {
 ```
 
 ### 4.2 Never-Allocating `static_vector`
+
 ```cpp
 #include "containers/static/static_vector.hpp"
 #include <iostream>

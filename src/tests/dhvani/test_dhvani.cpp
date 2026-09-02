@@ -4,7 +4,12 @@
 #include "dhvani/edsl.hpp"
 #include "spandana/spandana.hpp"
 
-TEST_CASE("Dhvani: Basic SoundBus Queue and Drain", "[dhvani][soundbus]") {
+TEST_CASE (
+"Dhvani: Basic SoundBus Queue and Drain"
+,
+"[dhvani][soundbus]"
+)
+ {
     pebble::dhvani::SoundBus bus;
 
     bus.play("jump.wav", 0.8f, 1.1f);
@@ -26,7 +31,12 @@ TEST_CASE("Dhvani: Basic SoundBus Queue and Drain", "[dhvani][soundbus]") {
     REQUIRE(bus.pending_count() == 0);
 }
 
-TEST_CASE("Dhvani: 2D Spatial Audio Attenuation & Stereo Panning", "[dhvani][spatial]") {
+TEST_CASE (
+"Dhvani: 2D Spatial Audio Attenuation & Stereo Panning"
+,
+"[dhvani][spatial]"
+)
+ {
     pebble::dhvani::AudioListener2D listener{
         .position = {0.0f, 0.0f},
         .forward = {0.0f, 1.0f},
@@ -54,7 +64,12 @@ TEST_CASE("Dhvani: 2D Spatial Audio Attenuation & Stereo Panning", "[dhvani][spa
     REQUIRE(far_out.attenuation == 0.0f);
 }
 
-TEST_CASE("Dhvani: Spandana Timeline EDSL Audio Cues", "[dhvani][edsl]") {
+TEST_CASE (
+"Dhvani: Spandana Timeline EDSL Audio Cues"
+,
+"[dhvani][edsl]"
+)
+ {
     pebble::dhvani::SoundBus sound_bus;
     pebble::spandana::Timeline timeline;
 
@@ -76,7 +91,12 @@ TEST_CASE("Dhvani: Spandana Timeline EDSL Audio Cues", "[dhvani][edsl]") {
 #include "gati/reactive_cues.hpp"
 #include "gati/transform.hpp"
 
-TEST_CASE("Dhvani: Gati AudioEmitter Component & SpatialAudioSystem Dispatch", "[dhvani][gati][ecs]") {
+TEST_CASE (
+"Dhvani: Gati AudioEmitter Component & SpatialAudioSystem Dispatch"
+,
+"[dhvani][gati][ecs]"
+)
+ {
     pebble::ecs::World world;
     pebble::dhvani::SoundBus sound_bus;
     gati::SpatialAudioSystem audio_sys;

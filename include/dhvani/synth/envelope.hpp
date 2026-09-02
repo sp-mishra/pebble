@@ -5,49 +5,48 @@
 #include <algorithm>
 
 namespace pebble::dhvani::synth {
+    enum class EnvelopeStage : uint8_t { Idle, Attack, Decay, Sustain, Release, Done };
 
-enum class EnvelopeStage : uint8_t { Idle, Attack, Decay, Sustain, Release, Done };
+    struct ADSRParams {
+        float attack = 0.01f; // seconds
+        float decay = 0.10f; // seconds
+        float sustain = 0.70f; // level [0..1]
+        float release = 0.30f; // seconds
+    };
 
-struct ADSRParams {
-    float attack  = 0.01f;  // seconds
-    float decay   = 0.10f;  // seconds
-    float sustain = 0.70f;  // level [0..1]
-    float release = 0.30f;  // seconds
-};
+    struct EnvelopeState {
+        ADSRParams params{};
+        EnvelopeStage stage = EnvelopeStage::Idle;
+        float value = 0.f;
+        float time = 0.f;
+        uint32_t sample_rate = kDefaultSampleRate;
+    };
 
-struct EnvelopeState {
-    ADSRParams    params{};
-    EnvelopeStage stage       = EnvelopeStage::Idle;
-    float         value       = 0.f;
-    float         time        = 0.f;
-    uint32_t      sample_rate = kDefaultSampleRate;
-};
-
-inline void trigger(EnvelopeState& e) noexcept {
-    e.stage = EnvelopeStage::Attack;
-    e.time  = 0.f;
-}
-
-inline void release_note(EnvelopeState& e) noexcept {
-    if (e.stage != EnvelopeStage::Done) {
-        e.stage = EnvelopeStage::Release;
-        e.time  = 0.f;
+    inline void trigger(EnvelopeState& e) noexcept {
+        e.stage = EnvelopeStage::Attack;
+        e.time = 0.f;
     }
-}
 
-[[nodiscard]] inline bool done(const EnvelopeState& e) noexcept {
-    return e.stage == EnvelopeStage::Done;
-}
+    inline void release_note(EnvelopeState& e) noexcept {
+        if (e.stage != EnvelopeStage::Done) {
+            e.stage = EnvelopeStage::Release;
+            e.time = 0.f;
+        }
+    }
 
-[[nodiscard]] inline Sample tick(EnvelopeState& e) noexcept {
-    const float dt = 1.f / static_cast<float>(e.sample_rate);
-    switch (e.stage) {
+    [[nodiscard]] inline bool done(const EnvelopeState& e) noexcept {
+        return e.stage == EnvelopeStage::Done;
+    }
+
+    [[nodiscard]] inline Sample tick(EnvelopeState& e) noexcept {
+        const float dt = 1.f / static_cast<float>(e.sample_rate);
+        switch (e.stage) {
         case EnvelopeStage::Attack:
             e.value += dt / std::max(e.params.attack, 1e-6f);
             if (e.value >= 1.f) {
                 e.value = 1.f;
                 e.stage = EnvelopeStage::Decay;
-                e.time  = 0.f;
+                e.time = 0.f;
             }
             break;
         case EnvelopeStage::Decay:
@@ -69,8 +68,7 @@ inline void release_note(EnvelopeState& e) noexcept {
         default:
             e.value = 0.f;
             break;
+        }
+        return e.value;
     }
-    return e.value;
-}
-
 } // namespace pebble::dhvani::synth

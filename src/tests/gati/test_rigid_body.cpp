@@ -2,7 +2,12 @@
 #include "gati/rigid_body.hpp"
 #include "akruti/primitives.hpp"
 
-TEST_CASE("Gati: RigidBody", "[gati][rigid_body]") {
+TEST_CASE (
+"Gati: RigidBody"
+,
+"[gati][rigid_body]"
+)
+ {
     akruti::Circle c{{0, 0}, 1.0f};
     gati::RigidBody body(c, {.position = {0, 10}, .velocity = {0, -5}, .mass = 2.0f});
 

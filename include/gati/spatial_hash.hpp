@@ -4,7 +4,5 @@
 #include <cstdint>
 
 namespace gati {
-
-using SpatialHash = akruti::SpatialHash<std::uint32_t, akruti::MortonOrder>;
-
+    using SpatialHash = akruti::SpatialHash<std::uint32_t, akruti::MortonOrder>;
 } // namespace gati

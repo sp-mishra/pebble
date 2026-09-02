@@ -1037,7 +1037,7 @@ namespace profiler {
                 };
             }
 
-            auto out = glz::write<glz::opts{}>(payload);
+            auto out = glz::write < glz::opts{} > (payload);
             return out ? *out : "{}";
         }
 
@@ -1057,7 +1057,7 @@ namespace profiler {
                 });
             }
 
-            auto out = glz::write<glz::opts{.prettify = true}>(trace);
+            auto out = glz::write < glz::opts{.prettify = true} > (trace);
             return out ? *out : "{\"traceEvents\":[]}";
         }
     } // namespace internal
@@ -1401,18 +1401,18 @@ namespace profiler {
         const auto baseline_median = static_cast<double>(baseline.median().count());
         const auto candidate_median = static_cast<double>(candidate.median().count());
         const auto median_delta_percent = baseline_median == 0.0
-            ? 0.0
-            : ((candidate_median / baseline_median) - 1.0) * 100.0;
+                                              ? 0.0
+                                              : ((candidate_median / baseline_median) - 1.0) * 100.0;
         const auto baseline_cv = baseline.coefficient_of_variation();
         const auto candidate_cv = candidate.coefficient_of_variation();
         constexpr double unstable_cv = 0.10;
         const bool unstable = std::max(baseline_cv, candidate_cv) >= unstable_cv;
         const auto conclusion = unstable
-            ? std::format(
-                "Statistical Test: p={:.4f} (advisory; sample stability is low)\n"
-                "Verdict: Measurement unstable; use the median delta and rerun under Release/RelWithDebInfo.\n",
-                comparison.p_value)
-            : format_comparison(comparison);
+                                    ? std::format(
+                                        "Statistical Test: p={:.4f} (advisory; sample stability is low)\n"
+                                        "Verdict: Measurement unstable; use the median delta and rerun under Release/RelWithDebInfo.\n",
+                                        comparison.p_value)
+                                    : format_comparison(comparison);
 
         return std::format(
             "Benchmark: {}\n"

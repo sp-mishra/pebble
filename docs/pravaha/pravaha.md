@@ -1,7 +1,7 @@
 # Pravaha: Task-Graph Orchestration Engine (C++23)
 
-**Current State:** High-performance, header-only, modern C++23 task-graph framework supporting single-threaded (
-InlineBackend), multi-threaded (JThreadBackend), and coroutine-based execution. Optimized with SmallVector for reduced
+**Current State:** High-performance, header-only, modern C++23 task-graph framework supporting single-threaded
+(InlineBackend), multi-threaded (JThreadBackend), and coroutine-based execution. Optimized with SmallVector for reduced
 allocations and unordered_map→map for memory efficiency.
 
 ---
@@ -34,63 +34,59 @@ allocations and unordered_map→map for memory efficiency.
 
 ## Dependency Boundary
 
-`#include "pravaha/pravaha.hpp"` is the task-graph core. It does not include Lithe.
-It uses the small, header-only Vākya structural layer only for the existing textual
-task-DSl identity representation; it does not pull compiler passes, code generation,
-JIT runtime, or GPU backends.
+`#include "pravaha/pravaha.hpp"` is the task-graph core. It does not include Lithe. It uses the small, header-only Vākya
+structural layer only for the existing textual task-DSl identity representation; it does not pull compiler passes, code
+generation, JIT runtime, or GPU backends.
 
-`#include "pravaha/compute.hpp"` opts into fused numerical execution. Its expression
-type is a Vākya tree, so host SIMD and Metal consume the same lightweight form without
-a compiler dependency. A caller already using Lithe can pass its re-exported Vākya trees
-without conversion, but Lithe optimisation is caller-owned.
+`#include "pravaha/compute.hpp"` opts into fused numerical execution. Its expression type is a Vākya tree, so host SIMD
+and Metal consume the same lightweight form without a compiler dependency. A caller already using Lithe can pass its
+re-exported Vākya trees without conversion, but Lithe optimisation is caller-owned.
 
-`#include "pravaha/adapters/lithe_runtime.hpp"` is an optional downstream Lithe
-add-on. It is always safe to include: without `edsl/lithe_runtime.hpp` on the include
-path, `pravaha::adapters::lithe_runtime::available` is `false` and no Lithe symbols are
-declared. With Lithe present it provides fuel, GC-observer, and native-FFI task adapters.
+`#include "pravaha/adapters/lithe_runtime.hpp"` is an optional downstream Lithe add-on. It is always safe to include:
+without `edsl/lithe_runtime.hpp` on the include path, `pravaha::adapters::lithe_runtime::available` is `false` and no
+Lithe symbols are declared. With Lithe present it provides fuel, GC-observer, and native-FFI task adapters.
 
-`#include "pravaha/backends/vulkan_gpu.hpp"` is likewise an optional downstream
-Lithe/Vulkan add-on. Without both Lithe Vulkan headers it exposes only
-`pravaha::backends::vulkan::available == false`. Core, SIMD, and Metal remain usable
-without either optional integration. This keeps Pebble below Lithe in the dependency
-graph while retaining a source-compatible add-on seam for the future Lithe repository.
+`#include "pravaha/backends/vulkan_gpu.hpp"` is likewise an optional downstream Lithe/Vulkan add-on. Without both Lithe
+Vulkan headers it exposes only
+`pravaha::backends::vulkan::available == false`. Core, SIMD, and Metal remain usable without either optional
+integration. This keeps Pebble below Lithe in the dependency graph while retaining a source-compatible add-on seam for
+the future Lithe repository.
 
 ### CMake consumption
 
-When Pebble is added as a subdirectory, downstream code should depend on the
-header-only component rather than copying include paths:
+When Pebble is added as a subdirectory, downstream code should depend on the header-only component rather than copying
+include paths:
 
 ```cmake
 add_subdirectory(path/to/pebble)
 target_link_libraries(my_lithe_or_application PRIVATE pebble::pravaha)
 ```
 
-Pravaha requires C++23. Pebble selects C++26 on macOS toolchains that support it
-and otherwise retains the C++23 baseline, so downstream projects can use newer
-language features without raising Pravaha's minimum requirement.
+Pravaha requires C++23. Pebble selects C++26 on macOS toolchains that support it and otherwise retains the C++23
+baseline, so downstream projects can use newer language features without raising Pravaha's minimum requirement.
 
 ---
 
 ## Algorithms Used
 
-| Concern | Algorithm | Where |
-|---|---|---|
-| Graph validation | Cycle detection + topological sort over TaskIR | `pravaha.hpp` |
-| Scheduling (default) | Priority ready-queue (High > Normal > Low) | `pravaha.hpp` |
-| Scheduling (DAG) | Critical-path / longest-remaining-path scheduling | `schedulers/critical_path_scheduler.hpp` |
-| Scheduling (parallel) | Work-stealing (per-worker deques + victim steal) | `schedulers/work_stealing_scheduler.hpp` |
-| Scheduling (affinity) | Locality/NUMA hint routing | `schedulers/locality_scheduler.hpp` |
-| Scheduling (GPU) | GPU-batch dispatch queue | `schedulers/gpu_scheduler.hpp` |
-| Async model | P2300-style sender/receiver combinators | `execution.hpp` |
-| Join policies | AllOrNothing, CollectAll, AnySuccess, Quorum(k) | `pravaha.hpp` |
-| Cancellation | Cooperative token/source/scope + coroutine points | `backends/coroutine.hpp` |
-| Parallel primitives | lazy_parallel_for / reduce / transform; eager parallel_reduce | `pravaha.hpp` |
-| SIMD backend | Fused element-wise via Google Highway (static dispatch) | `backends/host_simd.hpp` |
-| GPU backend (Metal) | MSL emit + Kosha PSO cache; threadgroup-barrier reduction tree | `backends/metal_gpu.hpp` |
-| GPU backend (Vulkan) | Direct SPIR-V emit + workgroup shared-mem reduction; Kahan `sum` | `backends/vulkan_gpu.hpp` |
-| Backend routing | Compile-time type filter + runtime cost race (`priority × 2³² + cost`) | `pravaha_hetero.hpp` |
-| Kernel dedup | Vākya `structural_hash` → shared cache key | `compute.hpp` |
-| Parallel reverse-mode AD | Wave-parallel backprop over Sutra DAG on JThreadBackend | `sutra/pravaha_ext.hpp` |
+| Concern                  | Algorithm                                                              | Where                                    |
+|--------------------------|------------------------------------------------------------------------|------------------------------------------|
+| Graph validation         | Cycle detection + topological sort over TaskIR                         | `pravaha.hpp`                            |
+| Scheduling (default)     | Priority ready-queue (High > Normal > Low)                             | `pravaha.hpp`                            |
+| Scheduling (DAG)         | Critical-path / longest-remaining-path scheduling                      | `schedulers/critical_path_scheduler.hpp` |
+| Scheduling (parallel)    | Work-stealing (per-worker deques + victim steal)                       | `schedulers/work_stealing_scheduler.hpp` |
+| Scheduling (affinity)    | Locality/NUMA hint routing                                             | `schedulers/locality_scheduler.hpp`      |
+| Scheduling (GPU)         | GPU-batch dispatch queue                                               | `schedulers/gpu_scheduler.hpp`           |
+| Async model              | P2300-style sender/receiver combinators                                | `execution.hpp`                          |
+| Join policies            | AllOrNothing, CollectAll, AnySuccess, Quorum(k)                        | `pravaha.hpp`                            |
+| Cancellation             | Cooperative token/source/scope + coroutine points                      | `backends/coroutine.hpp`                 |
+| Parallel primitives      | lazy_parallel_for / reduce / transform; eager parallel_reduce          | `pravaha.hpp`                            |
+| SIMD backend             | Fused element-wise via Google Highway (static dispatch)                | `backends/host_simd.hpp`                 |
+| GPU backend (Metal)      | MSL emit + Kosha PSO cache; threadgroup-barrier reduction tree         | `backends/metal_gpu.hpp`                 |
+| GPU backend (Vulkan)     | Direct SPIR-V emit + workgroup shared-mem reduction; Kahan `sum`       | `backends/vulkan_gpu.hpp`                |
+| Backend routing          | Compile-time type filter + runtime cost race (`priority × 2³² + cost`) | `pravaha_hetero.hpp`                     |
+| Kernel dedup             | Vākya `structural_hash` → shared cache key                             | `compute.hpp`                            |
+| Parallel reverse-mode AD | Wave-parallel backprop over Sutra DAG on JThreadBackend                | `sutra/pravaha_ext.hpp`                  |
 
 ---
 
@@ -572,8 +568,8 @@ struct CancellationToken {
 ```
 
 Cancellation is **cooperative**: tasks must explicitly check `stop_requested()` or hit a cancellation point.
-`CoroutineBackend::request_stop()` additionally guarantees that frames already marked ready but not yet
-resumed are canceled rather than resumed, so a `mark_ready` followed by `request_stop` never re-enters the coroutine.
+`CoroutineBackend::request_stop()` additionally guarantees that frames already marked ready but not yet resumed are
+canceled rather than resumed, so a `mark_ready` followed by `request_stop` never re-enters the coroutine.
 
 ### Cancellation Points
 
@@ -613,8 +609,8 @@ if (token && token->stop_requested()) {
 
 ### Op Support Matrix
 
-| Op                                                 | `lower_to_mir` (JIT)                 | `lower_to_pravaha_ir`     | Notes                                                                                                                                                  |
-|----------------------------------------------------|--------------------------------------|---------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Op                                                 | `lower_to_mir` (JIT)                  | `lower_to_pravaha_ir`      | Notes                                                                                                                                                  |
+|----------------------------------------------------|---------------------------------------|----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Arithmetic (`add` `sub` `mul` `div` `neg` `mod`)   | ✅ native MIR opcodes                 | ✅ lambda                  | Directly mapped                                                                                                                                        |
 | Comparisons (`eq` `ne` `lt` `le` `gt` `ge`)        | ✅ `fcmp_*`                           | ✅ lambda                  |                                                                                                                                                        |
 | Logical (`and_` `or_` `not_`)                      | ✅ `fcmp_*`                           | ✅ lambda                  |                                                                                                                                                        |
@@ -639,14 +635,12 @@ result GPR → gpr_to_fp (FP preg)
 ```
 
 Bridge functions (`plugin_bridge_1` … `plugin_bridge_8`) adapt
-`double(*)(const double*, uint8_t)` to the `int64_t(int64_t, ...)` ABI
-expected by the linker indirect_call mechanism.
+`double(*)(const double*, uint8_t)` to the `int64_t(int64_t, ...)` ABI expected by the linker indirect_call mechanism.
 
 ### `op::seq_` Lowering
 
-`seq_(side_effect, value)`: post-order traversal guarantees the side_effect
-node is evaluated before the parent. The `seq_` node simply forwards child[1]'s
-register/slot — zero overhead in both MIR and Pravaha IR.
+`seq_(side_effect, value)`: post-order traversal guarantees the side_effect node is evaluated before the parent. The
+`seq_` node simply forwards child[1]'s register/slot — zero overhead in both MIR and Pravaha IR.
 
 ### `op::sum_` Lowering
 
@@ -657,17 +651,15 @@ In Pravaha IR: a single compute lambda accumulates all child slots.
 
 ### Windowed MIR Constant Folding
 
-`windowed_mir_fold` walks post-order and attempts to constant-fold bounded
-subgraphs via the MIR peephole pipeline. Plugin ops with `eval_fn` (including
-`pow`, `sin`, `cos`, etc.) are now included in foldable windows, enabling
-expressions like `sin(π/2)` to fold to `1.0` at compile time when all inputs
-are constants.
+`windowed_mir_fold` walks post-order and attempts to constant-fold bounded subgraphs via the MIR peephole pipeline.
+Plugin ops with `eval_fn` (including
+`pow`, `sin`, `cos`, etc.) are now included in foldable windows, enabling expressions like `sin(π/2)` to fold to `1.0`
+at compile time when all inputs are constants.
 
 ### Stateful Op Routing
 
-Any plugin op with `effect_kind::stateful` in its `effect_mask_` bypasses JIT
-and Pravaha IR lowering and is routed to the scalar interpreter. This preserves
-host-side execution context semantics for ops with observable side effects.
+Any plugin op with `effect_kind::stateful` in its `effect_mask_` bypasses JIT and Pravaha IR lowering and is routed to
+the scalar interpreter. This preserves host-side execution context semantics for ops with observable side effects.
 
 ---
 
@@ -683,10 +675,9 @@ host-side execution context semantics for ops with observable side effects.
 
 ## Parallel Numeric Differentiation — `grad_parallel` and `build_backprop_dag`
 
-Sutra's `context::grad()` builds a symbolic formula DAG suitable for further
-differentiation and compilation. `context::grad_parallel()` is a complementary
-entry point that performs reverse-mode automatic differentiation numerically,
-using `JThreadBackend` for wave-parallel backprop. It returns a `lit_f64`
+Sutra's `context::grad()` builds a symbolic formula DAG suitable for further differentiation and compilation.
+`context::grad_parallel()` is a complementary entry point that performs reverse-mode automatic differentiation
+numerically, using `JThreadBackend` for wave-parallel backprop. It returns a `lit_f64`
 formula_ref containing the computed scalar gradient.
 
 ### When to use each
@@ -717,8 +708,8 @@ formula_ref context::grad_parallel(
     const std::unordered_map<symbol_id, double>& env);
 ```
 
-**env** maps `symbol_id → double` for all parameters and variables referenced
-by `f`. Use `ctx.intern("name")` to obtain `symbol_id` values.
+**env** maps `symbol_id → double` for all parameters and variables referenced by `f`. Use `ctx.intern("name")` to obtain
+`symbol_id` values.
 
 **Example:**
 
@@ -749,10 +740,9 @@ double grad_val = ctx.owned_store().at(df_dx.root).lit.f64;
     - Process waves from root to leaves (highest depth → 0).
     - Per wave: submit each node as a `TaskCommand` to `JThreadBackend`; block on
       `std::latch` until all tasks in the wave complete.
-    - Each task loads the parent adjoint atomically, calls `desc->diff_rule()` to get
-      the symbolic partial, evaluates it numerically via `eval_tree(..., fwd_vals)`,
-      and accumulates `parent_adj * partial_val` into the child's `adj[]` slot using
-      a CAS loop.
+    - Each task loads the parent adjoint atomically, calls `desc->diff_rule()` to get the symbolic partial, evaluates it
+      numerically via `eval_tree(..., fwd_vals)`, and accumulates `parent_adj * partial_val` into the child's `adj[]`
+      slot using a CAS loop.
 5. **Extract** `adj[target_node]` as the final gradient scalar.
 
 ### `build_backprop_dag()` — structured artifact API
@@ -777,14 +767,14 @@ Returns a `backprop_artifact` containing:
 - **`root`** — root node_index (seed adjoint here to `1.0`).
 - **`max_node_idx`** — size the adjoint accumulator array to `max_node_idx + 1`.
 
-This is useful when you need the structured wave grouping for custom execution
-strategies (e.g. GPU dispatch, profiling, serialization) rather than the
+This is useful when you need the structured wave grouping for custom execution strategies (e.g. GPU dispatch, profiling,
+serialization) rather than the
 `JThreadBackend`-based dispatch embedded in `grad_parallel()`.
 
 ### Thread safety
 
-- `grad_parallel()` owns its `JThreadBackend` and atomic accumulator array.
-  It is safe to call concurrently on different `context` objects.
+- `grad_parallel()` owns its `JThreadBackend` and atomic accumulator array. It is safe to call concurrently on different
+  `context` objects.
 - Concurrent calls on the **same** `context` are not safe because `grad_parallel()`
   modifies `owned_store_` (migrating formulas, allocating the result node).
 
@@ -820,8 +810,8 @@ ctest --output-on-failure
   `backend_set`
 - `include/pravaha/backends/host_simd.hpp` — CPU SIMD backend (Highway) + `HostSimdBackend` wrapper; included by
   `pravaha_hetero.hpp`
-- `include/pravaha/backends/metal_gpu.hpp` — Metal GPU backend + MSL emitter + Kosha cache + `MetalGpuBackend` wrapper (
-  priority=200); include explicitly for GPU dispatch on Apple
+- `include/pravaha/backends/metal_gpu.hpp` — Metal GPU backend + MSL emitter + Kosha cache + `MetalGpuBackend` wrapper
+  (priority=200); include explicitly for GPU dispatch on Apple
 - `include/pravaha/backends/vulkan_gpu.hpp` — Vulkan GPU backend + direct SPIR-V emitter (strategy 3b, no glslang) +
   Kosha cache + `VulkanGpuBackend` wrapper (priority=150); reuses Lithe `vk_build_pipeline` /
   `vk_alloc_pools_and_wrap` / `vulkan_resource::bind_storage_buffers` + `dispatch_sync` for
@@ -1072,9 +1062,8 @@ compute_domain route(const buffer_descriptor& desc, const routing_policy& policy
 **File:** `include/pravaha/pravaha_metal.hpp` (new — includes `pravaha_hetero.hpp`)
 **Impl TU:** None — MLX (`dependencies/mlx/mlx/backend/metal/device.cpp`) already defines
 `NS/CA/MTL_PRIVATE_IMPLEMENTATION`. Adding a second definition causes 1927 duplicate symbol linker errors; do NOT
-re-define these macros.
-**Platform:** macOS only for device/dispatch. MSL emitter is platform-independent.
-**CMake guard:** `HAS_METAL_CPP` — detected from `dependencies/metal-cpp/Metal/Metal.hpp`.
+re-define these macros. **Platform:** macOS only for device/dispatch. MSL emitter is platform-independent. **CMake
+guard:** `HAS_METAL_CPP` — detected from `dependencies/metal-cpp/Metal/Metal.hpp`.
 
 #### MSL Emitter (`namespace pravaha::backends::metal::msl`)
 
@@ -1135,19 +1124,16 @@ struct metal_gpu_backend {
 };
 ```
 
-**Memory rule:** every metal-cpp `new*` returns +1 retain; release explicitly. The ordinary dispatch API releases
-its transient buffers per call; PSOs are released by the caller (or by the Part-4 cache on eviction).
+**Memory rule:** every metal-cpp `new*` returns +1 retain; release explicitly. The ordinary dispatch API releases its
+transient buffers per call; PSOs are released by the caller (or by the Part-4 cache on eviction).
 
-For repeated work, `metal_buffer_set<T, K>` owns `K` shared input buffers plus
-one output buffer and grows only when capacity is insufficient. Upload, submit,
-wait, and download are separate steps. `dispatch_multi_async` returns a
-move-only `metal_submission`; call `wait()` before reusing or destroying its
-buffer set. This is opt-in, so one-shot dispatches retain their small API and
-pay no persistent-buffer cost.
+For repeated work, `metal_buffer_set<T, K>` owns `K` shared input buffers plus one output buffer and grows only when
+capacity is insufficient. Upload, submit, wait, and download are separate steps. `dispatch_multi_async` returns a
+move-only `metal_submission`; call `wait()` before reusing or destroying its buffer set. This is opt-in, so one-shot
+dispatches retain their small API and pay no persistent-buffer cost.
 
-`dispatch_device_multi_async` is the lower-level no-copy form: it binds
-caller-owned Metal buffers directly and is intended for an upper layer that
-owns device-resident values. It does not provide implicit upload or download.
+`dispatch_device_multi_async` is the lower-level no-copy form: it binds caller-owned Metal buffers directly and is
+intended for an upper layer that owns device-resident values. It does not provide implicit upload or download.
 
 **Zero-copy path:** `newBuffer(ptr, bytes, StorageModeShared, nullptr)` wraps host pointer directly — valid on Apple
 unified memory when pointer is 4 KB page-aligned. Fallback: `newBuffer(bytes) + memcpy` in/out.
@@ -1239,8 +1225,8 @@ concept ComputeBackend = requires(B be, std::size_t hash,
 **Routing order per call:**
 
 1. `routing_policy::optimize_before_codegen` → run O3 canonicalization at the executor entry (see *Canonicalization
-   boundary* below). The default preset is `lithe::preset::O3`; set `optimize_before_codegen = false` to bypass (
-   identity pass, zero overhead).
+   boundary* below). The default preset is `lithe::preset::O3`; set `optimize_before_codegen = false` to bypass
+   (identity pass, zero overhead).
 2. `routing_policy::force == host_simd` → short-circuit to SIMD without entering cost race.
 3. `execution_context` preferred override (hash lookup, `host_simd` domain only — backward compat).
 4. **Cost race**: for each backend, `backend_score()` / `backend_reduce_score()` = `priority × 2³²+ cost`. Zero =
@@ -1411,8 +1397,8 @@ No `foreach_target.h` — matches existing repo convention.
 
 ### `namespace pravaha::distributed` — Topology Descriptor Stubs
 
-Pure data layout types. No network calls. Distributed runtime is a future separate edition.
-Defined in `pravaha_hetero.hpp` alongside the hetero overlay.
+Pure data layout types. No network calls. Distributed runtime is a future separate edition. Defined in
+`pravaha_hetero.hpp` alongside the hetero overlay.
 
 ```cpp
 namespace pravaha::distributed {
@@ -1452,8 +1438,8 @@ struct rpc_task_descriptor {
 
 ### `compute_view<T>::operator[]` (C++23 multidimensional subscript)
 
-`operator[](Sel...)` is the spec-required name for multi-dimensional view slicing.
-Delegates to `slice()` — real offset+stride math (Part D). A `range{begin,end,step}`
+`operator[](Sel...)` is the spec-required name for multi-dimensional view slicing. Delegates to `slice()` — real
+offset+stride math (Part D). A `range{begin,end,step}`
 selects a sub-range; a bare integer collapses that dimension.
 
 ```cpp
@@ -1484,38 +1470,36 @@ auto r   = reduce_sum(x * x);        // reduction wrapper (Part E)
 // executor.reduce<reduce_op::sum, float>(reduce_child(r), src, ctx) → Outcome<float>
 ```
 
-- **`lit(v)`** — typed constant leaf (`lit_tag`). Its value is folded into the
-  structural hash via an ADL `structural_payload_hash` hook (see `pravaha_expr.hpp`), so
+- **`lit(v)`** — typed constant leaf (`lit_tag`). Its value is folded into the structural hash via an ADL
+  `structural_payload_hash` hook (see `pravaha_expr.hpp`), so
   `lit(1.0f)` and `lit(2.0f)` compile to distinct cached kernels.
 - **`input<N>` / `var`** — indexed input leaves; `var == input<0>`. `input_slot_count<E>()`
   derives the compile-time buffer count `K`; backends bind one buffer per slot.
 - **Tag registration** — All Pravaha tags (`input_tag<N>`, `lit_tag`, math tags, `reduce_tag`)
-  are registered with Lithe via `lithe::emit::tag_descriptor` specializations
-  (extension-band ids ≥ 1000) in `pravaha_hetero.hpp`. This makes them visible to
+  are registered with Lithe via `lithe::emit::tag_descriptor` specializations (extension-band ids ≥ 1000) in
+  `pravaha_hetero.hpp`. This makes them visible to
   `lithe::emit::structural_hash` and `lithe::tree` compile-time folds. See
   [Tag Metadata & Extensibility](../../edsl/lithe.md#tag-metadata--extensibility).
-- **Math free functions** — `sqrt/exp/log/sin/cos/abs` vectorize via Highway contrib
-  (`hn::Sqrt/Exp/Log/Sin/Cos/Abs`) and emit MSL builtins; `neg`, `sq` also provided.
-- **`reduce_sum/reduce_max/reduce_min(e)`** — wrap an element-wise child into a
-  reduction. SIMD folds lane partials then `hn::ReduceSum/Max/Min`; the remainder for
+- **Math free functions** — `sqrt/exp/log/sin/cos/abs` vectorize via Highway contrib (`hn::Sqrt/Exp/Log/Sin/Cos/Abs`)
+  and emit MSL builtins; `neg`, `sq` also provided.
+- **`reduce_sum/reduce_max/reduce_min(e)`** — wrap an element-wise child into a reduction. SIMD folds lane partials then
+  `hn::ReduceSum/Max/Min`; the remainder for
   `sum` uses `hn::LoadN` masked partial-load (Highway tail masking) while `max`/`min`
-  use a scalar tail to avoid identity-value pollution. GPU emits a two-stage threadgroup
-  reduction with `threadgroup_barrier` (the only barrier in the overlay). Routed by
+  use a scalar tail to avoid identity-value pollution. GPU emits a two-stage threadgroup reduction with
+  `threadgroup_barrier` (the only barrier in the overlay). Routed by
   `routing_policy::reduce_gpu_threshold_bytes` (default 1 MB). Multi-input reduce (e.g.
   `reduce_sum(x0 * x1)` for dot products) routes to `run_reduce_simd_multi<Op,T,K>` /
   `execute_reduction_multi` using the same `sum_accum_t` wide accumulator.
-- **Sum accumulation is wide by design.** A `sum` reduction over an `f32` buffer
-  accumulates the running total in `double`, not `float` — naive `f32` accumulation
-  over ~1e8 terms loses everything below the running magnitude (error ≫ 1e-4). The
-  reduction still *returns* the element type `T`; only the internal accumulator
-  promotes (`sum_accum_t<Op,T>` = `double` iff `Op==sum && T==float`, else `T`).
-  `max`/`min` never lose precision, so they accumulate in native `T`. This is applied
-  at every fold point: the SIMD vector body flushes each chunk's horizontal into the
-  wide scalar so the `f32` partial never grows large; the GPU host-side fold of the
-  ~N/256 threadgroup partials runs in `double`; and — since Metal has no `f64` — the
-  GPU threadgroup reduction tree uses **Kahan compensation** for `sum` (the widest
-  accuracy available on-device). No caller-side `N` reduction is needed; large-N
-  reductions stay accurate internally.
+- **Sum accumulation is wide by design.** A `sum` reduction over an `f32` buffer accumulates the running total in
+  `double`, not `float` — naive `f32` accumulation over ~1e8 terms loses everything below the running magnitude (error ≫
+  1e-4). The reduction still *returns* the element type `T`; only the internal accumulator promotes
+  (`sum_accum_t<Op,T>` = `double` iff `Op==sum && T==float`, else `T`).
+  `max`/`min` never lose precision, so they accumulate in native `T`. This is applied at every fold point: the SIMD
+  vector body flushes each chunk's horizontal into the wide scalar so the `f32` partial never grows large; the GPU
+  host-side fold of the
+  ~N/256 threadgroup partials runs in `double`; and — since Metal has no `f64` — the GPU threadgroup reduction tree uses
+  **Kahan compensation** for `sum` (the widest accuracy available on-device). No caller-side `N` reduction is needed;
+  large-N reductions stay accurate internally.
 
 ---
 
@@ -1585,9 +1569,8 @@ sched.init_from_dag(ir);  // one-time setup
 
 ### `profiling_scheduler_policy` Overlay
 
-`pravaha_profiler.hpp` provides `profiling_scheduler_policy<Inner>` — a transparent
-wrapper that records per-task latencies via NADI and delegates all scheduling decisions
-to the inner policy:
+`pravaha_profiler.hpp` provides `profiling_scheduler_policy<Inner>` — a transparent wrapper that records per-task
+latencies via NADI and delegates all scheduling decisions to the inner policy:
 
 ```cpp
 profiling_scheduler_policy<priority_scheduler_policy> instrumented;
@@ -1598,18 +1581,18 @@ profiling_scheduler_policy<priority_scheduler_policy> instrumented;
 
 ## Lithe Execution Analysis Handoff (`lithe::exec`)
 
-Pravaha receives parallel and GPU plans that have already been gated by Lithe's automatic execution
-analysis layer (`lithe::exec`, opt-in via `include/edsl/lithe_exec/lithe_exec.hpp`).
+Pravaha receives parallel and GPU plans that have already been gated by Lithe's automatic execution analysis layer
+(`lithe::exec`, opt-in via `include/edsl/lithe_exec/lithe_exec.hpp`).
 
 **Handoff protocol:**
 
 - Legality and profitability decisions are made upstream in `lithe::exec::auto_execution_pass`.
 - Only plans with `execution_kind::threaded` or `execution_kind::gpu` and `analysis_outcome::proven_legal`
   (or `unknown` with runtime guards passing) are lowered to `hl::task_decomposition_plan` and forwarded.
-- Scalar fallback plans are emitted by `lithe::exec` for any `analysis_outcome::unknown` region;
-  Pravaha executes the fast path and may report fallback telemetry when a guard fails at runtime.
-- Guard predicates (no_alias, aligned, min_trip_count, device_available, device_resident) are evaluated
-  before dispatch; failing guards route to the scalar fallback plan.
+- Scalar fallback plans are emitted by `lithe::exec` for any `analysis_outcome::unknown` region; Pravaha executes the
+  fast path and may report fallback telemetry when a guard fails at runtime.
+- Guard predicates (no_alias, aligned, min_trip_count, device_available, device_resident) are evaluated before dispatch;
+  failing guards route to the scalar fallback plan.
 - `lithe::intelligence::schedule_bridge` maps the chosen `execution_kind` to a `schedule_policy_id`
   for Pravaha's scheduler selection.
 
@@ -1623,7 +1606,10 @@ analysis layer (`lithe::exec`, opt-in via `include/edsl/lithe_exec/lithe_exec.hp
 ## Persistent Thread Pool & Real-Time Simulation Patterns
 
 ### The Zero-Overhead Physics Loop Pattern
-Instantiating thread pools per frame in real-time 60 FPS simulations causes severe OS context-switching overhead and kernel thread creation latency. In `barnes_hut.hpp` and `pebble_verse.cpp`, Pravaha uses a **static persistent thread pool holder** to amortize thread initialization to a single $O(1)$ startup cost:
+
+Instantiating thread pools per frame in real-time 60 FPS simulations causes severe OS context-switching overhead and
+kernel thread creation latency. In `barnes_hut.hpp` and `pebble_verse.cpp`, Pravaha uses a **static persistent thread
+pool holder** to amortize thread initialization to a single $O (1)$ startup cost:
 
 ```cpp
 #include "pravaha/pravaha.hpp"
@@ -1647,6 +1633,7 @@ inline void parallel_physics_sweep(Range&& range, Func&& fn, std::size_t chunk_s
 ## End-to-End Master Execution Examples
 
 ### 1. Multi-Stage Deterministic Physics Pipeline DAG
+
 ```cpp
 #include "pravaha/pravaha.hpp"
 #include <iostream>
@@ -1694,6 +1681,7 @@ int main() {
 ```
 
 ### 2. High-Throughput Parallel Map-Reduce
+
 ```cpp
 #include "pravaha/pravaha.hpp"
 #include <iostream>

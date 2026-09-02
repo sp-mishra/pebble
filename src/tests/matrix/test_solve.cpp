@@ -8,7 +8,12 @@ using namespace ga;
 // test_solve.cpp — LU/Cholesky/QR/LDLT factorizations + direct solve
 // ============================================================================
 
-TEST_CASE("LU factorization: 3×3", "[solve][lu]") {
+TEST_CASE (
+"LU factorization: 3×3"
+,
+"[solve][lu]"
+)
+ {
     Matrix<double> A(3, 3);
     A(0,0)=2; A(0,1)=1; A(0,2)=-1;
     A(1,0)=-3; A(1,1)=-1; A(1,2)=2;
@@ -22,7 +27,12 @@ TEST_CASE("LU factorization: 3×3", "[solve][lu]") {
     CHECK(x[2] == Catch::Approx(-1.0).epsilon(1e-8));
 }
 
-TEST_CASE("LU factorization: identity system", "[solve][lu]") {
+TEST_CASE (
+"LU factorization: identity system"
+,
+"[solve][lu]"
+)
+ {
     constexpr std::size_t N = 4;
     auto A = Matrix<float>::identity(N);
     Vector<float> b(N); for (std::size_t i=0;i<N;++i) b[i]=float(i+1);
@@ -30,7 +40,12 @@ TEST_CASE("LU factorization: identity system", "[solve][lu]") {
     for (std::size_t i=0;i<N;++i) CHECK(x[i] == Catch::Approx(float(i+1)).epsilon(1e-5f));
 }
 
-TEST_CASE("LU: forward and back solve", "[solve][lu][triangular]") {
+TEST_CASE (
+"LU: forward and back solve"
+,
+"[solve][lu][triangular]"
+)
+ {
     // lower triangular
     Matrix<float> L(3, 3, 0.f);
     L(0,0)=1; L(1,0)=2; L(1,1)=1; L(2,0)=3; L(2,1)=4; L(2,2)=1;
@@ -41,7 +56,12 @@ TEST_CASE("LU: forward and back solve", "[solve][lu][triangular]") {
     CHECK(x[2] == Catch::Approx(-1.f).epsilon(1e-5f));
 }
 
-TEST_CASE("Cholesky: SPD 3×3", "[solve][cholesky]") {
+TEST_CASE (
+"Cholesky: SPD 3×3"
+,
+"[solve][cholesky]"
+)
+ {
     // A = [[4,2,2],[2,10,4],[2,4,11]]
     Matrix<double> A(3, 3);
     A(0,0)=4; A(0,1)=2; A(0,2)=2;
@@ -57,7 +77,12 @@ TEST_CASE("Cholesky: SPD 3×3", "[solve][cholesky]") {
     }
 }
 
-TEST_CASE("QR factorization: overdetermined system (least squares)", "[solve][qr]") {
+TEST_CASE (
+"QR factorization: overdetermined system (least squares)"
+,
+"[solve][qr]"
+)
+ {
     Matrix<double> A(4, 2);
     A(0,0)=1; A(0,1)=1;
     A(1,0)=1; A(1,1)=2;
@@ -76,7 +101,12 @@ TEST_CASE("QR factorization: overdetermined system (least squares)", "[solve][qr
     CHECK(std::sqrt(res) < 3.5);  // least-squares residual ≈ 2.9 for this data
 }
 
-TEST_CASE("LDLT: 3×3 indefinite-friendly SPD", "[solve][ldlt]") {
+TEST_CASE (
+"LDLT: 3×3 indefinite-friendly SPD"
+,
+"[solve][ldlt]"
+)
+ {
     // Same SPD matrix as Cholesky test
     Matrix<double> A(3, 3);
     A(0,0)=4; A(0,1)=2; A(0,2)=0;
@@ -91,7 +121,12 @@ TEST_CASE("LDLT: 3×3 indefinite-friendly SPD", "[solve][ldlt]") {
     }
 }
 
-TEST_CASE("solve dispatch: default uses LU", "[solve][dispatch]") {
+TEST_CASE (
+"solve dispatch: default uses LU"
+,
+"[solve][dispatch]"
+)
+ {
     Matrix<double> A(2, 2);
     A(0,0)=3; A(0,1)=1;
     A(1,0)=1; A(1,1)=2;

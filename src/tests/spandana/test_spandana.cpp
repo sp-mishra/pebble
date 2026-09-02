@@ -2,7 +2,12 @@
 #include "spandana/spandana.hpp"
 #include <cmath>
 
-TEST_CASE("Spandana: Easing Functions", "[spandana][easing]") {
+TEST_CASE (
+"Spandana: Easing Functions"
+,
+"[spandana][easing]"
+)
+ {
     using namespace pebble::spandana::ease;
 
     REQUIRE(linear(0.0f) == 0.0f);
@@ -16,7 +21,12 @@ TEST_CASE("Spandana: Easing Functions", "[spandana][easing]") {
     REQUIRE(std::abs(out_bounce(1.0f) - 1.0f) < 1e-4f);
 }
 
-TEST_CASE("Spandana: Analytical Spring Damper Stability", "[spandana][spring]") {
+TEST_CASE (
+"Spandana: Analytical Spring Damper Stability"
+,
+"[spandana][spring]"
+)
+ {
     pebble::spandana::AnalyticalSpringDamper spring(180.0f, 12.0f);
 
     float pos = 0.0f;
@@ -34,7 +44,12 @@ TEST_CASE("Spandana: Analytical Spring Damper Stability", "[spandana][spring]") 
     REQUIRE(std::abs(pos - target) < 1.0f);
 }
 
-TEST_CASE("Spandana: TwoBoneIK Reach Solver", "[spandana][ik]") {
+TEST_CASE (
+"Spandana: TwoBoneIK Reach Solver"
+,
+"[spandana][ik]"
+)
+ {
     pebble::spandana::TwoBoneIK ik(10.0f, 10.0f);
 
     pebble::math::vec2 root(0.0f, 0.0f);
@@ -44,7 +59,12 @@ TEST_CASE("Spandana: TwoBoneIK Reach Solver", "[spandana][ik]") {
     REQUIRE(result.reachable);
 }
 
-TEST_CASE("Spandana: Automatic Dependency & Parallelism Inference Timeline", "[spandana][timeline]") {
+TEST_CASE (
+"Spandana: Automatic Dependency & Parallelism Inference Timeline"
+,
+"[spandana][timeline]"
+)
+ {
     using namespace pebble::spandana::edsl;
 
     pebble::spandana::Timeline timeline;
@@ -84,7 +104,12 @@ TEST_CASE("Spandana: Automatic Dependency & Parallelism Inference Timeline", "[s
     REQUIRE(callback_count == 1);
 }
 
-TEST_CASE("Spandana: Camera Shake Trauma Decay", "[spandana][procedural]") {
+TEST_CASE (
+"Spandana: Camera Shake Trauma Decay"
+,
+"[spandana][procedural]"
+)
+ {
     pebble::spandana::ScreenShake2D shake;
 
     shake.add_trauma(0.8f);
@@ -94,7 +119,12 @@ TEST_CASE("Spandana: Camera Shake Trauma Decay", "[spandana][procedural]") {
     REQUIRE(shake.trauma() < 0.8f);
 }
 
-TEST_CASE("Spandana: Spline Path Following and Tangent Orientation", "[spandana][spline]") {
+TEST_CASE (
+"Spandana: Spline Path Following and Tangent Orientation"
+,
+"[spandana][spline]"
+)
+ {
     using namespace pebble::spandana::edsl;
 
     akruti::CubicBezierCurve bezier{
@@ -123,7 +153,12 @@ TEST_CASE("Spandana: Spline Path Following and Tangent Orientation", "[spandana]
     REQUIRE(pos[1] == 0.0f);
 }
 
-TEST_CASE("Spandana: Particle Burst Emitter", "[spandana][particles]") {
+TEST_CASE (
+"Spandana: Particle Burst Emitter"
+,
+"[spandana][particles]"
+)
+ {
     using namespace pebble::spandana::edsl;
 
     pebble::spandana::Timeline timeline;
@@ -140,7 +175,12 @@ TEST_CASE("Spandana: Particle Burst Emitter", "[spandana][particles]") {
     REQUIRE(timeline.is_finished());
 }
 
-TEST_CASE("Spandana: Verlet Secondary Cloth Dynamics", "[spandana][cloth]") {
+TEST_CASE (
+"Spandana: Verlet Secondary Cloth Dynamics"
+,
+"[spandana][cloth]"
+)
+ {
     pebble::spandana::VerletCloth2D cloth(4, 5.0f);
 
     pebble::math::vec2 anchor(0.0f, 100.0f);
@@ -170,12 +210,17 @@ TEST_CASE("Spandana: Verlet Secondary Cloth Dynamics", "[spandana][cloth]") {
 // ============================================================================
 
 namespace {
-struct TestRect {
-    float x = 0.0f, y = 0.0f, w = 0.0f, h = 0.0f;
-};
+    struct TestRect {
+        float x = 0.0f, y = 0.0f, w = 0.0f, h = 0.0f;
+    };
 } // namespace
 
-TEST_CASE("Spandana: RectSpring first step snaps, then converges to target", "[spandana][spring]") {
+TEST_CASE (
+"Spandana: RectSpring first step snaps, then converges to target"
+,
+"[spandana][spring]"
+)
+ {
     using namespace pebble::spandana;
 
     RectSpring<TestRect> spring;
@@ -198,7 +243,12 @@ TEST_CASE("Spandana: RectSpring first step snaps, then converges to target", "[s
     CHECK(r.h == Catch::Approx(50.0f).margin(1.0f));
 }
 
-TEST_CASE("Spandana: AnalyticalSpringDamperN steps components independently", "[spandana][spring]") {
+TEST_CASE (
+"Spandana: AnalyticalSpringDamperN steps components independently"
+,
+"[spandana][spring]"
+)
+ {
     using namespace pebble::spandana;
 
     AnalyticalSpringDamperN<3> spring;

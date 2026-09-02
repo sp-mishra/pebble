@@ -8,7 +8,12 @@
 using prakriti::World;
 using prakriti::Scalar;
 
-TEST_CASE("Prakriti: apply_radial_impulse pushes dynamic particles outward", "[prakriti][impulse]") {
+TEST_CASE (
+"Prakriti: apply_radial_impulse pushes dynamic particles outward"
+,
+"[prakriti][impulse]"
+)
+ {
     World<> world;
     auto& P = world.particles();
 
@@ -26,7 +31,12 @@ TEST_CASE("Prakriti: apply_radial_impulse pushes dynamic particles outward", "[p
     REQUIRE(std::fabs(P.vel_x[down]) < 1e-4f);
 }
 
-TEST_CASE("Prakriti: apply_radial_impulse respects radius cutoff", "[prakriti][impulse]") {
+TEST_CASE (
+"Prakriti: apply_radial_impulse respects radius cutoff"
+,
+"[prakriti][impulse]"
+)
+ {
     World<> world;
     auto& P = world.particles();
     const auto far = P.add({.position = {1000.0f, 0.0f}, .mass = 1.0f});
@@ -38,7 +48,12 @@ TEST_CASE("Prakriti: apply_radial_impulse respects radius cutoff", "[prakriti][i
     REQUIRE(P.vel_y[far] == 0.0f);
 }
 
-TEST_CASE("Prakriti: apply_radial_impulse skips static particles", "[prakriti][impulse]") {
+TEST_CASE (
+"Prakriti: apply_radial_impulse skips static particles"
+,
+"[prakriti][impulse]"
+)
+ {
     World<> world;
     auto& P = world.particles();
     const auto stat = P.add({.position = {5.0f, 0.0f}, .mass = 0.0f}); // mass 0 => static
@@ -50,7 +65,12 @@ TEST_CASE("Prakriti: apply_radial_impulse skips static particles", "[prakriti][i
     REQUIRE(P.vel_y[stat] == 0.0f);
 }
 
-TEST_CASE("Prakriti: apply_radial_impulse falloff — nearer gains more speed", "[prakriti][impulse]") {
+TEST_CASE (
+"Prakriti: apply_radial_impulse falloff — nearer gains more speed"
+,
+"[prakriti][impulse]"
+)
+ {
     World<> world;
     auto& P = world.particles();
     const auto near = P.add({.position = {5.0f, 0.0f}, .mass = 1.0f});

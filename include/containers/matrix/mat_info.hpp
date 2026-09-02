@@ -23,15 +23,14 @@
 #include <type_traits>
 
 namespace ga {
-
     // -----------------------------------------------------------------------
     // MatKind — what representation does the matrix use
     // -----------------------------------------------------------------------
     enum class MatKind : std::uint8_t {
-        Static,    // StaticMatrix<T,R,C>
-        Dense,     // Matrix<T,SP,CP>
-        Sparse,    // CsrMatrix<T> or CooMatrix<T>
-        Diagonal,  // DiaMatrix<T>
+        Static, // StaticMatrix<T,R,C>
+        Dense, // Matrix<T,SP,CP>
+        Sparse, // CsrMatrix<T> or CooMatrix<T>
+        Diagonal, // DiaMatrix<T>
     };
 
     // -----------------------------------------------------------------------
@@ -40,24 +39,24 @@ namespace ga {
     struct MatUsageStats {
         std::uint64_t spmv_count{0};
         std::uint64_t gemm_count{0};
-        float         observed_density{0.f};
-        float         avg_spmv_ns{0.f};
-        float         avg_gemm_ns{0.f};
+        float observed_density{0.f};
+        float avg_spmv_ns{0.f};
+        float avg_gemm_ns{0.f};
     };
 
     // -----------------------------------------------------------------------
     // MatInfo — plain struct returned by ga::inspect()
     // -----------------------------------------------------------------------
     struct MatInfo {
-        MatKind          kind{MatKind::Dense};
-        std::size_t      rows{0}, cols{0};
-        std::size_t      nnz{0};
-        float            density{0.f};
-        std::size_t      storage_bytes{0};
+        MatKind kind{MatKind::Dense};
+        std::size_t rows{0}, cols{0};
+        std::size_t nnz{0};
+        float density{0.f};
+        std::size_t storage_bytes{0};
         std::string_view compute_policy{"DefaultComputationPolicy"};
-        bool             is_symmetric{false};
-        bool             is_spd{false};
-        MatUsageStats    usage{};
+        bool is_symmetric{false};
+        bool is_spd{false};
+        MatUsageStats usage{};
     };
 
     // -----------------------------------------------------------------------
@@ -65,28 +64,28 @@ namespace ga {
     // -----------------------------------------------------------------------
 
     // StaticMatrix<T,R,C>
-    template<typename T, std::size_t R, std::size_t C>
-    [[nodiscard]] constexpr MatInfo inspect(const StaticMatrix<T,R,C>&) noexcept {
+    template <typename T, std::size_t R, std::size_t C>
+    [[nodiscard]] constexpr MatInfo inspect(const StaticMatrix<T, R, C>&) noexcept {
         MatInfo info;
-        info.kind          = MatKind::Static;
-        info.rows          = R;
-        info.cols          = C;
-        info.nnz           = R * C;
-        info.density       = 1.f;
+        info.kind = MatKind::Static;
+        info.rows = R;
+        info.cols = C;
+        info.nnz = R * C;
+        info.density = 1.f;
         info.storage_bytes = R * C * sizeof(T);
         info.compute_policy = "StaticArray";
         return info;
     }
 
     // Matrix<T,SP,CP>
-    template<typename T, typename SP, typename CP>
-    [[nodiscard]] MatInfo inspect(const Matrix<T,SP,CP>& m) noexcept {
+    template <typename T, typename SP, typename CP>
+    [[nodiscard]] MatInfo inspect(const Matrix<T, SP, CP>& m) noexcept {
         MatInfo info;
-        info.kind          = MatKind::Dense;
-        info.rows          = m.rows();
-        info.cols          = m.cols();
-        info.nnz           = m.rows() * m.cols();
-        info.density       = 1.f;
+        info.kind = MatKind::Dense;
+        info.rows = m.rows();
+        info.cols = m.cols();
+        info.nnz = m.rows() * m.cols();
+        info.density = 1.f;
         info.storage_bytes = m.rows() * m.cols() * sizeof(T);
         if constexpr (std::is_same_v<CP, ts::DefaultComputationPolicy>)
             info.compute_policy = "DefaultComputationPolicy";
@@ -96,53 +95,53 @@ namespace ga {
     }
 
     // CsrMatrix<T>
-    template<typename T>
+    template <typename T>
     [[nodiscard]] MatInfo inspect(const CsrMatrix<T>& m) noexcept {
         MatInfo info;
-        info.kind          = MatKind::Sparse;
-        info.rows          = m.nrows;
-        info.cols          = m.ncols;
-        info.nnz           = m.nnz();
-        info.density       = (m.nrows * m.ncols > 0)
-                             ? static_cast<float>(m.nnz()) / static_cast<float>(m.nrows * m.ncols)
-                             : 0.f;
+        info.kind = MatKind::Sparse;
+        info.rows = m.nrows;
+        info.cols = m.ncols;
+        info.nnz = m.nnz();
+        info.density = (m.nrows * m.ncols > 0)
+                           ? static_cast<float>(m.nnz()) / static_cast<float>(m.nrows * m.ncols)
+                           : 0.f;
         info.storage_bytes = m.nnz() * (sizeof(T) + sizeof(std::size_t))
-                           + (m.nrows + 1) * sizeof(std::size_t);
+            + (m.nrows + 1) * sizeof(std::size_t);
         info.compute_policy = "DefaultComputationPolicy";
         return info;
     }
 
     // CooMatrix<T>
-    template<typename T>
+    template <typename T>
     [[nodiscard]] MatInfo inspect(const CooMatrix<T>& m) noexcept {
         MatInfo info;
-        info.kind          = MatKind::Sparse;
-        info.rows          = m.nrows;
-        info.cols          = m.ncols;
-        info.nnz           = m.nnz();
-        info.density       = (m.nrows * m.ncols > 0)
-                             ? static_cast<float>(m.nnz()) / static_cast<float>(m.nrows * m.ncols)
-                             : 0.f;
+        info.kind = MatKind::Sparse;
+        info.rows = m.nrows;
+        info.cols = m.ncols;
+        info.nnz = m.nnz();
+        info.density = (m.nrows * m.ncols > 0)
+                           ? static_cast<float>(m.nnz()) / static_cast<float>(m.nrows * m.ncols)
+                           : 0.f;
         info.storage_bytes = m.nnz() * (sizeof(T) + 2 * sizeof(std::size_t));
         info.compute_policy = "DefaultComputationPolicy";
         return info;
     }
 
     // DiaMatrix<T>
-    template<typename T>
+    template <typename T>
     [[nodiscard]] MatInfo inspect(const DiaMatrix<T>& m) noexcept {
         MatInfo info;
-        info.kind          = MatKind::Diagonal;
-        info.rows          = m.nrows;
-        info.cols          = m.ncols;
+        info.kind = MatKind::Diagonal;
+        info.rows = m.nrows;
+        info.cols = m.ncols;
         // count actual nnz (non-zero diag entries)
         std::size_t nz = 0;
         for (const auto& d : m.diags)
             for (T v : d) if (v != T{0}) ++nz;
-        info.nnz           = nz;
-        info.density       = (m.nrows * m.ncols > 0)
-                             ? static_cast<float>(nz) / static_cast<float>(m.nrows * m.ncols)
-                             : 0.f;
+        info.nnz = nz;
+        info.density = (m.nrows * m.ncols > 0)
+                           ? static_cast<float>(nz) / static_cast<float>(m.nrows * m.ncols)
+                           : 0.f;
         info.storage_bytes = m.offsets.size() * m.nrows * sizeof(T);
         info.compute_policy = "DefaultComputationPolicy";
         return info;
@@ -163,14 +162,16 @@ namespace ga {
             return reg;
         }
 
-        template<typename MatT>
+        template <typename MatT>
         MatId register_mat(MatT* ptr) {
             MatId id = next_id_.fetch_add(1, std::memory_order_relaxed);
             std::lock_guard<std::mutex> lock(mu_);
-            entries_.emplace(id, Entry{ptr,
-                [](void* p) -> MatInfo {
-                    return ga::inspect(*static_cast<MatT*>(p));
-                }});
+            entries_.emplace(id, Entry{
+                                 ptr,
+                                 [](void* p) -> MatInfo {
+                                     return ga::inspect(*static_cast<MatT*>(p));
+                                 }
+                             });
             return id;
         }
 
@@ -186,7 +187,7 @@ namespace ga {
             return it->second.inspect_fn(it->second.ptr);
         }
 
-        template<typename F>
+        template <typename F>
         void for_each(F&& fn) {
             std::lock_guard<std::mutex> lock(mu_);
             for (auto& [id, e] : entries_) {
@@ -195,42 +196,46 @@ namespace ga {
             }
         }
 
-        static void hint(MatId, MatKind) { /* hook for future adaptive policy */ }
+        static void hint(MatId, MatKind) { /* hook for future adaptive policy */
+        }
 
     private:
         struct Entry {
             void* ptr;
             MatInfo (*inspect_fn)(void*);
         };
+
         std::unordered_map<MatId, Entry> entries_;
         std::atomic<MatId> next_id_{0};
         mutable std::mutex mu_;
     };
 #endif // GA_ENABLE_REGISTRY
-
 } // namespace ga
 
 // -----------------------------------------------------------------------
 // std::formatter<ga::MatInfo> — C++23 format support
 // -----------------------------------------------------------------------
-template<>
+template <>
 struct std::formatter<ga::MatInfo> {
     constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
 
-    template<typename FormatCtx>
+    template <typename FormatCtx>
     auto format(const ga::MatInfo& info, FormatCtx& ctx) const {
         const char* kind_str = "Dense";
         switch (info.kind) {
-        case ga::MatKind::Static:   kind_str = "Static";   break;
-        case ga::MatKind::Sparse:   kind_str = "Sparse";   break;
-        case ga::MatKind::Diagonal: kind_str = "Diagonal"; break;
+        case ga::MatKind::Static: kind_str = "Static";
+            break;
+        case ga::MatKind::Sparse: kind_str = "Sparse";
+            break;
+        case ga::MatKind::Diagonal: kind_str = "Diagonal";
+            break;
         default: break;
         }
         return std::format_to(ctx.out(),
-            "Mat[{} {}×{} | nnz={} | {}B | {} | density={:.4f} | sym={} | SPD={}]",
-            kind_str, info.rows, info.cols, info.nnz,
-            info.storage_bytes, info.compute_policy,
-            info.density, info.is_symmetric, info.is_spd);
+                              "Mat[{} {}×{} | nnz={} | {}B | {} | density={:.4f} | sym={} | SPD={}]",
+                              kind_str, info.rows, info.cols, info.nnz,
+                              info.storage_bytes, info.compute_policy,
+                              info.density, info.is_symmetric, info.is_spd);
     }
 };
 

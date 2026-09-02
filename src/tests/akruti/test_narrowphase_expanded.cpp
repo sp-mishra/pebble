@@ -1,7 +1,12 @@
 #include "catch_amalgamated.hpp"
 #include "akruti/narrowphase.hpp"
 
-TEST_CASE("Akruti: Narrowphase Expanded Pairs", "[akruti][narrowphase]") {
+TEST_CASE (
+"Akruti: Narrowphase Expanded Pairs"
+,
+"[akruti][narrowphase]"
+)
+ {
     // 1. Circle - OBB
     akruti::Circle c{{0, 0}, 1.0f};
     akruti::OrientedBox obb = akruti::OrientedBox::from_angle({1.5f, 0}, {1, 1}, 0.0f);

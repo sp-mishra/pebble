@@ -2,7 +2,12 @@
 #include "kalpana/kalpana.hpp"
 #include <vector>
 
-TEST_CASE("Kalpana: Akruti ChainShape and CatmullRomSpline to Vector Path", "[kalpana][geom][path]") {
+TEST_CASE (
+"Kalpana: Akruti ChainShape and CatmullRomSpline to Vector Path"
+,
+"[kalpana][geom][path]"
+)
+ {
     // 1. Akruti Catmull-Rom Spline import
     akruti::CatmullRomSpline spline;
     (void)spline.points.push_back({0.0f, 0.0f});
@@ -26,7 +31,12 @@ TEST_CASE("Kalpana: Akruti ChainShape and CatmullRomSpline to Vector Path", "[ka
     REQUIRE(p_chain.points().size() == 3);
 }
 
-TEST_CASE("Kalpana: BasicPath from_svg parses M L C Q Z commands", "[kalpana][geom][path][svg]") {
+TEST_CASE (
+"Kalpana: BasicPath from_svg parses M L C Q Z commands"
+,
+"[kalpana][geom][path][svg]"
+)
+ {
     // Simple triangle: MoveTo, LineTo x2, Close
     auto p1 = kalpana::Path::from_svg("M 10 20 L 50 80 L 90 20 Z");
     REQUIRE_FALSE(p1.empty());

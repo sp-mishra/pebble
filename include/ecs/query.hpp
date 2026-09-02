@@ -10,15 +10,13 @@
 #include <type_traits>
 
 namespace pebble::ecs {
+    // Filter tags for compile-time query matching
+    template <typename... Ts>
+    struct With {};
 
-// Filter tags for compile-time query matching
-template <typename... Ts>
-struct With {};
+    template <typename... Ts>
+    struct Without {};
 
-template <typename... Ts>
-struct Without {};
-
-template <typename T>
-struct Optional {};
-
+    template <typename T>
+    struct Optional {};
 } // namespace pebble::ecs

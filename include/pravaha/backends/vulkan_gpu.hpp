@@ -1737,23 +1737,23 @@ namespace pravaha::backends::vulkan {
                                 const std::uint32_t local_x) {
         if (!destination.valid())
             return std::unexpected(PravahaError::make(ErrorKind::ResourceExhausted,
-                "vulkan: invalid device destination"));
+                                                      "vulkan: invalid device destination"));
         for (const auto* source : sources) {
             if (!source || !source->valid() || source->size() != destination.size())
                 return std::unexpected(PravahaError::make(ErrorKind::InvalidArgument,
-                    "vulkan: incompatible device source"));
+                                                          "vulkan: incompatible device source"));
         }
         auto resource = get_or_reuse_resource(key, module, static_cast<std::uint32_t>(K + 1));
         if (!resource || !resource->valid())
             return std::unexpected(PravahaError::make(ErrorKind::InternalError,
-                "vulkan: device resource build failed"));
+                                                      "vulkan: device resource build failed"));
         std::array<lithe::execution::storage_buffer_binding, K + 1> bindings{};
         for (std::size_t index = 0; index < K; ++index)
             bindings[index] = {sources[index]->buffer(), 0, sources[index]->byte_size()};
         bindings[K] = {destination.buffer(), 0, destination.byte_size()};
         if (auto bound = resource->bind_storage_buffers(bindings); !bound)
             return std::unexpected(PravahaError::make(ErrorKind::InternalError,
-                "vulkan: device descriptor bind failed"));
+                                                      "vulkan: device descriptor bind failed"));
         lithe::execution::kernel_launch launch{};
         launch.grid_x = static_cast<std::uint32_t>((destination.size() + local_x - 1) / local_x);
         launch.grid_y = 1;
@@ -1761,7 +1761,7 @@ namespace pravaha::backends::vulkan {
         launch.block_y = 1;
         if (auto dispatched = resource->dispatch_sync(launch); !dispatched)
             return std::unexpected(PravahaError::make(ErrorKind::InternalError,
-                "vulkan: device dispatch failed"));
+                                                      "vulkan: device dispatch failed"));
         return {};
     }
 

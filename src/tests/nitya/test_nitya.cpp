@@ -76,6 +76,7 @@ namespace {
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Frame layout constants and sizes"
 ,
 "[nitya][framing]"
@@ -90,6 +91,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Default framing encode and validate"
 ,
 "[nitya][framing]"
@@ -135,6 +137,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Single record append and sync"
 ,
 "[nitya][append]"
@@ -160,6 +163,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Multiple appends with sequential LSN offsets"
 ,
 "[nitya][append]"
@@ -196,6 +200,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Auto-rotation across segment boundary"
 ,
 "[nitya][segment]"
@@ -240,6 +245,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Streaming recovery scans all committed records"
 ,
 "[nitya][recovery]"
@@ -295,6 +301,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Replication subscriber streams updates"
 ,
 "[nitya][replication]"
@@ -336,6 +343,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Durability failure becomes sticky and observable"
 ,
 "[nitya][durability][fault_injection]"
@@ -370,6 +378,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Concurrent multi-threaded appends"
 ,
 "[nitya][concurrency]"
@@ -426,6 +435,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: EasyRules retention & archival triggers"
 ,
 "[nitya][rules]"
@@ -469,6 +479,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "NityaAdapter: basic put and get hit"
 ,
 "[nitya][adapter]"
@@ -485,6 +496,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "NityaAdapter: read-through recovery after cache clear"
 ,
 "[nitya][adapter]"
@@ -513,6 +525,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "NityaAdapter: erase records tombstone in WAL"
 ,
 "[nitya][adapter]"
@@ -532,6 +545,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "NityaAdapter: load_all warms in-memory cache"
 ,
 "[nitya][adapter]"
@@ -563,6 +577,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Append sync and recovery diagnostics"
 ,
 "[nitya][diagnostics]"
@@ -607,6 +622,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: wait_durable beyond published LSN fails with InvalidArg"
 ,
 "[nitya][durability]"
@@ -630,6 +646,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: append vs append_sync vs sync durability watermarks"
 ,
 "[nitya][durability]"
@@ -659,6 +676,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Zero-byte payload support"
 ,
 "[nitya][correctness]"
@@ -685,6 +703,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Reject payload larger than segment"
 ,
 "[nitya][correctness]"
@@ -705,6 +724,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Record exact fit and auto-rotate off behavior"
 ,
 "[nitya][segment]"
@@ -739,6 +759,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Background flusher periodically commits published LSN"
 ,
 "[nitya][flusher]"
@@ -773,6 +794,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Recovery modes and corruption handling"
 ,
 "[nitya][corruption]"
@@ -856,6 +878,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Crash simulation after reservation before publication"
 ,
 "[nitya][crash]"
@@ -901,6 +924,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Non-allocating list_segments iterator"
 ,
 "[nitya][admin]"
@@ -933,6 +957,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Segment header write and validation on reopen"
 ,
 "[nitya][segment_header]"
@@ -979,6 +1004,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Corrupted segment header is rejected"
 ,
 "[nitya][segment_header]"
@@ -1020,6 +1046,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: First record does not overwrite segment header and recovery skips it"
 ,
 "[nitya][segment_header]"
@@ -1078,6 +1105,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Frame version validation and UnsupportedVersion error"
 ,
 "[nitya][version]"
@@ -1109,6 +1137,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Flags and version round-trip through append and recovery"
 ,
 "[nitya][flags]"
@@ -1147,6 +1176,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Segment descriptor populated from segment header metadata"
 ,
 "[nitya][descriptor]"
@@ -1184,6 +1214,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Concurrent group commit waiters receive completion without spinning forever"
 ,
 "[nitya][group_commit]"
@@ -1227,6 +1258,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Repeated concurrent group commit batches make durable progress"
 ,
 "[nitya][group_commit][liveness]"
@@ -1287,6 +1319,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Background flusher watermark flush and explicit shutdown join"
 ,
 "[nitya][flusher]"
@@ -1344,6 +1377,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Segment rotation seals previous segment with sealed_lsn and flags"
 ,
 "[nitya][seal]"
@@ -1387,6 +1421,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: Archival persistence and mark_segment_archived"
 ,
 "[nitya][archive]"
@@ -1425,6 +1460,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "Nitya: flush_to validates target_lsn <= published_lsn"
 ,
 "[nitya][flush_to]"
@@ -1454,6 +1490,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Follower retries leadership and completes durability without blocking forever"
 ,
 "[nitya][follower_retry]"
@@ -1495,6 +1532,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Nitya: Sustained concurrent group commit and follower promotion stress"
 ,
 "[nitya][stress]"
@@ -1648,6 +1686,7 @@ namespace {
 } // anonymous namespace
 
 TEST_CASE (
+
 "nitya: custom framing applies to segment header"
 ,
 "[nitya][framing][policy]"
@@ -1698,6 +1737,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "nitya: retention with injected clock"
 ,
 "[nitya][retention][clock]"
@@ -1763,6 +1803,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "nitya: salvage resync scalar/simd parity"
 ,
 "[nitya][recovery][salvage]"
@@ -1822,6 +1863,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "nitya: recovery uses memory policy scratch"
 ,
 "[nitya][memory][policy]"

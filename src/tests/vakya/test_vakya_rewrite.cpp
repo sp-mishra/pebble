@@ -49,6 +49,7 @@ inline auto int_leaf() { return make_node<r_int_leaf_tag>(); }
 
 TEST_CASE (
 
+
 "pattern::rule: matches and fires rewrite builder"
 ,
 "[vakya][rewrite]"
@@ -71,6 +72,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "pattern::rule: mismatch → nullopt"
 ,
 "[vakya][rewrite]"
@@ -92,6 +94,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "guarded rule: always_true_guard fires identical to plain rule"
 ,
@@ -118,6 +121,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "guarded rule: guard returning false blocks rewrite → nullopt"
 ,
@@ -150,6 +154,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "guarded rule: guard inspects match bindings"
 ,
@@ -185,6 +190,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "guarded rule: no-env try_apply overload bypasses guard (guard never called)"
 ,
 "[vakya][rewrite]"
@@ -215,6 +221,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "guarded rule: named rule has correct name field"
 ,
 "[vakya][rewrite]"
@@ -234,6 +241,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "guarded factory (no guard): produces always_true_guard variant"
 ,
@@ -255,6 +263,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "guarded factory (with guard): custom guard threaded correctly"
 ,
@@ -287,6 +296,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "GuardFn concept: lambda with correct signature satisfies GuardFn<G, Solver>"
 ,
 "[vakya][rewrite]"
@@ -304,6 +314,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "GuardFn concept: lambda returning void does NOT satisfy GuardFn<G, Solver>"
 ,
 "[vakya][rewrite]"
@@ -320,6 +331,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 
 "backward compat: guarded_rule with always_true_guard behaves as plain rewrite_rule"
 ,

@@ -25,15 +25,14 @@
 #include <vector>
 
 namespace ts {
-
     struct HybridSimdPravahaComputationPolicy {
     private:
         static constexpr std::size_t k_parallel_threshold = 2048;
 
-        template<typename E>
+        template <typename E>
         struct is_scalar_wrapper : std::false_type {};
 
-        template<typename T, typename SP, typename CP>
+        template <typename T, typename SP, typename CP>
         struct is_scalar_wrapper<ScalarWrapper<T, SP, CP>> : std::true_type {};
 
         [[nodiscard]] static std::size_t optimal_chunk_size(const std::size_t total_size) noexcept {
@@ -42,23 +41,23 @@ namespace ts {
             return std::max<std::size_t>(512, ideal);
         }
 
-        template<typename E1, typename E2, typename OpVec, typename OpScalar>
-        static auto hybrid_binary_op(const E1 &a, const E2 &b, OpVec op_vec, OpScalar op_scalar) {
+        template <typename E1, typename E2, typename OpVec, typename OpScalar>
+        static auto hybrid_binary_op(const E1& a, const E2& b, OpVec op_vec, OpScalar op_scalar) {
             using T = typename E1::value_type;
-            const auto &tensor_a = a.self();
-            const auto &tensor_b = b.self();
+            const auto& tensor_a = a.self();
+            const auto& tensor_b = b.self();
 
             auto shape = get_shape(tensor_a);
             const size_t total_size = calculate_size_dyn(shape);
             HighwayStoragePolicy::DynamicStorage<T> result_data(total_size);
-            T *result_ptr = result_data.data();
+            T* result_ptr = result_data.data();
 
             constexpr bool a_is_scalar = is_scalar_wrapper<E1>::value;
             constexpr bool b_is_scalar = is_scalar_wrapper<E2>::value;
 
             if constexpr (!a_is_scalar && !b_is_scalar) {
-                const T *data_a = tensor_a.data();
-                const T *data_b = tensor_b.data();
+                const T* data_a = tensor_a.data();
+                const T* data_b = tensor_b.data();
 
                 if (data_a && data_b) {
                     // Small tensor fast-path: single-threaded Highway SIMD
@@ -86,8 +85,9 @@ namespace ts {
                     const std::size_t chunk_sz = optimal_chunk_size(total_size);
                     const auto chunks = ::pravaha::StaticChunkingPolicy::chunks(total_size, chunk_sz);
 
-                    for (const auto &ch : chunks) {
-                        auto task_fn = [data_a, data_b, result_ptr, op_vec, op_scalar, begin = ch.begin, end = ch.end]() {
+                    for (const auto& ch : chunks) {
+                        auto task_fn = [data_a, data_b, result_ptr, op_vec, op_scalar, begin = ch.begin, end = ch.end
+                            ]() {
                             namespace hn = hwy::HWY_NAMESPACE;
                             const hn::ScalableTag<T> d;
                             const size_t lanes = hn::Lanes(d);
@@ -129,19 +129,19 @@ namespace ts {
                 shape, std::move(result_data));
         }
 
-        template<typename E, typename OpVec, typename OpScalar>
-        static auto hybrid_unary_op(const E &a, OpVec op_vec, OpScalar op_scalar) {
+        template <typename E, typename OpVec, typename OpScalar>
+        static auto hybrid_unary_op(const E& a, OpVec op_vec, OpScalar op_scalar) {
             using T = typename E::value_type;
-            const auto &tensor_a = a.self();
+            const auto& tensor_a = a.self();
             auto shape = get_shape(tensor_a);
             const size_t total_size = calculate_size_dyn(shape);
             HighwayStoragePolicy::DynamicStorage<T> result_data(total_size);
-            T *result_ptr = result_data.data();
+            T* result_ptr = result_data.data();
 
             constexpr bool a_is_scalar = is_scalar_wrapper<E>::value;
 
             if constexpr (!a_is_scalar) {
-                const T *data_a = tensor_a.data();
+                const T* data_a = tensor_a.data();
                 if (data_a) {
                     if (total_size < k_parallel_threshold) {
                         namespace hn = hwy::HWY_NAMESPACE;
@@ -165,7 +165,7 @@ namespace ts {
                     const std::size_t chunk_sz = optimal_chunk_size(total_size);
                     const auto chunks = ::pravaha::StaticChunkingPolicy::chunks(total_size, chunk_sz);
 
-                    for (const auto &ch : chunks) {
+                    for (const auto& ch : chunks) {
                         auto task_fn = [data_a, result_ptr, op_vec, op_scalar, begin = ch.begin, end = ch.end]() {
                             namespace hn = hwy::HWY_NAMESPACE;
                             const hn::ScalableTag<T> d;
@@ -211,109 +211,109 @@ namespace ts {
         // Elementwise Binary Arithmetic
         // =====================================================================
 
-        template<typename E1, typename E2>
-        static auto add(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto add(const E1& a, const E2& b) {
             namespace hn = hwy::HWY_NAMESPACE;
             return hybrid_binary_op(a, b,
-                []([[maybe_unused]] auto d, auto va, auto vb) { return hn::Add(va, vb); },
-                [](auto x, auto y) { return x + y; });
+                                    []([[maybe_unused]] auto d, auto va, auto vb) { return hn::Add(va, vb); },
+                                    [](auto x, auto y) { return x + y; });
         }
 
-        template<typename E1, typename E2>
-        static auto subtract(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto subtract(const E1& a, const E2& b) {
             namespace hn = hwy::HWY_NAMESPACE;
             return hybrid_binary_op(a, b,
-                []([[maybe_unused]] auto d, auto va, auto vb) { return hn::Sub(va, vb); },
-                [](auto x, auto y) { return x - y; });
+                                    []([[maybe_unused]] auto d, auto va, auto vb) { return hn::Sub(va, vb); },
+                                    [](auto x, auto y) { return x - y; });
         }
 
-        template<typename E1, typename E2>
-        static auto multiply(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto multiply(const E1& a, const E2& b) {
             namespace hn = hwy::HWY_NAMESPACE;
             return hybrid_binary_op(a, b,
-                []([[maybe_unused]] auto d, auto va, auto vb) { return hn::Mul(va, vb); },
-                [](auto x, auto y) { return x * y; });
+                                    []([[maybe_unused]] auto d, auto va, auto vb) { return hn::Mul(va, vb); },
+                                    [](auto x, auto y) { return x * y; });
         }
 
-        template<typename E1, typename E2>
-        static auto divide(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto divide(const E1& a, const E2& b) {
             namespace hn = hwy::HWY_NAMESPACE;
             return hybrid_binary_op(a, b,
-                []([[maybe_unused]] auto d, auto va, auto vb) { return hn::Div(va, vb); },
-                [](auto x, auto y) { return x / y; });
+                                    []([[maybe_unused]] auto d, auto va, auto vb) { return hn::Div(va, vb); },
+                                    [](auto x, auto y) { return x / y; });
         }
 
         // =====================================================================
         // Elementwise Unary Arithmetic
         // =====================================================================
 
-        template<typename E>
-        static auto sqrt(const E &e) {
+        template <typename E>
+        static auto sqrt(const E& e) {
             namespace hn = hwy::HWY_NAMESPACE;
             return hybrid_unary_op(e,
-                []([[maybe_unused]] auto d, auto va) { return hn::Sqrt(va); },
-                [](auto x) { return std::sqrt(x); });
+                                   []([[maybe_unused]] auto d, auto va) { return hn::Sqrt(va); },
+                                   [](auto x) { return std::sqrt(x); });
         }
 
-        template<typename E>
-        static auto abs(const E &e) {
+        template <typename E>
+        static auto abs(const E& e) {
             namespace hn = hwy::HWY_NAMESPACE;
             return hybrid_unary_op(e,
-                []([[maybe_unused]] auto d, auto va) { return hn::Abs(va); },
-                [](auto x) { return std::abs(x); });
+                                   []([[maybe_unused]] auto d, auto va) { return hn::Abs(va); },
+                                   [](auto x) { return std::abs(x); });
         }
 
-        template<typename E>
-        static auto square(const E &e) {
+        template <typename E>
+        static auto square(const E& e) {
             namespace hn = hwy::HWY_NAMESPACE;
             return hybrid_unary_op(e,
-                []([[maybe_unused]] auto d, auto va) { return hn::Mul(va, va); },
-                [](auto x) { return x * x; });
+                                   []([[maybe_unused]] auto d, auto va) { return hn::Mul(va, va); },
+                                   [](auto x) { return x * x; });
         }
 
-        template<typename E>
-        static auto exp(const E &e) {
+        template <typename E>
+        static auto exp(const E& e) {
             return hybrid_unary_op(e,
-                []([[maybe_unused]] auto d, auto va) { return va; },
-                [](auto x) { return std::exp(x); });
+                                   []([[maybe_unused]] auto d, auto va) { return va; },
+                                   [](auto x) { return std::exp(x); });
         }
 
-        template<typename E>
-        static auto log(const E &e) {
+        template <typename E>
+        static auto log(const E& e) {
             return hybrid_unary_op(e,
-                []([[maybe_unused]] auto d, auto va) { return va; },
-                [](auto x) { return std::log(x); });
+                                   []([[maybe_unused]] auto d, auto va) { return va; },
+                                   [](auto x) { return std::log(x); });
         }
 
-        template<typename E>
-        static auto sin(const E &e) {
+        template <typename E>
+        static auto sin(const E& e) {
             return hybrid_unary_op(e,
-                []([[maybe_unused]] auto d, auto va) { return va; },
-                [](auto x) { return std::sin(x); });
+                                   []([[maybe_unused]] auto d, auto va) { return va; },
+                                   [](auto x) { return std::sin(x); });
         }
 
-        template<typename E>
-        static auto cos(const E &e) {
+        template <typename E>
+        static auto cos(const E& e) {
             return hybrid_unary_op(e,
-                []([[maybe_unused]] auto d, auto va) { return va; },
-                [](auto x) { return std::cos(x); });
+                                   []([[maybe_unused]] auto d, auto va) { return va; },
+                                   [](auto x) { return std::cos(x); });
         }
 
-        template<typename E>
-        static auto tan(const E &e) {
+        template <typename E>
+        static auto tan(const E& e) {
             return hybrid_unary_op(e,
-                []([[maybe_unused]] auto d, auto va) { return va; },
-                [](auto x) { return std::tan(x); });
+                                   []([[maybe_unused]] auto d, auto va) { return va; },
+                                   [](auto x) { return std::tan(x); });
         }
 
         // =====================================================================
         // Statistical Reductions
         // =====================================================================
 
-        template<typename E>
-        static auto sum(const E &expr) {
+        template <typename E>
+        static auto sum(const E& expr) {
             using T = typename E::value_type;
-            const auto &tensor = expr.self();
+            const auto& tensor = expr.self();
             auto shape = get_shape(tensor);
             const size_t total_size = calculate_size_dyn(shape);
 
@@ -322,7 +322,7 @@ namespace ts {
             constexpr bool is_scalar = is_scalar_wrapper<E>::value;
 
             if constexpr (!is_scalar) {
-                const T *data = tensor.data();
+                const T* data = tensor.data();
                 if (data) {
                     if (total_size < k_parallel_threshold) {
                         return HighwayComputationPolicy::sum(expr);
@@ -334,8 +334,8 @@ namespace ts {
                     std::vector<T> partial_sums(chunks.size(), T{0});
 
                     for (std::size_t c_idx = 0; c_idx < chunks.size(); ++c_idx) {
-                        const auto &ch = chunks[c_idx];
-                        auto *slot = &partial_sums[c_idx];
+                        const auto& ch = chunks[c_idx];
+                        auto* slot = &partial_sums[c_idx];
 
                         auto task_fn = [data, slot, begin = ch.begin, end = ch.end]() {
                             namespace hn = hwy::HWY_NAMESPACE;
@@ -368,20 +368,20 @@ namespace ts {
             return DefaultComputationPolicy::sum(expr);
         }
 
-        template<typename E>
-        static auto mean(const E &expr) {
+        template <typename E>
+        static auto mean(const E& expr) {
             using T = typename E::value_type;
-            const auto &tensor = expr.self();
+            const auto& tensor = expr.self();
             auto shape = get_shape(tensor);
             const size_t total_size = calculate_size_dyn(shape);
             if (total_size == 0) throw std::runtime_error("Mean of empty tensor");
             return sum(expr) / static_cast<T>(total_size);
         }
 
-        template<typename E>
-        static auto max(const E &expr) {
+        template <typename E>
+        static auto max(const E& expr) {
             using T = typename E::value_type;
-            const auto &tensor = expr.self();
+            const auto& tensor = expr.self();
             auto shape = get_shape(tensor);
             const size_t total_size = calculate_size_dyn(shape);
 
@@ -390,7 +390,7 @@ namespace ts {
             constexpr bool is_scalar = is_scalar_wrapper<E>::value;
 
             if constexpr (!is_scalar) {
-                const T *data = tensor.data();
+                const T* data = tensor.data();
                 if (data) {
                     if (total_size < k_parallel_threshold) {
                         return HighwayComputationPolicy::max(expr);
@@ -402,8 +402,8 @@ namespace ts {
                     std::vector<T> partial_max(chunks.size(), data[0]);
 
                     for (std::size_t c_idx = 0; c_idx < chunks.size(); ++c_idx) {
-                        const auto &ch = chunks[c_idx];
-                        auto *slot = &partial_max[c_idx];
+                        const auto& ch = chunks[c_idx];
+                        auto* slot = &partial_max[c_idx];
 
                         auto task_fn = [data, slot, begin = ch.begin, end = ch.end]() {
                             namespace hn = hwy::HWY_NAMESPACE;
@@ -441,10 +441,10 @@ namespace ts {
             return DefaultComputationPolicy::max(expr);
         }
 
-        template<typename E>
-        static auto min(const E &expr) {
+        template <typename E>
+        static auto min(const E& expr) {
             using T = typename E::value_type;
-            const auto &tensor = expr.self();
+            const auto& tensor = expr.self();
             auto shape = get_shape(tensor);
             const size_t total_size = calculate_size_dyn(shape);
 
@@ -453,7 +453,7 @@ namespace ts {
             constexpr bool is_scalar = is_scalar_wrapper<E>::value;
 
             if constexpr (!is_scalar) {
-                const T *data = tensor.data();
+                const T* data = tensor.data();
                 if (data) {
                     if (total_size < k_parallel_threshold) {
                         return HighwayComputationPolicy::min(expr);
@@ -465,8 +465,8 @@ namespace ts {
                     std::vector<T> partial_min(chunks.size(), data[0]);
 
                     for (std::size_t c_idx = 0; c_idx < chunks.size(); ++c_idx) {
-                        const auto &ch = chunks[c_idx];
-                        auto *slot = &partial_min[c_idx];
+                        const auto& ch = chunks[c_idx];
+                        auto* slot = &partial_min[c_idx];
 
                         auto task_fn = [data, slot, begin = ch.begin, end = ch.end]() {
                             namespace hn = hwy::HWY_NAMESPACE;
@@ -504,8 +504,8 @@ namespace ts {
             return DefaultComputationPolicy::min(expr);
         }
 
-        template<typename E>
-        static auto variance(const E &expr) {
+        template <typename E>
+        static auto variance(const E& expr) {
             using T = typename E::value_type;
             const auto avg = mean(expr);
             const auto diff = expr - avg;
@@ -513,13 +513,13 @@ namespace ts {
             return mean(sq_diff);
         }
 
-        template<typename E>
-        static auto std_dev(const E &expr) {
+        template <typename E>
+        static auto std_dev(const E& expr) {
             return std::sqrt(variance(expr));
         }
 
-        template<typename E>
-        static auto normalize(const E &expr) {
+        template <typename E>
+        static auto normalize(const E& expr) {
             const auto avg = mean(expr);
             const auto std = std_dev(expr);
             return (expr - avg) / (std + 1e-8);
@@ -529,11 +529,11 @@ namespace ts {
         // Blocked Multi-Threaded SIMD Matrix Multiplication (dot)
         // =====================================================================
 
-        template<typename E1, typename E2>
-        static auto dot(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto dot(const E1& a, const E2& b) {
             using T = typename E1::value_type;
-            const auto &tensor_a = a.self();
-            const auto &tensor_b = b.self();
+            const auto& tensor_a = a.self();
+            const auto& tensor_b = b.self();
 
             auto shape_a = get_shape(tensor_a);
             auto shape_b = get_shape(tensor_b);
@@ -548,9 +548,9 @@ namespace ts {
                 }
 
                 HighwayStoragePolicy::DynamicStorage<T> result_data(M * N, T{0});
-                T *C = result_data.data();
-                const T *A = tensor_a.data();
-                const T *B = tensor_b.data();
+                T* C = result_data.data();
+                const T* A = tensor_a.data();
+                const T* B = tensor_b.data();
 
                 if (A && B) {
                     if (M * N * K < 4096) {
@@ -573,7 +573,7 @@ namespace ts {
                     const size_t chunk_rows = std::max<size_t>(1, (M + hw_threads - 1) / hw_threads);
                     const auto chunks = ::pravaha::StaticChunkingPolicy::chunks(M, chunk_rows);
 
-                    for (const auto &ch : chunks) {
+                    for (const auto& ch : chunks) {
                         auto task_fn = [A, B, C, K, N, r_begin = ch.begin, r_end = ch.end]() {
                             namespace hn = hwy::HWY_NAMESPACE;
                             const hn::ScalableTag<T> d;
@@ -583,8 +583,8 @@ namespace ts {
                                 for (size_t k = 0; k < K; ++k) {
                                     const T a_val = A[i * K + k];
                                     const auto va = hn::Set(d, a_val);
-                                    const T *b_row = B + k * N;
-                                    T *c_row = C + i * N;
+                                    const T* b_row = B + k * N;
+                                    T* c_row = C + i * N;
 
                                     size_t j = 0;
                                     for (; j + lanes <= N; j += lanes) {
@@ -611,49 +611,48 @@ namespace ts {
             return DefaultComputationPolicy::dot(a, b);
         }
 
-        template<typename E>
-        static auto reshape(const E &expr, const TensorShape &new_shape) {
+        template <typename E>
+        static auto reshape(const E& expr, const TensorShape& new_shape) {
             return DefaultComputationPolicy::reshape(expr, new_shape);
         }
 
-        template<typename E>
-        static auto flatten(const E &expr) {
+        template <typename E>
+        static auto flatten(const E& expr) {
             return DefaultComputationPolicy::flatten(expr);
         }
 
-        template<typename E>
-        static auto transpose(const E &expr) {
+        template <typename E>
+        static auto transpose(const E& expr) {
             return DefaultComputationPolicy::transpose(expr);
         }
 
-        template<typename E1, typename E2>
-        static auto power(const E1 &a, const E2 &b) {
+        template <typename E1, typename E2>
+        static auto power(const E1& a, const E2& b) {
             return DefaultComputationPolicy::power(a, b);
         }
 
-        template<typename E, typename T>
-        static auto clip(const E &expr, T min_val, T max_val) {
+        template <typename E, typename T>
+        static auto clip(const E& expr, T min_val, T max_val) {
             return hybrid_unary_op(expr,
-                [min_val, max_val]([[maybe_unused]] auto d, auto va) {
-                    namespace hn = hwy::HWY_NAMESPACE;
-                    const auto vmin = hn::Set(d, min_val);
-                    const auto vmax = hn::Set(d, max_val);
-                    return hn::Min(hn::Max(va, vmin), vmax);
-                },
-                [min_val, max_val](auto x) {
-                    return std::clamp(x, min_val, max_val);
-                });
+                                   [min_val, max_val]([[maybe_unused]] auto d, auto va) {
+                                       namespace hn = hwy::HWY_NAMESPACE;
+                                       const auto vmin = hn::Set(d, min_val);
+                                       const auto vmax = hn::Set(d, max_val);
+                                       return hn::Min(hn::Max(va, vmin), vmax);
+                                   },
+                                   [min_val, max_val](auto x) {
+                                       return std::clamp(x, min_val, max_val);
+                                   });
         }
     };
 
     using hybrid_simd_pravaha_policy = HybridSimdPravahaComputationPolicy;
 
-    template<typename T>
+    template <typename T>
     using hybrid_tensor = DynamicTensor<T, HighwayStoragePolicy, HybridSimdPravahaComputationPolicy>;
 
-    template<typename T>
+    template <typename T>
     using HybridTensor = hybrid_tensor<T>;
-
 } // namespace ts
 
 namespace containers::tensor {

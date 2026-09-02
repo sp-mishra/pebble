@@ -86,7 +86,6 @@
 // ---- parse<G> entry point ---------------------------------------------------
 
 namespace lang::samasa {
-
     // Parse without materializing a green/red tree.  This is the low-allocation
     // route for frontends that lower parse events directly into their own IR.
     template <class Grammar, class Sink, class KWTable = keyword_table<>,
@@ -97,31 +96,38 @@ namespace lang::samasa {
                                     const default_parse_options& opts = {},
                                     const scan_token_kinds<typename Grammar::token_kind>& kinds = {},
                                     const LinePol& lp = {}) {
-        using SK = typename Grammar::syntax_kind; using TK = typename Grammar::token_kind;
-        lang::collecting_sink<diagnostic> diagnostics; auto tokens = scan<KWTable, OpTrie, LinePol, TK>(source,kinds,lp,diagnostics);
-        lang::parse_tree_stats stats; event_stream<SK> events;
-        parse_context<SK,TK, typename Profile::memo_policy,
-                      typename Profile::trace_policy> ctx(tokens.view(),source,events,diagnostics,stats,opts.budget);
-        const auto root = events.begin(SK{}); auto result = typename Grammar::root_rule{}.match(ctx);
-        if (!result.ok()) { events.rollback(root); return false; }
-        events.end(root,{0,static_cast<std::uint32_t>(source.size())});
+        using SK = typename Grammar::syntax_kind;
+        using TK = typename Grammar::token_kind;
+        lang::collecting_sink<diagnostic> diagnostics;
+        auto tokens = scan<KWTable, OpTrie, LinePol, TK>(source, kinds, lp, diagnostics);
+        lang::parse_tree_stats stats;
+        event_stream<SK> events;
+        parse_context<SK, TK, typename Profile::memo_policy,
+                      typename Profile::trace_policy> ctx(tokens.view(), source, events, diagnostics, stats,
+                                                          opts.budget);
+        const auto root = events.begin(SK{});
+        auto result = typename Grammar::root_rule{}.match(ctx);
+        if (!result.ok()) {
+            events.rollback(root);
+            return false;
+        }
+        events.end(root, {0, static_cast<std::uint32_t>(source.size())});
         for (const auto& event : events.all()) sink(event);
         return !diagnostics.has_errors();
     }
 
     // parse<G>(source, opts) — scan + parse source text into a parse_output.
     template <class Grammar,
-              class KWTable   = keyword_table<>,
-              class OpTrie    = operator_trie<>,
-              class LinePol   = no_line_sensitivity<typename Grammar::token_kind>,
-              class Profile   = fast_profile,
+              class KWTable = keyword_table<>,
+              class OpTrie = operator_trie<>,
+              class LinePol = no_line_sensitivity<typename Grammar::token_kind>,
+              class Profile = fast_profile,
               class ScannerPolicy = scanner_policy<typename Grammar::token_kind>>
     [[nodiscard]] parse_output<typename Grammar::syntax_kind, typename Grammar::token_kind>
-    parse(std::string_view           source,
-          const default_parse_options& opts  = {},
+    parse(std::string_view source,
+          const default_parse_options& opts = {},
           const scan_token_kinds<typename Grammar::token_kind>& tok_kinds = {},
-          const LinePol&             lp    = {})
-    {
+          const LinePol& lp = {}) {
         using SK = typename Grammar::syntax_kind;
         using TK = typename Grammar::token_kind;
         using Out = parse_output<SK, TK>;
@@ -136,11 +142,11 @@ namespace lang::samasa {
         output.stats.source_bytes = static_cast<std::uint32_t>(source.size());
         output.stats.total_tokens = output.tokens.view().size();
 
-        event_stream<SK>        events;
+        event_stream<SK> events;
         parse_context<SK, TK, typename Profile::memo_policy,
                       typename Profile::trace_policy> ctx(output.tokens.view(), source,
-                                    events, output.diagnostics, output.stats,
-                                    opts.budget);
+                                                          events, output.diagnostics, output.stats,
+                                                          opts.budget);
 
         // Run the root rule wrapped in a synthetic root node so green_arena::root_id_
         // is always set — grammars that use rule<> without node_t() produce flat token
@@ -154,7 +160,8 @@ namespace lang::samasa {
             events.end(root_mk, src_span);
             output.tree = build_green<SK>(events, output.tokens.view(), source);
             output.success = !output.diagnostics.has_errors();
-        } else {
+        }
+        else {
             events.rollback(root_mk);
             output.success = false;
         }
@@ -175,15 +182,14 @@ namespace lang::samasa {
               akshara::fixed_string Src,
               std::uint32_t MaxTokens = 4096,
               std::uint32_t MaxEvents = 4096,
-              std::uint32_t MaxDiags  = 256,
-              std::uint32_t MaxDepth  = 256,
-              class KWTable  = keyword_table<>,
-              class OpTrie   = operator_trie<>,
-              class LinePol  = no_line_sensitivity<typename Grammar::token_kind>>
+              std::uint32_t MaxDiags = 256,
+              std::uint32_t MaxDepth = 256,
+              class KWTable = keyword_table<>,
+              class OpTrie = operator_trie<>,
+              class LinePol = no_line_sensitivity<typename Grammar::token_kind>>
     [[nodiscard]] consteval auto parse_static(
         scan_token_kinds<typename Grammar::token_kind> tok_kinds = {},
-        LinePol lp = {})
-    {
+        LinePol lp = {}) {
         using SK = typename Grammar::syntax_kind;
         using TK = typename Grammar::token_kind;
         constexpr std::uint32_t MaxTrivia = MaxTokens * 2;
@@ -194,23 +200,23 @@ namespace lang::samasa {
         static_token_buffer<TK, MaxTokens, MaxTrivia> tok_buf{};
 
         const std::string_view src_sv{Src.data, Src.length};
-        const std::uint32_t    N   = static_cast<std::uint32_t>(Src.length);
+        const std::uint32_t N = static_cast<std::uint32_t>(Src.length);
 
         // Char sets are consteval-constructed; calling .contains() is valid inside
         // a consteval function because the entire body is a constant evaluation.
         const auto kIdentStart = akshara::cs_ident_start();
-        const auto kIdentCont  = akshara::cs_ident_cont();
-        const auto kDigits     = akshara::cs_digits();
+        const auto kIdentCont = akshara::cs_ident_cont();
+        const auto kDigits = akshara::cs_digits();
 
         auto cs_has = [](const akshara::ct_char_set& s, char c) constexpr noexcept -> bool {
             const unsigned idx = static_cast<unsigned char>(c) & 0x7Fu;
-            if (idx < 64) return (s.low  >> idx) & 1u;
-            return               (s.high >> (idx - 64)) & 1u;
+            if (idx < 64) return (s.low >> idx) & 1u;
+            return (s.high >> (idx - 64)) & 1u;
         };
 
-        std::uint32_t pos       = 0;
-        TK            prev_kind = tok_kinds.eof;
-        bool          lex_ok    = true;
+        std::uint32_t pos = 0;
+        TK prev_kind = tok_kinds.eof;
+        bool lex_ok = true;
 
         while (pos < N) {
             const std::uint32_t start = pos;
@@ -254,7 +260,8 @@ namespace lang::samasa {
                 while (pos + 1 < N && !(Src.data[pos] == '*' && Src.data[pos + 1] == '/')) ++pos;
                 if (pos + 1 < N) {
                     pos += 2;
-                } else {
+                }
+                else {
                     // Unterminated block comment — record lex failure but continue.
                     lex_ok = false;
                 }
@@ -279,11 +286,13 @@ namespace lang::samasa {
                 while (pos < N && cs_has(kDigits, Src.data[pos])) ++pos;
                 bool is_float = false;
                 if (pos < N && Src.data[pos] == '.') {
-                    is_float = true; ++pos;
+                    is_float = true;
+                    ++pos;
                     while (pos < N && cs_has(kDigits, Src.data[pos])) ++pos;
                 }
                 if (pos < N && (Src.data[pos] == 'e' || Src.data[pos] == 'E')) {
-                    is_float = true; ++pos;
+                    is_float = true;
+                    ++pos;
                     if (pos < N && (Src.data[pos] == '+' || Src.data[pos] == '-')) ++pos;
                     while (pos < N && cs_has(kDigits, Src.data[pos])) ++pos;
                 }
@@ -295,11 +304,19 @@ namespace lang::samasa {
 
             // String literal
             if (c == '"' || c == '\'') {
-                const char delim = c; ++pos;
+                const char delim = c;
+                ++pos;
                 bool terminated = false;
                 while (pos < N) {
-                    if (Src.data[pos] == '\\') { pos += 2; continue; }
-                    if (Src.data[pos] == delim) { ++pos; terminated = true; break; }
+                    if (Src.data[pos] == '\\') {
+                        pos += 2;
+                        continue;
+                    }
+                    if (Src.data[pos] == delim) {
+                        ++pos;
+                        terminated = true;
+                        break;
+                    }
                     ++pos;
                 }
                 if (!terminated) lex_ok = false;
@@ -362,11 +379,10 @@ namespace lang::samasa {
             out.diagnostics[i] = ctx.diag(i);
 
         out.success = r.ok()
-                   && !ctx.overflow()
-                   && !ctx.has_errors();
+            && !ctx.overflow()
+            && !ctx.has_errors();
         return out;
     }
-
 } // namespace lang::samasa
 
 // Convenience alias.

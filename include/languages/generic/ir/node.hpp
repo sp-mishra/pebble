@@ -17,7 +17,6 @@
 #include "../tree/spans.hpp"
 
 namespace lang {
-
     using ir_node_id = std::uint32_t;
     inline constexpr ir_node_id k_null_ir = std::numeric_limits<std::uint32_t>::max();
 
@@ -26,13 +25,12 @@ namespace lang {
 
     template <class KindEnum, class ExtPayload = std::monostate>
     struct ir_node {
-        KindEnum      kind            = {};
-        byte_span     span            = {};
-        ir_node_id    first_child     = k_null_ir;
-        std::uint32_t child_count     = 0;
+        KindEnum kind = {};
+        byte_span span = {};
+        ir_node_id first_child = k_null_ir;
+        std::uint32_t child_count = 0;
         std::uint64_t structural_hash = 0;
-        symbol_id     name            = k_null_symbol;
-        ExtPayload    ext             = {};
+        symbol_id name = k_null_symbol;
+        ExtPayload ext = {};
     };
-
 } // namespace lang

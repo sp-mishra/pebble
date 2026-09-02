@@ -70,7 +70,6 @@
 #include <type_traits>
 
 namespace lang::samasa {
-
     // ---- flat_pratt_action — token events only, no node wrapping -------------
     // Emits token events into the context's event_stream. No begin/end node
     // wrapping — expression structure is NOT preserved as CST nesting.
@@ -78,14 +77,19 @@ namespace lang::samasa {
     struct flat_pratt_action {
         template <class Ctx, class Op>
         static void begin_infix([[maybe_unused]] Ctx& ctx, [[maybe_unused]] Op op) {}
+
         template <class Ctx, class Op>
         static void end_infix([[maybe_unused]] Ctx& ctx, [[maybe_unused]] Op op) {}
+
         template <class Ctx, class Op>
         static auto begin_prefix([[maybe_unused]] Ctx& ctx, [[maybe_unused]] Op op) {}
+
         template <class Ctx, class Op>
         static void end_prefix([[maybe_unused]] Ctx& ctx, [[maybe_unused]] Op op) {}
+
         template <class Ctx, class Op>
         static auto begin_postfix([[maybe_unused]] Ctx& ctx, [[maybe_unused]] Op op) {}
+
         template <class Ctx, class Op>
         static void end_postfix([[maybe_unused]] Ctx& ctx, [[maybe_unused]] Op op) {}
     };
@@ -186,16 +190,15 @@ namespace lang::samasa {
         // parse_expr(ctx, min_bp) — the Pratt loop.
         template <class Ctx>
         [[nodiscard]] auto parse_expr(Ctx& ctx, std::uint8_t min_bp = 0) const
-            -> parse_result<typename Ctx::stream_type>
-        {
+            -> parse_result<typename Ctx::stream_type> {
             using Stream = typename Ctx::stream_type;
-            using R      = parse_result<Stream>;
-            using TK     = typename Ctx::token_kind;
+            using R = parse_result<Stream>;
+            using TK = typename Ctx::token_kind;
             using Marker = typename std::remove_reference_t<decltype(ctx.events())>::marker;
 
             // Snapshot before prefix operator or primary — needed for retroactive
             // begin_node insertion when a postfix or infix operator follows.
-            auto pre_left            = ctx.events().snapshot();
+            auto pre_left = ctx.events().snapshot();
             std::uint32_t pre_left_pos = ctx.cursor().pos; // stream index at pre_left time
 
             // Parse prefix operator or fall through to primary.
@@ -219,7 +222,8 @@ namespace lang::samasa {
                             operand_span = ctx.stream()[rhs_end_pos - 1].span();
                         Action::end_prefix(ctx, peak_k, marker,
                                            lang::byte_span::hull(op_span, operand_span));
-                    } else {
+                    }
+                    else {
                         const auto tok_pos = ctx.cursor().pos;
                         ctx.set_cursor(ctx.cursor().advance());
                         ctx.events().token(tok_pos);
@@ -252,13 +256,14 @@ namespace lang::samasa {
                         ctx.events().token(ctx.cursor().pos - 1);
                         Action::end_postfix(ctx, k, marker,
                                             lang::byte_span::hull(operand_start_span, op_span));
-                    } else {
+                    }
+                    else {
                         const auto tok_pos = ctx.cursor().pos;
                         ctx.set_cursor(ctx.cursor().advance());
                         ctx.events().token(tok_pos);
                     }
                     // After postfix, update pre_left for any chained operator.
-                    pre_left     = ctx.events().snapshot();
+                    pre_left = ctx.events().snapshot();
                     pre_left_pos = ctx.cursor().pos;
                     continue;
                 }
@@ -280,7 +285,8 @@ namespace lang::samasa {
                     const auto right_end_span = ctx.stream()[ctx.cursor().pos - 1].span();
                     Action::end_infix(ctx, k, marker,
                                       lang::byte_span::hull(left_start_span, right_end_span));
-                } else {
+                }
+                else {
                     const auto tok_pos = ctx.cursor().pos;
                     ctx.set_cursor(ctx.cursor().advance());
                     ctx.events().token(tok_pos);
@@ -290,7 +296,7 @@ namespace lang::samasa {
                 }
 
                 // Update pre_left: after a complete infix expression, a new infix might follow.
-                pre_left     = ctx.events().snapshot();
+                pre_left = ctx.events().snapshot();
                 pre_left_pos = ctx.cursor().pos;
             }
 
@@ -299,15 +305,13 @@ namespace lang::samasa {
 
         template <class Ctx>
         [[nodiscard]] auto match(Ctx& ctx) const
-            -> parse_result<typename Ctx::stream_type>
-        {
+            -> parse_result<typename Ctx::stream_type> {
             return parse_expr(ctx, 0);
         }
     };
 
     template <class Table, class Primary, class Action = flat_pratt_action>
-    [[nodiscard]] constexpr pratt_expression<Table,Primary,Action> pratt(Primary p) {
+    [[nodiscard]] constexpr pratt_expression<Table, Primary, Action> pratt(Primary p) {
         return {std::move(p)};
     }
-
 } // namespace lang::samasa

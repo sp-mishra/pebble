@@ -14,7 +14,12 @@ using namespace kalpa;
 // Local classes cannot carry a member template → residuals live at file scope.
 // ===========================================================================
 namespace {
-    ga::Vector<double> v2(double a, double b) { ga::Vector<double> v(2); v[0]=a; v[1]=b; return v; }
+    ga::Vector<double> v2(double a, double b) {
+        ga::Vector<double> v(2);
+        v[0] = a;
+        v[1] = b;
+        return v;
+    }
 
     // --- exponential model fit  y = a·e^{b t} ------------------------------
     // Residuals rᵢ = a·e^{b·tᵢ} − yᵢ over data sampled from a*=2, b*=0.5.
@@ -24,18 +29,21 @@ namespace {
     struct ExpFitRes {
         double t;
         double y;
-        template<typename V> auto operator()(const V& p) const {
+
+        template <typename V>
+        auto operator()(const V& p) const {
             using S = typename V::value_type;
             using std::exp;
             return p[0] * exp(p[1] * S(t)) - S(y);
         }
     };
+
     std::vector<ExpFitRes> exp_dataset() {
         std::vector<ExpFitRes> r;
         const double a = 2.0, b = 0.5;
         for (int k = 0; k <= 10; ++k) {
             const double t = 0.1 * k;
-            r.push_back(ExpFitRes{t, a * std::exp(b * t)});   // noise-free
+            r.push_back(ExpFitRes{t, a * std::exp(b * t)}); // noise-free
         }
         return r;
     }
@@ -44,7 +52,12 @@ namespace {
 // ===========================================================================
 // Levenberg–Marquardt on Rosenbrock-as-NLS → (1,1), residual 0, f=0.
 // ===========================================================================
-TEST_CASE("kalpa: Levenberg–Marquardt solves Rosenbrock residuals", "[kalpa][lsq][lm]") {
+TEST_CASE (
+"kalpa: Levenberg–Marquardt solves Rosenbrock residuals"
+,
+"[kalpa][lsq][lm]"
+)
+ {
     // Rosen_r0 and Rosen_r1 are distinct types, so a homogeneous std::vector
     // needs a single residual type. Use an index-selecting adapter that carries
     // both the value and the Dual overload the AD Jacobian pass requires.
@@ -77,7 +90,12 @@ TEST_CASE("kalpa: Levenberg–Marquardt solves Rosenbrock residuals", "[kalpa][l
 // ===========================================================================
 // Gauss–Newton on the same residuals (QR least-squares path) → (1,1).
 // ===========================================================================
-TEST_CASE("kalpa: Gauss–Newton solves Rosenbrock residuals", "[kalpa][lsq][gn]") {
+TEST_CASE (
+"kalpa: Gauss–Newton solves Rosenbrock residuals"
+,
+"[kalpa][lsq][gn]"
+)
+ {
     struct RosenRes {
         int which;
         double operator()(const ga::Vector<double>& x) const {
@@ -104,7 +122,12 @@ TEST_CASE("kalpa: Gauss–Newton solves Rosenbrock residuals", "[kalpa][lsq][gn]
 // LM recovers the parameters of an exponential model  y = a·e^{b t}.
 //   Data generated noise-free from (a,b) = (2, 0.5); LM must return them.
 // ===========================================================================
-TEST_CASE("kalpa: Levenberg–Marquardt fits an exponential model", "[kalpa][lsq][lm]") {
+TEST_CASE (
+"kalpa: Levenberg–Marquardt fits an exponential model"
+,
+"[kalpa][lsq][lm]"
+)
+ {
     auto data = exp_dataset();
     LevenbergMarquardt<double> lm; lm.max_iter = 200;
     auto r = lm.solve(data, v2(1.0, 1.0));           // start away from the truth
@@ -117,7 +140,12 @@ TEST_CASE("kalpa: Levenberg–Marquardt fits an exponential model", "[kalpa][lsq
 // ===========================================================================
 // Determinism: LM is a deterministic descent — same start ⇒ identical result.
 // ===========================================================================
-TEST_CASE("kalpa: Levenberg–Marquardt is deterministic", "[kalpa][lsq][lm][determinism]") {
+TEST_CASE (
+"kalpa: Levenberg–Marquardt is deterministic"
+,
+"[kalpa][lsq][lm][determinism]"
+)
+ {
     auto data = exp_dataset();
     LevenbergMarquardt<double> lm;
     auto a = lm.solve(data, v2(1.0, 1.0));
@@ -132,7 +160,12 @@ TEST_CASE("kalpa: Levenberg–Marquardt is deterministic", "[kalpa][lsq][lm][det
 // Parallel Jacobian parity: ParallelJacobian must reach the same point as the
 // serial default (differential validation of the pravaha row-fill path).
 // ===========================================================================
-TEST_CASE("kalpa: LM parallel Jacobian matches the serial path", "[kalpa][lsq][lm][parallel]") {
+TEST_CASE (
+"kalpa: LM parallel Jacobian matches the serial path"
+,
+"[kalpa][lsq][lm][parallel]"
+)
+ {
     auto data = exp_dataset();
     LevenbergMarquardt<double, SerialJacobian>   lm_ser;
     LevenbergMarquardt<double, ParallelJacobian> lm_par;

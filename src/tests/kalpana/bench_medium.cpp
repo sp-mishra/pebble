@@ -8,7 +8,12 @@
 #include "kalpana/color/spectral.hpp"
 #include <chrono>
 
-TEST_CASE("Bench MediumSolver::step on 256x256 field", "[kalpana][bench][medium][!benchmark]") {
+TEST_CASE (
+"Bench MediumSolver::step on 256x256 field"
+,
+"[kalpana][bench][medium][!benchmark]"
+)
+ {
     using namespace kalpana;
 
     PaintField<> f(256, 256, 1.0f);

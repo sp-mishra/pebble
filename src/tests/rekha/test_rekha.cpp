@@ -5,26 +5,29 @@
 #include <string_view>
 
 namespace {
+    struct TestBackend {
+        int lines = 0;
+        int polylines = 0;
+        int circles = 0;
+        int rects = 0;
+        int texts = 0;
 
-struct TestBackend {
-    int lines = 0;
-    int polylines = 0;
-    int circles = 0;
-    int rects = 0;
-    int texts = 0;
-
-    void begin_frame(std::uint32_t, std::uint32_t, rekha::Color) {}
-    void draw_line(rekha::Scalar, rekha::Scalar, rekha::Scalar, rekha::Scalar, rekha::StrokeStyle) { ++lines; }
-    void draw_polyline(std::span<const rekha::Vec2>, rekha::StrokeStyle) { ++polylines; }
-    void draw_circle(rekha::Scalar, rekha::Scalar, rekha::Scalar, rekha::Color) { ++circles; }
-    void draw_rect(rekha::Scalar, rekha::Scalar, rekha::Scalar, rekha::Scalar, rekha::Color) { ++rects; }
-    void draw_text(std::string_view, rekha::Scalar, rekha::Scalar, rekha::Color) { ++texts; }
-    void end_frame() {}
-};
-
+        void begin_frame(std::uint32_t, std::uint32_t, rekha::Color) {}
+        void draw_line(rekha::Scalar, rekha::Scalar, rekha::Scalar, rekha::Scalar, rekha::StrokeStyle) { ++lines; }
+        void draw_polyline(std::span<const rekha::Vec2>, rekha::StrokeStyle) { ++polylines; }
+        void draw_circle(rekha::Scalar, rekha::Scalar, rekha::Scalar, rekha::Color) { ++circles; }
+        void draw_rect(rekha::Scalar, rekha::Scalar, rekha::Scalar, rekha::Scalar, rekha::Color) { ++rects; }
+        void draw_text(std::string_view, rekha::Scalar, rekha::Scalar, rekha::Color) { ++texts; }
+        void end_frame() {}
+    };
 } // namespace
 
-TEST_CASE("rekha: mixed plot dispatch hits backend primitives", "[rekha][plot][backend]") {
+TEST_CASE (
+"rekha: mixed plot dispatch hits backend primitives"
+,
+"[rekha][plot][backend]"
+)
+ {
     rekha::XYSeries line("line");
     line.add(0.0f, 0.0f).add(1.0f, 2.0f).add(2.0f, 1.0f);
 
@@ -50,7 +53,12 @@ TEST_CASE("rekha: mixed plot dispatch hits backend primitives", "[rekha][plot][b
     REQUIRE(backend.texts >= 2);  // axis labels
 }
 
-TEST_CASE("rekha: force-directed spring layout keeps graph in viewport", "[rekha][graph][layout]") {
+TEST_CASE (
+"rekha: force-directed spring layout keeps graph in viewport"
+,
+"[rekha][graph][layout]"
+)
+ {
     rekha::Graph g;
     g.edges = {
         {0, 1, 1.0f}, {1, 2, 1.0f}, {2, 3, 1.0f}, {3, 0, 1.0f}, {0, 2, 0.5f}
@@ -70,7 +78,12 @@ TEST_CASE("rekha: force-directed spring layout keeps graph in viewport", "[rekha
     }
 }
 
-TEST_CASE("rekha: kalpana backend rasterizes frame", "[rekha][kalpana][raster]") {
+TEST_CASE (
+"rekha: kalpana backend rasterizes frame"
+,
+"[rekha][kalpana][raster]"
+)
+ {
     rekha::XYSeries s("wave");
     s.add(0.0f, 0.0f).add(1.0f, 1.0f).add(2.0f, 0.0f);
 
@@ -84,7 +97,12 @@ TEST_CASE("rekha: kalpana backend rasterizes frame", "[rekha][kalpana][raster]")
     REQUIRE(pixels.size() == 320 * 200);
 }
 
-TEST_CASE("rekha: extended chart set renders", "[rekha][plot][extended]") {
+TEST_CASE (
+"rekha: extended chart set renders"
+,
+"[rekha][plot][extended]"
+)
+ {
     rekha::XYSeries area("area");
     area.add(0.0f, 1.0f).add(1.0f, 2.0f).add(2.0f, 1.4f).add(3.0f, 2.2f);
 
@@ -116,7 +134,12 @@ TEST_CASE("rekha: extended chart set renders", "[rekha][plot][extended]") {
     REQUIRE(backend.rects >= 1);
 }
 
-TEST_CASE("rekha: errorbar pie heatmap render paths", "[rekha][plot][phase1]") {
+TEST_CASE (
+"rekha: errorbar pie heatmap render paths"
+,
+"[rekha][plot][phase1]"
+)
+ {
     rekha::ErrorBarPlot eb;
     eb.points = {
         {0.5f, 1.0f, 0.2f, 0.3f},
@@ -161,7 +184,12 @@ TEST_CASE("rekha: errorbar pie heatmap render paths", "[rekha][plot][phase1]") {
     REQUIRE(backend.texts >= 2);   // axes text + legend labels
 }
 
-TEST_CASE("rekha: subplot shared axes and annotations", "[rekha][subplot][annotation]") {
+TEST_CASE (
+"rekha: subplot shared axes and annotations"
+,
+"[rekha][subplot][annotation]"
+)
+ {
     rekha::XYSeries s0("cpu");
     s0.add(0.0f, 10.0f).add(1.0f, 14.0f).add(2.0f, 12.0f);
     rekha::XYSeries s1("mem");
@@ -189,7 +217,12 @@ TEST_CASE("rekha: subplot shared axes and annotations", "[rekha][subplot][annota
     REQUIRE(backend.lines >= 6); // axes/ticks
 }
 
-TEST_CASE("rekha: constrained layout tick labels and arrows", "[rekha][subplot][phase2]") {
+TEST_CASE (
+"rekha: constrained layout tick labels and arrows"
+,
+"[rekha][subplot][phase2]"
+)
+ {
     rekha::XYSeries s("util");
     s.add(0.0f, 0.2f).add(0.5f, 0.8f).add(1.0f, 0.4f);
 
@@ -217,7 +250,12 @@ TEST_CASE("rekha: constrained layout tick labels and arrows", "[rekha][subplot][
     REQUIRE(backend.texts >= 12); // tick labels + legends + annotations
 }
 
-TEST_CASE("rekha: data tick labels and auto legend", "[rekha][axis][legend]") {
+TEST_CASE (
+"rekha: data tick labels and auto legend"
+,
+"[rekha][axis][legend]"
+)
+ {
     rekha::XYSeries s("trend");
     s.add(10.0f, 100.0f).add(20.0f, 180.0f).add(30.0f, 120.0f);
 
@@ -236,7 +274,12 @@ TEST_CASE("rekha: data tick labels and auto legend", "[rekha][axis][legend]") {
     REQUIRE(backend.texts >= 6);  // axis labels + tick labels + legend + annotation
 }
 
-TEST_CASE("rekha: axis override and graph deoverlap", "[rekha][axis][graph]") {
+TEST_CASE (
+"rekha: axis override and graph deoverlap"
+,
+"[rekha][axis][graph]"
+)
+ {
     rekha::Graph g;
     g.nodes = {{10.0f, 10.0f}, {10.1f, 10.1f}, {10.2f, 10.1f}};
     g.edges = {{0, 1, 1.0f}, {1, 2, 1.0f}, {2, 0, 1.0f}};
@@ -256,7 +299,12 @@ TEST_CASE("rekha: axis override and graph deoverlap", "[rekha][axis][graph]") {
     REQUIRE(backend.texts >= 2);
 }
 
-TEST_CASE("rekha: theme presets apply cleanly", "[rekha][theme]") {
+TEST_CASE (
+"rekha: theme presets apply cleanly"
+,
+"[rekha][theme]"
+)
+ {
     rekha::XYSeries s("theme");
     s.add(0.0f, 0.1f).add(0.5f, 0.9f).add(1.0f, 0.4f);
 

@@ -12,7 +12,6 @@
 #include "token.hpp"
 
 namespace lang::samasa {
-
     template <class TokenKind>
     struct token_stream {
         std::span<const token<TokenKind>> tokens;
@@ -20,6 +19,7 @@ namespace lang::samasa {
         [[nodiscard]] constexpr std::uint32_t size() const noexcept {
             return static_cast<std::uint32_t>(tokens.size());
         }
+
         [[nodiscard]] constexpr bool empty() const noexcept { return tokens.empty(); }
 
         [[nodiscard]] constexpr const token<TokenKind>& operator[](std::uint32_t i) const {
@@ -29,6 +29,7 @@ namespace lang::samasa {
         [[nodiscard]] constexpr const token<TokenKind>* begin() const noexcept {
             return tokens.data();
         }
+
         [[nodiscard]] constexpr const token<TokenKind>* end() const noexcept {
             return tokens.data() + tokens.size();
         }
@@ -39,14 +40,13 @@ namespace lang::samasa {
     // storage template directly.
     template <class TokenKind>
     struct token_buffer {
-        using token_storage  = containers::dynamic::SmallVector<token<TokenKind>, 512>;
+        using token_storage = containers::dynamic::SmallVector<token<TokenKind>, 512>;
         using trivia_storage = containers::dynamic::SmallVector<trivia, 256>;
-        token_storage  data;
+        token_storage data;
         trivia_storage trivia_arena;
 
         [[nodiscard]] token_stream<TokenKind> view() const noexcept {
             return {std::span<const token<TokenKind>>(data)};
         }
     };
-
 } // namespace lang::samasa

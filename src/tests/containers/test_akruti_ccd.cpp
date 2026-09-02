@@ -7,7 +7,12 @@
 using namespace akruti;
 using V = Vec2<Scalar>;
 
-TEST_CASE("akruti: conservative-advancement time of impact", "[akruti][ccd]") {
+TEST_CASE (
+"akruti: conservative-advancement time of impact"
+,
+"[akruti][ccd]"
+)
+ {
     Circle a{{0, 0}, 1}, b{{5, 0}, 1};
     TOIResult toi = time_of_impact(a, b, V{-10, 0}); // gap 3, closes at t=0.3
     REQUIRE(toi.hit);
@@ -20,12 +25,22 @@ TEST_CASE("akruti: conservative-advancement time of impact", "[akruti][ccd]") {
     REQUIRE(ov.t == 0);
 }
 
-TEST_CASE("akruti: speculative fraction bounds motion", "[akruti][ccd]") {
+TEST_CASE (
+"akruti: speculative fraction bounds motion"
+,
+"[akruti][ccd]"
+)
+ {
     REQUIRE(speculative_fraction(3, 10, 1) == Catch::Approx(0.3).margin(0.02));
     REQUIRE(speculative_fraction(3, 0, 1) == Catch::Approx(1.0));
 }
 
-TEST_CASE("akruti: Sutherland-Hodgman clipping", "[akruti][fracture][clip]") {
+TEST_CASE (
+"akruti: Sutherland-Hodgman clipping"
+,
+"[akruti][fracture][clip]"
+)
+ {
     Poly sq = rect_poly({0, 0}, {1, 1});
     Poly half = clip_halfplane(sq, V{1, 0}, V{0.5f, 0});
     REQUIRE(std::fabs(polygon_area(half)) == Catch::Approx(0.5).margin(1e-3));
@@ -35,7 +50,12 @@ TEST_CASE("akruti: Sutherland-Hodgman clipping", "[akruti][fracture][clip]") {
     REQUIRE(std::fabs(polygon_area(inter)) == Catch::Approx(0.25).margin(1e-3));
 }
 
-TEST_CASE("akruti: Voronoi shatter conserves area", "[akruti][fracture][voronoi]") {
+TEST_CASE (
+"akruti: Voronoi shatter conserves area"
+,
+"[akruti][fracture][voronoi]"
+)
+ {
     Poly boundary = rect_poly({0, 0}, {1, 1});
     std::mt19937 rng(3);
     std::uniform_real_distribution<float> U(0.05f, 0.95f);

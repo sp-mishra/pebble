@@ -72,7 +72,8 @@ namespace tarka::native {
             const AtomId id = mint(t, theory);
             if (inserted) {
                 it->second = id;
-            } else {
+            }
+            else {
                 collisions_.push_back(id);
             }
             return id;
@@ -105,6 +106,7 @@ namespace tarka::native {
             const std::uint32_t vi = var_index(v);
             return vi < var_to_atom_.size() ? var_to_atom_[vi] : kNullAtom;
         }
+
         [[nodiscard]] AtomId atom_of(Var v) const noexcept { return atom_of_var(v); }
 
         void reset() {

@@ -40,6 +40,7 @@ using namespace medha::dsl;
 
 TEST_CASE (
 
+
 "edsl: plan_builder produces correct plan name"
 ,
 "[medha][edsl]"
@@ -50,6 +51,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "edsl: plan_builder isolation and retry stored"
 ,
@@ -67,6 +69,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "edsl: plan_builder resources and keys registered"
 ,
@@ -87,6 +90,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "edsl: plan_builder let_load and store_stmt in body"
 ,
@@ -111,6 +115,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "edsl: validate_plan: valid plan returns ok"
 ,
 "[medha][edsl]"
@@ -127,6 +132,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "edsl: validate_plan: missing resource_name → error"
 ,
 "[medha][edsl]"
@@ -140,6 +146,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "edsl: validate_plan: unbound resource reference → error"
 ,
@@ -161,6 +168,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "edsl: compile valid plan → executable_plan::valid() true"
 ,
 "[medha][edsl]"
@@ -176,6 +184,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "edsl: compile invalid plan → valid() false"
 ,
 "[medha][edsl]"
@@ -190,6 +199,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "edsl: executable_plan::run valid plan → committed"
 ,
@@ -208,6 +218,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "edsl: executable_plan::run invalid plan → rejected error"
 ,
@@ -231,6 +242,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "edsl: bindings bind_string + find_string"
 ,
 "[medha][edsl]"
@@ -250,6 +262,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "edsl/lithe: lower propagates plan_name"
 ,
 "[medha][edsl][lithe]"
@@ -263,6 +276,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "edsl/lithe: lower stores isolation in metadata"
 ,
@@ -279,6 +293,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "edsl/lithe: lower stores retry max in metadata"
 ,
 "[medha][edsl][lithe]"
@@ -293,6 +308,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "edsl/lithe: lower resource hashes non-zero for non-empty names"
 ,
@@ -311,6 +327,7 @@ TEST_CASE (
 
 TEST_CASE (
 
+
 "edsl/lithe: lower conflict policy stored"
 ,
 "[medha][edsl][lithe]"
@@ -323,6 +340,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 "edsl/lithe: two plans with different resources have different hashes"
 ,

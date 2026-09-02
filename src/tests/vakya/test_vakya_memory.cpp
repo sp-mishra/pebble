@@ -48,7 +48,12 @@ using namespace vakya::types;
 // 1. region_arena: distinct roots are syntactically disjoint
 // ============================================================================
 
-TEST_CASE("opt region: distinct roots disjoint", "[opt][region]") {
+TEST_CASE (
+"opt region: distinct roots disjoint"
+,
+"[opt][region]"
+)
+ {
     region_arena arena;
     const region_ref a = arena.fresh_region();
     const region_ref b = arena.fresh_region();
@@ -60,7 +65,12 @@ TEST_CASE("opt region: distinct roots disjoint", "[opt][region]") {
 // 2. region_arena: structural interning
 // ============================================================================
 
-TEST_CASE("opt region: structural interning", "[opt][region]") {
+TEST_CASE (
+"opt region: structural interning"
+,
+"[opt][region]"
+)
+ {
     region_arena arena;
     const region_ref root = arena.fresh_region();
     const std::uint64_t f = 0xABCDu;
@@ -73,7 +83,12 @@ TEST_CASE("opt region: structural interning", "[opt][region]") {
 // 3. region_arena: distinct concrete fields disjoint
 // ============================================================================
 
-TEST_CASE("opt region: distinct fields disjoint", "[opt][region]") {
+TEST_CASE (
+"opt region: distinct fields disjoint"
+,
+"[opt][region]"
+)
+ {
     region_arena arena;
     const region_ref root = arena.fresh_region();
     const region_ref fx = arena.project_field(root, 1u);
@@ -85,7 +100,12 @@ TEST_CASE("opt region: distinct fields disjoint", "[opt][region]") {
 // 4. region_arena: nested region not disjoint
 // ============================================================================
 
-TEST_CASE("opt region: nested not disjoint", "[opt][region]") {
+TEST_CASE (
+"opt region: nested not disjoint"
+,
+"[opt][region]"
+)
+ {
     region_arena arena;
     const region_ref root = arena.fresh_region();
     const region_ref fx = arena.project_field(root, 1u);
@@ -97,7 +117,12 @@ TEST_CASE("opt region: nested not disjoint", "[opt][region]") {
 // 5. region_arena: symbolic index defers
 // ============================================================================
 
-TEST_CASE("opt region: symbolic index not disjoint", "[opt][region]") {
+TEST_CASE (
+"opt region: symbolic index not disjoint"
+,
+"[opt][region]"
+)
+ {
     region_arena arena;
     const region_ref root = arena.fresh_region();
     const region_ref si = arena.project_index(root, kSymbolicIndex);
@@ -109,7 +134,12 @@ TEST_CASE("opt region: symbolic index not disjoint", "[opt][region]") {
 // 6. region_arena: unite_alias
 // ============================================================================
 
-TEST_CASE("opt region: unite_alias", "[opt][region]") {
+TEST_CASE (
+"opt region: unite_alias"
+,
+"[opt][region]"
+)
+ {
     region_arena arena;
     const region_ref a = arena.fresh_region();
     const region_ref b = arena.fresh_region();
@@ -122,7 +152,12 @@ TEST_CASE("opt region: unite_alias", "[opt][region]") {
 // 7. may_alias
 // ============================================================================
 
-TEST_CASE("opt alias: may_alias basic", "[opt][alias]") {
+TEST_CASE (
+"opt alias: may_alias basic"
+,
+"[opt][alias]"
+)
+ {
     region_arena arena;
     const region_ref a = arena.fresh_region();
     const region_ref b = arena.fresh_region();
@@ -135,7 +170,12 @@ TEST_CASE("opt alias: may_alias basic", "[opt][alias]") {
 // 8. disjoint_solver: concept + solved
 // ============================================================================
 
-TEST_CASE("opt alias: disjoint_solver solved", "[opt][alias]") {
+TEST_CASE (
+"opt alias: disjoint_solver solved"
+,
+"[opt][alias]"
+)
+ {
     static_assert(constraint_solver<disjoint_solver>);
     region_arena arena;
     const region_ref a = arena.fresh_region();
@@ -152,7 +192,12 @@ TEST_CASE("opt alias: disjoint_solver solved", "[opt][alias]") {
 // 9. disjoint_solver: unsatisfiable when aliased
 // ============================================================================
 
-TEST_CASE("opt alias: disjoint_solver refuted on alias", "[opt][alias]") {
+TEST_CASE (
+"opt alias: disjoint_solver refuted on alias"
+,
+"[opt][alias]"
+)
+ {
     region_arena arena;
     const region_ref a = arena.fresh_region();
     const region_ref b = arena.fresh_region();
@@ -169,7 +214,12 @@ TEST_CASE("opt alias: disjoint_solver refuted on alias", "[opt][alias]") {
 // 10. disjoint routes via solve_batch (registry seeds kDisjointKind → graph)
 // ============================================================================
 
-TEST_CASE("opt alias: disjoint via solve_batch", "[opt][alias]") {
+TEST_CASE (
+"opt alias: disjoint via solve_batch"
+,
+"[opt][alias]"
+)
+ {
     region_arena regions;
     const region_ref a = regions.fresh_region();
     const region_ref b = regions.fresh_region();
@@ -202,6 +252,7 @@ TEST_CASE("opt alias: disjoint via solve_batch", "[opt][alias]") {
 namespace {
     // A minimal File protocol: Closed(1) --open--> Open(2) --close--> Closed(1).
     enum : typestate_id { kClosed = 1, kOpen = 2 };
+
     constexpr std::uint64_t kOpenM = 0x0Eu, kCloseM = 0x0Cu, kReadM = 0x0Du;
 
     constexpr transition kFileEdges[] = {
@@ -211,7 +262,12 @@ namespace {
     };
 } // namespace
 
-TEST_CASE("opt typestate: legal transition", "[opt][typestate]") {
+TEST_CASE (
+"opt typestate: legal transition"
+,
+"[opt][typestate]"
+)
+ {
     protocol_descriptor proto;
     proto.stable_id = 1;
     proto.transitions = kFileEdges;
@@ -224,7 +280,12 @@ TEST_CASE("opt typestate: legal transition", "[opt][typestate]") {
     CHECK(tr.next == kOpen);
 }
 
-TEST_CASE("opt typestate: illegal method", "[opt][typestate]") {
+TEST_CASE (
+"opt typestate: illegal method"
+,
+"[opt][typestate]"
+)
+ {
     protocol_descriptor proto;
     proto.transitions = kFileEdges;
     proto.transition_count = 3;
@@ -237,7 +298,12 @@ TEST_CASE("opt typestate: illegal method", "[opt][typestate]") {
 // 13. affine_scope: advance + double-consume
 // ============================================================================
 
-TEST_CASE("opt typestate: affine_scope consume", "[opt][typestate]") {
+TEST_CASE (
+"opt typestate: affine_scope consume"
+,
+"[opt][typestate]"
+)
+ {
     protocol_descriptor proto;
     proto.transitions = kFileEdges;
     proto.transition_count = 3;
@@ -258,7 +324,12 @@ TEST_CASE("opt typestate: affine_scope consume", "[opt][typestate]") {
 // 14. affine_scope: leaked
 // ============================================================================
 
-TEST_CASE("opt typestate: affine_scope leaked", "[opt][typestate]") {
+TEST_CASE (
+"opt typestate: affine_scope leaked"
+,
+"[opt][typestate]"
+)
+ {
     protocol_descriptor proto;
     proto.transitions = kFileEdges;
     proto.transition_count = 3;
@@ -279,7 +350,12 @@ TEST_CASE("opt typestate: affine_scope leaked", "[opt][typestate]") {
 // 15. rw_summary: interning + sorted-unique insert
 // ============================================================================
 
-TEST_CASE("opt rw_summary: intern + insert", "[opt][rw]") {
+TEST_CASE (
+"opt rw_summary: intern + insert"
+,
+"[opt][rw]"
+)
+ {
     region_arena regions;
     const region_ref a = regions.fresh_region();
     const region_ref b = regions.fresh_region();
@@ -301,7 +377,12 @@ TEST_CASE("opt rw_summary: intern + insert", "[opt][rw]") {
 // 16-18. predict_conflict
 // ============================================================================
 
-TEST_CASE("opt rw_summary: disjoint no_conflict", "[opt][rw]") {
+TEST_CASE (
+"opt rw_summary: disjoint no_conflict"
+,
+"[opt][rw]"
+)
+ {
     region_arena regions;
     const region_ref a = regions.fresh_region();
     const region_ref b = regions.fresh_region();
@@ -311,7 +392,12 @@ TEST_CASE("opt rw_summary: disjoint no_conflict", "[opt][rw]") {
     CHECK(predict_conflict(regions, sa, sb) == conflict_result::no_conflict);
 }
 
-TEST_CASE("opt rw_summary: write-read conflict", "[opt][rw]") {
+TEST_CASE (
+"opt rw_summary: write-read conflict"
+,
+"[opt][rw]"
+)
+ {
     region_arena regions;
     const region_ref a = regions.fresh_region();
 
@@ -320,7 +406,12 @@ TEST_CASE("opt rw_summary: write-read conflict", "[opt][rw]") {
     CHECK(predict_conflict(regions, sa, sb) == conflict_result::conflict);
 }
 
-TEST_CASE("opt rw_summary: symbolic deferred", "[opt][rw]") {
+TEST_CASE (
+"opt rw_summary: symbolic deferred"
+,
+"[opt][rw]"
+)
+ {
     region_arena regions;
     const region_ref root = regions.fresh_region();
     const region_ref si = regions.project_index(root, kSymbolicIndex);
@@ -335,7 +426,12 @@ TEST_CASE("opt rw_summary: symbolic deferred", "[opt][rw]") {
 // 19. no_conflict_solver: concept + solve_batch deferred under no_smt
 // ============================================================================
 
-TEST_CASE("opt rw_summary: no_conflict_solver deferred", "[opt][rw]") {
+TEST_CASE (
+"opt rw_summary: no_conflict_solver deferred"
+,
+"[opt][rw]"
+)
+ {
     static_assert(constraint_solver<no_conflict_solver>);
     region_arena regions;
     rw_summary_arena summaries;

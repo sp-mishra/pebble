@@ -82,9 +82,9 @@ namespace vakya::types {
     // ============================================================================
 
     enum class transition_status : std::uint8_t {
-        ok = 0,             // legal; `next` is the resulting state
+        ok = 0, // legal; `next` is the resulting state
         illegal_method = 1, // no edge from `from` for this method
-        consumed = 2,       // the handle was already consumed (affine violation)
+        consumed = 2, // the handle was already consumed (affine violation)
     };
 
     struct transition_result {

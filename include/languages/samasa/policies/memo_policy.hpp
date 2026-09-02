@@ -28,12 +28,11 @@
 #include "../core/result.hpp"
 
 namespace lang::samasa {
-
     // ---- memo_key ----------------------------------------------------------
 
     struct memo_key {
-        std::uint64_t rule_hash  = 0;
-        std::uint32_t token_pos  = 0;
+        std::uint64_t rule_hash = 0;
+        std::uint32_t token_pos = 0;
 
         bool operator==(const memo_key&) const noexcept = default;
     };
@@ -52,10 +51,10 @@ namespace lang::samasa {
     // ---- memo_value --------------------------------------------------------
 
     struct memo_value {
-        parse_status  status       = parse_status::soft_fail;
-        std::uint32_t next_pos     = 0;
+        parse_status status = parse_status::soft_fail;
+        std::uint32_t next_pos = 0;
         std::uint32_t furthest_err = 0;
-        bool          valid        = false;
+        bool valid = false;
     };
 
     // ---- no_memo -----------------------------------------------------------
@@ -66,6 +65,7 @@ namespace lang::samasa {
         [[nodiscard]] constexpr bool lookup(memo_key, memo_value&) const noexcept {
             return false;
         }
+
         constexpr void store(memo_key, memo_value) noexcept {}
         constexpr void reserve(std::size_t) noexcept {}
     };
@@ -133,19 +133,41 @@ namespace lang::samasa {
     class dense_memo {
     public:
         static constexpr bool enabled = true;
+
         [[nodiscard]] bool lookup(memo_key k, memo_value& out) const noexcept {
-            const auto row = find(k.rule_hash); if (row == MaxRules || k.token_pos >= MaxTokens) return false;
-            const auto& v = table_[row * MaxTokens + k.token_pos]; if (!v.valid) return false; out = v; return true;
+            const auto row = find(k.rule_hash);
+            if (row == MaxRules || k.token_pos >= MaxTokens) return false;
+            const auto& v = table_[row * MaxTokens + k.token_pos];
+            if (!v.valid) return false;
+            out = v;
+            return true;
         }
+
         void store(memo_key k, memo_value v) noexcept {
-            if (k.token_pos >= MaxTokens) return; auto row = find(k.rule_hash);
-            if (row == MaxRules) { if (rule_count_ == MaxRules) return; row = rule_count_++; rules_[row] = k.rule_hash; }
+            if (k.token_pos >= MaxTokens) return;
+            auto row = find(k.rule_hash);
+            if (row == MaxRules) {
+                if (rule_count_ == MaxRules) return;
+                row = rule_count_++;
+                rules_[row] = k.rule_hash;
+            }
             table_[row * MaxTokens + k.token_pos] = v;
         }
+
         constexpr void reserve(std::size_t) noexcept {}
-        constexpr void clear() noexcept { table_ = {}; rules_ = {}; rule_count_ = 0; }
+
+        constexpr void clear() noexcept {
+            table_ = {};
+            rules_ = {};
+            rule_count_ = 0;
+        }
+
     private:
-        [[nodiscard]] std::size_t find(std::uint64_t h) const noexcept { for(std::size_t i=0;i<rule_count_;++i) if(rules_[i]==h)return i; return MaxRules; }
+        [[nodiscard]] std::size_t find(std::uint64_t h) const noexcept {
+            for (std::size_t i = 0; i < rule_count_; ++i) if (rules_[i] == h)return i;
+            return MaxRules;
+        }
+
         std::array<memo_value, MaxRules * MaxTokens> table_{};
         std::array<std::uint64_t, MaxRules> rules_{};
         std::size_t rule_count_ = 0;
@@ -179,7 +201,7 @@ namespace lang::samasa {
         template <class Ctx>
         [[nodiscard]] auto match(Ctx& ctx) const {
             using Stream = typename Ctx::stream_type;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
 
             // Check if Ctx provides memo() — use if constexpr for zero overhead.
             if constexpr (requires { ctx.memo(); }) {
@@ -190,7 +212,7 @@ namespace lang::samasa {
                 if (ctx.memo().lookup(key, cached)) {
                     // Restore cursor to cached next_pos.
                     auto next_cur = ctx.cursor();
-                    next_cur.pos  = cached.next_pos;
+                    next_cur.pos = cached.next_pos;
                     if (cached.status == parse_status::success)
                         return R::success_at(next_cur, cached.furthest_err);
                     if (cached.status == parse_status::hard_fail)
@@ -199,11 +221,14 @@ namespace lang::samasa {
                 }
 
                 auto r = rule.match(ctx);
-                memo_value mv{r.status, r.ok() ? r.next.pos : ctx.cursor().pos,
-                              r.furthest_error, true};
+                memo_value mv{
+                    r.status, r.ok() ? r.next.pos : ctx.cursor().pos,
+                    r.furthest_error, true
+                };
                 ctx.memo().store(key, mv);
                 return r;
-            } else {
+            }
+            else {
                 return rule.match(ctx);
             }
         }
@@ -213,5 +238,4 @@ namespace lang::samasa {
     [[nodiscard]] constexpr memoized<Rule> make_memoized(Rule r) {
         return {std::move(r)};
     }
-
 } // namespace lang::samasa

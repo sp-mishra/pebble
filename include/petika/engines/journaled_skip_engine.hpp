@@ -121,10 +121,12 @@ namespace petika {
                     const bool inserted = !list_.contains(mutation.key);
                     list_.insert_or_assign(mutation.key, NodePayload{.value = mutation.value, .lsn = lsn});
                     if (inserted) size_.fetch_add(1, std::memory_order_relaxed);
-                } else if (mutation.op == EntryOp::Delete) {
+                }
+                else if (mutation.op == EntryOp::Delete) {
                     if (!list_.erase(mutation.key)) return std::unexpected(StorageError::NotFound);
                     size_.fetch_sub(1, std::memory_order_relaxed);
-                } else {
+                }
+                else {
                     return std::unexpected(StorageError::InvalidArg);
                 }
             }
@@ -143,7 +145,8 @@ namespace petika {
                      it != list_.end() && comp.three_way(it->first, end_key) < 0; ++it) {
                     cb(EntryView{.key = it->first, .value = it->second.value, .lsn = it->second.lsn});
                 }
-            } else {
+            }
+            else {
                 for (auto it = list_.lower_bound(start_key);
                      it != list_.end() && comp(it->first, end_key); ++it) {
                     cb(EntryView{.key = it->first, .value = it->second.value, .lsn = it->second.lsn});
@@ -167,10 +170,10 @@ namespace petika {
         // ------------------------------------------------------------------------
         Result<void> apply_log_record(EntryOp op, const Key& key, const Value& val, nitya::lsn_t lsn) {
             switch (op) {
-            case EntryOp::Put:    return put(key, val, lsn);
+            case EntryOp::Put: return put(key, val, lsn);
             case EntryOp::Delete: return erase(key, lsn);
-            case EntryOp::Clear:  return clear(lsn);
-            case EntryOp::Batch:  return std::unexpected(StorageError::NotSupported);
+            case EntryOp::Clear: return clear(lsn);
+            case EntryOp::Batch: return std::unexpected(StorageError::NotSupported);
             }
             return {};
         }

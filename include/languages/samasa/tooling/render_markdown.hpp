@@ -20,7 +20,6 @@
 #include "../grammar/validation.hpp"
 
 namespace lang::samasa {
-
     // ---- render_markdown(grammar_description<G>) ---------------------------
 
     template <class G>
@@ -110,27 +109,27 @@ namespace lang::samasa {
     namespace rm_detail {
         [[nodiscard]] inline std::string_view severity_str(grammar_issue_severity s) noexcept {
             switch (s) {
-                case grammar_issue_severity::error:   return "error";
-                case grammar_issue_severity::warning: return "warning";
-                case grammar_issue_severity::note:    return "note";
+            case grammar_issue_severity::error: return "error";
+            case grammar_issue_severity::warning: return "warning";
+            case grammar_issue_severity::note: return "note";
             }
             return "unknown";
         }
 
         [[nodiscard]] inline std::string_view diag_code_str(grammar_diag_code c) noexcept {
             switch (c) {
-                case grammar_diag_code::empty_many:             return "SAMASA-GRAMMAR-EMPTY-MANY";
-                case grammar_diag_code::duplicate_rule:         return "SAMASA-GRAMMAR-DUPLICATE-RULE";
-                case grammar_diag_code::unreachable_rule:       return "SAMASA-GRAMMAR-UNREACHABLE-RULE";
-                case grammar_diag_code::left_recursion:         return "SAMASA-GRAMMAR-LEFT-RECURSION";
-                case grammar_diag_code::unknown_ref:            return "SAMASA-GRAMMAR-UNKNOWN-REF";
-                case grammar_diag_code::duplicate_operator:     return "SAMASA-GRAMMAR-DUPLICATE-OP";
-                case grammar_diag_code::bad_pratt_table:        return "SAMASA-GRAMMAR-BAD-PRATT-TABLE";
-                case grammar_diag_code::nullable_root:          return "SAMASA-GRAMMAR-NULLABLE-ROOT";
-                case grammar_diag_code::choice_shadowing:       return "SAMASA-GRAMMAR-CHOICE-SHADOW";
-                case grammar_diag_code::empty_separator:        return "SAMASA-GRAMMAR-EMPTY-SEP";
-                case grammar_diag_code::choice_first_overlap:   return "SAMASA-GRAMMAR-CHOICE-OVERLAP";
-                case grammar_diag_code::recovery_no_progress:   return "SAMASA-GRAMMAR-RECOVERY-NO-PROGRESS";
+            case grammar_diag_code::empty_many: return "SAMASA-GRAMMAR-EMPTY-MANY";
+            case grammar_diag_code::duplicate_rule: return "SAMASA-GRAMMAR-DUPLICATE-RULE";
+            case grammar_diag_code::unreachable_rule: return "SAMASA-GRAMMAR-UNREACHABLE-RULE";
+            case grammar_diag_code::left_recursion: return "SAMASA-GRAMMAR-LEFT-RECURSION";
+            case grammar_diag_code::unknown_ref: return "SAMASA-GRAMMAR-UNKNOWN-REF";
+            case grammar_diag_code::duplicate_operator: return "SAMASA-GRAMMAR-DUPLICATE-OP";
+            case grammar_diag_code::bad_pratt_table: return "SAMASA-GRAMMAR-BAD-PRATT-TABLE";
+            case grammar_diag_code::nullable_root: return "SAMASA-GRAMMAR-NULLABLE-ROOT";
+            case grammar_diag_code::choice_shadowing: return "SAMASA-GRAMMAR-CHOICE-SHADOW";
+            case grammar_diag_code::empty_separator: return "SAMASA-GRAMMAR-EMPTY-SEP";
+            case grammar_diag_code::choice_first_overlap: return "SAMASA-GRAMMAR-CHOICE-OVERLAP";
+            case grammar_diag_code::recovery_no_progress: return "SAMASA-GRAMMAR-RECOVERY-NO-PROGRESS";
             }
             return "SAMASA-GRAMMAR-UNKNOWN";
         }
@@ -159,5 +158,4 @@ namespace lang::samasa {
         out += result.ok() ? "_Validation passed._\n" : "_Validation failed._\n";
         return out;
     }
-
 } // namespace lang::samasa

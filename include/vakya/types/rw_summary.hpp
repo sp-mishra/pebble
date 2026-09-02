@@ -121,8 +121,8 @@ namespace vakya::types {
 
     enum class conflict_result : std::uint8_t {
         no_conflict = 0, // every cross pair provably disjoint → commutes
-        conflict = 1,    // a write overlaps a read/write (proven aliased or same)
-        deferred = 2,    // a symbolic-index pair is undecidable → needs SMT
+        conflict = 1, // a write overlaps a read/write (proven aliased or same)
+        deferred = 2, // a symbolic-index pair is undecidable → needs SMT
     };
 
     // ============================================================================
@@ -211,6 +211,7 @@ namespace vakya::types {
     class no_conflict_solver {
     public:
         no_conflict_solver() = default;
+
         no_conflict_solver(region_arena& regions, rw_summary_arena& summaries) noexcept
             : regions_(&regions), summaries_(&summaries) {}
 
@@ -221,7 +222,10 @@ namespace vakya::types {
         [[nodiscard]] solve_result solve(std::span<const constraint> batch,
                                          solve_context /*ctx*/) {
             solve_result r;
-            if (!regions_ || !summaries_) { r.status = solve_status::deferred; return r; }
+            if (!regions_ || !summaries_) {
+                r.status = solve_status::deferred;
+                return r;
+            }
 
             for (const constraint& c : batch) {
                 if (!handles(c.kind)) continue;

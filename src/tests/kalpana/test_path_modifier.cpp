@@ -1,7 +1,12 @@
 #include "catch_amalgamated.hpp"
 #include "kalpana/kalpana.hpp"
 
-TEST_CASE("Kalpana: Geometry Modifiers and Shape Builders", "[kalpana][geom]") {
+TEST_CASE (
+"Kalpana: Geometry Modifiers and Shape Builders"
+,
+"[kalpana][geom]"
+)
+ {
     using namespace kalpana;
 
     SECTION("Free-function Shape Constructors") {

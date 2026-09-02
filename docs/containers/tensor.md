@@ -1,6 +1,10 @@
 # Tensor: High-Performance C++23/C++26 Multidimensional Tensor Engine & EDSL
 
-The `Tensor` subsystem (`include/containers/tensor/tensor.hpp`, `include/containers/tensor/tensor_edsl.hpp`, namespace `ts` / `containers::tensor` / `ts::edsl`) is Pebble's header-only, policy-based multidimensional tensor computing framework and symbolic Embedded Domain-Specific Language (EDSL). It offers zero-overhead abstractions, decoupling storage layouts from execution architectures with compile-time policy injection and Sūtra/Vākya-inspired expression graph compilation.
+The `Tensor` subsystem (`include/containers/tensor/tensor.hpp`, `include/containers/tensor/tensor_edsl.hpp`, namespace
+`ts` / `containers::tensor` / `ts::edsl`) is Pebble's header-only, policy-based multidimensional tensor computing
+framework and symbolic Embedded Domain-Specific Language (EDSL). It offers zero-overhead abstractions, decoupling
+storage layouts from execution architectures with compile-time policy injection and Sūtra/Vākya-inspired expression
+graph compilation.
 
 ---
 
@@ -10,8 +14,8 @@ The `Tensor` subsystem (`include/containers/tensor/tensor.hpp`, `include/contain
 2. [File Structure](#-file-structure)
 3. [Quick Start: Core Tensor Engine](#-quick-start-core-tensor-engine)
 4. [Quick Start: Symbolic Tensor EDSL](#-quick-start-symbolic-tensor-edsl)
-   - [Level 1 — One-Shot Scalar & Tensor Evaluation](#level-1--one-shot-scalar--tensor-evaluation)
-   - [Level 2 — Compile Once, Run Many (Symbolic Model)](#level-2--compile-once-run-many-symbolic-model)
+    - [Level 1 — One-Shot Scalar & Tensor Evaluation](#level-1--one-shot-scalar--tensor-evaluation)
+    - [Level 2 — Compile Once, Run Many (Symbolic Model)](#level-2--compile-once-run-many-symbolic-model)
 5. [Game Math & Graphics Vectors (Constexpr Stack Math)](#-game-math--graphics-vectors-constexpr-stack-math)
 6. [Structure-of-Arrays (SoA) Reflection Storage](#-structure-of-arrays-soa-reflection-storage)
 7. [Apple Silicon GPU Acceleration (`mlx`)](#-apple-silicon-gpu-acceleration-mlx)
@@ -22,34 +26,47 @@ The `Tensor` subsystem (`include/containers/tensor/tensor.hpp`, `include/contain
 ## 🚀 Key Highlights
 
 1. **Clean Policy-Based Architecture**:
-   - **Storage Policies (Memory)**: Standard heap (`default_storage_policy`), Small-Buffer-Optimized inline buffer (`small_tensor_storage_policy<InlineBytes>`), Smriti Arena / Pool (`smriti_storage_policy<ResourceT>`), Aligned SIMD storage (`highway_storage_policy`), Apple Silicon GPU memory (`mlx_storage_policy`), and Arrow-style zero-copy string columns (`arrow_string_storage`).
-   - **Computation Policies (Execution)**: Pure CPU reference (`default_computation_policy`), Portable Highway SIMD (`highway_computation_policy`), and Apple MLX Metal GPU acceleration (`mlx_computation_policy`).
+    - **Storage Policies (Memory)**: Standard heap (`default_storage_policy`), Small-Buffer-Optimized inline buffer
+      (`small_tensor_storage_policy<InlineBytes>`), Smriti Arena / Pool (`smriti_storage_policy<ResourceT>`), Aligned
+      SIMD storage (`highway_storage_policy`), Apple Silicon GPU memory (`mlx_storage_policy`), and Arrow-style
+      zero-copy string columns (`arrow_string_storage`).
+    - **Computation Policies (Execution)**: Pure CPU reference (`default_computation_policy`), Portable Highway SIMD
+      (`highway_computation_policy`), and Apple MLX Metal GPU acceleration (`mlx_computation_policy`).
 2. **Small & Big Tensor Optimization**:
-   - **Static Compile-Time Tensors (`static_tensor`)**: Fixed-dimension stack arrays with zero heap allocation.
-   - **Small-Buffer Dynamic Tensors (`small_tensor`)**: Uses Pebble's `SmallVector` to keep tensors under 64/128 bytes strictly on the cache line.
-   - **Pebble Ecosystem Synergy**:
-     - `containers::dynamic::SmallVector`: Used for `tensor_shape` and `tensor_strides` (eliminating heap allocation for rank 1–4 tensors).
-     - `mem::smriti`: Direct arena and memory-pool allocation with `smriti_tensor` and `SmritiAllocator`.
-     - `observability::nadi`: Distributed tracing / pulse scopes for zero-overhead profiling.
+    - **Static Compile-Time Tensors (`static_tensor`)**: Fixed-dimension stack arrays with zero heap allocation.
+    - **Small-Buffer Dynamic Tensors (`small_tensor`)**: Uses Pebble's `SmallVector` to keep tensors under 64/128 bytes
+      strictly on the cache line.
+    - **Pebble Ecosystem Synergy**:
+        - `containers::dynamic::SmallVector`: Used for `tensor_shape` and `tensor_strides` (eliminating heap allocation
+          for rank 1–4 tensors).
+        - `mem::smriti`: Direct arena and memory-pool allocation with `smriti_tensor` and `SmritiAllocator`.
+        - `observability::nadi`: Distributed tracing / pulse scopes for zero-overhead profiling.
 3. **True Lazy Evaluation via Expression Templates**:
-   - Uses C++23 *Deducing this* for zero-cost static polymorphism.
-   - Expressions (`binary_expression`, `unary_expression`) build compile-time evaluation trees without creating intermediate heap allocations.
-   - `scalar_wrapper` uses value-capture traits while heavy tensors use const reference capture.
+    - Uses C++23 *Deducing this* for zero-cost static polymorphism.
+    - Expressions (`binary_expression`, `unary_expression`) build compile-time evaluation trees without creating
+      intermediate heap allocations.
+    - `scalar_wrapper` uses value-capture traits while heavy tensors use const reference capture.
 4. **Symbolic Tensor EDSL (Sūtra & Vākya Inspired)**:
-   - **User-Defined Parameter Literals (`_p` and `_t`)**: `"learning_rate"_p = 0.001f` for scalar parameters and `"weights"_t = W` for tensors.
-   - **Symbolic Leaves (`sym_tensor<Rank>`)**: Pure metadata carriers (Rank, Shape) building DAGs without allocating heap buffers.
-   - **Eager Shape Calculus**: Shape deduction and validation at graph construction time for `matmul`, reductions, broadcasts, and transpositions.
-   - **Multi-Tier Execution**:
-     - **Level 1 (`ts::eval`)**: Immediate one-shot evaluation with named bindings.
-     - **Level 2 (`ts::compile`)**: Compile-once, run-many execution pipelines with hardware target dispatch (`ts::target::cpu`, `ts::target::simd`, `ts::target::gpu`).
+    - **User-Defined Parameter Literals (`_p` and `_t`)**: `"learning_rate"_p = 0.001f` for scalar parameters and
+      `"weights"_t = W` for tensors.
+    - **Symbolic Leaves (`sym_tensor<Rank>`)**: Pure metadata carriers (Rank, Shape) building DAGs without allocating
+      heap buffers.
+    - **Eager Shape Calculus**: Shape deduction and validation at graph construction time for `matmul`, reductions,
+      broadcasts, and transpositions.
+    - **Multi-Tier Execution**:
+        - **Level 1 (`ts::eval`)**: Immediate one-shot evaluation with named bindings.
+        - **Level 2 (`ts::compile`)**: Compile-once, run-many execution pipelines with hardware target dispatch
+          (`ts::target::cpu`, `ts::target::simd`, `ts::target::gpu`).
 5. **C++23 Modern Interfaces**:
-   - Multidimensional subscripting: `tensor[i, j, k]`.
-   - Strided slicing and views: `tensor(all, {0, 2})`.
+    - Multidimensional subscripting: `tensor[i, j, k]`.
+    - Strided slicing and views: `tensor(all, {0, 2})`.
 6. **Rich Mathematical & Neural Kernel Suite**:
-   - Arithmetic: `+`, `-`, `*`, `/`, `%`, `fma`
-   - Reductions & Stats: `sum`, `mean`, `max`, `min`, `variance`, `std_dev`, `normalize`, `reduce_sum`, `reduce_mean`, `reduce_max`
-   - Linear Algebra: `dot`, `matmul`, `transpose`, `reshape`, `flatten`
-   - Neural Activations & Math: `relu`, `sigmoid`, `gelu`, `softmax`, `clip`, `power`, trigonometric (`sin`, `cos`, `tan`), exponential (`exp`, `log`, `sqrt`, `abs`).
+    - Arithmetic: `+`, `-`, `*`, `/`, `%`, `fma`
+    - Reductions & Stats: `sum`, `mean`, `max`, `min`, `variance`, `std_dev`, `normalize`, `reduce_sum`, `reduce_mean`,
+      `reduce_max`
+    - Linear Algebra: `dot`, `matmul`, `transpose`, `reshape`, `flatten`
+    - Neural Activations & Math: `relu`, `sigmoid`, `gelu`, `softmax`, `clip`, `power`, trigonometric (`sin`, `cos`,
+      `tan`), exponential (`exp`, `log`, `sqrt`, `abs`).
 
 ---
 
@@ -189,8 +206,12 @@ for (const auto& batch : data_loader) {
 
 ## 🎮 Game Math & Graphics Vectors (Constexpr Stack Math)
 
-For graphics, physics engines, and game math, `pebble::math` (or `ts::math` from `include/containers/numeric/math_vector.hpp`) provides specialized zero-overhead, stack-allocated vector and matrix aliases powered by `ts::static_tensor`:
-- Types: `vec2`, `vec3`, `vec4`, `quat`, `mat2`, `mat3`, `mat4` (and double/integer variants: `vec3d`, `vec4i`, `mat4d`).
+For graphics, physics engines, and game math, `pebble::math` (or `ts::math` from
+`include/containers/numeric/math_vector.hpp`) provides specialized zero-overhead, stack-allocated vector and matrix
+aliases powered by `ts::static_tensor`:
+
+- Types: `vec2`, `vec3`, `vec4`, `quat`, `mat2`, `mat3`, `mat4` (and double/integer variants: `vec3d`, `vec4i`,
+  `mat4d`).
 - **Fully `constexpr` enabled**: construct, index (`v[0]`, `m[0, 1]`), and perform arithmetic during compilation.
 - Geometric algorithms: `dot`, `cross`, `length`, `length_sq`, `normalize`, `distance`, `lerp`, `reflect`.
 
@@ -216,7 +237,9 @@ vec3 dir = normalize(velocity); // (0.0, 0.6, 0.8)
 
 ## 🧱 Structure-of-Arrays (SoA) Reflection Storage
 
-For high-throughput cache locality, data-oriented design (DOD), and SIMD-friendly vectorization, `ts::soa_storage_policy<StructT>` integrates with Pebble's `meta` compile-time reflection system to decompose custom structs into parallel column arrays:
+For high-throughput cache locality, data-oriented design (DOD), and SIMD-friendly vectorization,
+`ts::soa_storage_policy<StructT>` integrates with Pebble's `meta` compile-time reflection system to decompose custom
+structs into parallel column arrays:
 
 ```cpp
 struct Particle {
@@ -240,10 +263,15 @@ Particle p = particles.get(0);
 
 ## 🍏 Apple Silicon GPU Acceleration (`mlx`)
 
-When compiling on macOS with `HAS_MLX=1`, `ts::gpu_tensor<T>` (or `ts::tensor<T, mlx_storage_policy, mlx_computation_policy>`) and EDSL target `ts::target::gpu` leverage Apple's MLX unified memory architecture and Metal GPU execution backend:
+When compiling on macOS with `HAS_MLX=1`, `ts::gpu_tensor<T>` (or
+`ts::tensor<T, mlx_storage_policy, mlx_computation_policy>`) and EDSL target `ts::target::gpu` leverage Apple's MLX
+unified memory architecture and Metal GPU execution backend:
+
 - **Unified Memory Architecture**: Zero host-to-device PCI transfer latency (CPU and GPU share the unified memory pool).
-- **Metal GPU Dispatch**: Matrix operations (`dot`, `matmul`), reductions (`sum`, `mean`, `max`), and elementwise arithmetic are dispatched directly to Apple Metal GPU cores.
-- **Heterogeneous Interop**: Seamlessly construct or assign tensors between CPU reference storage, Highway SIMD buffers, and MLX GPU storage.
+- **Metal GPU Dispatch**: Matrix operations (`dot`, `matmul`), reductions (`sum`, `mean`, `max`), and elementwise
+  arithmetic are dispatched directly to Apple Metal GPU cores.
+- **Heterogeneous Interop**: Seamlessly construct or assign tensors between CPU reference storage, Highway SIMD buffers,
+  and MLX GPU storage.
 
 ```cpp
 auto A = sym_tensor<2>("A", {2048, 2048});
@@ -261,7 +289,9 @@ auto gpu_result = gpu_model("A"_t = tA, "B"_t = tB, "bias"_p = 1.5f);
 
 ## ⚡ Arrow-Style String Storage
 
-For tabular and dataframe applications, `ts::ArrowStringStorage` stores strings in a contiguous `std::vector<char>` buffer with an offset array:
-- Zero pointer chasing ($O(1)$ flat cache locality).
+For tabular and dataframe applications, `ts::ArrowStringStorage` stores strings in a contiguous `std::vector<char>`
+buffer with an offset array:
+
+- Zero pointer chasing ($O (1)$ flat cache locality).
 - Returns zero-copy `std::string_view` on `operator[]`.
 - Up to 10x faster for bulk scanning, sorting, and grouping.

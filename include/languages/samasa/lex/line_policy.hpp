@@ -17,22 +17,24 @@
 #include <concepts>
 
 namespace lang::samasa {
-
     // ---- Concept -------------------------------------------------------
 
     template <class P, class TokenKind>
     concept line_policy = requires(P p, TokenKind k) {
-        { p.line_continues(k) }           -> std::same_as<bool>;
-        { p.suppress_separator(k, k) }    -> std::same_as<bool>;
-        { p.synthetic_separator() }       -> std::same_as<TokenKind>;
+        { p.line_continues(k) } -> std::same_as<bool>;
+        { p.suppress_separator(k, k) } -> std::same_as<bool>;
+        { p.synthetic_separator() } -> std::same_as<TokenKind>;
     };
 
     // ---- no_line_sensitivity -------------------------------------------
 
     template <class TokenKind>
     struct no_line_sensitivity {
-        [[nodiscard]] constexpr bool      line_continues([[maybe_unused]] TokenKind) const noexcept { return true; }
-        [[nodiscard]] constexpr bool      suppress_separator([[maybe_unused]] TokenKind, [[maybe_unused]] TokenKind) const noexcept { return true; }
+        [[nodiscard]] constexpr bool line_continues([[maybe_unused]] TokenKind) const noexcept { return true; }
+
+        [[nodiscard]] constexpr bool suppress_separator([[maybe_unused]] TokenKind,
+                                                        [[maybe_unused]] TokenKind) const noexcept { return true; }
+
         [[nodiscard]] constexpr TokenKind synthetic_separator() const noexcept { return {}; }
     };
 
@@ -51,10 +53,12 @@ namespace lang::samasa {
         [[nodiscard]] constexpr bool line_continues(TokenKind prev) const noexcept {
             return !statement_ending<TokenKind>::value(prev);
         }
-        [[nodiscard]] constexpr bool suppress_separator([[maybe_unused]] TokenKind, [[maybe_unused]] TokenKind) const noexcept {
+
+        [[nodiscard]] constexpr bool suppress_separator([[maybe_unused]] TokenKind,
+                                                        [[maybe_unused]] TokenKind) const noexcept {
             return false;
         }
+
         [[nodiscard]] constexpr TokenKind synthetic_separator() const noexcept { return SepKind; }
     };
-
 } // namespace lang::samasa

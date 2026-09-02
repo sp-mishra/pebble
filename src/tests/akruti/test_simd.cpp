@@ -3,7 +3,12 @@
 #include "akruti/simd.hpp"
 #include <vector>
 
-TEST_CASE("Akruti: SIMD Vectorized Polygon Support Point Sweep", "[akruti][simd]") {
+TEST_CASE (
+"Akruti: SIMD Vectorized Polygon Support Point Sweep"
+,
+"[akruti][simd]"
+)
+ {
     akruti::ConvexPoly<8> poly;
     // Regular octagon
     for (int i = 0; i < 8; ++i) {
@@ -25,7 +30,12 @@ TEST_CASE("Akruti: SIMD Vectorized Polygon Support Point Sweep", "[akruti][simd]
     REQUIRE(sup_diag.y > 5.0f);
 }
 
-TEST_CASE("Akruti: SIMD 4-Ray Packet AABB Intersection", "[akruti][simd]") {
+TEST_CASE (
+"Akruti: SIMD 4-Ray Packet AABB Intersection"
+,
+"[akruti][simd]"
+)
+ {
     akruti::simd::Ray4 rays;
     rays.o[0] = {-10.0f, 0.0f};  rays.d[0] = {1.0f, 0.0f}; rays.tmax[0] = 100.0f; // Direct hit
     rays.o[1] = {-10.0f, 10.0f}; rays.d[1] = {1.0f, 0.0f}; rays.tmax[1] = 100.0f; // Miss (above)

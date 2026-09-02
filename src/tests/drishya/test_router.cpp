@@ -17,23 +17,29 @@ using M = MonospaceMetrics;
 using P = DefaultPainter;
 
 namespace {
-InputFrame press_at(float x, float y) {
-    InputFrame f;
-    f.pointer = Vec2{x, y};
-    f.buttons = kPointerLeft;
-    f.prev_buttons = kPointerNone; // down edge this frame
-    return f;
-}
-InputFrame release_at(float x, float y) {
-    InputFrame f;
-    f.pointer = Vec2{x, y};
-    f.buttons = kPointerNone;
-    f.prev_buttons = kPointerLeft; // up edge this frame
-    return f;
-}
+    InputFrame press_at(float x, float y) {
+        InputFrame f;
+        f.pointer = Vec2{x, y};
+        f.buttons = kPointerLeft;
+        f.prev_buttons = kPointerNone; // down edge this frame
+        return f;
+    }
+
+    InputFrame release_at(float x, float y) {
+        InputFrame f;
+        f.pointer = Vec2{x, y};
+        f.buttons = kPointerNone;
+        f.prev_buttons = kPointerLeft; // up edge this frame
+        return f;
+    }
 } // namespace
 
-TEST_CASE("router: button fires on_click on press+release", "[drishya][router]") {
+TEST_CASE (
+"router: button fires on_click on press+release"
+,
+"[drishya][router]"
+)
+ {
     M m;
     App<M, P> app(m);
 
@@ -54,7 +60,12 @@ TEST_CASE("router: button fires on_click on press+release", "[drishya][router]")
     CHECK(clicks == 1);
 }
 
-TEST_CASE("router: press outside the button does not fire", "[drishya][router]") {
+TEST_CASE (
+"router: press outside the button does not fire"
+,
+"[drishya][router]"
+)
+ {
     M m;
     App<M, P> app(m);
 

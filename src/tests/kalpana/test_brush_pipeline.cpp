@@ -1,7 +1,12 @@
 #include "catch_amalgamated.hpp"
 #include "kalpana/kalpana.hpp"
 
-TEST_CASE("Kalpana: Brush Pipeline & Rebelle Presets", "[kalpana][brush]") {
+TEST_CASE (
+"Kalpana: Brush Pipeline & Rebelle Presets"
+,
+"[kalpana][brush]"
+)
+ {
     using namespace kalpana;
 
     SECTION("SpectralBrush Configuration and Emission") {

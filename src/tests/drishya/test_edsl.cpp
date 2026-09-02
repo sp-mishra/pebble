@@ -13,20 +13,35 @@ using namespace pebble::drishya::edsl;
 using M = MonospaceMetrics;
 using P = DefaultPainter;
 
-TEST_CASE("edsl: _px literal yields a Px SizeSpec", "[drishya][edsl]") {
+TEST_CASE (
+"edsl: _px literal yields a Px SizeSpec"
+,
+"[drishya][edsl]"
+)
+ {
     const auto s = 240_px;
     CHECK(s.kind == akruti::layout::SizeSpec::Kind::Px);
     CHECK(s.value == Catch::Approx(240.0f));
 }
 
-TEST_CASE("edsl: modifiers set style fields via operator|", "[drishya][edsl]") {
+TEST_CASE (
+"edsl: modifiers set style fields via operator|"
+,
+"[drishya][edsl]"
+)
+ {
     auto w = vstack_() | pad(12) | flex(2.0f) | align(Align::Center);
     CHECK(w.style_.padding.l == Catch::Approx(12.0f));
     CHECK(w.style_.flex_grow == Catch::Approx(2.0f));
     CHECK(w.style_.align_items == Align::Center);
 }
 
-TEST_CASE("edsl: node tree mounts into the App with the right shape", "[drishya][edsl]") {
+TEST_CASE (
+"edsl: node tree mounts into the App with the right shape"
+,
+"[drishya][edsl]"
+)
+ {
     M m;
     App<M, P> app(m);
 

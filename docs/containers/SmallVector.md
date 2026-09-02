@@ -92,11 +92,10 @@ partially-moved mess).
 `Alloc` defaults to `std::allocator<T>`. Custom allocators follow the standard `std::allocator_traits` protocol.
 
 Propagation behaviour is fully respected:
-| Trait | Effect |
-|---|---|
-| `propagate_on_container_copy_assignment` | Allocator propagated on copy-assign if different and trait is true |
-| `propagate_on_container_move_assignment` | Heap pointer stolen on move-assign when allocators match or POCMA is true |
-| `propagate_on_container_swap` | Allocators swapped (or `assert` fires if unequal and trait is false) |
+| Trait | Effect | |---|---| | `propagate_on_container_copy_assignment` | Allocator propagated on copy-assign if
+different and trait is true | | `propagate_on_container_move_assignment` | Heap pointer stolen on move-assign when
+allocators match or POCMA is true | | `propagate_on_container_swap` | Allocators swapped (or `assert` fires if unequal
+and trait is false) |
 
 **Smriti allocator example** (bump pool spill):
 

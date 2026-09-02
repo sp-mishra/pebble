@@ -58,6 +58,7 @@ namespace tarka::native {
             [[nodiscard]] weight operator+(const weight& o) const {
                 return weight{value + o.value, strict || o.strict};
             }
+
             // negativity test for a cycle sum: (v < 0) or (v == 0 and strict)
             [[nodiscard]] bool negative() const {
                 const int s = value.sign();
@@ -134,10 +135,12 @@ namespace tarka::native {
             rat k;
             bool strict;
         };
+
         struct Decoded {
             std::optional<Constraint> pos;
             std::optional<Constraint> neg;
         };
+
         // Directed edge y -> x with weight w, justified by (atom,value).
         struct Edge {
             std::uint32_t x;
@@ -154,6 +157,7 @@ namespace tarka::native {
             if (ins) ++next_dlvar_;
             return it->second;
         }
+
         static constexpr std::uint32_t kZeroVertex = 0;
 
         void add_edge(std::uint32_t x, std::uint32_t y, weight w, AtomId a, bool val) {
@@ -211,31 +215,36 @@ namespace tarka::native {
         AffDiff affine(Term t) {
             AffDiff r;
             switch (t.op()) {
-                case Op::Sub: {
-                    auto ch = t.children();
-                    if (ch.size() != 2) return r;
-                    if (is_const(ch[1])) { // v - c
-                        r.x = dlvar(ch[0]);
-                        r.c = -const_val(ch[1]);
-                    } else if (is_const(ch[0])) { // c - v
-                        r.y = dlvar(ch[1]);
-                        r.c = const_val(ch[0]);
-                    } else { // v1 - v2
-                        r.x = dlvar(ch[0]);
-                        r.y = dlvar(ch[1]);
-                    }
-                    r.ok = true;
-                    return r;
+            case Op::Sub: {
+                auto ch = t.children();
+                if (ch.size() != 2) return r;
+                if (is_const(ch[1])) { // v - c
+                    r.x = dlvar(ch[0]);
+                    r.c = -const_val(ch[1]);
                 }
-                case Op::Lit: {
-                    r.c = const_val(t);
-                    r.ok = true;
-                    return r;
+                else if (is_const(ch[0])) { // c - v
+                    r.y = dlvar(ch[1]);
+                    r.c = const_val(ch[0]);
                 }
-                default:
-                    // bare variable
-                    if (is_var(t)) { r.x = dlvar(t); r.ok = true; }
-                    return r;
+                else { // v1 - v2
+                    r.x = dlvar(ch[0]);
+                    r.y = dlvar(ch[1]);
+                }
+                r.ok = true;
+                return r;
+            }
+            case Op::Lit: {
+                r.c = const_val(t);
+                r.ok = true;
+                return r;
+            }
+            default:
+                // bare variable
+                if (is_var(t)) {
+                    r.x = dlvar(t);
+                    r.ok = true;
+                }
+                return r;
             }
         }
 
@@ -257,7 +266,8 @@ namespace tarka::native {
             for (int i = 0; i < np; ++i) {
                 for (int j = 0; j < nn; ++j) {
                     if (P[i] != kZeroVertex && P[i] == N[j]) {
-                        P[i] = kZeroVertex; N[j] = kZeroVertex;
+                        P[i] = kZeroVertex;
+                        N[j] = kZeroVertex;
                     }
                 }
             }
@@ -331,7 +341,8 @@ namespace tarka::native {
                 const std::size_t ei = static_cast<std::size_t>(pred[v]);
                 cycle.push_back(ei);
                 v = edges_[ei].y;
-            } while (v != start && cycle.size() <= edges_.size());
+            }
+            while (v != start && cycle.size() <= edges_.size());
             return cycle;
         }
 

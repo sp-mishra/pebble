@@ -1,19 +1,26 @@
 # Tutorial: The Alchemist of Pebble Island — Compile-Time Reflection with Meta & Akshara
 
-Welcome to **Pebble Island**. As the Royal Alchemist and Systems Architect, your duty is to inspect, transform, and serialize data structures without paying any runtime penalty. 
+Welcome to **Pebble Island**. As the Royal Alchemist and Systems Architect, your duty is to inspect, transform, and
+serialize data structures without paying any runtime penalty.
 
 In traditional C++, writing a JSON serializer, a database ORM, or a binary packet encoder requires either:
+
 1. Painful, error-prone manual boilerplate for every field.
 2. Clunky, intrusive macros (`BOOST_HANA_DEFINE_STRUCT`, `REFLECT(...)`).
 3. Heavy runtime reflection (RTTI, virtual functions, heap allocations).
 
-Pebble provides a modern alternative: **`meta.hpp`** and **`akshara.hpp`** — single-header, zero-dependency C++23 compile-time reflection, string, and metaprogramming systems with **zero macros, zero virtual dispatch, and zero runtime overhead**.
+Pebble provides a modern alternative: **`meta.hpp`** and **`akshara.hpp`** — single-header, zero-dependency C++23
+compile-time reflection, string, and metaprogramming systems with **zero macros, zero virtual dispatch, and zero runtime
+overhead**.
 
-This tutorial assumes **zero prior knowledge of advanced template metaprogramming**. We will build from first principles, starting with compile-time strings and advancing to automatic struct reflection, enum-to-string mapping, tuple transformation, Structure-of-Arrays (SoA) layout transforms, and compile-time schema hashing.
+This tutorial assumes **zero prior knowledge of advanced template metaprogramming**. We will build from first
+principles, starting with compile-time strings and advancing to automatic struct reflection, enum-to-string mapping,
+tuple transformation, Structure-of-Arrays (SoA) layout transforms, and compile-time schema hashing.
 
 ---
 
 ## Table of Contents
+
 1. [The Philosophy: Reflection Without Macros](#1-the-philosophy-reflection-without-macros)
 2. [The One-File Compilation Blueprint](#2-the-one-file-compilation-blueprint)
 3. [Act 1: The Indestructible Word (Compile-Time Strings with Akshara)](#act-1-the-indestructible-word-compile-time-strings-with-akshara)
@@ -30,12 +37,16 @@ This tutorial assumes **zero prior knowledge of advanced template metaprogrammin
 
 ## 1. The Philosophy: Reflection Without Macros
 
-How does `meta.hpp` inspect a plain C++ struct like `struct Player { std::string name; int level; double health; };` without any macros or annotations?
+How does `meta.hpp` inspect a plain C++ struct like `struct Player { std::string name; int level; double health; };`
+without any macros or annotations?
 
-1. **Brace-Initialization Probing**: At compile time, template concepts probe how many fields a struct has using modern structured bindings.
+1. **Brace-Initialization Probing**: At compile time, template concepts probe how many fields a struct has using modern
+   structured bindings.
 2. **Type Extraction**: Structured bindings decompose the object into typed references.
-3. **Symbol Demangling**: `__PRETTY_FUNCTION__` / `__FUNCSIG__` is parsed at compile time via `akshara` to extract clean member and type names.
-4. **Constexpr Fold Execution**: Loops over fields are unrolled at compile time by the optimizer into direct pointer offsets.
+3. **Symbol Demangling**: `__PRETTY_FUNCTION__` / `__FUNCSIG__` is parsed at compile time via `akshara` to extract clean
+   member and type names.
+4. **Constexpr Fold Execution**: Loops over fields are unrolled at compile time by the optimizer into direct pointer
+   offsets.
 
 ---
 
@@ -67,9 +78,12 @@ int main() {
 ## Act 1: The Indestructible Word (Compile-Time Strings with Akshara)
 
 ### The Concept
-*Akshara* (Sanskrit: अक्षर) means "that which does not perish". `akshara::fixed_string<N>` allows strings to be passed as Non-Type Template Parameters (NTTP), concatenated, sliced, searched, and hashed entirely at compile time.
+
+*Akshara* (Sanskrit: अक्षर) means "that which does not perish". `akshara::fixed_string<N>` allows strings to be passed
+as Non-Type Template Parameters (NTTP), concatenated, sliced, searched, and hashed entirely at compile time.
 
 ### The Code
+
 ```cpp
 void act1_compile_time_strings() {
     // 1. Literal compile-time strings via ""_fs
@@ -99,9 +113,12 @@ void act1_compile_time_strings() {
 ## Act 2: The X-Ray Mirror (Automatic Aggregate Reflection)
 
 ### The Problem
-You have an unannotated third-party struct. You want to inspect its field count, field types, and field values automatically.
+
+You have an unannotated third-party struct. You want to inspect its field count, field types, and field values
+automatically.
 
 ### The Code
+
 ```cpp
 struct Hero {
     std::string name;
@@ -132,9 +149,12 @@ void act2_automatic_reflection() {
 ## Act 3: The Secret Archives (Semantic ADL Reflection for Private Fields)
 
 ### The Problem
-Some classes encapsulate their state with `private` members. To reflect them without exposing public getters/setters, declare an ADL hidden-friend `reflect_members`.
+
+Some classes encapsulate their state with `private` members. To reflect them without exposing public getters/setters,
+declare an ADL hidden-friend `reflect_members`.
 
 ### The Code
+
 ```cpp
 class TreasureChest {
 private:
@@ -166,9 +186,12 @@ void act3_private_member_reflection() {
 ## Act 4: The Chameleon Runes (Enum Introspection & Serialization)
 
 ### The Problem
-Converting C++ `enum class` values to strings (and parsing strings back to enums) usually requires maintaining brittle `switch` statements. `meta.hpp` automates this at compile time.
+
+Converting C++ `enum class` values to strings (and parsing strings back to enums) usually requires maintaining brittle
+`switch` statements. `meta.hpp` automates this at compile time.
 
 ### The Code
+
 ```cpp
 enum class IslandFaction : uint8_t {
     Merchants,
@@ -201,9 +224,11 @@ void act4_enum_reflection() {
 ## Act 5: The Transmutation Circle (Meta Algorithms: for_each, transform, fold)
 
 ### The Problem
+
 Write a generic JSON serializer that can print **any** C++ struct without knowing its types in advance.
 
 ### The Code
+
 ```cpp
 template <typename T>
 void print_as_json(const T& obj) {
@@ -243,9 +268,11 @@ void act5_generic_serialization() {
 ## Act 6: The Universal Bridge (Tuple Interop & Destructuring)
 
 ### The Concept
+
 Convert any struct into a `std::tuple` of values or references for pattern matching, hashing, or structured comparisons.
 
 ### The Code
+
 ```cpp
 struct Point3D {
     float x{1.0f};
@@ -276,7 +303,9 @@ void act6_tuple_interop() {
 ## Act 7: The Cache Transmuter (Structure-of-Arrays SoA Transforms)
 
 ### The Problem
-Storing particles as an Array of Structs (`std::vector<Particle>`) destroys SIMD and cache locality during physics loops. 
+
+Storing particles as an Array of Structs (`std::vector<Particle>`) destroys SIMD and cache locality during physics
+loops.
 
 `meta::soa_vector<T>` automatically decomposes any struct `T` into parallel contiguous column buffers at compile time.
 
@@ -292,6 +321,7 @@ Mass: [m0, m1, m2, ...]
 ```
 
 ### The Code
+
 ```cpp
 struct Particle {
     float x, y, z;
@@ -317,11 +347,15 @@ void act7_soa_optimization() {
 ## Act 8: The Seal of Integrity (Compile-Time Schema Fingerprinting)
 
 ### The Concept
-When saving binary files or sending network packets, how do you verify that the sender and receiver share the exact same struct layout?
 
-`meta::schema_hash<T>()` computes a deterministic 64-bit FNV-1a fingerprint based on field names, field types, and field offsets at compile time.
+When saving binary files or sending network packets, how do you verify that the sender and receiver share the exact same
+struct layout?
+
+`meta::schema_hash<T>()` computes a deterministic 64-bit FNV-1a fingerprint based on field names, field types, and field
+offsets at compile time.
 
 ### The Code
+
 ```cpp
 struct PacketV1 {
     uint32_t seq;
@@ -349,14 +383,14 @@ void act8_schema_hashing() {
 
 ## 11. Quick API Reference & Cheat Sheet
 
-| Category | API | Description |
-|---|---|---|
-| **Compile-Time String** | `"text"_fs`, `fixed_string<N>`, `akshara::fnv1a64` | NTTP-capable constexpr string manipulation |
-| **Field Count** | `meta::member_count<T>` | Compile-time count of fields in struct `T` |
-| **Field Iteration** | `meta::for_each_member(obj, fn)` | Unrolled compile-time visitor over all fields |
-| **Type Names** | `meta::type_name<T>()`, `meta::type_name_fs<T>()` | Clean constexpr type demangling |
-| **Enum Reflection** | `meta::enum_name(e)`, `meta::enum_cast<E>(str)`, `meta::enum_for_each<E>(fn)` | String-to-enum / enum-to-string mapping |
-| **Tuple Interop** | `meta::to_value_tuple(obj)`, `meta::tie_members(obj)`, `meta::from_tuple<T>(tup)` | Zero-copy tuple conversion and reference binding |
-| **SoA Memory** | `meta::soa_vector<T>` | Automatic Structure-of-Arrays cache optimizer |
-| **Schema Hashing** | `meta::type_hash<T>()`, `meta::schema_hash<T>()` | Structural FNV-1a binary schema fingerprinting |
-| **Binary Predicates** | `meta::is_binary_stable<T>`, `meta::is_zero_copy_safe<T>` | Compile-time memory safety checks |
+| Category                | API                                                                               | Description                                      |
+|-------------------------|-----------------------------------------------------------------------------------|--------------------------------------------------|
+| **Compile-Time String** | `"text"_fs`, `fixed_string<N>`, `akshara::fnv1a64`                                | NTTP-capable constexpr string manipulation       |
+| **Field Count**         | `meta::member_count<T>`                                                           | Compile-time count of fields in struct `T`       |
+| **Field Iteration**     | `meta::for_each_member(obj, fn)`                                                  | Unrolled compile-time visitor over all fields    |
+| **Type Names**          | `meta::type_name<T>()`, `meta::type_name_fs<T>()`                                 | Clean constexpr type demangling                  |
+| **Enum Reflection**     | `meta::enum_name(e)`, `meta::enum_cast<E>(str)`, `meta::enum_for_each<E>(fn)`     | String-to-enum / enum-to-string mapping          |
+| **Tuple Interop**       | `meta::to_value_tuple(obj)`, `meta::tie_members(obj)`, `meta::from_tuple<T>(tup)` | Zero-copy tuple conversion and reference binding |
+| **SoA Memory**          | `meta::soa_vector<T>`                                                             | Automatic Structure-of-Arrays cache optimizer    |
+| **Schema Hashing**      | `meta::type_hash<T>()`, `meta::schema_hash<T>()`                                  | Structural FNV-1a binary schema fingerprinting   |
+| **Binary Predicates**   | `meta::is_binary_stable<T>`, `meta::is_zero_copy_safe<T>`                         | Compile-time memory safety checks                |

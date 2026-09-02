@@ -15,23 +15,33 @@
 #include "languages/samasa/grammar/expected_sets.hpp"
 
 namespace {
+    using namespace lang::samasa;
 
-using namespace lang::samasa;
+    enum class SK : std::uint8_t { root, a_node, b_node };
 
-enum class SK : std::uint8_t { root, a_node, b_node };
-enum class TK : std::uint8_t { eof, tok_a, tok_b };
+    enum class TK : std::uint8_t { eof, tok_a, tok_b };
 
-// ============================================================================
-// FIRST-set computation
-// ============================================================================
+    // ============================================================================
+    // FIRST-set computation
+    // ============================================================================
 
-TEST_CASE("FIRST: tok<K> → {K}", "[samasa][conformance][first]") {
+    TEST_CASE (
+    "FIRST: tok<K> → {K}"
+    ,
+    "[samasa][conformance][first]"
+    )
+ {
     constexpr auto f = expected_at<rule<"r", tok<TK::tok_a>>, TK>();
     STATIC_REQUIRE(f.size() == 1);
     STATIC_REQUIRE(f[0] == TK::tok_a);
 }
 
-TEST_CASE("FIRST: seq<A,B> non-nullable A → FIRST = {A}", "[samasa][conformance][first]") {
+    TEST_CASE (
+    "FIRST: seq<A,B> non-nullable A → FIRST = {A}"
+    ,
+    "[samasa][conformance][first]"
+    )
+ {
     // tok_a is non-nullable → seq<tok_a, tok_b> FIRST = {tok_a} as the first element.
     // Array capacity is upper-bound (2); only arr[0] is filled.
     constexpr auto f = expected_at<rule<"r", seq_t<tok<TK::tok_a>, tok<TK::tok_b>>>, TK>();
@@ -39,7 +49,12 @@ TEST_CASE("FIRST: seq<A,B> non-nullable A → FIRST = {A}", "[samasa][conformanc
     STATIC_REQUIRE(f[0] == TK::tok_a);
 }
 
-TEST_CASE("FIRST: choice<A,B> → FIRST(A) ∪ FIRST(B)", "[samasa][conformance][first]") {
+    TEST_CASE (
+    "FIRST: choice<A,B> → FIRST(A) ∪ FIRST(B)"
+    ,
+    "[samasa][conformance][first]"
+    )
+ {
     constexpr auto f = expected_at<rule<"r", choice_t<tok<TK::tok_a>, tok<TK::tok_b>>>, TK>();
     STATIC_REQUIRE(f.size() == 2);
     const bool has_a = f[0] == TK::tok_a || f[1] == TK::tok_a;
@@ -48,8 +63,11 @@ TEST_CASE("FIRST: choice<A,B> → FIRST(A) ∪ FIRST(B)", "[samasa][conformance]
     STATIC_REQUIRE(has_b);
 }
 
-TEST_CASE("FIRST: nullable A in seq<A,B> → both A and B in FIRST",
-          "[samasa][conformance][first]")
+    TEST_CASE (
+    "FIRST: nullable A in seq<A,B> → both A and B in FIRST"
+    ,
+    "[samasa][conformance][first]"
+    )
 {
     // seq<opt<tok_a>, tok_b>: opt<tok_a> nullable → FIRST = {tok_a, tok_b}
     constexpr auto f = expected_at<
@@ -61,19 +79,26 @@ TEST_CASE("FIRST: nullable A in seq<A,B> → both A and B in FIRST",
     STATIC_REQUIRE(has_b);
 }
 
-// ============================================================================
-// FOLLOW fixed-point — mutually-recursive grammar
-//   G: root → (tok_a | tok_b)* using grammar<> with rule_count and rules.
-// ============================================================================
+    // ============================================================================
+    // FOLLOW fixed-point — mutually-recursive grammar
+    //   G: root → (tok_a | tok_b)* using grammar<> with rule_count and rules.
+    // ============================================================================
 
-using r_ab   = rule<"ab",   choice_t<tok<TK::tok_a>, tok<TK::tok_b>>>;
-using r_root = rule<"root", many_t<r_ab>>;
+    using r_ab = rule<"ab", choice_t < tok < TK::tok_a>
+    ,
+    tok<TK::tok_b>
+    >
+    >;
+    using r_root = rule<"root", many_t<r_ab>>;
 
-// Use the grammar<> helper to get rule_count.
-using FollowG = grammar<SK, TK, r_root, r_root, r_ab>;
+    // Use the grammar<> helper to get rule_count.
+    using FollowG = grammar<SK, TK, r_root, r_root, r_ab>;
 
-TEST_CASE("FOLLOW fixed-point: follow_sets completes and root has EOF",
-          "[samasa][conformance][follow]")
+    TEST_CASE (
+    "FOLLOW fixed-point: follow_sets completes and root has EOF"
+    ,
+    "[samasa][conformance][follow]"
+    )
 {
     // Verify fixed-point iteration terminates (no divergence).
     constexpr auto& entries = grammar_follow_sets<FollowG>::entries;
@@ -95,8 +120,11 @@ TEST_CASE("FOLLOW fixed-point: follow_sets completes and root has EOF",
     CHECK(root_has_eof);
 }
 
-TEST_CASE("FOLLOW fixed-point: FOLLOW(ab) contains tok_a and tok_b (loop body follows itself)",
-          "[samasa][conformance][follow]")
+    TEST_CASE (
+    "FOLLOW fixed-point: FOLLOW(ab) contains tok_a and tok_b (loop body follows itself)"
+    ,
+    "[samasa][conformance][follow]"
+    )
 {
     constexpr auto& entries = grammar_follow_sets<FollowG>::entries;
     constexpr std::size_t N = grammar_follow_sets<FollowG>::rule_count;
@@ -115,12 +143,15 @@ TEST_CASE("FOLLOW fixed-point: FOLLOW(ab) contains tok_a and tok_b (loop body fo
     CHECK(ab_has_b);
 }
 
-// ============================================================================
-// Nullable chain FIRST
-// ============================================================================
+    // ============================================================================
+    // Nullable chain FIRST
+    // ============================================================================
 
-TEST_CASE("FIRST: seq<opt<tok_a>, opt<tok_b>> → both tok_a and tok_b in FIRST",
-          "[samasa][conformance][first]")
+    TEST_CASE (
+    "FIRST: seq<opt<tok_a>, opt<tok_b>> → both tok_a and tok_b in FIRST"
+    ,
+    "[samasa][conformance][first]"
+    )
 {
     constexpr auto f = expected_at<
         rule<"r", seq_t<opt_t<tok<TK::tok_a>>, opt_t<tok<TK::tok_b>>>>, TK>();

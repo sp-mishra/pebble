@@ -66,11 +66,11 @@ namespace akshara {
         }
 
         // view() kept for backward compatibility
-        [[nodiscard]] consteval std::string_view view() const noexcept {
+        [[nodiscard]] constexpr std::string_view view() const noexcept {
             return {data, length};
         }
 
-        [[nodiscard]] consteval char operator[](std::size_t i) const noexcept {
+        [[nodiscard]] constexpr char operator[](std::size_t i) const noexcept {
             return data[i];
         }
 
@@ -406,7 +406,7 @@ namespace akshara {
         if constexpr (Nm == 0) return 0;
         if constexpr (Nm > Nh) return std::string_view::npos;
         // Build KMP failure table inline (function-parameter data can't be constexpr local)
-        std::array<int, Nm> fail{};
+        std::array < int, Nm > fail{};
         fail[0] = 0;
         for (std::size_t i = 1; i < Nm; ++i) {
             int k = fail[i - 1];
@@ -431,7 +431,7 @@ namespace akshara {
         constexpr std::size_t Nh = N - 1;
         constexpr std::size_t Nm = M - 1;
         if constexpr (Nm == 0 || Nm > Nh) return 0;
-        std::array<int, Nm> fail{};
+        std::array < int, Nm > fail{};
         fail[0] = 0;
         for (std::size_t i = 1; i < Nm; ++i) {
             int k = fail[i - 1];

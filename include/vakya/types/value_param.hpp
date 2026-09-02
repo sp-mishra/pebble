@@ -93,9 +93,9 @@ namespace vakya::types {
         static_cast<constraint_kind>(kConstraintKindExtensionBase + 22);
 
     enum class value_unify_result : std::uint8_t {
-        equal = 0,      // both literal and equal
-        not_equal = 1,  // both literal and distinct
-        deferred = 2,   // at least one symbolic — emit SMT obligation
+        equal = 0, // both literal and equal
+        not_equal = 1, // both literal and distinct
+        deferred = 2, // at least one symbolic — emit SMT obligation
     };
 
     // ============================================================================
@@ -133,9 +133,9 @@ namespace vakya::types {
 
     struct width_policy {
         std::uint16_t max_lane_bits = 128; // widest usable vector register, in bits
-        std::uint16_t elem_bits = 32;      // element width, in bits
-        std::uint32_t tile_bytes = 4096;   // working-set tile budget, in bytes
-        std::uint16_t max_width = 64;      // hard cap on synthesized lane count
+        std::uint16_t elem_bits = 32; // element width, in bits
+        std::uint32_t tile_bytes = 4096; // working-set tile budget, in bytes
+        std::uint16_t max_width = 64; // hard cap on synthesized lane count
 
         // Lanes that fit in one vector register for this element width.
         [[nodiscard]] constexpr std::uint16_t lanes() const noexcept {
@@ -181,8 +181,9 @@ namespace vakya::types {
     synthesize_tile(std::uint64_t static_extent, const width_policy& policy = {}) noexcept {
         if (static_extent == 0) return 0;
         const std::uint32_t elem_bytes = policy.elem_bits == 0 ? 1u : (policy.elem_bits / 8u);
-        const std::uint32_t budget = elem_bytes == 0 ? policy.tile_bytes
-                                                      : policy.tile_bytes / elem_bytes;
+        const std::uint32_t budget = elem_bytes == 0
+                                         ? policy.tile_bytes
+                                         : policy.tile_bytes / elem_bytes;
         std::uint64_t tile = budget == 0 ? 1u : budget;
         if (tile > static_extent) tile = static_extent;
         if (tile > 0xFFFFu) tile = 0xFFFFu;

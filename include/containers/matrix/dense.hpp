@@ -15,11 +15,10 @@
 #include <string_view>
 
 namespace ga {
-
     // -----------------------------------------------------------------------
     // MatrixView<T> — non-owning rank-2 slice (zero-copy)
     // -----------------------------------------------------------------------
-    template<typename T>
+    template <typename T>
     class MatrixView {
     public:
         MatrixView(T* data, std::size_t rows, std::size_t cols,
@@ -30,9 +29,11 @@ namespace ga {
         [[nodiscard]] T& operator()(std::size_t r, std::size_t c) noexcept {
             return data_[r * row_stride_ + c * col_stride_];
         }
+
         [[nodiscard]] const T& operator()(std::size_t r, std::size_t c) const noexcept {
             return data_[r * row_stride_ + c * col_stride_];
         }
+
         [[nodiscard]] std::size_t rows() const noexcept { return rows_; }
         [[nodiscard]] std::size_t cols() const noexcept { return cols_; }
         [[nodiscard]] T* data() noexcept { return data_; }
@@ -46,20 +47,22 @@ namespace ga {
     // -----------------------------------------------------------------------
     // Matrix<T, SP, CP> — rank-2 wrapper over DynamicTensor
     // -----------------------------------------------------------------------
-    template<typename T,
-             typename SP = ts::DefaultStoragePolicy,
-             typename CP = ts::DefaultComputationPolicy>
+    template <typename T,
+              typename SP = ts::DefaultStoragePolicy,
+              typename CP = ts::DefaultComputationPolicy>
     class Matrix {
     public:
         using tensor_type = ts::DynamicTensor<T, SP, CP>;
-        using value_type  = T;
+        using value_type = T;
         using storage_policy = SP;
         using computation_policy = CP;
 
         // ---- Construction ---------------------------------------------------
         Matrix() : tensor_({0, 0}) {}
+
         Matrix(std::size_t rows, std::size_t cols)
             : tensor_(ts::TensorShape{rows, cols}) {}
+
         Matrix(std::size_t rows, std::size_t cols, T fill_val)
             : tensor_(ts::TensorShape{rows, cols}) {
             std::fill(tensor_.data(), tensor_.data() + rows * cols, fill_val);
@@ -89,6 +92,7 @@ namespace ga {
         [[nodiscard]] T& operator()(std::size_t r, std::size_t c) noexcept {
             return tensor_.data()[r * cols() + c];
         }
+
         [[nodiscard]] const T& operator()(std::size_t r, std::size_t c) const noexcept {
             return tensor_.data()[r * cols() + c];
         }
@@ -104,15 +108,19 @@ namespace ga {
         [[nodiscard]] MatrixView<T> row(std::size_t r) noexcept {
             return {data() + r * cols(), 1, cols(), cols(), 1};
         }
+
         [[nodiscard]] MatrixView<const T> row(std::size_t r) const noexcept {
             return {data() + r * cols(), 1, cols(), cols(), 1};
         }
+
         [[nodiscard]] MatrixView<T> col(std::size_t c) noexcept {
             return {data() + c, rows(), 1, cols(), cols()};
         }
+
         [[nodiscard]] MatrixView<const T> col(std::size_t c) const noexcept {
             return {data() + c, rows(), 1, cols(), cols()};
         }
+
         [[nodiscard]] MatrixView<T> block(std::size_t r0, std::size_t c0,
                                           std::size_t h, std::size_t w) noexcept {
             return {data() + r0 * cols() + c0, h, w, cols(), 1};
@@ -177,7 +185,7 @@ namespace ga {
             return out;
         }
 
-        template<typename S> requires std::is_arithmetic_v<S>
+        template <typename S> requires std::is_arithmetic_v<S>
         [[nodiscard]] friend Matrix operator*(const Matrix& A, S s) {
             Matrix out(A.rows(), A.cols());
             const std::size_t n = A.rows() * A.cols();
@@ -200,19 +208,21 @@ namespace ga {
     // -----------------------------------------------------------------------
     // Vector<T> — rank-1 wrapper (thin alias with convenience methods)
     // -----------------------------------------------------------------------
-    template<typename T,
-             typename SP = ts::DefaultStoragePolicy,
-             typename CP = ts::DefaultComputationPolicy>
+    template <typename T,
+              typename SP = ts::DefaultStoragePolicy,
+              typename CP = ts::DefaultComputationPolicy>
     class Vector {
     public:
         using tensor_type = ts::DynamicTensor<T, SP, CP>;
-        using value_type  = T;
+        using value_type = T;
 
         Vector() : tensor_(ts::TensorShape{0}) {}
         explicit Vector(std::size_t n) : tensor_(ts::TensorShape{n}) {}
+
         Vector(std::size_t n, T fill_val) : tensor_(ts::TensorShape{n}) {
             std::fill(tensor_.data(), tensor_.data() + n, fill_val);
         }
+
         explicit Vector(tensor_type t) : tensor_(std::move(t)) {}
 
         [[nodiscard]] T& operator[](std::size_t i) noexcept { return tensor_.data()[i]; }
@@ -226,6 +236,7 @@ namespace ga {
         [[nodiscard]] const tensor_type& tensor() const noexcept { return tensor_; }
 
         [[nodiscard]] T norm() const { return ts::nrm2<T, SP, CP>(tensor_); }
+
         [[nodiscard]] T dot(const Vector& b) const {
             if (size() != b.size()) throw std::invalid_argument("Vector::dot: size mismatch");
             T s = T{0};
@@ -241,24 +252,27 @@ namespace ga {
             for (std::size_t i = 0; i < a.size(); ++i) out[i] = a[i] + b[i];
             return out;
         }
+
         friend Vector operator-(const Vector& a, const Vector& b) {
             if (a.size() != b.size()) throw std::invalid_argument("Vector-: size mismatch");
             Vector out(a.size());
             for (std::size_t i = 0; i < a.size(); ++i) out[i] = a[i] - b[i];
             return out;
         }
-        template<typename S> requires std::is_arithmetic_v<S>
+
+        template <typename S> requires std::is_arithmetic_v<S>
         friend Vector operator*(const Vector& v, S s) {
             Vector out(v.size());
             for (std::size_t i = 0; i < v.size(); ++i) out[i] = static_cast<T>(v[i] * s);
             return out;
         }
-        template<typename S> requires std::is_arithmetic_v<S>
+
+        template <typename S> requires std::is_arithmetic_v<S>
         friend Vector operator*(S s, const Vector& v) { return v * s; }
 
         // axpy: this ← α·x + this
         void axpy(T alpha, const Vector& x) {
-            ts::axpy<T,SP,CP>(alpha, x.tensor_, tensor_);
+            ts::axpy<T, SP, CP>(alpha, x.tensor_, tensor_);
         }
 
     private:
@@ -268,38 +282,37 @@ namespace ga {
     // -----------------------------------------------------------------------
     // Free BLAS wrappers for ga::Matrix and ga::Vector
     // -----------------------------------------------------------------------
-    template<typename T, typename SP, typename CP>
-    void gemm(T alpha, const Matrix<T,SP,CP>& A, const Matrix<T,SP,CP>& B,
-              T beta, Matrix<T,SP,CP>& C) {
-        ts::gemm<T,SP,CP>(alpha, A.as_tensor(), B.as_tensor(), beta, C.as_tensor());
+    template <typename T, typename SP, typename CP>
+    void gemm(T alpha, const Matrix<T, SP, CP>& A, const Matrix<T, SP, CP>& B,
+              T beta, Matrix<T, SP, CP>& C) {
+        ts::gemm<T, SP, CP>(alpha, A.as_tensor(), B.as_tensor(), beta, C.as_tensor());
     }
 
-    template<typename T, typename SP, typename CP>
-    void gemv(T alpha, const Matrix<T,SP,CP>& A, const Vector<T,SP,CP>& x,
-              T beta, Vector<T,SP,CP>& y) {
-        ts::gemv<T,SP,CP>(alpha, A.as_tensor(), x.tensor(), beta, y.tensor());
+    template <typename T, typename SP, typename CP>
+    void gemv(T alpha, const Matrix<T, SP, CP>& A, const Vector<T, SP, CP>& x,
+              T beta, Vector<T, SP, CP>& y) {
+        ts::gemv<T, SP, CP>(alpha, A.as_tensor(), x.tensor(), beta, y.tensor());
     }
 
-    template<typename T, typename SP, typename CP>
-    void axpy(T alpha, const Vector<T,SP,CP>& x, Vector<T,SP,CP>& y) {
-        ts::axpy<T,SP,CP>(alpha, x.tensor(), y.tensor());
+    template <typename T, typename SP, typename CP>
+    void axpy(T alpha, const Vector<T, SP, CP>& x, Vector<T, SP, CP>& y) {
+        ts::axpy<T, SP, CP>(alpha, x.tensor(), y.tensor());
     }
 
-    template<typename T, typename SP, typename CP>
-    T nrm2(const Vector<T,SP,CP>& x) {
-        return ts::nrm2<T,SP,CP>(x.tensor());
+    template <typename T, typename SP, typename CP>
+    T nrm2(const Vector<T, SP, CP>& x) {
+        return ts::nrm2<T, SP, CP>(x.tensor());
     }
 
-    template<typename T, typename SP, typename CP>
-    T dot(const Vector<T,SP,CP>& a, const Vector<T,SP,CP>& b) {
+    template <typename T, typename SP, typename CP>
+    T dot(const Vector<T, SP, CP>& a, const Vector<T, SP, CP>& b) {
         return a.dot(b);
     }
 
-    template<typename T, typename SP, typename CP>
-    void syrk(T alpha, const Matrix<T,SP,CP>& A, T beta, Matrix<T,SP,CP>& C, bool upper = true) {
-        ts::syrk<T,SP,CP>(alpha, A.as_tensor(), beta, C.as_tensor(), upper);
+    template <typename T, typename SP, typename CP>
+    void syrk(T alpha, const Matrix<T, SP, CP>& A, T beta, Matrix<T, SP, CP>& C, bool upper = true) {
+        ts::syrk<T, SP, CP>(alpha, A.as_tensor(), beta, C.as_tensor(), upper);
     }
-
 } // namespace ga
 
 #endif // PEBBLE_CONTAINERS_MATRIX_DENSE_HPP

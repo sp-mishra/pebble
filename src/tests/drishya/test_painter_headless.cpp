@@ -17,12 +17,22 @@ namespace w = pebble::drishya::widgets;
 using M = MonospaceMetrics;
 using P = DefaultPainter;
 
-TEST_CASE("painter_headless: KalpanaPainter satisfies the Painter concept", "[drishya][painter]") {
+TEST_CASE (
+"painter_headless: KalpanaPainter satisfies the Painter concept"
+,
+"[drishya][painter]"
+)
+ {
     STATIC_REQUIRE(Painter<P>);
     STATIC_REQUIRE(ColorPainter<P>);
 }
 
-TEST_CASE("painter_headless: a filled rect lands on the capture canvas", "[drishya][painter]") {
+TEST_CASE (
+"painter_headless: a filled rect lands on the capture canvas"
+,
+"[drishya][painter]"
+)
+ {
     kalpana::DefaultCanvas canvas(64, 64);
     M metrics;
     P painter(canvas, metrics);
@@ -41,7 +51,12 @@ TEST_CASE("painter_headless: a filled rect lands on the capture canvas", "[drish
     CHECK(center != corner);
 }
 
-TEST_CASE("painter_headless: App::paint drives a widget tree onto the canvas", "[drishya][painter]") {
+TEST_CASE (
+"painter_headless: App::paint drives a widget tree onto the canvas"
+,
+"[drishya][painter]"
+)
+ {
     kalpana::DefaultCanvas canvas(80, 60);
     M metrics;
     App<M, P> app(metrics);

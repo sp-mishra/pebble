@@ -77,11 +77,11 @@ namespace tarka::backend {
 
         [[nodiscard]] static constexpr theory_mask capabilities() noexcept {
             return theory_bit(theory_family::core) |
-                   theory_bit(theory_family::bv) |
-                   theory_bit(theory_family::lra) |
-                   theory_bit(theory_family::lia) |
-                   theory_bit(theory_family::array) |
-                   theory_bit(theory_family::uf);
+                theory_bit(theory_family::bv) |
+                theory_bit(theory_family::lra) |
+                theory_bit(theory_family::lia) |
+                theory_bit(theory_family::array) |
+                theory_bit(theory_family::uf);
         }
 
         // Identity lowering — the native engine consumes tarka IR directly.
@@ -123,7 +123,9 @@ namespace tarka::backend {
 
         [[nodiscard]] std::expected<SmtValue, SmtError> get_value(Term t) {
             if (!solved_) {
-                return std::unexpected(SmtError{SmtError::Kind::Internal, "get_value called before check_sat returned Sat"});
+                return std::unexpected(SmtError{
+                    SmtError::Kind::Internal, "get_value called before check_sat returned Sat"
+                });
             }
             model_builder mb(sat_, reg_);
             return mb.eval(t, theories_);
@@ -154,17 +156,19 @@ namespace tarka::backend {
         // Guard rejects constructs beyond supported theories
         [[nodiscard]] static std::expected<void, SmtError> guard(Term t) {
             switch (t.op()) {
-                case Op::Mul: {
-                    // Reject nonlinear symbolic multiplication (constant * symbol is supported)
-                    auto ch = t.children();
-                    if (ch.size() == 2 && ch[0].op() != Op::Lit && ch[1].op() != Op::Lit &&
-                        ch[0].sort().kind() != SortKind::BitVec) {
-                        return std::unexpected(SmtError{SmtError::Kind::Unsupported, "native: nonlinear real/int multiplication"});
-                    }
-                    break;
+            case Op::Mul: {
+                // Reject nonlinear symbolic multiplication (constant * symbol is supported)
+                auto ch = t.children();
+                if (ch.size() == 2 && ch[0].op() != Op::Lit && ch[1].op() != Op::Lit &&
+                    ch[0].sort().kind() != SortKind::BitVec) {
+                    return std::unexpected(SmtError{
+                        SmtError::Kind::Unsupported, "native: nonlinear real/int multiplication"
+                    });
                 }
-                default:
-                    break;
+                break;
+            }
+            default:
+                break;
             }
             for (Term c : t.children()) {
                 if (auto g = guard(c); !g) return g;
@@ -215,15 +219,16 @@ namespace tarka::backend {
             LBool r;
             if (assumption_lits.empty()) {
                 r = driver.solve(stop);
-            } else {
+            }
+            else {
                 r = sat_.solve_assuming(assumption_lits, stop);
             }
             solved_ = (r == LBool::True);
 
             switch (r) {
-                case LBool::True: return SatResult::Sat;
-                case LBool::False: return SatResult::Unsat;
-                default: return SatResult::Unknown;
+            case LBool::True: return SatResult::Sat;
+            case LBool::False: return SatResult::Unsat;
+            default: return SatResult::Unknown;
             }
         }
 

@@ -11,18 +11,17 @@
 #include <cstdint>
 
 namespace lang::samasa {
-
     struct limits {
-        std::uint32_t max_depth   = 512;
-        std::uint32_t max_nodes   = 1'048'576; // 1 M nodes
+        std::uint32_t max_depth = 512;
+        std::uint32_t max_nodes = 1'048'576; // 1 M nodes
         std::uint32_t max_repairs = 64;
 
         [[nodiscard]] static constexpr limits tight() noexcept {
             return {128, 65536, 16};
         }
+
         [[nodiscard]] static constexpr limits relaxed() noexcept {
             return {1024, 4'000'000, 256};
         }
     };
-
 } // namespace lang::samasa

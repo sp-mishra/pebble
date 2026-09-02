@@ -44,20 +44,18 @@
 #include "canvas/canvas.hpp"
 
 namespace kalpana {
+    // Default headless canvas for tests and software frame recording
+    using DefaultCanvas = Canvas<capture_backend>;
 
-// Default headless canvas for tests and software frame recording
-using DefaultCanvas = Canvas<capture_backend>;
-
-// GPU hardware canvas using Sokol GFX
+    // GPU hardware canvas using Sokol GFX
 #if !defined(KALPANA_ENABLE_SOKOL_BACKEND) || KALPANA_ENABLE_SOKOL_BACKEND
-using SokolCanvas = Canvas<sokol_backend>;
+    using SokolCanvas = Canvas<sokol_backend>;
 #endif
 
-// Terminal text-mode canvas using Notcurses
+    // Terminal text-mode canvas using Notcurses
 #if !defined(KALPANA_ENABLE_NOTCURSES_BACKEND) || KALPANA_ENABLE_NOTCURSES_BACKEND
-using TerminalCanvas = Canvas<notcurses_backend>;
+    using TerminalCanvas = Canvas<notcurses_backend>;
 #endif
-
 } // namespace kalpana
 
 namespace pebble {

@@ -47,8 +47,8 @@ namespace vakya::types {
     // ============================================================================
 
     struct cost_policy {
-        std::uint64_t tiny_below = 8;        // < 8 elements → tiny
-        std::uint64_t small_below = 256;     // < 256 → small
+        std::uint64_t tiny_below = 8; // < 8 elements → tiny
+        std::uint64_t small_below = 256; // < 256 → small
         std::uint64_t moderate_below = 65536; // < 64Ki → moderate; ≥ → heavy
     };
 
@@ -95,7 +95,10 @@ namespace vakya::types {
             const std::uint64_t extent = dn->payload_hash;
             if (extent == 0) return cost_class::unknown; // undecoded / symbolic dim
             // Saturating multiply.
-            if (work > (0xFFFFFFFFFFFFFFFFULL / extent)) { work = 0xFFFFFFFFFFFFFFFFULL; break; }
+            if (work > (0xFFFFFFFFFFFFFFFFULL / extent)) {
+                work = 0xFFFFFFFFFFFFFFFFULL;
+                break;
+            }
             work *= extent;
         }
         return synthesize_cost(work, policy);

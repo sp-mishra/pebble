@@ -2,7 +2,12 @@
 #include "akruti/akruti.hpp"
 #include <cmath>
 
-TEST_CASE("Akruti: ChainShape Open Polyline Contract", "[akruti][chain]") {
+TEST_CASE (
+"Akruti: ChainShape Open Polyline Contract"
+,
+"[akruti][chain]"
+)
+ {
     akruti::ChainShape<4> chain;
     (void)chain.verts.push_back({0.0f, 0.0f});
     (void)chain.verts.push_back({10.0f, 0.0f});
@@ -35,7 +40,12 @@ TEST_CASE("Akruti: ChainShape Open Polyline Contract", "[akruti][chain]") {
     REQUIRE(sup_y.y >= 10.5f);
 }
 
-TEST_CASE("Akruti: ChainShape Closed Loop and Ghost Vertices", "[akruti][chain]") {
+TEST_CASE (
+"Akruti: ChainShape Closed Loop and Ghost Vertices"
+,
+"[akruti][chain]"
+)
+ {
     akruti::ChainShape<4> loop;
     (void)loop.verts.push_back({0.0f, 0.0f});
     (void)loop.verts.push_back({10.0f, 0.0f});

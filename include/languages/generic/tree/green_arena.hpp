@@ -28,7 +28,6 @@
 #include "../core/identity.hpp"
 
 namespace lang {
-
     using arena_id = std::uint32_t;
     inline constexpr arena_id k_null_arena = std::numeric_limits<std::uint32_t>::max();
 
@@ -36,10 +35,10 @@ namespace lang {
 
     template <class KindEnum>
     struct green_node {
-        KindEnum      kind            = {};
-        byte_span     span            = {};
-        arena_id      first_child     = k_null_arena; // index into child_ids_
-        std::uint32_t child_count     = 0;
+        KindEnum kind = {};
+        byte_span span = {};
+        arena_id first_child = k_null_arena; // index into child_ids_
+        std::uint32_t child_count = 0;
         std::uint64_t structural_hash = 0;
     };
 
@@ -50,11 +49,13 @@ namespace lang {
     public:
         using node_type = green_node<KindEnum>;
 
-        [[nodiscard]] arena_id      root()  const noexcept { return root_id_; }
-        [[nodiscard]] std::uint32_t size()  const noexcept {
+        [[nodiscard]] arena_id root() const noexcept { return root_id_; }
+
+        [[nodiscard]] std::uint32_t size() const noexcept {
             return static_cast<std::uint32_t>(nodes_.size());
         }
-        [[nodiscard]] bool          empty() const noexcept { return nodes_.empty(); }
+
+        [[nodiscard]] bool empty() const noexcept { return nodes_.empty(); }
 
         [[nodiscard]] const node_type& operator[](arena_id id) const { return nodes_[id]; }
 
@@ -70,18 +71,17 @@ namespace lang {
         template <class DiagCode, class LeafSpanFn, class LeafHashFn>
         [[nodiscard]] static green_arena build(
             const event_log<KindEnum, DiagCode>& log,
-            LeafSpanFn&&  leaf_span,
-            LeafHashFn&&  leaf_hash)
-        {
+            LeafSpanFn&& leaf_span,
+            LeafHashFn&& leaf_hash) {
             green_arena arena;
 
             struct frame {
-                KindEnum      kind;
+                KindEnum kind;
                 std::uint32_t staging_start;
-                byte_span     span;
+                byte_span span;
             };
 
-            std::vector<frame>    stack;
+            std::vector<frame> stack;
             std::vector<arena_id> staging;
             stack.reserve(64);
             staging.reserve(256);
@@ -90,17 +90,19 @@ namespace lang {
                 switch (ev.kind) {
                 case event_kind::begin_node:
                 case event_kind::tombstone:
-                    stack.push_back({ev.node_kind,
-                                     static_cast<std::uint32_t>(staging.size()), {}});
+                    stack.push_back({
+                        ev.node_kind,
+                        static_cast<std::uint32_t>(staging.size()), {}
+                    });
                     break;
 
                 case event_kind::token: {
                     node_type leaf{};
-                    leaf.span            = leaf_span(ev.token_index);
-                    leaf.first_child     = k_null_arena;
-                    leaf.child_count     = 0;
+                    leaf.span = leaf_span(ev.token_index);
+                    leaf.first_child = k_null_arena;
+                    leaf.child_count = 0;
                     leaf.structural_hash = leaf_hash(ev.token_index);
-                    const arena_id id    = static_cast<arena_id>(arena.nodes_.size());
+                    const arena_id id = static_cast<arena_id>(arena.nodes_.size());
                     arena.nodes_.push_back(leaf);
                     staging.push_back(id);
                     if (!stack.empty())
@@ -110,13 +112,13 @@ namespace lang {
 
                 case event_kind::error: {
                     node_type err{};
-                    err.span            = ev.span;
-                    err.first_child     = k_null_arena;
-                    err.child_count     = 0;
+                    err.span = ev.span;
+                    err.first_child = k_null_arena;
+                    err.child_count = 0;
                     err.structural_hash = ::lang::detail::fp_with_scalar(
                         ::lang::detail::fp_from_string("error"),
                         static_cast<std::uint64_t>(ev.diag_code));
-                    const arena_id id   = static_cast<arena_id>(arena.nodes_.size());
+                    const arena_id id = static_cast<arena_id>(arena.nodes_.size());
                     arena.nodes_.push_back(err);
                     staging.push_back(id);
                     if (!stack.empty())
@@ -126,15 +128,16 @@ namespace lang {
 
                 case event_kind::end_node: {
                     if (stack.empty()) break;
-                    const frame f = stack.back(); stack.pop_back();
+                    const frame f = stack.back();
+                    stack.pop_back();
 
                     const std::uint32_t staging_base = f.staging_start;
-                    const std::uint32_t child_count  =
+                    const std::uint32_t child_count =
                         static_cast<std::uint32_t>(staging.size()) - staging_base;
 
                     node_type node{};
-                    node.kind        = f.kind;
-                    node.span        = !ev.span.empty() ? ev.span : f.span;
+                    node.kind = f.kind;
+                    node.span = !ev.span.empty() ? ev.span : f.span;
                     node.child_count = child_count;
 
                     const arena_id node_id = static_cast<arena_id>(arena.nodes_.size());
@@ -165,7 +168,7 @@ namespace lang {
                     staging.push_back(node_id);
                     if (!stack.empty())
                         stack.back().span = byte_span::hull(stack.back().span,
-                                                             arena.nodes_[node_id].span);
+                                                            arena.nodes_[node_id].span);
                     arena.root_id_ = node_id;
                     break;
                 }
@@ -188,12 +191,11 @@ namespace lang {
         //
         // Freed slots from the old subtree are left as holes (holes carry k_null_arena
         // kind-zero nodes; a future reset()/rebuild reclaims them — pay-for-use).
-        void splice_subtree(arena_id at, const green_arena& sub)
-        {
+        void splice_subtree(arena_id at, const green_arena& sub) {
             if (at == k_null_arena || sub.empty()) return;
 
             const auto append_offset = static_cast<arena_id>(nodes_.size());
-            const auto child_offset  = static_cast<arena_id>(child_ids_.size());
+            const auto child_offset = static_cast<arena_id>(child_ids_.size());
 
             // Append sub's child_ids, offsetting each id by append_offset.
             child_ids_.reserve(child_ids_.size() + sub.child_ids_.size());
@@ -222,8 +224,7 @@ namespace lang {
         //
         // Requires a transient parent map (O(n) build, O(1) lookup), discarded after
         // the call — nodes do not store parent ids (pay-for-use).
-        void recompute_ancestor_hashes(arena_id from)
-        {
+        void recompute_ancestor_hashes(arena_id from) {
             if (from == k_null_arena || nodes_.empty()) return;
 
             // Build transient parent map: parent_of[child] = parent's arena_id.
@@ -260,9 +261,8 @@ namespace lang {
         }
 
     private:
-        std::vector<node_type>  nodes_;
-        std::vector<arena_id>   child_ids_;
-        arena_id                root_id_ = k_null_arena;
+        std::vector<node_type> nodes_;
+        std::vector<arena_id> child_ids_;
+        arena_id root_id_ = k_null_arena;
     };
-
 } // namespace lang

@@ -31,6 +31,7 @@ namespace medha::adapters {
             Value value;
             anukrama::timestamp observed_version{};
         };
+
         struct attempt {
             transaction_context* context{};
             std::optional<typename store_type::snapshot> snapshot{};
@@ -40,13 +41,16 @@ namespace medha::adapters {
         [[nodiscard]] static tx_error conflict_error() noexcept {
             return {tx_status::conflict, "Anukrama version conflict"};
         }
+
         [[nodiscard]] static tx_error not_found_error() noexcept {
             return {tx_status::rejected, "Anukrama key not found"};
         }
+
         [[nodiscard]] bool equivalent(const Key& left, const Key& right) const {
             const Compare compare{};
             return !compare(left, right) && !compare(right, left);
         }
+
         attempt& ensure_attempt_locked(transaction_context& context) {
             auto it = std::find_if(attempts_.begin(), attempts_.end(), [&](const attempt& value) {
                 return value.context == std::addressof(context);
@@ -58,6 +62,7 @@ namespace medha::adapters {
             }
             return *it;
         }
+
         auto find_attempt_locked(transaction_context& context) {
             return std::find_if(attempts_.begin(), attempts_.end(), [&](const attempt& value) {
                 return value.context == std::addressof(context);
@@ -80,8 +85,10 @@ namespace medha::adapters {
             if (resource.equivalent(it->key, key)) return it->value;
         }
         auto value = attempt.snapshot->get(key);
-        if (!value) return std::unexpected(value.error() == anukrama::error::not_found
-            ? resource.not_found_error() : resource.conflict_error());
+        if (!value)
+            return std::unexpected(value.error() == anukrama::error::not_found
+                                       ? resource.not_found_error()
+                                       : resource.conflict_error());
         return *std::move(value);
     }
 
@@ -98,8 +105,10 @@ namespace medha::adapters {
                 return {};
             }
         }
-        attempt.writes.push_back({key, std::move(value),
-            resource.store_.version_at(key, attempt.snapshot->timestamp_value())});
+        attempt.writes.push_back({
+            key, std::move(value),
+            resource.store_.version_at(key, attempt.snapshot->timestamp_value())
+        });
         return {};
     }
 
@@ -126,8 +135,10 @@ namespace medha::adapters {
         std::lock_guard lock{resource.mutex_};
         const auto it = resource.find_attempt_locked(context);
         if (it == resource.attempts_.end()) return {};
-        std::vector<typename anukrama_resource<Key, Value, Compare, IndexPolicy, Clock, ConflictPolicy>::store_type::observation> observed;
-        std::vector<typename anukrama_resource<Key, Value, Compare, IndexPolicy, Clock, ConflictPolicy>::store_type::write> writes;
+        std::vector < typename anukrama_resource<
+            Key, Value, Compare, IndexPolicy, Clock, ConflictPolicy>::store_type::observation > observed;
+        std::vector < typename anukrama_resource<
+            Key, Value, Compare, IndexPolicy, Clock, ConflictPolicy>::store_type::write > writes;
         observed.reserve(it->writes.size());
         writes.reserve(it->writes.size());
         for (const auto& staged : it->writes) {

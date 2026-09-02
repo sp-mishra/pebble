@@ -57,7 +57,7 @@ LiteGraph distinguishes between **logical** and **physical** storage:
 - **Logical Graph:** Active nodes and edges visible to the user.
 - **Physical Storage:** Vector of nodes and edges; some entries may be marked inactive/removed.
 
-Lazy removal (mark as inactive) provides O(1) deletion with eventual compaction. This prevents O(N) rewiring costs but
+Lazy removal (mark as inactive) provides O (1) deletion with eventual compaction. This prevents O (N) rewiring costs but
 trades memory fragmentation for speed.
 
 ### No dependency on RTTI or virtual dispatch
@@ -285,8 +285,8 @@ Throws `std::out_of_range` if `from` or `to` is invalid.
 void remove_node(NodeId nid);
 ```
 
-Marks the node and all incident edges as inactive. Does **not** reallocate storage.
-Throws `std::out_of_range` if `nid` is invalid or already inactive.
+Marks the node and all incident edges as inactive. Does **not** reallocate storage. Throws `std::out_of_range` if `nid`
+is invalid or already inactive.
 
 **Important:** After removal, the node's storage slot remains but is logically deleted.
 
@@ -671,7 +671,7 @@ auto floyd_warshall(
 
 Returns: `(all-pairs distance matrix, all-pairs next-node matrix)`.
 
-All-pairs shortest paths; O(V³) time complexity.
+All-pairs shortest paths; O (V³) time complexity.
 
 ```cpp
 auto [dist, next] = litegraph::floyd_warshall(g, weight_fn);
@@ -1278,7 +1278,8 @@ int main() {
 
 ## 10. Multi-Core Task Parallelism (Pravaha Add-on)
 
-When including `LiteGraphPravaha.hpp`, callers can execute heavy graph workloads across multi-core CPUs via `pravaha::Runner` / `JThreadBackend`:
+When including `LiteGraphPravaha.hpp`, callers can execute heavy graph workloads across multi-core CPUs via
+`pravaha::Runner` / `JThreadBackend`:
 
 ```cpp
 #include <containers/graph/LiteGraph.hpp>
@@ -1308,46 +1309,46 @@ auto centrality = litegraph::pravaha::parallel_betweenness_centrality(g);
 
 ## Appendix: Quick Reference
 
-| Feature                    | Function                        | Signature                                                                         |
-|----------------------------|---------------------------------|-----------------------------------------------------------------------------------|
-| Add node                   | `add_node`                      | `NodeId add_node(const NodeT &data)`                                              |
-| Add edge                   | `add_edge`                      | `EdgeId add_edge(NodeId from, NodeId to, const EdgeT &data)`                      |
-| Remove node                | `remove_node`                   | `void remove_node(NodeId nid)`                                                    |
-| Remove edge                | `remove_edge`                   | `void remove_edge(EdgeId eid)`                                                    |
-| Node data                  | `node_data`                     | `NodeT &node_data(NodeId nid)`                                                    |
-| Edge data                  | `edge_data`                     | `EdgeT &edge_data(EdgeId eid)`                                                    |
-| Valid node                 | `valid_node`                    | `bool valid_node(NodeId nid) const`                                               |
-| Out edges                  | `out_edges`                     | `auto out_edges(NodeId nid) const`                                                |
-| In edges                   | `in_edges`                      | `auto in_edges(NodeId nid) const` (directed)                                      |
-| Neighbors                  | `neighbors`                     | `auto neighbors(NodeId nid) const`                                                |
-| Degree                     | `degree`                        | `std::size_t degree(NodeId nid) const`                                            |
-| Compaction                 | `compact`                       | `std::pair<IdMap, IdMap> compact()`                                               |
-| **BFS**                    | `bfs`                           | `void bfs(const GraphT &g, NodeId start, Fn &&visit)`                             |
-| **DFS**                    | `dfs`                           | `void dfs(const GraphT &g, NodeId start, Fn &&visit)`                             |
-| **Dijkstra**               | `dijkstra`                      | `auto dijkstra(const GraphT &g, NodeId source, weight_fn)`                        |
-| **A\***                    | `a_star_search`                 | `auto a_star_search(const GraphT &g, src, dst, weight_fn, heuristic)`             |
-| **Bellman-Ford**           | `bellman_ford`                  | `auto bellman_ford(const GraphT &g, source, weight_fn)`                           |
-| **Floyd-Warshall**         | `floyd_warshall`                | `auto floyd_warshall(const GraphT &g, weight_fn)`                                 |
-| **Topological sort**       | `topological_sort`              | `std::vector<NodeId> topological_sort(const GraphT &g)`                           |
-| **SCC**                    | `strongly_connected_components` | `std::vector<std::vector<NodeId>> strongly_connected_components(const GraphT &g)` |
-| **Cycle detect**           | `has_cycle`                     | `bool has_cycle(const GraphT &g)`                                                 |
-| **PageRank**               | `pagerank`                      | `CsrPageRankResult pagerank(const CsrGraph<...> &g, options)`                     |
-| **Parallel PageRank**      | `pravaha::parallel_pagerank`    | `CsrPageRankResult parallel_pagerank(const CsrGraph<...> &g, options)`            |
-| **Parallel BFS**           | `pravaha::parallel_bfs`         | `void parallel_bfs(const GraphT &g, NodeId start, Fn &&visit)`                    |
-| **Parallel Multi Dijkstra**| `pravaha::parallel_multi_source_dijkstra` | `vector<pair<vector<double>, vector<opt<NodeId>>>> (g, sources)`      |
-| **Parallel Betweenness**   | `pravaha::parallel_betweenness_centrality`| `vector<double> parallel_betweenness_centrality(const GraphT &g)`       |
-| **VF2**                    | `vf2_subgraph_isomorphism`      | `auto vf2_subgraph_isomorphism(pattern, target, node_comp, edge_comp)`            |
-| **Max flow**               | `edmonds_karp_max_flow`         | `double edmonds_karp_max_flow(g, source, sink, capacity_fn)`                      |
-| **Graph coloring**         | `greedy_graph_coloring`         | `std::vector<std::optional<int>> greedy_graph_coloring(const GraphT &g)`          |
-| **Bipartite matching**     | `max_bipartite_matching`        | `std::vector<EdgeId> max_bipartite_matching(const GraphT &g)`                     |
-| **Degree centrality**      | `degree_centrality`             | `std::vector<double> degree_centrality(const GraphT &g)`                          |
-| **Closeness centrality**   | `closeness_centrality`          | `std::vector<double> closeness_centrality(const GraphT &g)`                       |
-| **Betweenness centrality** | `betweenness_centrality`        | `std::vector<double> betweenness_centrality(const GraphT &g)`                     |
-| **Kruskal MST**            | `kruskal_mst`                   | `std::vector<EdgeId> kruskal_mst(const GraphT &g, weight_fn)`                     |
-| **Prim MST**               | `prim_mst`                      | `std::vector<EdgeId> prim_mst(const GraphT &g, weight_fn, start)`                 |
-| **GED**                    | `graph_edit_distance`           | `double graph_edit_distance(g1, g2, cost_fns...)`                                 |
-| **Freeze to CSR**          | `freeze_to_csr`                 | `CsrGraph<...> freeze_to_csr(const Graph<...> &g)`                                |
-| **Display (DOT)**          | `to_dot`                        | `void to_dot(const Graph<...> &g, std::ostream &os)`                              |
-| **Display (ASCII)**        | `to_ascii`                      | `void to_ascii(const Graph<...> &g, std::ostream &os, formatters...)`             |
+| Feature                     | Function                                   | Signature                                                                         |
+|-----------------------------|--------------------------------------------|-----------------------------------------------------------------------------------|
+| Add node                    | `add_node`                                 | `NodeId add_node(const NodeT &data)`                                              |
+| Add edge                    | `add_edge`                                 | `EdgeId add_edge(NodeId from, NodeId to, const EdgeT &data)`                      |
+| Remove node                 | `remove_node`                              | `void remove_node(NodeId nid)`                                                    |
+| Remove edge                 | `remove_edge`                              | `void remove_edge(EdgeId eid)`                                                    |
+| Node data                   | `node_data`                                | `NodeT &node_data(NodeId nid)`                                                    |
+| Edge data                   | `edge_data`                                | `EdgeT &edge_data(EdgeId eid)`                                                    |
+| Valid node                  | `valid_node`                               | `bool valid_node(NodeId nid) const`                                               |
+| Out edges                   | `out_edges`                                | `auto out_edges(NodeId nid) const`                                                |
+| In edges                    | `in_edges`                                 | `auto in_edges(NodeId nid) const` (directed)                                      |
+| Neighbors                   | `neighbors`                                | `auto neighbors(NodeId nid) const`                                                |
+| Degree                      | `degree`                                   | `std::size_t degree(NodeId nid) const`                                            |
+| Compaction                  | `compact`                                  | `std::pair<IdMap, IdMap> compact()`                                               |
+| **BFS**                     | `bfs`                                      | `void bfs(const GraphT &g, NodeId start, Fn &&visit)`                             |
+| **DFS**                     | `dfs`                                      | `void dfs(const GraphT &g, NodeId start, Fn &&visit)`                             |
+| **Dijkstra**                | `dijkstra`                                 | `auto dijkstra(const GraphT &g, NodeId source, weight_fn)`                        |
+| **A\***                     | `a_star_search`                            | `auto a_star_search(const GraphT &g, src, dst, weight_fn, heuristic)`             |
+| **Bellman-Ford**            | `bellman_ford`                             | `auto bellman_ford(const GraphT &g, source, weight_fn)`                           |
+| **Floyd-Warshall**          | `floyd_warshall`                           | `auto floyd_warshall(const GraphT &g, weight_fn)`                                 |
+| **Topological sort**        | `topological_sort`                         | `std::vector<NodeId> topological_sort(const GraphT &g)`                           |
+| **SCC**                     | `strongly_connected_components`            | `std::vector<std::vector<NodeId>> strongly_connected_components(const GraphT &g)` |
+| **Cycle detect**            | `has_cycle`                                | `bool has_cycle(const GraphT &g)`                                                 |
+| **PageRank**                | `pagerank`                                 | `CsrPageRankResult pagerank(const CsrGraph<...> &g, options)`                     |
+| **Parallel PageRank**       | `pravaha::parallel_pagerank`               | `CsrPageRankResult parallel_pagerank(const CsrGraph<...> &g, options)`            |
+| **Parallel BFS**            | `pravaha::parallel_bfs`                    | `void parallel_bfs(const GraphT &g, NodeId start, Fn &&visit)`                    |
+| **Parallel Multi Dijkstra** | `pravaha::parallel_multi_source_dijkstra`  | `vector<pair<vector<double>, vector<opt<NodeId>>>> (g, sources)`                  |
+| **Parallel Betweenness**    | `pravaha::parallel_betweenness_centrality` | `vector<double> parallel_betweenness_centrality(const GraphT &g)`                 |
+| **VF2**                     | `vf2_subgraph_isomorphism`                 | `auto vf2_subgraph_isomorphism(pattern, target, node_comp, edge_comp)`            |
+| **Max flow**                | `edmonds_karp_max_flow`                    | `double edmonds_karp_max_flow(g, source, sink, capacity_fn)`                      |
+| **Graph coloring**          | `greedy_graph_coloring`                    | `std::vector<std::optional<int>> greedy_graph_coloring(const GraphT &g)`          |
+| **Bipartite matching**      | `max_bipartite_matching`                   | `std::vector<EdgeId> max_bipartite_matching(const GraphT &g)`                     |
+| **Degree centrality**       | `degree_centrality`                        | `std::vector<double> degree_centrality(const GraphT &g)`                          |
+| **Closeness centrality**    | `closeness_centrality`                     | `std::vector<double> closeness_centrality(const GraphT &g)`                       |
+| **Betweenness centrality**  | `betweenness_centrality`                   | `std::vector<double> betweenness_centrality(const GraphT &g)`                     |
+| **Kruskal MST**             | `kruskal_mst`                              | `std::vector<EdgeId> kruskal_mst(const GraphT &g, weight_fn)`                     |
+| **Prim MST**                | `prim_mst`                                 | `std::vector<EdgeId> prim_mst(const GraphT &g, weight_fn, start)`                 |
+| **GED**                     | `graph_edit_distance`                      | `double graph_edit_distance(g1, g2, cost_fns...)`                                 |
+| **Freeze to CSR**           | `freeze_to_csr`                            | `CsrGraph<...> freeze_to_csr(const Graph<...> &g)`                                |
+| **Display (DOT)**           | `to_dot`                                   | `void to_dot(const Graph<...> &g, std::ostream &os)`                              |
+| **Display (ASCII)**         | `to_ascii`                                 | `void to_ascii(const Graph<...> &g, std::ostream &os, formatters...)`             |
 
 

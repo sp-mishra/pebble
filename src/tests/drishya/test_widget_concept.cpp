@@ -17,13 +17,23 @@ namespace w = pebble::drishya::widgets;
 using M = MonospaceMetrics;
 using P = DefaultPainter;
 
-TEST_CASE("drishya: default painter satisfies Painter concepts", "[drishya][concept]") {
+TEST_CASE (
+"drishya: default painter satisfies Painter concepts"
+,
+"[drishya][concept]"
+)
+ {
     STATIC_REQUIRE(Painter<P>);
     STATIC_REQUIRE(ColorPainter<P>);
     STATIC_REQUIRE(ITextMetrics<M>);
 }
 
-TEST_CASE("drishya: container widgets satisfy Widget + PaintableWith", "[drishya][concept]") {
+TEST_CASE (
+"drishya: container widgets satisfy Widget + PaintableWith"
+,
+"[drishya][concept]"
+)
+ {
     STATIC_REQUIRE(Widget<w::Stack, M>);
     STATIC_REQUIRE(PaintableWith<w::Stack, P>);
     STATIC_REQUIRE(Widget<w::Panel, M>);
@@ -35,7 +45,12 @@ TEST_CASE("drishya: container widgets satisfy Widget + PaintableWith", "[drishya
     STATIC_REQUIRE(Widget<w::Spacer, M>);
 }
 
-TEST_CASE("drishya: display widgets satisfy Widget + PaintableWith", "[drishya][concept]") {
+TEST_CASE (
+"drishya: display widgets satisfy Widget + PaintableWith"
+,
+"[drishya][concept]"
+)
+ {
     STATIC_REQUIRE(Widget<w::Label, M>);
     STATIC_REQUIRE(PaintableWith<w::Label, P>);
     STATIC_REQUIRE(Widget<w::Icon, M>);
@@ -46,7 +61,12 @@ TEST_CASE("drishya: display widgets satisfy Widget + PaintableWith", "[drishya][
     STATIC_REQUIRE(Widget<w::Tooltip, M>);
 }
 
-TEST_CASE("drishya: input widgets satisfy Widget + PaintableWith", "[drishya][concept]") {
+TEST_CASE (
+"drishya: input widgets satisfy Widget + PaintableWith"
+,
+"[drishya][concept]"
+)
+ {
     STATIC_REQUIRE(Widget<w::Button, M>);
     STATIC_REQUIRE(PaintableWith<w::Button, P>);
     STATIC_REQUIRE(Widget<w::Toggle, M>);
@@ -56,7 +76,12 @@ TEST_CASE("drishya: input widgets satisfy Widget + PaintableWith", "[drishya][co
     STATIC_REQUIRE(Widget<w::Select, M>);
 }
 
-TEST_CASE("drishya: data + game widgets satisfy Widget + PaintableWith", "[drishya][concept]") {
+TEST_CASE (
+"drishya: data + game widgets satisfy Widget + PaintableWith"
+,
+"[drishya][concept]"
+)
+ {
     STATIC_REQUIRE(Widget<w::Sparkline, M>);
     STATIC_REQUIRE(Widget<w::StatTile, M>);
     STATIC_REQUIRE(Widget<w::ListView, M>);
@@ -71,7 +96,12 @@ TEST_CASE("drishya: data + game widgets satisfy Widget + PaintableWith", "[drish
     STATIC_REQUIRE(Widget<w::WorldAnchor, M>);
 }
 
-TEST_CASE("drishya: stub widgets are concept-complete", "[drishya][concept][stub]") {
+TEST_CASE (
+"drishya: stub widgets are concept-complete"
+,
+"[drishya][concept][stub]"
+)
+ {
     STATIC_REQUIRE(Widget<w::Markdown, M>);
     STATIC_REQUIRE(PaintableWith<w::Markdown, P>);
     STATIC_REQUIRE(Widget<w::Chart, M>);
@@ -82,7 +112,12 @@ TEST_CASE("drishya: stub widgets are concept-complete", "[drishya][concept][stub
     STATIC_REQUIRE(Widget<w::DialogueBox, M>);
 }
 
-TEST_CASE("drishya: widgets fit the default AnyWidget inline buffer", "[drishya][concept]") {
+TEST_CASE (
+"drishya: widgets fit the default AnyWidget inline buffer"
+,
+"[drishya][concept]"
+)
+ {
     // The 512B default buffer must hold every stock widget with no heap. If a
     // widget grows past it, AnyWidget's static_assert would already fail to
     // compile; this run-time check documents the headroom.

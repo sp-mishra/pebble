@@ -34,19 +34,23 @@
 #include <limits>
 
 namespace kalpa {
-
     // =======================================================================
     // FullTrace — records every iteration for post-hoc inspection.
     // =======================================================================
-    template<typename T>
+    template <typename T>
     struct FullTrace {
-        struct Row { T f, grad_norm, step, alpha; std::size_t iter; };
+        struct Row {
+            T f, grad_norm, step, alpha;
+            std::size_t iter;
+        };
+
         std::vector<Row> rows;
 
-        template<typename State>
+        template <typename State>
         void record(const State& s) {
             rows.push_back(Row{s.f, s.grad_norm, s.step, s.alpha, s.iter});
         }
+
         [[nodiscard]] std::size_t size() const noexcept { return rows.size(); }
         [[nodiscard]] const Row& back() const { return rows.back(); }
     };
@@ -56,23 +60,26 @@ namespace kalpa {
     // the state (and, if it captures a flag, request an early stop through the
     // Stop policy). Fn signature: void(const State&).
     // =======================================================================
-    template<typename Fn>
+    template <typename Fn>
     struct Callback {
         Fn fn;
         explicit Callback(Fn f) : fn(std::move(f)) {}
-        template<typename State>
+
+        template <typename State>
         void record(const State& s) { fn(s); }
     };
-    template<typename Fn>
+
+    template <typename Fn>
     [[nodiscard]] Callback<Fn> on_iteration(Fn&& fn) { return Callback<Fn>{std::forward<Fn>(fn)}; }
 
     // =======================================================================
     // ProgressBar — one terse TTY line per iteration.
     // =======================================================================
-    template<typename T>
+    template <typename T>
     struct ProgressBar {
         std::FILE* out{stderr};
-        template<typename State>
+
+        template <typename State>
         void record(const State& s) const {
             std::fprintf(out, "\r[kalpa] it=%-5zu  f=%- .6e  |g|=%- .3e  a=%- .3e",
                          s.iter, static_cast<double>(s.f),
@@ -86,20 +93,22 @@ namespace kalpa {
     // policy is the backend; utils::nadi::NoSink zeroes the cost. Category is
     // fixed "kalpa.iter"; Fields carry the scalar metrics.
     // =======================================================================
-    template<typename NadiBackend = utils::nadi::NoSink>
+    template <typename NadiBackend = utils::nadi::NoSink>
     struct NadiSink {
-        template<typename State>
+        template <typename State>
         void record(const State& s) const {
             using namespace utils::nadi;
             PulseScope<NadiBackend, "kalpa.iter",
-                       Field<"f",     double>,
-                       Field<"g_norm", double>,
-                       Field<"step",  double>,
-                       Field<"alpha", double>>
-                scope{ Field<"f",     double>{ static_cast<double>(s.f) },
-                       Field<"g_norm", double>{ static_cast<double>(s.grad_norm) },
-                       Field<"step",  double>{ static_cast<double>(s.step) },
-                       Field<"alpha", double>{ static_cast<double>(s.alpha) } };
+                       Field < "f", double>,
+                Field < "g_norm", double >,
+                Field < "step", double >,
+                Field<"alpha", double> >
+                scope{
+                    Field < "f", double>{static_cast<double>(s.f)},
+                    Field < "g_norm", double>{static_cast<double>(s.grad_norm)},
+                    Field < "step", double>{static_cast<double>(s.step)},
+                    Field < "alpha", double>{static_cast<double>(s.alpha)}
+                };
             // scope emits Begin now + End at destruction — one pulse per iter.
         }
     };
@@ -109,15 +118,19 @@ namespace kalpa {
     // Records iter 0 always, then every `stride` iter and/or when objective
     // drops by at least `min_rel_drop` relative to the previous recorded row.
     // =======================================================================
-    template<typename T>
+    template <typename T>
     struct SparseTrace {
-        struct Row { T f, grad_norm, step, alpha; std::size_t iter; };
+        struct Row {
+            T f, grad_norm, step, alpha;
+            std::size_t iter;
+        };
+
         std::vector<Row> rows;
         std::size_t stride{10};
         T min_rel_drop{static_cast<T>(0)};
         T last_recorded_f{std::numeric_limits<T>::infinity()};
 
-        template<typename State>
+        template <typename State>
         void record(const State& s) {
             const bool first = rows.empty();
             const bool stride_hit = (stride > 0) && ((s.iter % stride) == 0);
@@ -144,9 +157,11 @@ namespace kalpa {
         case Cause::Unbounded:
             return "objective decreases without bound — add box/norm bounds or check the model sign";
         case Cause::SingularKKT:
-            return "KKT/Newton system singular — constraints may be redundant or Hessian rank-deficient; try trust-region";
+            return
+                "KKT/Newton system singular — constraints may be redundant or Hessian rank-deficient; try trust-region";
         case Cause::LineSearchFail:
-            return "no step satisfied the descent test — direction may be non-descent; check gradient or loosen Wolfe c2";
+            return
+                "no step satisfied the descent test — direction may be non-descent; check gradient or loosen Wolfe c2";
         case Cause::NaNTrap:
             return "NaN/Inf in f or gradient — check domain (log/sqrt of negatives) and scale the variables";
         case Cause::NumericalError:
@@ -158,7 +173,6 @@ namespace kalpa {
     [[nodiscard]] inline std::string explain(const Diagnosis& d) {
         return "kalpa: " + d.message + " [iter " + std::to_string(d.iteration) + "]\n  hint: " + remediation(d.cause);
     }
-
 } // namespace kalpa
 
 #endif // PEBBLE_KALPA_INTROSPECT_TELEMETRY_HPP

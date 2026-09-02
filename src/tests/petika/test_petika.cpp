@@ -45,6 +45,7 @@ namespace {
 // ============================================================================
 
 TEST_CASE (
+
 "JournaledSkipEngine: Basic CRUD operations"
 ,
 "[petika][skip_engine]"
@@ -78,6 +79,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 "JournaledSkipEngine: Ordered range scan"
 ,
 "[petika][skip_engine]"
@@ -102,6 +104,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Petika: Put, Get, Contains and Clear with WAL persistence"
 ,
 "[petika][store]"
@@ -137,6 +140,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Petika: Automatic recovery from durable WAL log"
 ,
 "[petika][recovery]"
@@ -192,6 +196,7 @@ TEST_CASE (
 // ============================================================================
 
 TEST_CASE (
+
 "Petika: Transaction commit and rollback"
 ,
 "[petika][transaction]"
@@ -228,7 +233,12 @@ TEST_CASE (
     CHECK(*db.get("account:2") == "250");
 }
 
-TEST_CASE("Petika: failed batch has no partial in-memory publication", "[petika][transaction][atomic]") {
+TEST_CASE (
+"Petika: failed batch has no partial in-memory publication"
+,
+"[petika][transaction][atomic]"
+)
+ {
     TmpPetikaDir tmp;
     petika::StringSkipStore db{{.db_dir = tmp.path, .auto_recovery = false}};
     auto tx = db.transaction();
@@ -238,7 +248,12 @@ TEST_CASE("Petika: failed batch has no partial in-memory publication", "[petika]
     CHECK_FALSE(db.get("new-key").has_value());
 }
 
-TEST_CASE("Petika: default MVCC transaction rejects a stale same-key write", "[petika][transaction][mvcc]") {
+TEST_CASE (
+"Petika: default MVCC transaction rejects a stale same-key write"
+,
+"[petika][transaction][mvcc]"
+)
+ {
     TmpPetikaDir tmp;
     petika::StringSkipStore db{{.db_dir = tmp.path, .auto_recovery = false}};
     REQUIRE(db.put("counter", "1").has_value());
@@ -255,6 +270,7 @@ TEST_CASE("Petika: default MVCC transaction rejects a stale same-key write", "[p
 // ============================================================================
 
 TEST_CASE (
+
 "Petika: Snapshot isolation view"
 ,
 "[petika][snapshot]"
@@ -274,7 +290,12 @@ TEST_CASE (
     CHECK(*db.get("version") == "v2.0");
 }
 
-TEST_CASE("Petika: MvccJournaledSkipEngine retains a durable snapshot view", "[petika][mvcc][snapshot]") {
+TEST_CASE (
+"Petika: MvccJournaledSkipEngine retains a durable snapshot view"
+,
+"[petika][mvcc][snapshot]"
+)
+ {
     TmpPetikaDir tmp;
     petika::MvccSkipStore<std::string, std::string> db{{.db_dir = tmp.path, .auto_recovery = false}};
     REQUIRE(db.put("version", "v1").has_value());
@@ -284,7 +305,12 @@ TEST_CASE("Petika: MvccJournaledSkipEngine retains a durable snapshot view", "[p
     CHECK(*db.get("version") == "v2");
 }
 
-TEST_CASE("Petika: MvccJournaledSkipEngine replays durable versions", "[petika][mvcc][recovery]") {
+TEST_CASE (
+"Petika: MvccJournaledSkipEngine replays durable versions"
+,
+"[petika][mvcc][recovery]"
+)
+ {
     TmpPetikaDir tmp;
     {
         petika::MvccSkipStore<std::string, std::string> db{{.db_dir = tmp.path, .auto_recovery = false}};
@@ -303,6 +329,7 @@ TEST_CASE("Petika: MvccJournaledSkipEngine replays durable versions", "[petika][
 // ============================================================================
 
 TEST_CASE (
+
 "PetikaAdapter for Kosha: Cache write-through and read-through"
 ,
 "[petika][kosha_adapter]"
@@ -331,8 +358,12 @@ TEST_CASE (
 // § 7  ConcurrencyPolicy: shared_mutex snapshot/writer non-blocking
 // ============================================================================
 
-TEST_CASE("Petika: concurrent snapshot reads do not block concurrent writers",
-          "[petika][concurrency][shared_mutex]") {
+TEST_CASE (
+"Petika: concurrent snapshot reads do not block concurrent writers"
+,
+"[petika][concurrency][shared_mutex]"
+)
+ {
     TmpPetikaDir tmp;
     petika::StringSkipStore db{{.db_dir = tmp.path, .auto_recovery = false}};
 
@@ -380,8 +411,12 @@ TEST_CASE("Petika: concurrent snapshot reads do not block concurrent writers",
 // § 8  SingleThreadSkipStore: CRUD round-trip on NullMutex variant
 // ============================================================================
 
-TEST_CASE("Petika: SingleThreadSkipStore put/get/erase/scan",
-          "[petika][single_thread][null_mutex]") {
+TEST_CASE (
+"Petika: SingleThreadSkipStore put/get/erase/scan"
+,
+"[petika][single_thread][null_mutex]"
+)
+ {
     TmpPetikaDir tmp;
     petika::SingleThreadSkipStore<std::string, std::string> db{
         {.db_dir = tmp.path, .auto_recovery = false}};
@@ -408,10 +443,16 @@ TEST_CASE("Petika: SingleThreadSkipStore put/get/erase/scan",
 // ============================================================================
 
 // Must have external linkage for glaze reflection (glz::detail::external<T> requirement).
-struct AsyncWorkerTestRecord { std::string data; };
+struct AsyncWorkerTestRecord {
+    std::string data;
+};
 
-TEST_CASE("Petika: AsyncPersistenceWorker drains within 10ms of enqueue",
-          "[petika][async_persistence]") {
+TEST_CASE (
+"Petika: AsyncPersistenceWorker drains within 10ms of enqueue"
+,
+"[petika][async_persistence]"
+)
+ {
     TmpPetikaDir tmp;
 
     petika::AsyncPersistenceWorker<AsyncWorkerTestRecord> worker;
@@ -438,8 +479,12 @@ TEST_CASE("Petika: AsyncPersistenceWorker drains within 10ms of enqueue",
 // § 10  Transaction: O(1) read-your-own-writes correctness
 // ============================================================================
 
-TEST_CASE("Petika: Transaction read-your-own-writes: put/delete/overwrite",
-          "[petika][transaction][read_your_own_writes]") {
+TEST_CASE (
+"Petika: Transaction read-your-own-writes: put/delete/overwrite"
+,
+"[petika][transaction][read_your_own_writes]"
+)
+ {
     TmpPetikaDir tmp;
     petika::StringSkipStore db{{.db_dir = tmp.path, .auto_recovery = false}};
     REQUIRE(db.put("base", "original").has_value());
@@ -476,8 +521,12 @@ TEST_CASE("Petika: Transaction read-your-own-writes: put/delete/overwrite",
 // § 11  BloomFilterPolicy: zero false negatives
 // ============================================================================
 
-TEST_CASE("Petika: BloomFilterPolicy: zero false negatives after 10k inserts",
-          "[petika][bloom_filter]") {
+TEST_CASE (
+"Petika: BloomFilterPolicy: zero false negatives after 10k inserts"
+,
+"[petika][bloom_filter]"
+)
+ {
     TmpPetikaDir tmp;
     petika::BloomSkipStore<std::string, std::string> db{
         {.db_dir = tmp.path, .auto_recovery = false}};
@@ -499,8 +548,12 @@ TEST_CASE("Petika: BloomFilterPolicy: zero false negatives after 10k inserts",
 // § 12  scan_view: C++23 range-compatible lazy scan
 // ============================================================================
 
-TEST_CASE("Petika: scan_view returns iterable range over [start, end)",
-          "[petika][scan_view]") {
+TEST_CASE (
+"Petika: scan_view returns iterable range over [start, end)"
+,
+"[petika][scan_view]"
+)
+ {
     TmpPetikaDir tmp;
     petika::StringSkipStore db{{.db_dir = tmp.path, .auto_recovery = false}};
 
@@ -523,7 +576,12 @@ TEST_CASE("Petika: scan_view returns iterable range over [start, end)",
 // § 13  GroupCommit write coalescing (WriteBuffer policy — item 1)
 // ============================================================================
 
-TEST_CASE("petika: group commit coalesces WAL appends", "[petika][writebuffer]") {
+TEST_CASE (
+"petika: group commit coalesces WAL appends"
+,
+"[petika][writebuffer]"
+)
+ {
     TmpPetikaDir tmp;
 
     constexpr std::size_t kBatch = 8;
@@ -570,7 +628,12 @@ TEST_CASE("petika: group commit coalesces WAL appends", "[petika][writebuffer]")
 // § 14  Epoch GC bounds MVCC version growth (SnapshotGCPolicy — item 2)
 // ============================================================================
 
-TEST_CASE("petika: epoch GC prunes dead versions", "[petika][mvcc][gc]") {
+TEST_CASE (
+"petika: epoch GC prunes dead versions"
+,
+"[petika][mvcc][gc]"
+)
+ {
     TmpPetikaDir tmp;
     petika::GcSkipStore<std::string, std::string> db{
         {.db_dir = tmp.path, .auto_recovery = false}};
@@ -611,7 +674,12 @@ TEST_CASE("petika: epoch GC prunes dead versions", "[petika][mvcc][gc]") {
 // § 15  Endianness-canonical WAL portability (serializer — item 4)
 // ============================================================================
 
-TEST_CASE("petika: WAL payload codec is endian-canonical", "[petika][serializer]") {
+TEST_CASE (
+"petika: WAL payload codec is endian-canonical"
+,
+"[petika][serializer]"
+)
+ {
     using petika::WalPayloadCodec;
     using petika::EntryOp;
 
@@ -650,7 +718,12 @@ TEST_CASE("petika: WAL payload codec is endian-canonical", "[petika][serializer]
 // § 16  Concept enforcement diagnostics (item 3 + item 8 BTreeEngine)
 // ============================================================================
 
-TEST_CASE("petika: engine/serializer concepts enforced", "[petika][concept]") {
+TEST_CASE (
+"petika: engine/serializer concepts enforced"
+,
+"[petika][concept]"
+)
+ {
     using K = std::string;
     using V = std::string;
 
@@ -685,17 +758,22 @@ namespace {
     struct CountingCursorEngine {
         using key_type = int;
         using value_type = int;
-        struct EntryView { const int& key; const int& value; nitya::lsn_t lsn; };
 
-        std::vector<std::pair<int, int>> data;   // sorted by key
-        mutable int pulled = 0;                   // entries the generator yielded
+        struct EntryView {
+            const int& key;
+            const int& value;
+            nitya::lsn_t lsn;
+        };
+
+        std::vector<std::pair<int, int>> data; // sorted by key
+        mutable int pulled = 0; // entries the generator yielded
 
         template <typename Out>
         std::generator<Out> scan_lazy(const int& first, const int& last) const {
             for (const auto& [k, v] : data) {
                 if (k < first) continue;
-                if (!(k < last)) break;           // half-open [first, last)
-                ++pulled;                          // observed on demand, per pull
+                if (!(k < last)) break; // half-open [first, last)
+                ++pulled; // observed on demand, per pull
                 co_yield Out{k, v, 0};
             }
         }
@@ -707,7 +785,7 @@ namespace {
     };
 } // anonymous namespace
 
-TEST_CASE("petika: scan_view is lazy", "[petika][scan]") {
+TEST_CASE ("petika: scan_view is lazy", "[petika][scan]") {
     CountingCursorEngine engine;
     for (int i = 0; i < 100; ++i) engine.data.emplace_back(i, i * 10);
 
@@ -732,7 +810,12 @@ TEST_CASE("petika: scan_view is lazy", "[petika][scan]") {
 // § 18  BTreeStore CRUD + WAL recovery (item 8)
 // ============================================================================
 
-TEST_CASE("petika: BTreeStore put/get/erase and durable recovery", "[petika][btree]") {
+TEST_CASE (
+"petika: BTreeStore put/get/erase and durable recovery"
+,
+"[petika][btree]"
+)
+ {
     TmpPetikaDir tmp;
 
     {
@@ -771,7 +854,12 @@ TEST_CASE("petika: BTreeStore put/get/erase and durable recovery", "[petika][btr
 // § 19  BTreeStore scan_view is half-open and (with <generator>) lazy (item 7/8)
 // ============================================================================
 
-TEST_CASE("petika: BTreeStore scan_view is half-open [start, end)", "[petika][btree][scan]") {
+TEST_CASE (
+"petika: BTreeStore scan_view is half-open [start, end)"
+,
+"[petika][btree][scan]"
+)
+ {
     TmpPetikaDir tmp;
     petika::BTreeStore<std::string, std::string> db{
         {.db_dir = tmp.path, .auto_recovery = false}};
@@ -793,7 +881,12 @@ TEST_CASE("petika: BTreeStore scan_view is half-open [start, end)", "[petika][bt
 // § 20  BTreeEngine direct: from_sorted, apply_batch validation, replay delete
 // ============================================================================
 
-TEST_CASE("petika: BTreeEngine from_sorted / apply_batch / replay", "[petika][btree][engine]") {
+TEST_CASE (
+"petika: BTreeEngine from_sorted / apply_batch / replay"
+,
+"[petika][btree][engine]"
+)
+ {
     using Engine = petika::BTreeEngine<int, int, std::less<int>>;
 
     SECTION("from_sorted bulk-loads a sorted checkpoint in one pass") {
@@ -845,7 +938,12 @@ TEST_CASE("petika: BTreeEngine from_sorted / apply_batch / replay", "[petika][bt
 // § 21  AsyncPersistenceWorker Reject overflow fires the error callback (item 9)
 // ============================================================================
 
-TEST_CASE("petika: async worker Reject overflow reports OverflowDropped", "[petika][async][overflow]") {
+TEST_CASE (
+"petika: async worker Reject overflow reports OverflowDropped"
+,
+"[petika][async][overflow]"
+)
+ {
     // Smallest legal ring (RingBuffer requires N>=2, power of two). Reject: once
     // the slots are occupied and the worker has not drained them, the next
     // enqueue must be rejected and reported.
@@ -877,7 +975,12 @@ TEST_CASE("petika: async worker Reject overflow reports OverflowDropped", "[peti
 // § 22  AsyncPersistenceWorker DropOldest evicts to make room (item 9)
 // ============================================================================
 
-TEST_CASE("petika: async worker DropOldest never rejects, reports eviction", "[petika][async][overflow]") {
+TEST_CASE (
+"petika: async worker DropOldest never rejects, reports eviction"
+,
+"[petika][async][overflow]"
+)
+ {
     using Worker = petika::AsyncPersistenceWorker<
         AsyncWorkerTestRecord, 2, petika::GlazeJsonPolicy, petika::OverflowPolicy::DropOldest>;
 
@@ -902,7 +1005,12 @@ TEST_CASE("petika: async worker DropOldest never rejects, reports eviction", "[p
 // § 23  ImmediateCommitPolicy is pass-through; GroupCommit MaxLevel forwarded
 // ============================================================================
 
-TEST_CASE("petika: ImmediateCommitPolicy publishes each put immediately", "[petika][writebuffer]") {
+TEST_CASE (
+"petika: ImmediateCommitPolicy publishes each put immediately"
+,
+"[petika][writebuffer]"
+)
+ {
     TmpPetikaDir tmp;
     // Default SkipStore uses ImmediateCommitPolicy — no staging, no buffering.
     petika::SkipStore<std::string, std::string> db{
@@ -917,7 +1025,12 @@ TEST_CASE("petika: ImmediateCommitPolicy publishes each put immediately", "[peti
     CHECK(db.manifest().record_count == 2); // each put appended at once, not staged
 }
 
-TEST_CASE("petika: MvccJournaledSkipEngine forwards MaxLevel (item 8 fix)", "[petika][concept][mvcc]") {
+TEST_CASE (
+"petika: MvccJournaledSkipEngine forwards MaxLevel (item 8 fix)"
+,
+"[petika][concept][mvcc]"
+)
+ {
     using E8  = petika::MvccJournaledSkipEngine<std::string, std::string, petika::LexicalComparator, 8>;
     using E32 = petika::MvccJournaledSkipEngine<std::string, std::string, petika::LexicalComparator, 32>;
     // The MaxLevel template param was previously discarded; it is now surfaced.

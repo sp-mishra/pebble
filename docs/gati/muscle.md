@@ -21,7 +21,8 @@ Gati exposes muscle control as pure ECS components/systems and bridges activatio
 - `MuscleActivationSystem`: integrates `da/dt = (u-a)/tau` each fixed tick.
 - `MuscleBridgeSystem<Cfg>`: copies controller activation into `prakriti::MuscleStore<Cfg>::activation`.
 - `PathUpdateSystem<Cfg>`: updates `MusclePath::cached_path_length` and writes it to `rest_length`.
-- All three systems use `world.par_view(...)`, which routes through `gati::ParallelExecutor` (Pravaha-backed when `GATI_ENABLE_PRAVAHA` is enabled).
+- All three systems use `world.par_view(...)`, which routes through `gati::ParallelExecutor` (Pravaha-backed when
+  `GATI_ENABLE_PRAVAHA` is enabled).
 
 ## Minimal Usage
 

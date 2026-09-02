@@ -146,8 +146,8 @@ namespace containers::associative {
             pos_[v] = i;
         }
 
-        std::vector<index_type> heap_;          // element ids, max-heap by cmp_
-        std::vector<index_type> pos_;           // pos_[v] = slot in heap_ or kNpos
-        [[no_unique_address]] Compare cmp_{};   // external mutable-key comparator
+        std::vector<index_type> heap_; // element ids, max-heap by cmp_
+        std::vector<index_type> pos_; // pos_[v] = slot in heap_ or kNpos
+        [[no_unique_address]] Compare cmp_{}; // external mutable-key comparator
     };
 } // namespace containers::associative

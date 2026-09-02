@@ -459,6 +459,7 @@ namespace vakya {
                 (sizeof...(Args) == 0 || !std::conjunction_v < std::is_same<std::decay_t<Args>, node>
 
 
+
         ...
         >
         )
@@ -824,7 +825,7 @@ namespace vakya {
                 // structural_payload_hash equality is a necessary condition; operator== is
                 // the authoritative check. This enables user-defined terminal types without
                 // requiring changes to Vākya per-type.
-                else if constexpr (std::is_same_v<DA, DB> && std::equality_comparable<DA>) {
+                else if constexpr (std::is_same_v<DA, DB>&& std::equality_comparable<DA>) {
                     return a == b;
                 }
                 else {

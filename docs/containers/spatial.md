@@ -1,6 +1,8 @@
 # Spatial Containers & Acceleration Structures (`include/containers/spatial/`)
 
-Pebble's spatial container subsystem provides header-only, zero-virtual-dispatch, cache-aligned spatial indexing and acceleration data structures in modern C++23. It powers broadphase collision detection, gravitational multipole summation, continuous range queries, and raycasting.
+Pebble's spatial container subsystem provides header-only, zero-virtual-dispatch, cache-aligned spatial indexing and
+acceleration data structures in modern C++23. It powers broadphase collision detection, gravitational multipole
+summation, continuous range queries, and raycasting.
 
 ---
 
@@ -43,20 +45,24 @@ Pebble's spatial container subsystem provides header-only, zero-virtual-dispatch
 ## 2. Mathematical Foundations & Algorithms
 
 ### 2.1 Barnes-Hut Multipole Gravitational Solver (`containers::spatial::BarnesHutTree`)
+
 - **Opening Angle Criterion**:
   For an internal quadtree node with bounding width $s$ and distance $d$ from test body $i$:
   $$\frac{s}{d} < \theta \quad (\text{default } \theta = 0.5)$$
-  If the criterion is satisfied, the entire subtree is approximated as a single monopole at center of mass $\mathbf{C} = \frac{1}{M} \sum m_k \mathbf{p}_k$.
+  If the criterion is satisfied, the entire subtree is approximated as a single monopole at center of
+  mass $\mathbf{C} = \frac{1}{M} \sum m_k \mathbf{p}_k$.
 - **Fast Reciprocal Force Math**:
-  $$\mathbf{F}_{ij} = G m_i M_j \left(\frac{1}{\sqrt{r^2 + \epsilon^2}}\right)^3 \mathbf{r}_{ij}$$
+  $$\mathbf{F}_{ij} = G m_i M_j \left (\frac{1}{\sqrt{r^2 + \epsilon^2}}\right)^3 \mathbf{r}_{ij}$$
   Using fast reciprocal square roots avoids expensive standard library `std::pow(..., 1.5)` routines.
 - **Unrolled Non-Recursive Traversal**:
-  Uses a fixed stack `uint32_t stack[64]` and unrolls 4 child pushes into contiguous local registers, eliminating function recursion frame overhead.
+  Uses a fixed stack `uint32_t stack[64]` and unrolls 4 child pushes into contiguous local registers, eliminating
+  function recursion frame overhead.
 
 ### 2.2 Spatial Hash Grid with Morton Z-Order Locality (`containers::spatial::SpatialHashGrid`)
+
 - **SplitMix64 Coordinate Hashing**:
   Maps $(X, Y)$ grid cell coordinates to a 64-bit pseudo-random hash index:
-  $$\text{Hash}(x, y) = \text{SplitMix64}\Big( (x \cdot 0x9E3779B9) \oplus (y \cdot 0x85EBCA6B) \Big) \pmod{\text{TableSize}}$$
+  $$\text{Hash} (x, y) = \text{SplitMix64}\Big ( (x \cdot 0x9E3779B9) \oplus (y \cdot 0x85EBCA6B) \Big) \pmod{\text{TableSize}}$$
 - **Morton Z-Order Interleaving**:
   Interleaves 16-bit $x$ and $y$ coordinate bits into a 32-bit integer:
   ```cpp
@@ -71,13 +77,15 @@ Pebble's spatial container subsystem provides header-only, zero-virtual-dispatch
       return (expand(y) << 1) | expand(x);
   }
   ```
-  This maps 2D spatial locality directly into 1D memory address continuity, boosting CPU L1/L2 data cache hit rates to $>98\%$.
+  This maps 2D spatial locality directly into 1D memory address continuity, boosting CPU L1/L2 data cache hit rates
+  to $>98\%$.
 
 ---
 
 ## 3. End-to-End API Examples
 
-### 3.1 Barnes-Hut $O(N \log N)$ Gravitational Solver
+### 3.1 Barnes-Hut $O (N \log N)$ Gravitational Solver
+
 ```cpp
 #include "containers/spatial/barnes_hut.hpp"
 #include <iostream>
@@ -105,7 +113,8 @@ int main() {
 }
 ```
 
-### 3.2 High-Throughput $O(N)$ SpatialHashGrid Collision Broadphase
+### 3.2 High-Throughput $O (N)$ SpatialHashGrid Collision Broadphase
+
 ```cpp
 #include "containers/spatial/spatial_hash_grid.hpp"
 #include <iostream>

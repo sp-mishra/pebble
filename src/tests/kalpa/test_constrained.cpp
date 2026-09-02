@@ -9,16 +9,30 @@
 using namespace kalpa;
 
 namespace {
-    ga::Vector<double> v2(double a, double b) { ga::Vector<double> v(2); v[0]=a; v[1]=b; return v; }
-    ga::Vector<double> v3(double a, double b, double c) { ga::Vector<double> v(3); v[0]=a; v[1]=b; v[2]=c; return v; }
+    ga::Vector<double> v2(double a, double b) {
+        ga::Vector<double> v(2);
+        v[0] = a;
+        v[1] = b;
+        return v;
+    }
+
+    ga::Vector<double> v3(double a, double b, double c) {
+        ga::Vector<double> v(3);
+        v[0] = a;
+        v[1] = b;
+        v[2] = c;
+        return v;
+    }
 
     // Local classes cannot hold member templates → objectives at file scope.
     // ½‖x − (5,5)‖²; minimum at (5,5), clamped by the constraint/domain.
     struct Shifted5 {
-        template<typename V> auto operator()(const V& x) const {
+        template <typename V>
+        auto operator()(const V& x) const {
             using S = typename V::value_type;
-            S a = x[0] - S{5}; S b = x[1] - S{5};
-            return S{0.5}*(a*a + b*b);
+            S a = x[0] - S{5};
+            S b = x[1] - S{5};
+            return S{0.5} * (a * a + b * b);
         }
     };
 }
@@ -30,7 +44,12 @@ namespace {
 //   x       + s2     = 3
 //   Optimum at (3,1): objective max = 4 → simplex f (of −x−y) = −4.
 // ===========================================================================
-TEST_CASE("kalpa: dense simplex finds the LP vertex", "[kalpa][constrained][lp]") {
+TEST_CASE (
+"kalpa: dense simplex finds the LP vertex"
+,
+"[kalpa][constrained][lp]"
+)
+ {
     ga::Matrix<double> A(2, 4, 0.0);
     A(0,0)=1; A(0,1)=1; A(0,2)=1;               // x+y+s1 = 4
     A(1,0)=1;           A(1,3)=1;               // x   +s2 = 3
@@ -47,7 +66,12 @@ TEST_CASE("kalpa: dense simplex finds the LP vertex", "[kalpa][constrained][lp]"
 
 // Degenerate LP — Bland's rule must terminate. Trivial equality x1=x2=... with
 // redundant tight constraint. min x  s.t. x + s = 1, x ≤ 1 (extra), x≥0.
-TEST_CASE("kalpa: simplex terminates on a degenerate LP (Bland)", "[kalpa][constrained][lp]") {
+TEST_CASE (
+"kalpa: simplex terminates on a degenerate LP (Bland)"
+,
+"[kalpa][constrained][lp]"
+)
+ {
     ga::Matrix<double> A(2, 3, 0.0);
     A(0,0)=1; A(0,1)=1;                          // x + s1 = 1
     A(1,0)=1;          A(1,2)=1;                 // x + s2 = 1  (redundant/degenerate)
@@ -60,7 +84,12 @@ TEST_CASE("kalpa: simplex terminates on a degenerate LP (Bland)", "[kalpa][const
     CHECK(r->f   == Catch::Approx(0.0).margin(1e-6));
 }
 
-TEST_CASE("kalpa: simplex reports an unbounded objective", "[kalpa][constrained][lp]") {
+TEST_CASE (
+"kalpa: simplex reports an unbounded objective"
+,
+"[kalpa][constrained][lp]"
+)
+ {
     // min −x  s.t.  x − s = 0 (x free upward) → unbounded below.
     ga::Matrix<double> A(1, 2, 0.0);
     A(0,0)=1; A(0,1)=-1;                         // x − s = 0
@@ -75,7 +104,12 @@ TEST_CASE("kalpa: simplex reports an unbounded objective", "[kalpa][constrained]
 // ===========================================================================
 // Exact rational simplex — zero round-off. Same LP as first, exact vertex.
 // ===========================================================================
-TEST_CASE("kalpa: exact-rational simplex gives the exact vertex", "[kalpa][constrained][lp][exact]") {
+TEST_CASE (
+"kalpa: exact-rational simplex gives the exact vertex"
+,
+"[kalpa][constrained][lp][exact]"
+)
+ {
     using F = Fraction;
     std::vector<std::vector<F>> A = {
         { F(1), F(1), F(1), F(0) },
@@ -91,7 +125,12 @@ TEST_CASE("kalpa: exact-rational simplex gives the exact vertex", "[kalpa][const
     CHECK(r.objective == F(-4));
 }
 
-TEST_CASE("kalpa: Fraction normalizes and compares exactly", "[kalpa][constrained][exact]") {
+TEST_CASE (
+"kalpa: Fraction normalizes and compares exactly"
+,
+"[kalpa][constrained][exact]"
+)
+ {
     Fraction a(2, 4);                             // → 1/2
     CHECK(a.num == 1);
     CHECK(a.den == 2);
@@ -105,7 +144,12 @@ TEST_CASE("kalpa: Fraction normalizes and compares exactly", "[kalpa][constraine
 //   min ½(x²+y²)  s.t.  x + y = 2.
 //   H = I, c = 0, A = [1 1], b = [2].  Optimum x=y=1, λ = −1.
 // ===========================================================================
-TEST_CASE("kalpa: equality QP solves the KKT system", "[kalpa][constrained][qp]") {
+TEST_CASE (
+"kalpa: equality QP solves the KKT system"
+,
+"[kalpa][constrained][qp]"
+)
+ {
     ga::Matrix<double> H = ga::Matrix<double>::identity(2);
     ga::Vector<double> c(2, 0.0);
     ga::Matrix<double> A(1, 2, 0.0); A(0,0)=1; A(0,1)=1;
@@ -125,7 +169,12 @@ TEST_CASE("kalpa: equality QP solves the KKT system", "[kalpa][constrained][qp]"
 // ===========================================================================
 // Projections — every projected point must be feasible & idempotent inside.
 // ===========================================================================
-TEST_CASE("kalpa: box projection clamps and is idempotent inside", "[kalpa][constrained][project]") {
+TEST_CASE (
+"kalpa: box projection clamps and is idempotent inside"
+,
+"[kalpa][constrained][project]"
+)
+ {
     Box<double> box(v2(-1.0,-1.0), v2(1.0,1.0));
     ga::Vector<double> out(2);
 
@@ -138,7 +187,12 @@ TEST_CASE("kalpa: box projection clamps and is idempotent inside", "[kalpa][cons
     CHECK(out[1] == Catch::Approx(-1.0));
 }
 
-TEST_CASE("kalpa: ball projection lands on the sphere", "[kalpa][constrained][project]") {
+TEST_CASE (
+"kalpa: ball projection lands on the sphere"
+,
+"[kalpa][constrained][project]"
+)
+ {
     Ball<double> ball; ball.center = v2(0.0,0.0); ball.radius = 2.0;
     ga::Vector<double> out(2);
     ball.project(v2(6.0, 0.0), out);              // outside along +x
@@ -149,7 +203,12 @@ TEST_CASE("kalpa: ball projection lands on the sphere", "[kalpa][constrained][pr
     CHECK(out[1] == Catch::Approx(0.5));
 }
 
-TEST_CASE("kalpa: polytope projection yields a feasible point", "[kalpa][constrained][project]") {
+TEST_CASE (
+"kalpa: polytope projection yields a feasible point"
+,
+"[kalpa][constrained][project]"
+)
+ {
     // Halfspaces  x ≤ 1,  y ≤ 1,  −x ≤ 0,  −y ≤ 0  (unit box as a polytope).
     ga::Matrix<double> A(4, 2, 0.0);
     A(0,0)= 1;             // x ≤ 1
@@ -171,7 +230,12 @@ TEST_CASE("kalpa: polytope projection yields a feasible point", "[kalpa][constra
 // Projected gradient descent onto a box — constrained quadratic optimum.
 //   min ½‖x − t‖²,  t = (5,5),  x ∈ [−1,1]²  →  optimum at (1,1) (corner).
 // ===========================================================================
-TEST_CASE("kalpa: projected gradient hits the constrained optimum", "[kalpa][constrained][pgd]") {
+TEST_CASE (
+"kalpa: projected gradient hits the constrained optimum"
+,
+"[kalpa][constrained][pgd]"
+)
+ {
     auto prob = make_problem(Shifted5{}, Unconstrained<ga::Vector<double>>{},
                              Box<double>(v2(-1.0,-1.0), v2(1.0,1.0)));
     Solver<ProjectedGradient<double>, Derivatives<Dual,double>, Armijo<double>> s;
@@ -186,7 +250,12 @@ TEST_CASE("kalpa: projected gradient hits the constrained optimum", "[kalpa][con
 //   min ½‖x − t‖², t=(5,5), box [−1,1]²  → same corner optimum (1,1).
 //   LMO(g): vertex minimizing gᵀs → per-coord s_i = (g_i>0? lo : hi).
 // ===========================================================================
-TEST_CASE("kalpa: Frank-Wolfe converges over a box domain", "[kalpa][constrained][fw]") {
+TEST_CASE (
+"kalpa: Frank-Wolfe converges over a box domain"
+,
+"[kalpa][constrained][fw]"
+)
+ {
     auto prob = make_problem<double>(Shifted5{});
     FrankWolfe<double> fw;
     auto lmo = [](const ga::Vector<double>& g, ga::Vector<double>& s) {
@@ -205,12 +274,15 @@ TEST_CASE("kalpa: Frank-Wolfe converges over a box domain", "[kalpa][constrained
 // ===========================================================================
 namespace {
     struct SumSq2 {
-        template<typename V> auto operator()(const V& x) const {
-            return x[0]*x[0] + x[1]*x[1];
+        template <typename V>
+        auto operator()(const V& x) const {
+            return x[0] * x[0] + x[1] * x[1];
         }
     };
-    struct Eq_sum2 {                     // c(x) = x₀ + x₁ − 2
-        template<typename V> auto operator()(const V& x) const {
+
+    struct Eq_sum2 { // c(x) = x₀ + x₁ − 2
+        template <typename V>
+        auto operator()(const V& x) const {
             using S = typename V::value_type;
             return x[0] + x[1] - S{2};
         }
@@ -221,7 +293,12 @@ namespace {
 // Interior-point (Mehrotra) on a convex QP:
 //   min ½‖x‖²  s.t.  x₀ + x₁ = 1,  x ≥ 0   →  (0.5, 0.5), f = 0.25.
 // ===========================================================================
-TEST_CASE("kalpa: interior-point solves an equality+bound QP", "[kalpa][constrained][ipm]") {
+TEST_CASE (
+"kalpa: interior-point solves an equality+bound QP"
+,
+"[kalpa][constrained][ipm]"
+)
+ {
     ga::Matrix<double> H(2, 2, 0.0); H(0,0)=1; H(1,1)=1;   // ½xᵀHx = ½‖x‖²
     ga::Vector<double> c = v2(0.0, 0.0);
     ga::Matrix<double> A(1, 2, 0.0); A(0,0)=1; A(0,1)=1;   // x₀+x₁ = 1
@@ -237,7 +314,12 @@ TEST_CASE("kalpa: interior-point solves an equality+bound QP", "[kalpa][constrai
 
 // Interior-point vs. revised simplex on the same LP (H = 0):
 //   max x+y s.t. x+y ≤ 4, x ≤ 3  → vertex (3,1) (with slacks), f(−x−y) = −4.
-TEST_CASE("kalpa: interior-point matches simplex on an LP", "[kalpa][constrained][ipm][lp]") {
+TEST_CASE (
+"kalpa: interior-point matches simplex on an LP"
+,
+"[kalpa][constrained][ipm][lp]"
+)
+ {
     ga::Matrix<double> A(2, 4, 0.0);
     A(0,0)=1; A(0,1)=1; A(0,2)=1;               // x+y+s1 = 4
     A(1,0)=1;           A(1,3)=1;               // x   +s2 = 3
@@ -256,7 +338,12 @@ TEST_CASE("kalpa: interior-point matches simplex on an LP", "[kalpa][constrained
 // ===========================================================================
 // SQP on  min x₀²+x₁²  s.t.  x₀+x₁−2 = 0   →  (1,1).
 // ===========================================================================
-TEST_CASE("kalpa: SQP solves an equality-constrained NLP", "[kalpa][constrained][sqp]") {
+TEST_CASE (
+"kalpa: SQP solves an equality-constrained NLP"
+,
+"[kalpa][constrained][sqp]"
+)
+ {
     std::vector<Eq_sum2> cons{ Eq_sum2{} };
     SQP<double> sqp;
     auto r = sqp.solve(SumSq2{}, v2(-1.0, 3.0), Derivatives<Dual,double>{}, cons);
@@ -268,7 +355,12 @@ TEST_CASE("kalpa: SQP solves an equality-constrained NLP", "[kalpa][constrained]
 // ===========================================================================
 // Augmented Lagrangian on the same NLP → (1,1); inner solver is LBFGS.
 // ===========================================================================
-TEST_CASE("kalpa: augmented Lagrangian solves the equality NLP", "[kalpa][constrained][alm]") {
+TEST_CASE (
+"kalpa: augmented Lagrangian solves the equality NLP"
+,
+"[kalpa][constrained][alm]"
+)
+ {
     std::vector<Eq_sum2> cons{ Eq_sum2{} };
     AugmentedLagrangian<double> alm;
     Solver<LBFGS<double>, Derivatives<Dual,double>, Wolfe<double>> inner;
@@ -284,21 +376,29 @@ TEST_CASE("kalpa: augmented Lagrangian solves the equality NLP", "[kalpa][constr
 // The constraint is active at the optimum; μ ≥ 0 and complementarity μ·c = 0.
 // ===========================================================================
 namespace {
-    struct Ineq_sum_ge2 {                // c(x) = 2 − x₀ − x₁ ≤ 0
-        template<typename V> auto operator()(const V& x) const {
+    struct Ineq_sum_ge2 { // c(x) = 2 − x₀ − x₁ ≤ 0
+        template <typename V>
+        auto operator()(const V& x) const {
             using S = typename V::value_type;
             return S{2} - x[0] - x[1];
         }
     };
-    struct Ineq_x0_le1 {                 // c(x) = x₀ − 1 ≤ 0
-        template<typename V> auto operator()(const V& x) const {
+
+    struct Ineq_x0_le1 { // c(x) = x₀ − 1 ≤ 0
+        template <typename V>
+        auto operator()(const V& x) const {
             using S = typename V::value_type;
             return x[0] - S{1};
         }
     };
 }
 
-TEST_CASE("kalpa: inequality SQP reaches the active-constraint optimum", "[kalpa][constrained][sqp]") {
+TEST_CASE (
+"kalpa: inequality SQP reaches the active-constraint optimum"
+,
+"[kalpa][constrained][sqp]"
+)
+ {
     std::vector<Eq_sum2>       eq{};                 // no equalities
     std::vector<Ineq_sum_ge2>  ineq{ Ineq_sum_ge2{} };
     SQP_Ineq<double> sqp;
@@ -316,7 +416,12 @@ TEST_CASE("kalpa: inequality SQP reaches the active-constraint optimum", "[kalpa
 
 // Inactive constraint: the unconstrained min (0,0) is already feasible for
 // x₀ ≤ 1, so SQP_Ineq should return it with a slack (inactive) inequality.
-TEST_CASE("kalpa: inequality SQP leaves an inactive constraint slack", "[kalpa][constrained][sqp]") {
+TEST_CASE (
+"kalpa: inequality SQP leaves an inactive constraint slack"
+,
+"[kalpa][constrained][sqp]"
+)
+ {
     std::vector<Eq_sum2>     eq{};
     std::vector<Ineq_x0_le1> ineq{ Ineq_x0_le1{} };
     SQP_Ineq<double> sqp;

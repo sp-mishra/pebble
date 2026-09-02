@@ -14,120 +14,121 @@
 #include <cmath>
 
 namespace kalpana {
-
-class ProceduralFill {
-public:
-    enum class Kind : std::uint8_t {
-        PaperTexture,
-        WatercolorPaper,
-        Marble,
-        Wood,
-        Grain,
-        Noise,
-        Canvas,
-        Linen,
-        Parchment,
-        Custom
-    };
-
-    Kind  kind   = Kind::PaperTexture;
-    float scale  = 1.0f;             // spatial scale
-    float amount = 0.5f;             // blend strength [0, 1]
-    Color tint   = colors::white();  // tint color
-
-    ProceduralFill() = default;
-
-    // Factory constructors
-    static ProceduralFill paper_texture(float scale = 1.0f, float amount = 0.3f) noexcept {
-        ProceduralFill pf;
-        pf.kind = Kind::PaperTexture;
-        pf.scale = scale;
-        pf.amount = amount;
-        return pf;
-    }
-
-    static ProceduralFill watercolor_paper(float scale = 0.8f, float amount = 0.4f) noexcept {
-        ProceduralFill pf;
-        pf.kind = Kind::WatercolorPaper;
-        pf.scale = scale;
-        pf.amount = amount;
-        return pf;
-    }
-
-    static ProceduralFill marble(float scale = 1.0f, Color tint = colors::white()) noexcept {
-        ProceduralFill pf;
-        pf.kind = Kind::Marble;
-        pf.scale = scale;
-        pf.amount = 0.7f;
-        pf.tint = tint;
-        return pf;
-    }
-
-    static ProceduralFill wood(float scale = 1.0f, Color tint = {0.55f, 0.35f, 0.17f}) noexcept {
-        ProceduralFill pf;
-        pf.kind = Kind::Wood;
-        pf.scale = scale;
-        pf.amount = 0.8f;
-        pf.tint = tint;
-        return pf;
-    }
-
-    static ProceduralFill grain(float amount = 0.04f) noexcept {
-        ProceduralFill pf;
-        pf.kind = Kind::Grain;
-        pf.scale = 10.0f;
-        pf.amount = amount;
-        return pf;
-    }
-
-    static ProceduralFill canvas_texture(float scale = 1.0f, Color tint = colors::white()) noexcept {
-        ProceduralFill pf;
-        pf.kind = Kind::Canvas;
-        pf.scale = scale;
-        pf.amount = 0.35f;
-        pf.tint = tint;
-        return pf;
-    }
-
-    static ProceduralFill parchment(float scale = 1.0f, float age = 0.5f) noexcept {
-        ProceduralFill pf;
-        pf.kind = Kind::Parchment;
-        pf.scale = scale;
-        pf.amount = age;
-        pf.tint = Color{0.92f, 0.85f, 0.70f};
-        return pf;
-    }
-
-    // Plug-and-play custom user noise generator
-    template <noise::noise_generator G>
-    static ProceduralFill custom_noise(G generator, float scale = 1.0f, float amount = 0.5f, Color tint = colors::white()) {
-        ProceduralFill pf;
-        pf.kind = Kind::Custom;
-        pf.scale = scale;
-        pf.amount = amount;
-        pf.tint = tint;
-        pf.custom_eval_ = [gen = std::move(generator)](float x, float y) -> float {
-            return gen.evaluate(x, y);
+    class ProceduralFill {
+    public:
+        enum class Kind : std::uint8_t {
+            PaperTexture,
+            WatercolorPaper,
+            Marble,
+            Wood,
+            Grain,
+            Noise,
+            Canvas,
+            Linen,
+            Parchment,
+            Custom
         };
-        return pf;
-    }
 
-    static ProceduralFill custom_function(std::function<float(float, float)> fn, float scale = 1.0f, float amount = 0.5f, Color tint = colors::white()) {
-        ProceduralFill pf;
-        pf.kind = Kind::Custom;
-        pf.scale = scale;
-        pf.amount = amount;
-        pf.tint = tint;
-        pf.custom_eval_ = std::move(fn);
-        return pf;
-    }
+        Kind kind = Kind::PaperTexture;
+        float scale = 1.0f; // spatial scale
+        float amount = 0.5f; // blend strength [0, 1]
+        Color tint = colors::white(); // tint color
 
-    // Evaluates procedural value at world coordinate (x, y) -> modulation factor [0, 1]
-    [[nodiscard]] float evaluate(float x, float y) const noexcept {
-        const float sx = (scale > 1e-4f) ? (x * 0.05f / scale) : x;
-        const float sy = (scale > 1e-4f) ? (y * 0.05f / scale) : y;
+        ProceduralFill() = default;
 
-        switch (kind) {
+        // Factory constructors
+        static ProceduralFill paper_texture(float scale = 1.0f, float amount = 0.3f) noexcept {
+            ProceduralFill pf;
+            pf.kind = Kind::PaperTexture;
+            pf.scale = scale;
+            pf.amount = amount;
+            return pf;
+        }
+
+        static ProceduralFill watercolor_paper(float scale = 0.8f, float amount = 0.4f) noexcept {
+            ProceduralFill pf;
+            pf.kind = Kind::WatercolorPaper;
+            pf.scale = scale;
+            pf.amount = amount;
+            return pf;
+        }
+
+        static ProceduralFill marble(float scale = 1.0f, Color tint = colors::white()) noexcept {
+            ProceduralFill pf;
+            pf.kind = Kind::Marble;
+            pf.scale = scale;
+            pf.amount = 0.7f;
+            pf.tint = tint;
+            return pf;
+        }
+
+        static ProceduralFill wood(float scale = 1.0f, Color tint = {0.55f, 0.35f, 0.17f}) noexcept {
+            ProceduralFill pf;
+            pf.kind = Kind::Wood;
+            pf.scale = scale;
+            pf.amount = 0.8f;
+            pf.tint = tint;
+            return pf;
+        }
+
+        static ProceduralFill grain(float amount = 0.04f) noexcept {
+            ProceduralFill pf;
+            pf.kind = Kind::Grain;
+            pf.scale = 10.0f;
+            pf.amount = amount;
+            return pf;
+        }
+
+        static ProceduralFill canvas_texture(float scale = 1.0f, Color tint = colors::white()) noexcept {
+            ProceduralFill pf;
+            pf.kind = Kind::Canvas;
+            pf.scale = scale;
+            pf.amount = 0.35f;
+            pf.tint = tint;
+            return pf;
+        }
+
+        static ProceduralFill parchment(float scale = 1.0f, float age = 0.5f) noexcept {
+            ProceduralFill pf;
+            pf.kind = Kind::Parchment;
+            pf.scale = scale;
+            pf.amount = age;
+            pf.tint = Color{0.92f, 0.85f, 0.70f};
+            return pf;
+        }
+
+        // Plug-and-play custom user noise generator
+        template <noise::noise_generator G>
+        static ProceduralFill custom_noise(G generator, float scale = 1.0f, float amount = 0.5f,
+                                           Color tint = colors::white()) {
+            ProceduralFill pf;
+            pf.kind = Kind::Custom;
+            pf.scale = scale;
+            pf.amount = amount;
+            pf.tint = tint;
+            pf.custom_eval_ = [gen = std::move(generator)](float x, float y) -> float {
+                return gen.evaluate(x, y);
+            };
+            return pf;
+        }
+
+        static ProceduralFill custom_function(std::function<float(float, float)> fn, float scale = 1.0f,
+                                              float amount = 0.5f, Color tint = colors::white()) {
+            ProceduralFill pf;
+            pf.kind = Kind::Custom;
+            pf.scale = scale;
+            pf.amount = amount;
+            pf.tint = tint;
+            pf.custom_eval_ = std::move(fn);
+            return pf;
+        }
+
+        // Evaluates procedural value at world coordinate (x, y) -> modulation factor [0, 1]
+        [[nodiscard]] float evaluate(float x, float y) const noexcept {
+            const float sx = (scale > 1e-4f) ? (x * 0.05f / scale) : x;
+            const float sy = (scale > 1e-4f) ? (y * 0.05f / scale) : y;
+
+            switch (kind) {
             case Kind::PaperTexture: {
                 // Fibers + fine grain
                 const float n1 = noise::simplex(sx * 4.0f, sy * 4.0f);
@@ -184,27 +185,26 @@ public:
                 }
                 return 0.5f;
             }
+            }
+            return 0.5f;
         }
-        return 0.5f;
-    }
 
-    // Modulates an existing base color by this procedural fill
-    [[nodiscard]] Color modulate(const Color& base, float x, float y) const noexcept {
-        const float val = evaluate(x, y);
-        return Color{
-            base.r * (1.0f - amount + amount * val * tint.r),
-            base.g * (1.0f - amount + amount * val * tint.g),
-            base.b * (1.0f - amount + amount * val * tint.b),
-            base.a
-        };
-    }
+        // Modulates an existing base color by this procedural fill
+        [[nodiscard]] Color modulate(const Color& base, float x, float y) const noexcept {
+            const float val = evaluate(x, y);
+            return Color{
+                base.r * (1.0f - amount + amount * val * tint.r),
+                base.g * (1.0f - amount + amount * val * tint.g),
+                base.b * (1.0f - amount + amount * val * tint.b),
+                base.a
+            };
+        }
 
-    friend bool operator==(const ProceduralFill& a, const ProceduralFill& b) noexcept {
-        return a.kind == b.kind && a.scale == b.scale && a.amount == b.amount && a.tint == b.tint;
-    }
+        friend bool operator==(const ProceduralFill& a, const ProceduralFill& b) noexcept {
+            return a.kind == b.kind && a.scale == b.scale && a.amount == b.amount && a.tint == b.tint;
+        }
 
-private:
-    std::function<float(float, float)> custom_eval_{};
-};
-
+    private:
+        std::function<float(float, float)> custom_eval_{};
+    };
 } // namespace kalpana

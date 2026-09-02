@@ -4,7 +4,12 @@
 #include "spandana/skeleton.hpp"
 #include "spandana/serialization.hpp"
 
-TEST_CASE("Gati Elemental: Water and Lava Contact Fuses to Obsidian with Steam", "[gati][elemental]") {
+TEST_CASE (
+"Gati Elemental: Water and Lava Contact Fuses to Obsidian with Steam"
+,
+"[gati][elemental]"
+)
+ {
     pebble::ecs::World world;
 
     auto water = world.spawn();
@@ -40,7 +45,12 @@ TEST_CASE("Gati Elemental: Water and Lava Contact Fuses to Obsidian with Steam",
     REQUIRE(mat->phase_fractions.solid() > 0.8f);
 }
 
-TEST_CASE("Spandana Skeleton: 2D Bone Hierarchy Forward Kinematics & Skinning", "[spandana][skeleton]") {
+TEST_CASE (
+"Spandana Skeleton: 2D Bone Hierarchy Forward Kinematics & Skinning"
+,
+"[spandana][skeleton]"
+)
+ {
     pebble::spandana::Skeleton2D skeleton;
 
     // Bone 0: Root at origin
@@ -72,7 +82,12 @@ TEST_CASE("Spandana Skeleton: 2D Bone Hierarchy Forward Kinematics & Skinning", 
     REQUIRE(std::abs(skinned[1] - 20.0f) < 1e-4f);
 }
 
-TEST_CASE("Spandana Serialization: Glaze JSON Material & Animation Round-Trip", "[spandana][serialization]") {
+TEST_CASE (
+"Spandana Serialization: Glaze JSON Material & Animation Round-Trip"
+,
+"[spandana][serialization]"
+)
+ {
     auto ice = gati::MaterialComponent::Ice();
     ice.temperature = -25.0f;
 
@@ -99,8 +114,12 @@ TEST_CASE("Spandana Serialization: Glaze JSON Material & Animation Round-Trip", 
 #include <cmath>
 #include <type_traits>
 
-TEST_CASE("Spandana Timeline: no-virtual SBO action is trivially relocatable & heap-free",
-          "[spandana][timeline][zero-overhead]") {
+TEST_CASE (
+"Spandana Timeline: no-virtual SBO action is trivially relocatable & heap-free"
+,
+"[spandana][timeline][zero-overhead]"
+)
+ {
     using pebble::spandana::Action;
     using pebble::spandana::Timeline;
 
@@ -114,8 +133,12 @@ TEST_CASE("Spandana Timeline: no-virtual SBO action is trivially relocatable & h
     STATIC_REQUIRE(sizeof(Action) >= 96);
 }
 
-TEST_CASE("Spandana Timeline: dependency inference parallels disjoint keys, serializes shared",
-          "[spandana][timeline][deps]") {
+TEST_CASE (
+"Spandana Timeline: dependency inference parallels disjoint keys, serializes shared"
+,
+"[spandana][timeline][deps]"
+)
+ {
     using namespace pebble::spandana;
     using namespace pebble::spandana::edsl;
 
@@ -137,8 +160,12 @@ TEST_CASE("Spandana Timeline: dependency inference parallels disjoint keys, seri
     }
 }
 
-TEST_CASE("Spandana Easing: policy-templated tween is stateless & correct",
-          "[spandana][easing][zero-overhead]") {
+TEST_CASE (
+"Spandana Easing: policy-templated tween is stateless & correct"
+,
+"[spandana][easing][zero-overhead]"
+)
+ {
     using namespace pebble::spandana::edsl;
     using namespace pebble::spandana;
 
@@ -154,8 +181,12 @@ TEST_CASE("Spandana Easing: policy-templated tween is stateless & correct",
     REQUIRE(std::abs(v - 10.0f) < 1e-3f);
 }
 
-TEST_CASE("Spandana Spring: cached omega/zeta matches recomputed analytic step",
-          "[spandana][spring]") {
+TEST_CASE (
+"Spandana Spring: cached omega/zeta matches recomputed analytic step"
+,
+"[spandana][spring]"
+)
+ {
     using pebble::spandana::AnalyticalSpringDamper;
     AnalyticalSpringDamper spring(180.0f, 12.0f);
     float pos = 0.0f, vel = 0.0f;
@@ -168,8 +199,12 @@ TEST_CASE("Spandana Spring: cached omega/zeta matches recomputed analytic step",
     REQUIRE(std::abs(vel) < 5.0f);
 }
 
-TEST_CASE("Spandana Spring: AngleSpringDamper takes the shortest arc across the wrap",
-          "[spandana][spring]") {
+TEST_CASE (
+"Spandana Spring: AngleSpringDamper takes the shortest arc across the wrap"
+,
+"[spandana][spring]"
+)
+ {
     using pebble::spandana::AngleSpringDamper;
     AngleSpringDamper spring(180.0f, 24.0f);
     // From +3.0 rad toward -3.0 rad: shortest path is forward through +pi
@@ -179,8 +214,12 @@ TEST_CASE("Spandana Spring: AngleSpringDamper takes the shortest arc across the 
     (void)np;
 }
 
-TEST_CASE("Spandana Sonification: SimProfile selects the correct Dhvani cue",
-          "[spandana][dhvani][sonification]") {
+TEST_CASE (
+"Spandana Sonification: SimProfile selects the correct Dhvani cue"
+,
+"[spandana][dhvani][sonification]"
+)
+ {
     using namespace pebble::spandana::edsl;
     using pebble::dhvani::DhvaniCue;
 
@@ -192,8 +231,12 @@ TEST_CASE("Spandana Sonification: SimProfile selects the correct Dhvani cue",
     REQUIRE(sound_palette(SimProfile::Impact, ctx).volume == 1.0f);
 }
 
-TEST_CASE("Spandana Sonification: NullSonifier is zero-overhead & plug-and-play default",
-          "[spandana][dhvani][zero-overhead]") {
+TEST_CASE (
+"Spandana Sonification: NullSonifier is zero-overhead & plug-and-play default"
+,
+"[spandana][dhvani][zero-overhead]"
+)
+ {
     using namespace pebble::spandana::edsl;
 
     // Default policy carries no sonifier bytes: the action is the same size with

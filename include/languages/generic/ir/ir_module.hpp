@@ -25,10 +25,9 @@
 #include "containers/handle/generational_handle.hpp"
 
 namespace lang {
-
     // ---- Store policy tags -------------------------------------------------
 
-    struct default_store {};   // std::vector backing (default)
+    struct default_store {}; // std::vector backing (default)
 
     // handle_store<Tag>: slot_map + generational_handle<Tag,uint32_t>.
     // Tag is a phantom type (e.g. vakya::types::type_tag) so handles are
@@ -42,8 +41,8 @@ namespace lang {
 
     template <class KindEnum, class ExtPayload>
     struct ir_adjacency_view {
-        const std::vector<ir_node<KindEnum, ExtPayload>>* nodes    = nullptr;
-        const std::vector<ir_node_id>*                    children = nullptr;
+        const std::vector<ir_node<KindEnum, ExtPayload>>* nodes = nullptr;
+        const std::vector<ir_node_id>* children = nullptr;
 
         [[nodiscard]] std::span<const ir_node_id> adj(ir_node_id id) const noexcept {
             if (!nodes || !children) return {};
@@ -61,11 +60,11 @@ namespace lang {
 
     template <class KindEnum,
               class ExtPayload = std::monostate,
-              class Store      = default_store>
+              class Store = default_store>
     class ir_module {
     public:
-        using node_type   = ir_node<KindEnum, ExtPayload>;
-        using node_handle = ir_node_id;   // raw uint32_t under default_store
+        using node_type = ir_node<KindEnum, ExtPayload>;
+        using node_handle = ir_node_id; // raw uint32_t under default_store
 
         // ---- Append ---------------------------------------------------------
 
@@ -85,18 +84,17 @@ namespace lang {
 
         // Append child ids for the node at `node_id`, returning first_child offset.
         node_handle append_children(node_handle node_id,
-                                    std::span<const ir_node_id> kids)
-        {
+                                    std::span<const ir_node_id> kids) {
             const ir_node_id offset = static_cast<ir_node_id>(child_ids_.size());
             for (auto cid : kids) child_ids_.push_back(cid);
-            nodes_[node_id].first_child  = offset;
-            nodes_[node_id].child_count  = static_cast<std::uint32_t>(kids.size());
+            nodes_[node_id].first_child = offset;
+            nodes_[node_id].child_count = static_cast<std::uint32_t>(kids.size());
             return offset;
         }
 
         // ---- Access ---------------------------------------------------------
 
-        [[nodiscard]] node_type&       operator[](node_handle id)       { return nodes_[id]; }
+        [[nodiscard]] node_type& operator[](node_handle id) { return nodes_[id]; }
         [[nodiscard]] const node_type& operator[](node_handle id) const { return nodes_[id]; }
 
         [[nodiscard]] std::span<const ir_node_id> children(node_handle id) const noexcept {
@@ -105,11 +103,13 @@ namespace lang {
             return std::span<const ir_node_id>(child_ids_.data() + n.first_child, n.child_count);
         }
 
-        [[nodiscard]] node_handle     root()  const noexcept { return root_id_; }
-        [[nodiscard]] std::uint32_t   size()  const noexcept {
+        [[nodiscard]] node_handle root() const noexcept { return root_id_; }
+
+        [[nodiscard]] std::uint32_t size() const noexcept {
             return static_cast<std::uint32_t>(nodes_.size());
         }
-        [[nodiscard]] bool            empty() const noexcept { return nodes_.empty(); }
+
+        [[nodiscard]] bool empty() const noexcept { return nodes_.empty(); }
 
         void set_root(node_handle id) noexcept { root_id_ = id; }
 
@@ -133,9 +133,9 @@ namespace lang {
         }
 
     private:
-        std::vector<node_type>  nodes_;
+        std::vector<node_type> nodes_;
         std::vector<ir_node_id> child_ids_;
-        node_handle             root_id_ = k_null_ir;
+        node_handle root_id_ = k_null_ir;
     };
 
     // ---- ir_module (handle_store<Tag>) specialization ----------------------
@@ -152,10 +152,10 @@ namespace lang {
     template <class KindEnum, class ExtPayload, class Tag>
     struct ir_adjacency_view_hs {
         using node_handle = containers::generational_handle<Tag, std::uint32_t>;
-        using node_type   = ir_node<KindEnum, ExtPayload>;
+        using node_type = ir_node<KindEnum, ExtPayload>;
 
-        const containers::slot_map<node_type, node_handle>* store    = nullptr;
-        const std::vector<ir_node_id>*                      children = nullptr;
+        const containers::slot_map<node_type, node_handle>* store = nullptr;
+        const std::vector<ir_node_id>* children = nullptr;
 
         [[nodiscard]] std::span<const ir_node_id> adj(node_handle h) const noexcept {
             if (!store || !children) return {};
@@ -172,7 +172,7 @@ namespace lang {
     template <class KindEnum, class ExtPayload, class Tag>
     class ir_module<KindEnum, ExtPayload, handle_store<Tag>> {
     public:
-        using node_type   = ir_node<KindEnum, ExtPayload>;
+        using node_type = ir_node<KindEnum, ExtPayload>;
         using node_handle = containers::generational_handle<Tag, std::uint32_t>;
 
         // ---- Append ---------------------------------------------------------
@@ -183,14 +183,13 @@ namespace lang {
 
         // Append child ids for the node at `h`, returning first_child offset.
         ir_node_id append_children(node_handle h,
-                                   std::span<const ir_node_id> kids)
-        {
+                                   std::span<const ir_node_id> kids) {
             const ir_node_id offset = static_cast<ir_node_id>(child_ids_.size());
             for (auto cid : kids) child_ids_.push_back(cid);
             node_type* n = store_.find(h);
             if (n) {
-                n->first_child  = offset;
-                n->child_count  = static_cast<std::uint32_t>(kids.size());
+                n->first_child = offset;
+                n->child_count = static_cast<std::uint32_t>(kids.size());
             }
             return offset;
         }
@@ -198,7 +197,7 @@ namespace lang {
         // ---- Access ---------------------------------------------------------
 
         // Returns nullptr when handle is stale.
-        [[nodiscard]] node_type*       find(node_handle h)       noexcept { return store_.find(h); }
+        [[nodiscard]] node_type* find(node_handle h) noexcept { return store_.find(h); }
         [[nodiscard]] const node_type* find(node_handle h) const noexcept { return store_.find(h); }
 
         [[nodiscard]] std::span<const ir_node_id> children(node_handle h) const noexcept {
@@ -207,9 +206,9 @@ namespace lang {
             return std::span<const ir_node_id>(child_ids_.data() + n->first_child, n->child_count);
         }
 
-        [[nodiscard]] node_handle   root()  const noexcept { return root_id_; }
-        [[nodiscard]] std::uint32_t size()  const noexcept { return store_.size(); }
-        [[nodiscard]] bool          empty() const noexcept { return store_.empty(); }
+        [[nodiscard]] node_handle root() const noexcept { return root_id_; }
+        [[nodiscard]] std::uint32_t size() const noexcept { return store_.size(); }
+        [[nodiscard]] bool empty() const noexcept { return store_.empty(); }
 
         void set_root(node_handle h) noexcept { root_id_ = h; }
 
@@ -217,9 +216,9 @@ namespace lang {
 
         // reset: clear store + child_ids; root becomes null.
         void reset() noexcept {
-            store_     = {};
+            store_ = {};
             child_ids_ = {};
-            root_id_   = {};
+            root_id_ = {};
         }
 
         // ---- Graph views ----------------------------------------------------
@@ -232,15 +231,14 @@ namespace lang {
 
         // ---- Iteration (live nodes only) ------------------------------------
 
-        auto begin()       { return store_.begin(); }
-        auto end()         { return store_.end(); }
+        auto begin() { return store_.begin(); }
+        auto end() { return store_.end(); }
         auto begin() const { return store_.begin(); }
-        auto end()   const { return store_.end(); }
+        auto end() const { return store_.end(); }
 
     private:
         containers::slot_map<node_type, node_handle> store_;
-        std::vector<ir_node_id>                      child_ids_;
-        node_handle                                  root_id_{};
+        std::vector<ir_node_id> child_ids_;
+        node_handle root_id_{};
     };
-
 } // namespace lang

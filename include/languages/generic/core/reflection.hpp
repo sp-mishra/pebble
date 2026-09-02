@@ -33,14 +33,12 @@
 #include <type_traits>
 
 namespace lang {
-
     // =========================================================================
     // callable_traits — introspect free functions, noexcept variants,
     //                   const member operator() (non-capturing lambdas).
     // =========================================================================
 
     namespace detail {
-
         template <class F, class = void>
         struct callable_traits : callable_traits<decltype(&std::decay_t<F>::operator())> {};
 
@@ -49,8 +47,8 @@ namespace lang {
         struct callable_traits<R(*)(Args...), void> {
             using return_type = R;
             using param_types = std::tuple<std::decay_t<Args>...>;
-            static constexpr std::size_t arity      = sizeof...(Args);
-            static constexpr bool        is_noexcept = false;
+            static constexpr std::size_t arity = sizeof...(Args);
+            static constexpr bool is_noexcept = false;
         };
 
         // Free function pointer noexcept
@@ -58,8 +56,8 @@ namespace lang {
         struct callable_traits<R(*)(Args...) noexcept, void> {
             using return_type = R;
             using param_types = std::tuple<std::decay_t<Args>...>;
-            static constexpr std::size_t arity      = sizeof...(Args);
-            static constexpr bool        is_noexcept = true;
+            static constexpr std::size_t arity = sizeof...(Args);
+            static constexpr bool is_noexcept = true;
         };
 
         // Const member operator() (lambda / functor)
@@ -67,8 +65,8 @@ namespace lang {
         struct callable_traits<R(C::*)(Args...) const, void> {
             using return_type = R;
             using param_types = std::tuple<std::decay_t<Args>...>;
-            static constexpr std::size_t arity      = sizeof...(Args);
-            static constexpr bool        is_noexcept = false;
+            static constexpr std::size_t arity = sizeof...(Args);
+            static constexpr bool is_noexcept = false;
         };
 
         // Const member operator() noexcept
@@ -76,10 +74,9 @@ namespace lang {
         struct callable_traits<R(C::*)(Args...) const noexcept, void> {
             using return_type = R;
             using param_types = std::tuple<std::decay_t<Args>...>;
-            static constexpr std::size_t arity      = sizeof...(Args);
-            static constexpr bool        is_noexcept = true;
+            static constexpr std::size_t arity = sizeof...(Args);
+            static constexpr bool is_noexcept = true;
         };
-
     } // namespace detail
 
     // Public alias — skips the detail:: prefix at call sites.
@@ -101,7 +98,7 @@ namespace lang {
 
     template <meta::fixed_string Name, auto Ptr>
     struct field {
-        static constexpr auto name    = Name;
+        static constexpr auto name = Name;
         static constexpr auto pointer = Ptr;
     };
 
@@ -139,15 +136,15 @@ namespace lang {
     // =========================================================================
 
     namespace detail {
-
         template <auto Fn, class Params, std::size_t... Is>
         void invoke_typed_impl(const void* const* args, void* result,
                                std::index_sequence<Is...>) {
             using Traits = callable_traits<decltype(Fn)>;
-            using R      = typename Traits::return_type;
+            using R = typename Traits::return_type;
             if constexpr (std::is_void_v<R>) {
                 Fn(*static_cast<const std::tuple_element_t<Is, Params>*>(args[Is])...);
-            } else {
+            }
+            else {
                 *static_cast<R*>(result) =
                     Fn(*static_cast<const std::tuple_element_t<Is, Params>*>(args[Is])...);
             }
@@ -158,10 +155,9 @@ namespace lang {
             using Traits = callable_traits<decltype(Fn)>;
             return +[](const void* const* args, void* result) {
                 invoke_typed_impl<Fn, typename Traits::param_types>(
-                    args, result, std::make_index_sequence<Traits::arity>{});
+                    args, result, std::make_index_sequence < Traits::arity >
+                {});
             };
         }
-
     } // namespace detail
-
 } // namespace lang

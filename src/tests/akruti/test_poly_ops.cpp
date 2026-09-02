@@ -12,17 +12,22 @@ using akruti::Vec2;
 using akruti::Scalar;
 
 namespace {
-Poly make_square(Scalar s, Scalar cx = 0, Scalar cy = 0) {
-    Poly p;
-    p.push_back(Vec2<Scalar>{cx - s, cy - s});
-    p.push_back(Vec2<Scalar>{cx + s, cy - s});
-    p.push_back(Vec2<Scalar>{cx + s, cy + s});
-    p.push_back(Vec2<Scalar>{cx - s, cy + s});
-    return p;
-}
+    Poly make_square(Scalar s, Scalar cx = 0, Scalar cy = 0) {
+        Poly p;
+        p.push_back(Vec2<Scalar>{cx - s, cy - s});
+        p.push_back(Vec2<Scalar>{cx + s, cy - s});
+        p.push_back(Vec2<Scalar>{cx + s, cy + s});
+        p.push_back(Vec2<Scalar>{cx - s, cy + s});
+        return p;
+    }
 } // namespace
 
-TEST_CASE("Akruti poly_ops: offset inflates area for positive delta (miter)", "[akruti][poly_ops]") {
+TEST_CASE (
+"Akruti poly_ops: offset inflates area for positive delta (miter)"
+,
+"[akruti][poly_ops]"
+)
+ {
     const Poly sq = make_square(10.0f);               // 20x20 => area 400
     const Scalar base_area = std::fabs(akruti::polygon_area(sq));
 
@@ -36,7 +41,12 @@ TEST_CASE("Akruti poly_ops: offset inflates area for positive delta (miter)", "[
     REQUIRE(std::fabs(akruti::polygon_area(shrunk)) < base_area); // deflation shrinks
 }
 
-TEST_CASE("Akruti poly_ops: offset join styles all produce valid contours", "[akruti][poly_ops]") {
+TEST_CASE (
+"Akruti poly_ops: offset join styles all produce valid contours"
+,
+"[akruti][poly_ops]"
+)
+ {
     const Poly sq = make_square(10.0f);
     for (auto js : {akruti::JoinStyle::Miter, akruti::JoinStyle::Round, akruti::JoinStyle::Bevel}) {
         const Poly r = akruti::offset_polygon(sq, 4.0f, js);
@@ -45,7 +55,12 @@ TEST_CASE("Akruti poly_ops: offset join styles all produce valid contours", "[ak
     }
 }
 
-TEST_CASE("Akruti poly_ops: union of nested returns outer; area >= max(a,b)", "[akruti][poly_ops]") {
+TEST_CASE (
+"Akruti poly_ops: union of nested returns outer; area >= max(a,b)"
+,
+"[akruti][poly_ops]"
+)
+ {
     const Poly big = make_square(10.0f);
     const Poly small = make_square(3.0f);
     const Poly u = akruti::union_polygon(big, small);
@@ -55,14 +70,24 @@ TEST_CASE("Akruti poly_ops: union of nested returns outer; area >= max(a,b)", "[
     REQUIRE(ua >= std::fabs(akruti::polygon_area(small)));
 }
 
-TEST_CASE("Akruti poly_ops: subtract fully-contained clip empties subject", "[akruti][poly_ops]") {
+TEST_CASE (
+"Akruti poly_ops: subtract fully-contained clip empties subject"
+,
+"[akruti][poly_ops]"
+)
+ {
     const Poly subject = make_square(3.0f);
     const Poly clip = make_square(10.0f);            // clip ⊃ subject
     const Poly d = akruti::subtract_polygon(subject, clip);
     REQUIRE(d.empty());                              // nothing of subject survives
 }
 
-TEST_CASE("Akruti poly_ops: subtract disjoint clip leaves subject intact", "[akruti][poly_ops]") {
+TEST_CASE (
+"Akruti poly_ops: subtract disjoint clip leaves subject intact"
+,
+"[akruti][poly_ops]"
+)
+ {
     const Poly subject = make_square(3.0f, 0.0f, 0.0f);
     const Poly clip = make_square(3.0f, 100.0f, 100.0f); // far away
     const Poly d = akruti::subtract_polygon(subject, clip);
@@ -71,7 +96,12 @@ TEST_CASE("Akruti poly_ops: subtract disjoint clip leaves subject intact", "[akr
             Catch::Approx(std::fabs(akruti::polygon_area(subject))).margin(1e-3));
 }
 
-TEST_CASE("Akruti poly_ops: intersect parity via clip_polygon on overlap", "[akruti][poly_ops]") {
+TEST_CASE (
+"Akruti poly_ops: intersect parity via clip_polygon on overlap"
+,
+"[akruti][poly_ops]"
+)
+ {
     // clip_polygon (intersect) is the pre-existing op Kalpana::intersect uses; sanity-check
     // it against overlapping squares — intersection area must be positive and <= each input.
     const Poly a = make_square(10.0f, 0.0f, 0.0f);

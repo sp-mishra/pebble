@@ -36,7 +36,6 @@
 #endif
 
 namespace pebble::containers {
-
     // ============================================================================
     // SECTION 1 — Traits & Policy Defaults
     // ============================================================================
@@ -81,7 +80,7 @@ namespace pebble::containers {
     template <typename Key, typename Value, std::size_t TargetNodeBytesV = 256>
     struct DefaultBPlusTreeTraits {
         static constexpr std::size_t TargetNodeBytes = TargetNodeBytesV;
-        static constexpr std::size_t LeafCapacity  = detail::default_bplus_leaf_capacity<Key, Value, TargetNodeBytesV>();
+        static constexpr std::size_t LeafCapacity = detail::default_bplus_leaf_capacity<Key, Value, TargetNodeBytesV>();
         static constexpr std::size_t InnerCapacity = detail::default_bplus_inner_capacity<Key, TargetNodeBytesV>();
         static constexpr bool EnableSIMD = true;
         static constexpr std::size_t MaxRecycleNodes = 64;
@@ -91,9 +90,9 @@ namespace pebble::containers {
     // message instead of a deep template error deep inside the container body.
     template <typename T>
     concept BPlusTreeTraits = requires {
-        { T::LeafCapacity }    -> std::convertible_to<std::size_t>;
-        { T::InnerCapacity }   -> std::convertible_to<std::size_t>;
-        { T::EnableSIMD }      -> std::convertible_to<bool>;
+        { T::LeafCapacity } -> std::convertible_to<std::size_t>;
+        { T::InnerCapacity } -> std::convertible_to<std::size_t>;
+        { T::EnableSIMD } -> std::convertible_to<bool>;
         { T::MaxRecycleNodes } -> std::convertible_to<std::size_t>;
     };
 
@@ -111,7 +110,8 @@ namespace pebble::containers {
             std::same_as<Key, std::uint64_t> || std::same_as<Key, std::int64_t>;
 
         template <typename Key>
-        [[nodiscard]] inline std::size_t linear_search_simd(const Key* keys, std::size_t count, const Key& target) noexcept {
+        [[nodiscard]] inline std::size_t linear_search_simd(const Key* keys, std::size_t count,
+                                                            const Key& target) noexcept {
 #if defined(PEBBLE_HAS_HIGHWAY)
             if constexpr (std::same_as<Key, std::uint64_t> || std::same_as<Key, std::int64_t>) {
                 namespace hn = hwy::HWY_NAMESPACE;
@@ -135,7 +135,9 @@ namespace pebble::containers {
                     }
                     return count;
                 }
-            } else if constexpr (std::same_as<Key, std::uint32_t> || std::same_as<Key, std::int32_t> || std::same_as<Key, float>) {
+            }
+            else if constexpr (std::same_as<Key, std::uint32_t> || std::same_as<Key, std::int32_t> || std::same_as<
+                Key, float>) {
                 namespace hn = hwy::HWY_NAMESPACE;
                 const hn::ScalableTag<Key> d;
                 const std::size_t N = hn::Lanes(d);
@@ -303,9 +305,10 @@ namespace pebble::containers {
     class BPlusTreeIterator {
     public:
         using iterator_category = std::bidirectional_iterator_tag;
-        using difference_type   = std::ptrdiff_t;
-        using value_type        = std::pair<const Key&, std::conditional_t<IsConst, const Value&, Value&>>;
-        using LeafNodePtr       = std::conditional_t<IsConst, const LeafNode<Key, Value, LeafCap, Allocator>*, LeafNode<Key, Value, LeafCap, Allocator>*>;
+        using difference_type = std::ptrdiff_t;
+        using value_type = std::pair<const Key&, std::conditional_t<IsConst, const Value&, Value&>>;
+        using LeafNodePtr = std::conditional_t<IsConst, const LeafNode<Key, Value, LeafCap, Allocator>*, LeafNode<
+                                                   Key, Value, LeafCap, Allocator>*>;
 
         struct ReferenceProxy {
             const Key& first;
@@ -319,7 +322,7 @@ namespace pebble::containers {
         };
 
         using reference = ReferenceProxy;
-        using pointer   = ReferenceProxy*;
+        using pointer = ReferenceProxy*;
 
     private:
         LeafNodePtr node_{nullptr};
@@ -337,7 +340,7 @@ namespace pebble::containers {
             : node_(node), index_(idx) {}
 
         template <bool OtherConst>
-        requires (IsConst && !OtherConst)
+            requires (IsConst && !OtherConst)
         constexpr BPlusTreeIterator(const BPlusTreeIterator<Key, Value, LeafCap, Allocator, OtherConst>& other) noexcept
             : node_(other.node_), index_(other.index_) {}
 
@@ -372,7 +375,8 @@ namespace pebble::containers {
             if (!node_) return *this;
             if (index_ > 0) {
                 --index_;
-            } else if (node_->prev) {
+            }
+            else if (node_->prev) {
                 node_ = node_->prev;
                 index_ = node_->header.count > 0 ? (node_->header.count - 1) : 0;
             }
@@ -406,57 +410,59 @@ namespace pebble::containers {
         typename Value,
         typename Compare = std::less<Key>,
         typename Traits = DefaultBPlusTreeTraits<Key, Value>,
-        typename Allocator = std::allocator<std::pair<const Key, Value>>
-    >
+        typename Allocator = std::allocator<std::pair<const Key, Value>>>
     class BPlusTree {
     public:
-        using key_type        = Key;
-        using mapped_type     = Value;
-        using value_type      = std::pair<const Key, Value>;
-        using size_type       = std::size_t;
+        using key_type = Key;
+        using mapped_type = Value;
+        using value_type = std::pair<const Key, Value>;
+        using size_type = std::size_t;
         using difference_type = std::ptrdiff_t;
-        using key_compare     = Compare;
-        using allocator_type  = Allocator;
-        using traits_type     = Traits;
+        using key_compare = Compare;
+        using allocator_type = Allocator;
+        using traits_type = Traits;
 
-        static constexpr size_type LeafCapacity  = Traits::LeafCapacity;
+        static constexpr size_type LeafCapacity = Traits::LeafCapacity;
         static constexpr size_type InnerCapacity = Traits::InnerCapacity;
-        static constexpr size_type MaxRecycle    = Traits::MaxRecycleNodes;
+        static constexpr size_type MaxRecycle = Traits::MaxRecycleNodes;
 
-        static_assert(BPlusTreeTraits<Traits>, "Traits must provide LeafCapacity, InnerCapacity, EnableSIMD, MaxRecycleNodes");
+        static_assert(BPlusTreeTraits<Traits>,
+                      "Traits must provide LeafCapacity, InnerCapacity, EnableSIMD, MaxRecycleNodes");
         static_assert(LeafCapacity >= 3, "BPlusTree LeafCapacity must be at least 3");
         static_assert(InnerCapacity >= 3, "BPlusTree InnerCapacity must be at least 3");
 
-        using LeafType  = LeafNode<Key, Value, LeafCapacity, Allocator>;
+        using LeafType = LeafNode<Key, Value, LeafCapacity, Allocator>;
         using InnerType = InnerNode<Key, InnerCapacity, Allocator>;
 
-        using iterator               = BPlusTreeIterator<Key, Value, LeafCapacity, Allocator, false>;
-        using const_iterator         = BPlusTreeIterator<Key, Value, LeafCapacity, Allocator, true>;
-        using reverse_iterator       = std::reverse_iterator<iterator>;
+        using iterator = BPlusTreeIterator<Key, Value, LeafCapacity, Allocator, false>;
+        using const_iterator = BPlusTreeIterator<Key, Value, LeafCapacity, Allocator, true>;
+        using reverse_iterator = std::reverse_iterator<iterator>;
         using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
     private:
-        using LeafAllocTraits  = std::allocator_traits<typename std::allocator_traits<Allocator>::template rebind_alloc<LeafType>>;
-        using InnerAllocTraits = std::allocator_traits<typename std::allocator_traits<Allocator>::template rebind_alloc<InnerType>>;
+        using LeafAllocTraits = std::allocator_traits<typename std::allocator_traits<Allocator>::template rebind_alloc<
+            LeafType>>;
+        using InnerAllocTraits = std::allocator_traits<typename std::allocator_traits<Allocator>::template rebind_alloc<
+            InnerType>>;
 
-        using LeafAlloc  = typename std::allocator_traits<Allocator>::template rebind_alloc<LeafType>;
+        using LeafAlloc = typename std::allocator_traits<Allocator>::template rebind_alloc<LeafType>;
         using InnerAlloc = typename std::allocator_traits<Allocator>::template rebind_alloc<InnerType>;
 
-        [[no_unique_address]] Compare    comp_{};
-        [[no_unique_address]] LeafAlloc  leaf_alloc_{};
+        [[no_unique_address]] Compare comp_{};
+        [[no_unique_address]] LeafAlloc leaf_alloc_{};
         [[no_unique_address]] InnerAlloc inner_alloc_{};
 
-        void*      root_{nullptr};
-        LeafType*  head_leaf_{nullptr};
-        LeafType*  tail_leaf_{nullptr};
-        size_type  size_{0};
-        size_type  depth_{0};
+        void* root_{nullptr};
+        LeafType* head_leaf_{nullptr};
+        LeafType* tail_leaf_{nullptr};
+        size_type size_{0};
+        size_type depth_{0};
 
         // Freelist recycling pools
-        LeafType*  free_leaves_{nullptr};
-        size_type  free_leaf_count_{0};
+        LeafType* free_leaves_{nullptr};
+        size_type free_leaf_count_{0};
         InnerType* free_inners_{nullptr};
-        size_type  free_inner_count_{0};
+        size_type free_inner_count_{0};
 
         // Exact-key membership probe within a leaf. Returns the index of an equal key, or
         // header.count if absent. Uses the branchless SIMD linear scan when EnableSIMD is set,
@@ -466,7 +472,7 @@ namespace pebble::containers {
         template <typename K>
         [[nodiscard]] std::size_t leaf_find_index(const LeafType* leaf, const K& key) const noexcept {
             if constexpr (Traits::EnableSIMD && simd::simd_searchable<Key> && std::same_as<K, Key> &&
-                          std::is_same_v<Compare, std::less<Key>>) {
+                std::is_same_v<Compare, std::less<Key>>) {
 #if defined(PEBBLE_HAS_HIGHWAY)
                 return simd::linear_search_simd<Key>(leaf->keys(), leaf->header.count, key);
 #endif
@@ -488,7 +494,8 @@ namespace pebble::containers {
                 std::size_t mid = low + (high - low) / 2;
                 if (comp_(keys[mid], key)) {
                     low = mid + 1;
-                } else {
+                }
+                else {
                     high = mid;
                 }
             }
@@ -505,7 +512,8 @@ namespace pebble::containers {
                 std::size_t mid = low + (high - low) / 2;
                 if (!comp_(key, keys[mid])) {
                     low = mid + 1;
-                } else {
+                }
+                else {
                     high = mid;
                 }
             }
@@ -538,7 +546,8 @@ namespace pebble::containers {
                 ptr->next_free = free_leaves_;
                 free_leaves_ = ptr;
                 ++free_leaf_count_;
-            } else {
+            }
+            else {
                 LeafAllocTraits::destroy(leaf_alloc_, ptr);
                 LeafAllocTraits::deallocate(leaf_alloc_, ptr, 1);
             }
@@ -568,7 +577,8 @@ namespace pebble::containers {
                 ptr->next_free = free_inners_;
                 free_inners_ = ptr;
                 ++free_inner_count_;
-            } else {
+            }
+            else {
                 InnerAllocTraits::destroy(inner_alloc_, ptr);
                 InnerAllocTraits::deallocate(inner_alloc_, ptr, 1);
             }
@@ -596,7 +606,8 @@ namespace pebble::containers {
             if (!node_ptr) return;
             if (is_leaf) {
                 deallocate_leaf(static_cast<LeafType*>(node_ptr));
-            } else {
+            }
+            else {
                 auto* inner = static_cast<InnerType*>(node_ptr);
                 for (std::size_t i = 0; i <= inner->header.count; ++i) {
                     if (inner->children[i]) {
@@ -608,7 +619,7 @@ namespace pebble::containers {
         }
 
         struct SplitResult {
-            Key   promoted_key;
+            Key promoted_key;
             void* new_right_node;
         };
 
@@ -633,14 +644,15 @@ namespace pebble::containers {
             }
 
             right->header.count = static_cast<std::uint16_t>(move_count);
-            left->header.count  = static_cast<std::uint16_t>(split_idx);
+            left->header.count = static_cast<std::uint16_t>(split_idx);
 
             // Sibling linking
             right->next = left->next;
             right->prev = left;
             if (left->next) {
                 left->next->prev = right;
-            } else {
+            }
+            else {
                 tail_leaf_ = right;
             }
             left->next = right;
@@ -675,7 +687,7 @@ namespace pebble::containers {
             }
 
             right->header.count = static_cast<std::uint16_t>(move_count);
-            left->header.count  = static_cast<std::uint16_t>(split_idx);
+            left->header.count = static_cast<std::uint16_t>(split_idx);
 
             return SplitResult{
                 .promoted_key = std::move(promoted),
@@ -685,7 +697,8 @@ namespace pebble::containers {
 
         // Recursive insert helper (SoA layout)
         template <typename K, typename V>
-        std::pair<iterator, std::optional<SplitResult>> insert_recursive(void* current, bool is_leaf, K&& key, V&& val, bool overwrite) {
+        std::pair<iterator, std::optional<SplitResult>> insert_recursive(
+            void* current, bool is_leaf, K&& key, V&& val, bool overwrite) {
             if (is_leaf) {
                 auto* leaf = static_cast<LeafType*>(current);
                 const std::size_t idx = leaf_lower_bound(leaf, key);
@@ -726,7 +739,8 @@ namespace pebble::containers {
             void* child_node = inner->children[child_idx];
             bool child_is_leaf = static_cast<NodeHeader*>(child_node)->is_leaf();
 
-            auto [result_it, maybe_split] = insert_recursive(child_node, child_is_leaf, std::forward<K>(key), std::forward<V>(val), overwrite);
+            auto [result_it, maybe_split] = insert_recursive(child_node, child_is_leaf, std::forward<K>(key),
+                                                             std::forward<V>(val), overwrite);
 
             if (!maybe_split.has_value()) {
                 return {result_it, std::nullopt};
@@ -875,7 +889,8 @@ namespace pebble::containers {
                 left->next = leaf->next;
                 if (leaf->next) {
                     leaf->next->prev = left;
-                } else {
+                }
+                else {
                     tail_leaf_ = left;
                 }
 
@@ -888,7 +903,8 @@ namespace pebble::containers {
                 }
                 --parent->header.count;
                 deallocate_leaf(leaf);
-            } else if (parent_idx < parent->header.count) {
+            }
+            else if (parent_idx < parent->header.count) {
                 auto* right = static_cast<LeafType*>(parent->children[parent_idx + 1]);
                 auto* leaf_keys = leaf->keys();
                 auto* leaf_vals = leaf->values();
@@ -907,7 +923,8 @@ namespace pebble::containers {
                 leaf->next = right->next;
                 if (right->next) {
                     right->next->prev = leaf;
-                } else {
+                }
+                else {
                     tail_leaf_ = leaf;
                 }
 
@@ -999,7 +1016,8 @@ namespace pebble::containers {
                 }
                 --parent->header.count;
                 deallocate_inner(inner);
-            } else if (parent_idx < parent->header.count) {
+            }
+            else if (parent_idx < parent->header.count) {
                 auto* right = static_cast<InnerType*>(parent->children[parent_idx + 1]);
                 auto* inner_keys = inner->keys();
                 auto* right_keys = right->keys();
@@ -1034,7 +1052,7 @@ namespace pebble::containers {
         void build_bottom_up(ForwardIt first, ForwardIt last) {
             if (first == last) return;
 
-            constexpr std::size_t leaf_fill  = (LeafCapacity * 9) / 10 >= 1 ? (LeafCapacity * 9) / 10 : 1;
+            constexpr std::size_t leaf_fill = (LeafCapacity * 9) / 10 >= 1 ? (LeafCapacity * 9) / 10 : 1;
             constexpr std::size_t inner_fill = (InnerCapacity * 9) / 10 >= 2 ? (InnerCapacity * 9) / 10 : 2;
 
             // Level 0: pack sorted entries into leaves.
@@ -1107,16 +1125,20 @@ namespace pebble::containers {
 
     public:
         // Constructors & Destructor
-        constexpr BPlusTree() noexcept(std::is_nothrow_default_constructible_v<Compare> && std::is_nothrow_default_constructible_v<Allocator>)
-            : comp_(), leaf_alloc_(), inner_alloc_(), root_(nullptr), head_leaf_(nullptr), tail_leaf_(nullptr), size_(0), depth_(0),
+        constexpr BPlusTree() noexcept(std::is_nothrow_default_constructible_v<Compare> &&
+            std::is_nothrow_default_constructible_v<Allocator>)
+            : comp_(), leaf_alloc_(), inner_alloc_(), root_(nullptr), head_leaf_(nullptr), tail_leaf_(nullptr),
+              size_(0), depth_(0),
               free_leaves_(nullptr), free_leaf_count_(0), free_inners_(nullptr), free_inner_count_(0) {}
 
         explicit BPlusTree(const Compare& comp, const Allocator& alloc = Allocator())
-            : comp_(comp), leaf_alloc_(alloc), inner_alloc_(alloc), root_(nullptr), head_leaf_(nullptr), tail_leaf_(nullptr), size_(0), depth_(0),
+            : comp_(comp), leaf_alloc_(alloc), inner_alloc_(alloc), root_(nullptr), head_leaf_(nullptr),
+              tail_leaf_(nullptr), size_(0), depth_(0),
               free_leaves_(nullptr), free_leaf_count_(0), free_inners_(nullptr), free_inner_count_(0) {}
 
         explicit BPlusTree(const Allocator& alloc)
-            : comp_(), leaf_alloc_(alloc), inner_alloc_(alloc), root_(nullptr), head_leaf_(nullptr), tail_leaf_(nullptr), size_(0), depth_(0),
+            : comp_(), leaf_alloc_(alloc), inner_alloc_(alloc), root_(nullptr), head_leaf_(nullptr),
+              tail_leaf_(nullptr), size_(0), depth_(0),
               free_leaves_(nullptr), free_leaf_count_(0), free_inners_(nullptr), free_inner_count_(0) {}
 
         template <std::input_iterator InputIt>
@@ -1127,7 +1149,8 @@ namespace pebble::containers {
             }
         }
 
-        BPlusTree(std::initializer_list<value_type> init, const Compare& comp = Compare(), const Allocator& alloc = Allocator())
+        BPlusTree(std::initializer_list<value_type> init, const Compare& comp = Compare(),
+                  const Allocator& alloc = Allocator())
             : BPlusTree(init.begin(), init.end(), comp, alloc) {}
 
         ~BPlusTree() {
@@ -1194,7 +1217,8 @@ namespace pebble::containers {
         // O(N) Bottom-Up Bulk Loading Factory Method.
         // Precondition: [first, last) is sorted by key and unique (implied by the name).
         template <std::forward_iterator ForwardIt>
-        [[nodiscard]] static BPlusTree from_sorted(ForwardIt first, ForwardIt last, const Compare& comp = Compare(), const Allocator& alloc = Allocator()) {
+        [[nodiscard]] static BPlusTree from_sorted(ForwardIt first, ForwardIt last, const Compare& comp = Compare(),
+                                                   const Allocator& alloc = Allocator()) {
             BPlusTree tree(comp, alloc);
             tree.build_bottom_up(first, last);
             return tree;
@@ -1294,7 +1318,8 @@ namespace pebble::containers {
             const size_type prev_size = size_;
             bool root_is_leaf = static_cast<NodeHeader*>(root_)->is_leaf();
 
-            auto [it, maybe_split] = insert_recursive(root_, root_is_leaf, std::forward<K>(key), std::forward<V>(val), true);
+            auto [it, maybe_split] = insert_recursive(root_, root_is_leaf, std::forward<K>(key), std::forward<V>(val),
+                                                      true);
 
             if (maybe_split.has_value()) {
                 auto split = std::move(*maybe_split);
@@ -1589,28 +1614,26 @@ namespace pebble::containers {
         typename Value,
         typename Compare = std::less<Key>,
         typename Traits = DefaultBPlusTreeTraits<Key, Value>,
-        typename Allocator = std::allocator<std::pair<const Key, Value>>
-    >
+        typename Allocator = std::allocator<std::pair<const Key, Value>>>
     using BPlusMap = BPlusTree<Key, Value, Compare, Traits, Allocator>;
 
     template <
         typename Key,
         typename Compare = std::less<Key>,
         typename Traits = DefaultBPlusTreeTraits<Key, std::monostate>,
-        typename Allocator = std::allocator<std::pair<const Key, std::monostate>>
-    >
+        typename Allocator = std::allocator<std::pair<const Key, std::monostate>>>
     class BPlusSet {
     private:
         using TreeType = BPlusTree<Key, std::monostate, Compare, Traits, Allocator>;
         TreeType tree_;
 
     public:
-        using key_type        = Key;
-        using value_type      = Key;
-        using size_type       = std::size_t;
+        using key_type = Key;
+        using value_type = Key;
+        using size_type = std::size_t;
         using difference_type = std::ptrdiff_t;
-        using key_compare     = Compare;
-        using allocator_type  = Allocator;
+        using key_compare = Compare;
+        using allocator_type = Allocator;
 
         class const_iterator {
         private:
@@ -1619,10 +1642,10 @@ namespace pebble::containers {
 
         public:
             using iterator_category = std::bidirectional_iterator_tag;
-            using difference_type   = std::ptrdiff_t;
-            using value_type        = Key;
-            using pointer           = const Key*;
-            using reference         = const Key&;
+            using difference_type = std::ptrdiff_t;
+            using value_type = Key;
+            using pointer = const Key*;
+            using reference = const Key&;
 
             constexpr const_iterator() noexcept = default;
             constexpr explicit const_iterator(typename TreeType::const_iterator it) noexcept : it_(it) {}
@@ -1630,13 +1653,35 @@ namespace pebble::containers {
             [[nodiscard]] constexpr const Key& operator*() const noexcept { return it_->first; }
             [[nodiscard]] constexpr const Key* operator->() const noexcept { return &it_->first; }
 
-            constexpr const_iterator& operator++() noexcept { ++it_; return *this; }
-            constexpr const_iterator operator++(int) noexcept { auto tmp = *this; ++it_; return tmp; }
-            constexpr const_iterator& operator--() noexcept { --it_; return *this; }
-            constexpr const_iterator operator--(int) noexcept { auto tmp = *this; --it_; return tmp; }
+            constexpr const_iterator& operator++() noexcept {
+                ++it_;
+                return *this;
+            }
 
-            [[nodiscard]] constexpr bool operator==(const const_iterator& other) const noexcept { return it_ == other.it_; }
-            [[nodiscard]] constexpr bool operator!=(const const_iterator& other) const noexcept { return it_ != other.it_; }
+            constexpr const_iterator operator++(int) noexcept {
+                auto tmp = *this;
+                ++it_;
+                return tmp;
+            }
+
+            constexpr const_iterator& operator--() noexcept {
+                --it_;
+                return *this;
+            }
+
+            constexpr const_iterator operator--(int) noexcept {
+                auto tmp = *this;
+                --it_;
+                return tmp;
+            }
+
+            [[nodiscard]] constexpr bool operator==(const const_iterator& other) const noexcept {
+                return it_ == other.it_;
+            }
+
+            [[nodiscard]] constexpr bool operator!=(const const_iterator& other) const noexcept {
+                return it_ != other.it_;
+            }
         };
 
         using iterator = const_iterator;
@@ -1657,7 +1702,8 @@ namespace pebble::containers {
             : BPlusSet(init.begin(), init.end(), comp, alloc) {}
 
         template <std::forward_iterator ForwardIt>
-        [[nodiscard]] static BPlusSet from_sorted(ForwardIt first, ForwardIt last, const Compare& comp = Compare(), const Allocator& alloc = Allocator()) {
+        [[nodiscard]] static BPlusSet from_sorted(ForwardIt first, ForwardIt last, const Compare& comp = Compare(),
+                                                  const Allocator& alloc = Allocator()) {
             std::vector<std::pair<const Key, std::monostate>> pairs;
             for (; first != last; ++first) {
                 pairs.emplace_back(*first, std::monostate{});
@@ -1688,16 +1734,21 @@ namespace pebble::containers {
 
         template <typename K>
         size_type erase(const K& key) { return tree_.erase(key); }
+
         iterator erase(const_iterator pos) { return iterator(tree_.erase(pos.it_)); }
 
         template <typename K>
         [[nodiscard]] iterator find(const K& key) const noexcept { return iterator(tree_.find(key)); }
+
         template <typename K>
         [[nodiscard]] bool contains(const K& key) const noexcept { return tree_.contains(key); }
+
         template <typename K>
         [[nodiscard]] iterator lower_bound(const K& key) const noexcept { return iterator(tree_.lower_bound(key)); }
+
         template <typename K>
         [[nodiscard]] iterator upper_bound(const K& key) const noexcept { return iterator(tree_.upper_bound(key)); }
+
         template <typename K>
         [[nodiscard]] std::pair<iterator, iterator> equal_range(const K& key) const noexcept {
             auto [l, u] = tree_.equal_range(key);
@@ -1716,25 +1767,24 @@ namespace pebble::containers {
         typename Value,
         typename ResourceT,
         typename Compare = std::less<Key>,
-        typename Traits = DefaultBPlusTreeTraits<Key, Value>
-    >
-    using SmritiBPlusMap = BPlusMap<Key, Value, Compare, Traits, smriti::SmritiAllocator<std::pair<const Key, Value>, ResourceT>>;
+        typename Traits = DefaultBPlusTreeTraits<Key, Value>>
+    using SmritiBPlusMap = BPlusMap<Key, Value, Compare, Traits, smriti::SmritiAllocator<
+                                        std::pair<const Key, Value>, ResourceT>>;
 
     template <
         typename Key,
         typename ResourceT,
         typename Compare = std::less<Key>,
-        typename Traits = DefaultBPlusTreeTraits<Key, std::monostate>
-    >
-    using SmritiBPlusSet = BPlusSet<Key, Compare, Traits, smriti::SmritiAllocator<std::pair<const Key, std::monostate>, ResourceT>>;
+        typename Traits = DefaultBPlusTreeTraits<Key, std::monostate>>
+    using SmritiBPlusSet = BPlusSet<Key, Compare, Traits, smriti::SmritiAllocator<
+                                        std::pair<const Key, std::monostate>, ResourceT>>;
 
     template <
         typename Key,
         typename Value,
         typename ResourceT,
         typename Compare = std::less<Key>,
-        typename Traits = DefaultBPlusTreeTraits<Key, Value>
-    >
+        typename Traits = DefaultBPlusTreeTraits<Key, Value>>
     [[nodiscard]] inline auto make_smriti_bplus_map(ResourceT& res, const Compare& comp = Compare()) {
         using Alloc = smriti::SmritiAllocator<std::pair<const Key, Value>, ResourceT>;
         return BPlusMap<Key, Value, Compare, Traits, Alloc>(comp, Alloc(res));
@@ -1744,11 +1794,9 @@ namespace pebble::containers {
         typename Key,
         typename ResourceT,
         typename Compare = std::less<Key>,
-        typename Traits = DefaultBPlusTreeTraits<Key, std::monostate>
-    >
+        typename Traits = DefaultBPlusTreeTraits<Key, std::monostate>>
     [[nodiscard]] inline auto make_smriti_bplus_set(ResourceT& res, const Compare& comp = Compare()) {
         using Alloc = smriti::SmritiAllocator<std::pair<const Key, std::monostate>, ResourceT>;
         return BPlusSet<Key, Compare, Traits, Alloc>(comp, Alloc(res));
     }
-
 } // namespace pebble::containers

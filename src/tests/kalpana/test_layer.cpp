@@ -1,7 +1,12 @@
 #include "catch_amalgamated.hpp"
 #include "kalpana/kalpana.hpp"
 
-TEST_CASE("Kalpana: Layer Compositing and Combiner Policies", "[kalpana][layer]") {
+TEST_CASE (
+"Kalpana: Layer Compositing and Combiner Policies"
+,
+"[kalpana][layer]"
+)
+ {
     using namespace kalpana;
 
     SECTION("Layer Properties and Nodes") {

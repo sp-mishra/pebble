@@ -3,8 +3,7 @@ Medha — C++23 Transactional Memory & Transaction EDSL
 
 ## Overview
 
-Medha is a standalone C++23 header-only transactional-memory framework.
-Two public surfaces:
+Medha is a standalone C++23 header-only transactional-memory framework. Two public surfaces:
 
 1. **Direct C++ API** — runtime transactions (`transaction_context`, `atomic(...)`).
 2. **Symbolic EDSL** — builds a transaction plan that lowers into Lithe-compatible region/effect/constraint metadata.
@@ -32,7 +31,8 @@ Smriti   transaction-local storage (arenas, staged-value logs, rollback checkpoi
 - [Options](#options) — [`replay_safety`](#replay_safety), [`partial_commit_policy`](#partial_commit_policy)
 - [Commit report](#commit-report)
 - [Transaction memory model](#transaction-memory-model)
-- [Isolation levels](#isolation-levels) — [snapshot](#isolationsnapshot), [serializable](#isolationserializable), [`read_kind`](#read_kind-in-keyhpp)
+- [Isolation levels](#isolation-levels) — [snapshot](#isolationsnapshot), [serializable](#isolationserializable), [
+  `read_kind`](#read_kind-in-keyhpp)
 - [Commit algorithms](#commit-algorithms) — [snapshot](#snapshot-isolation-commit-202), [serializable](#serializable-commit-203), [retry loop](#retry-loop-205)
 - [Effect model](#effect-model)
 - [EDSL API](#edsl-api) — [typed builder](#typed-expression-builder-preferred), [string frontend](#string-based-frontend-parser-compat), [Lithe lowering](#lowering-to-lithe)
@@ -268,8 +268,8 @@ struct commit_report {
 
 ### `isolation::snapshot`
 
-Reads are stable within the transaction; write/write conflicts are prevented; **write-skew is still possible** (
-documented).
+Reads are stable within the transaction; write/write conflicts are prevented; **write-skew is still possible**
+(documented).
 
 **Snapshot acquisition (§19.4)**:
 
@@ -294,14 +294,14 @@ key return the write-set value (if written) or the resource's current value subj
 
 Uses `supports_serializable(commit_capability)` — an explicit predicate, not enum-ordering:
 
-| `commit_capability`                | Protocol selected        | Point reads | Range/predicate reads                |
-|------------------------------------|--------------------------|-------------|--------------------------------------|
-| `atomic_multi_key_within_resource` | `resource_provided`      | ✓           | ✓ (resource responsibility)          |
-| `pessimistic`                      | `read_write_key_locking` | ✓           | ✗ — phantom prevention is resource's |
-| `serial_validation`                | `serial_validation`      | ✓           | ✗                                    |
-| `ssi`                              | `ssi`                    | ✓           | ✓ (resource responsibility)          |
-| `deterministic`                    | `deterministic_executor` | ✓           | ✗                                    |
-| `none` / `atomic_single_key`       | unavailable              | —           | —                                    |
+| `commit_capability`                | Protocol selected        | Point reads | Range/predicate reads                 |
+|------------------------------------|--------------------------|-------------|---------------------------------------|
+| `atomic_multi_key_within_resource` | `resource_provided`      | ✓          | ✓ (resource responsibility)          |
+| `pessimistic`                      | `read_write_key_locking` | ✓          | ✗ — phantom prevention is resource's |
+| `serial_validation`                | `serial_validation`      | ✓          | ✗                                    |
+| `ssi`                              | `ssi`                    | ✓          | ✓ (resource responsibility)          |
+| `deterministic`                    | `deterministic_executor` | ✓          | ✗                                    |
+| `none` / `atomic_single_key`       | unavailable              | —           | —                                     |
 
 **Important**: `atomic_multi_key_within_resource` applies to a **single** resource only. It does NOT guarantee atomicity
 across multiple resources. Cross-resource atomicity requires a coordinator, 2PC, or resource-provided atomic batch
@@ -615,8 +615,8 @@ that do not bump `generation` on slot reuse are not ABA-safe.
 
 ## Distribution readiness (v1 metadata only)
 
-Medha v1 is **local-process** transactional memory.
-The following are defined as metadata/contracts only — no network behavior:
+Medha v1 is **local-process** transactional memory. The following are defined as metadata/contracts only — no network
+behavior:
 
 - `transaction_id`, `attempt_id`, `idempotency_token` (§5b.1)
 - `distributed_version_stamp` (§5b.3)
@@ -640,21 +640,19 @@ The following are defined as metadata/contracts only — no network behavior:
 ## Anukrama adapter
 
 `#include <medha/adapters/anukrama.hpp>` adapts an
-`anukrama::store<Key, Value>` as a Medha transactional resource. The adapter
-owns a typed, per-attempt staging batch and pins an Anukrama snapshot on first
-resource access. At commit it invokes Anukrama's `commit_if_unchanged`, which
+`anukrama::store<Key, Value>` as a Medha transactional resource. The adapter owns a typed, per-attempt staging batch and
+pins an Anukrama snapshot on first resource access. At commit it invokes Anukrama's `commit_if_unchanged`, which
 validates staged-key versions and publishes the batch under one writer lock.
 
-This gives point-key optimistic conflict detection within that resource. It
-does not claim predicate/range serializability, nor durable cross-resource
-atomic commit; those require corresponding resource protocols.
+This gives point-key optimistic conflict detection within that resource. It does not claim predicate/range
+serializability, nor durable cross-resource atomic commit; those require corresponding resource protocols.
 
 ---
 
 ## Frontend consumers
 
-Crank (`docs/languages/crank/`) is the primary language frontend that consumes Medha.
-The canonical crank→Medha type mapping (design §7c.2) lives in
+Crank (`docs/languages/crank/`) is the primary language frontend that consumes Medha. The canonical crank→Medha type
+mapping (design §7c.2) lives in
 `docs/languages/crank/transactions.md`:
 
 | Crank type           | Medha C++ type                 |
@@ -668,6 +666,5 @@ The canonical crank→Medha type mapping (design §7c.2) lives in
 | `PartialCommit`      | `medha::partial_commit_policy` |
 | `ProofStatus`        | `medha::proof_status`          |
 
-Crank uses Medha **as-is** — no Medha API gap. All policy checks (retry/replay,
-cross-resource serializable, async-in-tx) are enforced by crank at compile time
-before any Medha runtime call.
+Crank uses Medha **as-is** — no Medha API gap. All policy checks (retry/replay, cross-resource serializable,
+async-in-tx) are enforced by crank at compile time before any Medha runtime call.

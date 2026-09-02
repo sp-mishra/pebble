@@ -12,7 +12,12 @@
 
 using namespace prakriti;
 
-TEST_CASE("joint: rod holds rest length under gravity", "[prakriti][joint][rod]") {
+TEST_CASE (
+"joint: rod holds rest length under gravity"
+,
+"[prakriti][joint][rod]"
+)
+ {
     std::vector<akruti::Joint> joints;
     auto stack = SolverStack<JointSolver>{
         std::make_tuple(JointSolver{joints, JointConfig{.default_compliance=0.0f, .iterations=8}})};
@@ -28,7 +33,12 @@ TEST_CASE("joint: rod holds rest length under gravity", "[prakriti][joint][rod]"
     REQUIRE(std::fabs(dist - 2.0f) < 0.05f);
 }
 
-TEST_CASE("damage islands: bridge removal splits components", "[prakriti][damage][islands]") {
+TEST_CASE (
+"damage islands: bridge removal splits components"
+,
+"[prakriti][damage][islands]"
+)
+ {
     WorldConfig cfg;
     World<> w(cfg);
     auto steel = w.materials().add(MaterialRegistry::steel());

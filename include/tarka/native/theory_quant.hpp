@@ -105,7 +105,8 @@ namespace tarka::native {
         void collect_quantifiers_and_ground(Term t) {
             if (t.op() == Op::Forall) {
                 forall_terms_.push_back(t);
-            } else if (t.op() == Op::Exists) {
+            }
+            else if (t.op() == Op::Exists) {
                 exists_terms_.push_back(t);
             }
             if (t.sort().valid()) {

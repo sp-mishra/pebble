@@ -24,7 +24,6 @@
 #include "languages/generic/tree/green_arena.hpp"
 
 namespace lang::samasa {
-
     // Type/constant aliases.
     using lang::green_node;
     using green_id = lang::arena_id;
@@ -38,7 +37,6 @@ namespace lang::samasa {
 
     template <class SyntaxKind>
     struct green_tree : lang::green_arena<SyntaxKind> {
-
         // Forward all arena constructors.
         using lang::green_arena<SyntaxKind>::green_arena;
 
@@ -47,9 +45,8 @@ namespace lang::samasa {
         template <class TokenKind>
         [[nodiscard]] static green_tree build(
             const event_stream<SyntaxKind>& events,
-            const token_stream<TokenKind>&  tokens,
-            std::string_view                source = {})
-        {
+            const token_stream<TokenKind>& tokens,
+            std::string_view source = {}) {
             auto leaf_span = [&tokens](std::uint32_t idx) -> byte_span {
                 return tokens[idx].span();
             };
@@ -69,11 +66,9 @@ namespace lang::samasa {
     // build_green — free-function entry point (used internally by samasa.hpp).
     template <class SyntaxKind, class TokenKind>
     [[nodiscard]] green_tree<SyntaxKind> build_green(
-        const event_stream<SyntaxKind>&    events,
-        const token_stream<TokenKind>&     tokens,
-        std::string_view                   source = {})
-    {
+        const event_stream<SyntaxKind>& events,
+        const token_stream<TokenKind>& tokens,
+        std::string_view source = {}) {
         return green_tree<SyntaxKind>::build(events, tokens, source);
     }
-
 } // namespace lang::samasa

@@ -11,6 +11,7 @@ using namespace pravaha::hetero;
 TEST_CASE (
 
 
+
 "element_size covers all defined types"
 ,
 "[hetero][part1]"
@@ -24,6 +25,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "buffer_descriptor footprint"
@@ -40,6 +42,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "make_const_view is read-only, make_view is writable"
@@ -61,6 +64,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "route picks GPU only above threshold and non-f64"
@@ -91,6 +95,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "structural_hash stable + topology-sensitive"
 ,
 "[hetero][part1]"
@@ -107,6 +112,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "execution_context overlay bind/lookup"
@@ -137,6 +143,7 @@ TEST_CASE ("make_view on const ptr must not compile", "[hetero][part1][compilefa
 // ---- Part 2 cases (append; do not modify Part 1 cases) ----
 
 TEST_CASE (
+
 
 
 "simd add-mul element-wise correctness"
@@ -174,6 +181,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "simd neg + sub + div"
 ,
 "[hetero][part2][simd]"
@@ -202,6 +210,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "simd capability gate"
 ,
 "[hetero][part2][simd]"
@@ -220,6 +229,7 @@ TEST_CASE (
 // ---- Part 3: MSL emitter (runs on all platforms) ----
 
 TEST_CASE (
+
 
 
 "msl emitter produces valid-looking kernel"
@@ -241,6 +251,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "msl emitter neg + scalar type mapping"
@@ -288,6 +299,7 @@ TEST_CASE ("metal GPU element-wise matches CPU", "[hetero][part3][gpu]") {
 // ---- Part 4: executor + cache + telemetry ----
 
 TEST_CASE (
+
 
 
 "hetero_executor routes small workload to SIMD and computes"
@@ -361,6 +373,7 @@ TEST_CASE ("hetero_executor routes big workload to GPU", "[hetero][part4][gpu]")
 TEST_CASE (
 
 
+
 "fallback emits NADI event via run_simd_or_fallback"
 ,
 "[hetero][part4][nadi]"
@@ -398,6 +411,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "Invariant 1: hetero overlay never grows Lithe node size"
 ,
 "[hetero][part5][invariant]"
@@ -425,6 +439,7 @@ TEST_CASE (
 // Runtime side: make_const_view yields writable==false. The compile-fail half
 // (make_view on const ptr) is guarded under PRAVAHA_HETERO_COMPILE_FAIL_TESTS (Part 1 §8).
 TEST_CASE (
+
 
 
 "Invariant 2: const view is read-only, writable view is writable"
@@ -478,6 +493,7 @@ TEST_CASE ("Invariant 3: fallback always emits a NADI event", "[hetero][part5][i
 TEST_CASE (
 
 
+
 "Invariant 4: contexts are isolated across threads"
 ,
 "[hetero][part5][invariant]"
@@ -510,6 +526,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "structural_hash deterministic across repeated calls"
 ,
 "[hetero][part5][invariant]"
@@ -530,6 +547,7 @@ TEST_CASE (
 
 // ---- Part A: lit_node value honored on scalar + SIMD, distinct hash ----
 TEST_CASE (
+
 
 
 "Part A: lit_node value honored on SIMD path"
@@ -560,6 +578,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "Part A: lit-bearing tree stays SIMD-capable"
 ,
 "[hetero][partA][simd]"
@@ -573,6 +592,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "Part A: distinct constants get distinct structural hashes"
@@ -596,6 +616,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "Part A: MSL emits literal, not stray x"
 ,
 "[hetero][partA][msl]"
@@ -611,6 +632,7 @@ TEST_CASE (
 
 // ---- Part B: math builtins on SIMD + Metal ----
 TEST_CASE (
+
 
 
 "Part B: sqrt/exp/sin match scalar oracle on SIMD"
@@ -643,6 +665,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "Part B: MSL emits builtin names"
 ,
 "[hetero][partB][msl]"
@@ -658,6 +681,7 @@ TEST_CASE (
 
 // ---- Part C: multi-input y = f(x0, x1, …) ----
 TEST_CASE (
+
 
 
 "Part C: AXPY a*x + y two-input SIMD"
@@ -687,6 +711,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "Part C: input slot count + MSL multi-buffer"
 ,
 "[hetero][partC][msl]"
@@ -706,6 +731,7 @@ TEST_CASE (
 
 // ---- Part D: view slicing / strided access ----
 TEST_CASE (
+
 
 
 "Part D: strided view processes every-other element"
@@ -744,6 +770,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "Part D: integer slice collapses a dimension"
 ,
 "[hetero][partD][view]"
@@ -760,6 +787,7 @@ TEST_CASE (
 
 // ---- Part E: reductions ----
 TEST_CASE (
+
 
 
 "Part E: reduce_sum matches std::accumulate"
@@ -784,6 +812,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "Part E: reduce_max / reduce_min correctness"
@@ -814,6 +843,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "Part E: reduce eDSL surface + op recovery"
 ,
 "[hetero][partE][edsl]"
@@ -830,6 +860,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "Part E: MSL reduce kernel emits threadgroup barrier"
@@ -849,6 +880,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "Part E: reduce routing uses its own threshold"
@@ -881,6 +913,7 @@ TEST_CASE (
 // Phase 2.1 — Multi-buffer reduce: reduce_sum(x0 * x1) == std::inner_product
 // (SIMD path always; GPU path when HAS_METAL_CPP and buffer >= 1 MB).
 TEST_CASE (
+
 
 
 "Phase2: multi-buffer reduce_sum(x0*x1) == inner_product reference"
@@ -941,6 +974,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "Phase2: strided scatter write only fills stride-2 slots"
 ,
 "[phase2][scatter][strided]"
@@ -982,6 +1016,7 @@ TEST_CASE (
 
 // Phase 2.3 — Tail masking: N values where N % lane_count != 0 → same result as scalar.
 TEST_CASE (
+
 
 
 "Phase2: tail masking matches scalar for non-power-of-two N"
@@ -1028,6 +1063,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "Phase2: contiguous element-wise and reduce regression after scatter/tail refactor"
 ,
 "[phase2][regression][contiguous]"
@@ -1070,6 +1106,7 @@ TEST_CASE (
 // Phase 3.1 — Include hygiene: include only user-surface headers, no Highway symbols directly.
 // This is a compile-only test — if it compiles, include separation is correct.
 TEST_CASE (
+
 
 
 "Phase3: user-surface headers compile without direct Highway symbols"
@@ -1158,6 +1195,7 @@ namespace {
 TEST_CASE (
 
 
+
 "Phase3: FakeBackend selected when cost wins; cascades to SIMD on failure"
 ,
 "[phase3][custom][backend]"
@@ -1207,6 +1245,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "Phase3: force host_simd policy selects SIMD, no GPU dispatch"
 ,
 "[phase3][no-metal][simd]"
@@ -1244,6 +1283,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "structural_hash: distinct constants → distinct keys"
 ,
 "[hetero][hash][impl5]"
@@ -1259,6 +1299,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "structural_hash: identical trees → same key"
 ,
 "[hetero][hash][impl5]"
@@ -1271,6 +1312,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "structural_hash: distinct input slots → distinct keys"
@@ -1300,6 +1342,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "vulkan spirv: emit_kernel produces non-empty module"
 ,
 "[vulkan][spirv][part6a]"
@@ -1318,6 +1361,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "vulkan spirv: SPIR-V magic word is correct"
 ,
 "[vulkan][spirv][part6a]"
@@ -1332,6 +1376,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "vulkan spirv: bound field is patched (> 1)"
@@ -1351,6 +1396,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "vulkan spirv: different expressions yield different modules"
 ,
 "[vulkan][spirv][part6a]"
@@ -1366,6 +1412,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "vulkan spirv: emit_kernel i32 type uses integer opcodes"
@@ -1390,6 +1437,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "vulkan spirv: emit_reduce_kernel produces valid module"
 ,
 "[vulkan][spirv][part6a]"
@@ -1408,6 +1456,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "vulkan spirv: multi-input kernel has more bindings"
 ,
 "[vulkan][spirv][part6a]"
@@ -1423,6 +1472,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "vulkan spirv: cache hit after first compile"
@@ -1453,6 +1503,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "vulkan backend: metadata and priority"
 ,
 "[vulkan][backend][part6b]"
@@ -1469,6 +1520,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "vulkan backend: type support"
@@ -1491,6 +1543,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "vulkan backend: elementwise dispatch round-trip (device required)"
@@ -1536,6 +1589,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "vulkan backend: reduction round-trip (device required)"
 ,
 "[vulkan][reduce][part6b]"
@@ -1570,6 +1624,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "vulkan backend: evaluate_cost below threshold returns 0"
 ,
 "[vulkan][cost][part6b]"
@@ -1589,6 +1644,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "vulkan backend: evaluate_cost above threshold returns nonzero when device up"
@@ -1618,6 +1674,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "compute::element_type_for maps scalar types"
 ,
 "[hetero][part7_1]"
@@ -1641,6 +1698,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "vulkan staging_pool: acquire/release reuses backing buffer (device required)"
@@ -1684,6 +1742,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "vulkan backend: GPU reduction tree sum/max/min (device required)"
@@ -1732,6 +1791,7 @@ TEST_CASE (
 TEST_CASE (
 
 
+
 "vulkan backend: warm-path repeat dispatch stays correct (device required)"
 ,
 "[vulkan][pool][warm][part7_1]"
@@ -1773,6 +1833,7 @@ TEST_CASE (
 }
 
 TEST_CASE (
+
 
 
 "vulkan backend: i32 elementwise round-trip (element_type_for fix, device required)"

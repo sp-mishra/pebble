@@ -58,16 +58,16 @@
 **Vākya** is a standalone, header-only, C++26-capable structural-construction EDSL. It constructs, hashes, compares,
 traverses, and pattern-matches expression trees without any notion of semantics, passes, code generation, or backends.
 
-| Property       | Detail                                                            |
-|----------------|-------------------------------------------------------------------|
+| Property       | Detail                                                                          |
+|----------------|---------------------------------------------------------------------------------|
 | Standard       | C++26 target; core remains C++23-compatible (concepts, `[[no_unique_address]]`) |
-| Delivery       | Header-only (`include/vakya/`)                                    |
-| Namespace      | `vakya`                                                           |
-| Entry header   | `vakya/vakya.hpp` (construction surface)                          |
-| Opt-in DSL     | `vakya/pattern.hpp` (structural pattern matching)                 |
-| Opt-in types   | `vakya/vakya_types.hpp` (full type-system stack, see below)       |
-| No virtual fns | All dispatch via templates and concepts                           |
-| No macros      | Tag registration is macro-free via NTTP descriptors               |
+| Delivery       | Header-only (`include/vakya/`)                                                  |
+| Namespace      | `vakya`                                                                         |
+| Entry header   | `vakya/vakya.hpp` (construction surface)                                        |
+| Opt-in DSL     | `vakya/pattern.hpp` (structural pattern matching)                               |
+| Opt-in types   | `vakya/vakya_types.hpp` (full type-system stack, see below)                     |
+| No virtual fns | All dispatch via templates and concepts                                         |
+| No macros      | Tag registration is macro-free via NTTP descriptors                             |
 
 Vākya has **no consumer-project dependency**. The `test_vakya_construction.cpp` smoke tests exercise the pure
 `vakya::` surface, proving the library stands alone.
@@ -77,25 +77,25 @@ Vākya has **no consumer-project dependency**. The `test_vakya_construction.cpp`
 ## Dependency Contract
 
 Vākya is header-only, but it is deliberately layered: include only the surface you use. The core construction and
-pattern surfaces have no Pebble subsystem dependency; the semantic/type layers reuse Pebble infrastructure rather
-than reimplementing arenas, handles, registries, graphs, caches, or SMT solving.
+pattern surfaces have no Pebble subsystem dependency; the semantic/type layers reuse Pebble infrastructure rather than
+reimplementing arenas, handles, registries, graphs, caches, or SMT solving.
 
-| Surface | Required dependencies | Optional integration |
-|---|---|---|
-| `vakya/vakya.hpp` | C++ standard library only | None |
-| `vakya/pattern.hpp` | `vakya/vakya.hpp` | None |
-| `vakya/property.hpp` | Vākya core; `containers/dynamic/SmallVector.hpp` | None |
-| `vakya/rule_registry.hpp` | Vākya pattern layer | None |
-| `vakya/types.hpp`, `unification.hpp` | Vākya core; Pebble `slot_map`, generational handles, `SmallVector`, `kosha`, `union_find`, and `mem/arena.hpp` | None |
-| Constraints, analysis, and registries | Type layer; Pebble `LiteGraph`, descriptor registry, and related container utilities | `egraph.hpp` activates equality-saturation paths when available |
-| `vakya/smt.hpp`, `verify.hpp` | Constraint/analysis layers | Tarka bridge only when `tarka/tarka.hpp` is available; otherwise `no_smt_backend` remains usable |
-| `vakya/diagnostics.hpp` | C++ standard library only | `observability/nadi.hpp` enables `nadi_sink` when available |
-| `vakya/vakya_types.hpp` | All Vākya type-system headers and their Pebble dependencies | Tarka, egraph, and NADI remain opt-in as above |
+| Surface                               | Required dependencies                                                                                          | Optional integration                                                                             |
+|---------------------------------------|----------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
+| `vakya/vakya.hpp`                     | C++ standard library only                                                                                      | None                                                                                             |
+| `vakya/pattern.hpp`                   | `vakya/vakya.hpp`                                                                                              | None                                                                                             |
+| `vakya/property.hpp`                  | Vākya core; `containers/dynamic/SmallVector.hpp`                                                               | None                                                                                             |
+| `vakya/rule_registry.hpp`             | Vākya pattern layer                                                                                            | None                                                                                             |
+| `vakya/types.hpp`, `unification.hpp`  | Vākya core; Pebble `slot_map`, generational handles, `SmallVector`, `kosha`, `union_find`, and `mem/arena.hpp` | None                                                                                             |
+| Constraints, analysis, and registries | Type layer; Pebble `LiteGraph`, descriptor registry, and related container utilities                           | `egraph.hpp` activates equality-saturation paths when available                                  |
+| `vakya/smt.hpp`, `verify.hpp`         | Constraint/analysis layers                                                                                     | Tarka bridge only when `tarka/tarka.hpp` is available; otherwise `no_smt_backend` remains usable |
+| `vakya/diagnostics.hpp`               | C++ standard library only                                                                                      | `observability/nadi.hpp` enables `nadi_sink` when available                                      |
+| `vakya/vakya_types.hpp`               | All Vākya type-system headers and their Pebble dependencies                                                    | Tarka, egraph, and NADI remain opt-in as above                                                   |
 
 There are no direct third-party types in Vākya's public API. Optional capabilities are discovered with
-`__has_include`; they do not make the core header or a basic expression consumer depend on a solver, telemetry,
-or a downstream compiler project. The `type_ir_module_view` API is Vākya-owned and does not require the Generic
-Language IR headers.
+`__has_include`; they do not make the core header or a basic expression consumer depend on a solver, telemetry, or a
+downstream compiler project. The `type_ir_module_view` API is Vākya-owned and does not require the Generic Language IR
+headers.
 
 For the smallest build and fastest compile path, include `vakya/vakya.hpp` alone. Add `pattern.hpp`,
 `property.hpp`, or individual type-system headers only when their corresponding facilities are needed; reserve
@@ -193,9 +193,9 @@ vakya::emit::tag_id<vakya::add_tag>::value;    // stable id
 Downstream EDSLs register custom tags by **specialising** `tag_descriptor` and returning a `stable_id >=
 kExtensionIdBase` (`1000u`). `kVariadicArity` (`0xFF`) marks variadic tags. `tag_name` / `tag_id` alias the descriptor.
 
-**`is_commutative`** (default `false`): when `true` the pattern matcher automatically tries the swapped-operand
-ordering when the canonical ordering fails to match. Built-in commutative tags: `add_tag`, `mul_tag`. All other
-built-in tags default to `false` (primary template). Downstream extensions declare commutative tags by including
+**`is_commutative`** (default `false`): when `true` the pattern matcher automatically tries the swapped-operand ordering
+when the canonical ordering fails to match. Built-in commutative tags: `add_tag`, `mul_tag`. All other built-in tags
+default to `false` (primary template). Downstream extensions declare commutative tags by including
 `static constexpr bool is_commutative = true;` in their `tag_descriptor` specialization.
 
 > Specialise via the qualified-id form (`struct vakya::emit::tag_descriptor<T> {…}`) or inside a
@@ -248,19 +248,20 @@ Value-carrying leaves opt in to payload sensitivity via an ADL hook — define
 
 ## Algorithms Used
 
-| Concern | Algorithm | Where |
-|---|---|---|
-| Structural hashing | Tag-`stable_id`-seeded FNV-1a fold over children; ADL `structural_payload_hash` for value leaves; sees through wrappers via `structural_unwrap` | `vakya.hpp` (structural_hash) |
-| Structural equality | Recursive tag + topology compare (variant visit); optional `structural_payload_equal` hook | `vakya.hpp` (structural_equal) |
-| DAG interning / CSE | Hash-cons: `structural_hash` bucket lookup (O(1)) + `structural_equal` confirm, `use_count` refcount | `vakya.hpp` (`graph::dag_builder`) |
-| Type interning | Arena hash-cons for primitive/variable/constructor/callable/quantified type terms | `types.hpp` (`type_arena`) |
-| Unification | Robinson most-general-unifier + occurs-check + `subst_delta` (`SmallVector<8>`) | `unification.hpp` |
-| Type inference | Hindley-Milner (Algorithm-W) with `structural_hash`-keyed kosha LRU cache; let-polymorphism | `type_inference.hpp` |
-| Pattern matching | Linear + non-linear (rebind vs. structural_equal) + commutative (both orderings) | `pattern.hpp` |
-| Guarded rewriting | `guarded_rule<Pattern, Rewrite, Guard>` predicate-gated term rewriting | `rewrite.hpp` |
-| Analysis propagation | `analysis_record` (effect_mask / capability_mask / proof_status / trait bits), thread-safe `update_for` | `vakya.hpp` (analysis store) |
+| Concern              | Algorithm                                                                                                                                       | Where                              |
+|----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------|
+| Structural hashing   | Tag-`stable_id`-seeded FNV-1a fold over children; ADL `structural_payload_hash` for value leaves; sees through wrappers via `structural_unwrap` | `vakya.hpp` (structural_hash)      |
+| Structural equality  | Recursive tag + topology compare (variant visit); optional `structural_payload_equal` hook                                                      | `vakya.hpp` (structural_equal)     |
+| DAG interning / CSE  | Hash-cons: `structural_hash` bucket lookup (O(1)) + `structural_equal` confirm, `use_count` refcount                                            | `vakya.hpp` (`graph::dag_builder`) |
+| Type interning       | Arena hash-cons for primitive/variable/constructor/callable/quantified type terms                                                               | `types.hpp` (`type_arena`)         |
+| Unification          | Robinson most-general-unifier + occurs-check + `subst_delta` (`SmallVector<8>`)                                                                 | `unification.hpp`                  |
+| Type inference       | Hindley-Milner (Algorithm-W) with `structural_hash`-keyed kosha LRU cache; let-polymorphism                                                     | `type_inference.hpp`               |
+| Pattern matching     | Linear + non-linear (rebind vs. structural_equal) + commutative (both orderings)                                                                | `pattern.hpp`                      |
+| Guarded rewriting    | `guarded_rule<Pattern, Rewrite, Guard>` predicate-gated term rewriting                                                                          | `rewrite.hpp`                      |
+| Analysis propagation | `analysis_record` (effect_mask / capability_mask / proof_status / trait bits), thread-safe `update_for`                                         | `vakya.hpp` (analysis store)       |
 
-Tree folds and visits (`vakya::tree`) are generic compile-time recursion (`fold`, `all_tags_satisfy`, `any_tag_satisfies`) — no hand-rolled per-node code.
+Tree folds and visits (`vakya::tree`) are generic compile-time recursion (`fold`, `all_tags_satisfy`,
+`any_tag_satisfies`) — no hand-rolled per-node code.
 
 ---
 
@@ -284,8 +285,8 @@ auto raw = vakya::as_expr(x) + vakya::as_expr(y);  // node<add_tag, expr_ref<int
 auto h1  = vakya::structural_hash(raw);
 ```
 
-**After** — wrap in a consumer-defined phase decorator. Vākya must not name that wrapper type, so
-the consumer registers an `structural_unwrap` overload in its own namespace:
+**After** — wrap in a consumer-defined phase decorator. Vākya must not name that wrapper type, so the consumer registers
+an `structural_unwrap` overload in its own namespace:
 
 ```cpp
 // consumer/phase_wrapper.hpp  (consumer code, zero Vākya edits)
@@ -315,9 +316,9 @@ auto opt     = optimized_expr{ canonical_expr{ surface_expr{ raw } } };
 auto h3      = vakya::structural_hash(opt);       // h3 == h1
 ```
 
-**Why not a member function?** The ADL barrier in `emit::unwrap_detail::call` means only free functions in
-associated namespaces are found — this prevents accidental satisfaction by unrelated `structural_unwrap` members on
-arbitrary types and keeps the seam explicit and reviewable.
+**Why not a member function?** The ADL barrier in `emit::unwrap_detail::call` means only free functions in associated
+namespaces are found — this prevents accidental satisfaction by unrelated `structural_unwrap` members on arbitrary types
+and keeps the seam explicit and reviewable.
 
 ---
 
@@ -551,8 +552,8 @@ auto out = r.apply<set_t>("arith.add_zero", e);   // drives the registered pack
 ## Type System Stack (opt-in)
 
 All headers below are opt-in and **never pulled by `vakya.hpp`**. They extend the construction surface with
-Hindley-Milner type inference, constraint solving, guarded rewriting, validation, and diagnostics.
-Pull the whole stack at once with `#include "vakya/vakya_types.hpp"`, or include individual headers as needed.
+Hindley-Milner type inference, constraint solving, guarded rewriting, validation, and diagnostics. Pull the whole stack
+at once with `#include "vakya/vakya_types.hpp"`, or include individual headers as needed.
 
 ### Layered Architecture
 
@@ -617,7 +618,7 @@ vakya/types.hpp
 - **Commutativity**: `tag_descriptor<Tag>::is_commutative` declares commutative tags at compile time; the pattern
   matcher and structural operations read this flag with zero overhead for non-commutative tags.
 - **Shared DAG**: `graph::dag_builder` hash-consing turns expression trees into `graph::shared_expr` with `use_count`
-  and `topo_order`; structural equality is O(1) handle comparison after interning.
+  and `topo_order`; structural equality is O (1) handle comparison after interning.
 
 #### Layer 2 — Metadata & Pattern Matching
 
@@ -636,7 +637,7 @@ vakya/types.hpp
 #### Layer 3 — Type System & Inference
 
 - **Handle-based type arena**: types (`τ ::= κ | α | C(τ…) | (τ…→τ) | ∀ᾱ.τ`) are hash-consed in a `type_arena` backed by
-  `slot_map`; `type_ref` is a generational handle making structural type equality an O(1) integer comparison.
+  `slot_map`; `type_ref` is a generational handle making structural type equality an O (1) integer comparison.
 - **Cached type hash**: `type_node` carries a `mutable std::uint64_t cached_hash = 0` member; `type_hash()` computes
   FNV-1a on first call and caches the result — zero recomputation cost on repeated intern lookups in deep trees.
 - **Robinson MGU**: `unify()` with union-find variable chains, occurs-check (prevents infinite types), and full
@@ -824,9 +825,9 @@ REQUIRE(r.status == solve_status::solved);
 
 - `constraint_kind` — open enum with extension band `>= 1000`: `same_type`, `convertible`, `subtype`, `implements`,
   `same_rank`, `broadcastable`, `compatible`, `requires_cap`, `user`.
-- `constraint` — `{kind, operands, trait_name_hash, payload, source}`. `source` is an optional `constraint_ref` back
-  to the originating entry in a `constraint_store`; defaults to `constraint_ref{}` when no store is in use.
-  Equality comparison is semantic: `source` is intentionally excluded from `operator==`.
+- `constraint` — `{kind, operands, trait_name_hash, payload, source}`. `source` is an optional `constraint_ref` back to
+  the originating entry in a `constraint_store`; defaults to `constraint_ref{}` when no store is in use. Equality
+  comparison is semantic: `source` is intentionally excluded from `operator==`.
 - `constraint_solver<S>` concept — requires `s.solve(batch, ctx) → solve_result` and `s.handles(kind) → bool`.
 - `composite_solver<Solvers...>` — variadic `[[no_unique_address]]` fold; routes each constraint to the first solver
   that `handles()` it. Zero erasure on the hot path.
@@ -861,16 +862,15 @@ REQUIRE(r.has_value());  // std::expected<type_ref, infer_error>
 
 - `type_environment` — scoped name (`uint64_t` hash) → `type_scheme` bindings; `push_scope()` / `pop_scope()`;
   `free_type_vars(subst, arena)`.
-- `typing_rule<Tag>` seam — default: fresh var for leaves, first child type for interior nodes. Specialise to add
-  custom per-tag constraint generation. Built-in arithmetic tags (`add_tag`, `sub_tag`, …) emit `same_type(child[0],
+- `typing_rule<Tag>` seam — default: fresh var for leaves, first child type for interior nodes. Specialise to add custom
+  per-tag constraint generation. Built-in arithmetic tags (`add_tag`, `sub_tag`, …) emit `same_type(child[0],
   child[i])` for every `i >= 1`, fully constraining N-ary or variadic arithmetic tags.
   `emit` may be declared with either a 4-arg signature `(child_types, env, arena, gen)` or the extended 5-arg form
-  `(child_types, env, arena, gen, subst)`. Both are supported via `detail::invoke_emit<Tag>` — the call site detects
-  the available overload at compile time so older specializations remain binary-compatible.
+  `(child_types, env, arena, gen, subst)`. Both are supported via `detail::invoke_emit<Tag>` — the call site detects the
+  available overload at compile time so older specializations remain binary-compatible.
 - `type_check(expr, env, solver, arena, gen, subst, store, max_depth = kMaxWalkDepth) → validation_result` — post-order
-  walk, accumulates
-  constraints, solves in one batch. `max_depth` (default `kMaxWalkDepth = 1024`) guards against stack overflow on deeply
-  nested auto-generated trees; at depth 0 a fresh unresolved variable is returned.
+  walk, accumulates constraints, solves in one batch. `max_depth` (default `kMaxWalkDepth = 1024`) guards against stack
+  overflow on deeply nested auto-generated trees; at depth 0 a fresh unresolved variable is returned.
 - `infer(expr, env, subst, arena, gen, cache, max_depth = kMaxWalkDepth) → std::expected<type_ref, infer_error>` —
   incremental Algorithm-W;
   `same_type` constraints resolved per-node; kosha-cached on `structural_hash`. Passes `max_depth - 1` into recursive
@@ -1042,13 +1042,13 @@ void pipeline_example() {
 
 ### From Solving to Reasoning
 
-With **Tarka** (the zero-overhead multi-solver SMT substrate, see [tarka.md](../tarka/tarka.md)) now sitting
-*below* Vākya, the type-system evolution shifts from **constraint *solving*** to **constraint *reasoning***: Tarka
-becomes the formal reasoning engine underneath, joining the existing unification / rule / graph / egraph backends.
-The bridge already exists — `tarka_smt_backend<B>` / `tarka_smt_constraint_solver<B>` in `vakya/smt.hpp`, behind
+With **Tarka** (the zero-overhead multi-solver SMT substrate, see [tarka.md](../tarka/tarka.md)) now sitting *below*
+Vākya, the type-system evolution shifts from **constraint *solving*** to **constraint *reasoning***: Tarka becomes the
+formal reasoning engine underneath, joining the existing unification / rule / graph / egraph backends. The bridge
+already exists — `tarka_smt_backend<B>` / `tarka_smt_constraint_solver<B>` in `vakya/smt.hpp`, behind
 `__has_include(<tarka/tarka.hpp>)`. This layer does **not** write a new SMT solver; it wires that bridge into a
-*registry-routed* engine and adds the surrounding registries, capability/effect systems, analysis store, and
-reasoning layers.
+*registry-routed* engine and adds the surrounding registries, capability/effect systems, analysis store, and reasoning
+layers.
 
 Reuse-first (as `union_find` was extracted to `containers/`): the only new *generic* extraction is
 `containers/descriptor_registry.hpp`. Everything else composes existing internal libraries — **EasyRules** (traits),
@@ -1089,18 +1089,18 @@ application-defined feature routing, **NADI** (telemetry).
 
 ### Registries & Descriptors
 
-The type registry and the constraint registry share one shape — a compile-time descriptor plus a runtime
-discovery/index table (exactly the proven `rule_registry` pattern). Extract the core once:
+The type registry and the constraint registry share one shape — a compile-time descriptor plus a runtime discovery/index
+table (exactly the proven `rule_registry` pattern). Extract the core once:
 
 - **`containers::descriptor_registry<Desc>`** — `RegistrableDescriptor<D>` requires `D::stable_id` (builtin `< 1000`,
   ext `>= 1000`), `D::name` (fixed_string NTTP), `D::category`. Store = `containers::slot_map<Desc>` + two
   `SparseSet` indices (`id → handle`, `category → handles`). API: `register / find(id) / find(name_hash) /
   by_category / discover`. An empty registry allocates nothing.
 - **`type_registry`** (`types/type_registry.hpp`) — runtime metadata layer over the compile-time
-  `type_descriptor<Ctor>` seam so types can be enumerated/named/looked-up (needed by the query + LSP layers).
-  Entry = descriptor snapshot + `type_kind` + optional `capability_mask` + optional `effect_mask`. Categories:
-  `primitive | tensor | effect | capability | language`. Arena interning stays the hot path; the registry is
-  metadata only, keyed by `type_descriptor::stable_id` (no back-pointer).
+  `type_descriptor<Ctor>` seam so types can be enumerated/named/looked-up (needed by the query + LSP layers). Entry =
+  descriptor snapshot + `type_kind` + optional `capability_mask` + optional `effect_mask`. Categories:
+  `primitive | tensor | effect | capability | language`. Arena interning stays the hot path; the registry is metadata
+  only, keyed by `type_descriptor::stable_id` (no back-pointer).
 - **`constraint_registry`** (`constraint_registry.hpp`) — the *one major missing component*. Replaces the linear
   `handles(kind)` scan with declarative routing:
 
@@ -1112,7 +1112,7 @@ discovery/index table (exactly the proven `rule_registry` pattern). Extract the 
   uint8_t cost_hint; }`, `solver_class ∈ {unify, rule, graph, egraph, smt}`. Builtin seeding:
 
   | constraint_kind | solver_class | backing library |
-    |---|---|---|
+        |---|---|---|
   | `same_type`, `convertible`, `subtype` | `unify` | unification (Robinson MGU) |
   | `implements`, `requires_cap` | `rule` | EasyRules forward-chaining |
   | `same_rank`, `broadcastable`, `compatible` | `graph` | LiteGraph Tarjan SCC |
@@ -1124,8 +1124,8 @@ discovery/index table (exactly the proven `rule_registry` pattern). Extract the 
 
 ### Descriptor-Routed Constraint Engine
 
-`composite_solver<Solvers...>` stays the zero-erasure executor; the reasoning layer adds a routing front-end that partitions a batch
-by `solver_class` (O(1) `SparseSet` lookup) and runs a cross-class fixpoint:
+`composite_solver<Solvers...>` stays the zero-erasure executor; the reasoning layer adds a routing front-end that
+partitions a batch by `solver_class` (O (1) `SparseSet` lookup) and runs a cross-class fixpoint:
 
 ```
 solve_batch(constraints, ctx, registry, solver):
@@ -1140,11 +1140,11 @@ solve_batch(constraints, ctx, registry, solver):
     return solved
 ```
 
-- **Why cross-class fixpoint:** a unify binding can unlock a trait rule, which asserts a refinement the SMT solver
-  must discharge. Ordering `unify → rule → graph → egraph → smt` runs cheap solvers first; Tarka runs last, only on
-  residual obligations (cost-directed via `cost_hint`).
-- **Zero-overhead when a class is empty:** empty buckets are skipped; a `composite_solver` without an SMT backend
-  never enters the `smt` branch — `no_smt_backend` keeps the build SMT-free.
+- **Why cross-class fixpoint:** a unify binding can unlock a trait rule, which asserts a refinement the SMT solver must
+  discharge. Ordering `unify → rule → graph → egraph → smt` runs cheap solvers first; Tarka runs last, only on residual
+  obligations (cost-directed via `cost_hint`).
+- **Zero-overhead when a class is empty:** empty buckets are skipped; a `composite_solver` without an SMT backend never
+  enters the `smt` branch — `no_smt_backend` keeps the build SMT-free.
 - **Origin tracking:** each bucket carries `constraint.source` (`constraint_ref`) so an unsat verdict names the
   originating expression — generalizes the existing `graph_constraint_solver` cycle-attribution mechanism.
 
@@ -1153,23 +1153,23 @@ solve_batch(constraints, ctx, registry, solver):
 Capabilities and effects — once plain metadata — become **first-class constraints** in the reasoning layer.
 
 - **`types/capability.hpp`** — `capability_descriptor` (`Read | Write | Network | Execute | Allocate` + ext band).
-  `requires_capability(T, Cap)` lowers to the existing `requires_cap` kind: routed to the **rule** solver for
-  simple membership, or **Tarka** when path-sensitive (`forall path: has(Write)`). `capability_mask` =
+  `requires_capability(T, Cap)` lowers to the existing `requires_cap` kind: routed to the **rule** solver for simple
+  membership, or **Tarka** when path-sensitive (`forall path: has(Write)`). `capability_mask` =
   `SparseSet<capability id>` on a type-registry entry (e.g. `NetworkSocket → {Network}`).
 - **`types/effect.hpp`** — `effect_descriptor` (`FileSystem | Memory | IO | …`). A function type carries an
-  `effect_mask`; calling it emits an effect *obligation*. Effects aggregate up the call tree via LiteGraph
-  reachability; a policy like "every writing path requires `Write`" becomes a Tarka obligation
+  `effect_mask`; calling it emits an effect *obligation*. Effects aggregate up the call tree via LiteGraph reachability;
+  a policy like "every writing path requires `Write`" becomes a Tarka obligation
   `forall p ∈ paths: writes(p) ⇒ has_cap(Write)`. Simple checks stay on EasyRules; quantified ones go to Tarka.
 
 ### Analysis Store & Semantic Analysis
 
-- **`analysis_store.hpp`** — a schema'd sidecar (vs. loose `property_store` keys) so downstream reads a schema.
-  Keyed by `structural_hash`; value is a fixed `analysis_record`:
+- **`analysis_store.hpp`** — a schema'd sidecar (vs. loose `property_store` keys) so downstream reads a schema. Keyed by
+  `structural_hash`; value is a fixed `analysis_record`:
   `{ type_ref type; shape_ref shape; effect_mask effects; capability_mask caps; proof_status proofs;
   trait_set traits; feature_vector features; }`. Backing reuses `property_store`'s `shared_mutex` + `update_for`
   discipline verbatim (value type = `analysis_record`, SBO-sized). Unpopulated fields cost nothing.
-- **`analysis.hpp`** — drives the `typing_rule` walk, emits type/effect/capability/shape obligations into the
-  constraint batch, then persists the solved `analysis_record`:
+- **`analysis.hpp`** — drives the `typing_rule` walk, emits type/effect/capability/shape obligations into the constraint
+  batch, then persists the solved `analysis_record`:
 
   ```
   AST → Analysis (typing_rule walk + constraint solve) → analysis_record → analysis_store
@@ -1184,14 +1184,14 @@ Capabilities and effects — once plain metadata — become **first-class constr
     - `trait<Trait>(inner)` — matches iff the bound subtree's type `implements(Trait)`.
     - `typed<Integer>(pv<0>) + lit<0>` is distinct from `typed<Tensor>(pv<0>) + lit<0>` — type-directed rewriting.
 
-  The typed wrapper holds the inner matcher `[[no_unique_address]]` + a compile-time type key; it runs the
-  structural match first, then consults the `analysis_store` (or on-the-fly `infer`). Untyped patterns never
-  instantiate the wrapper → zero cost.
+  The typed wrapper holds the inner matcher `[[no_unique_address]]` + a compile-time type key; it runs the structural
+  match first, then consults the `analysis_store` (or on-the-fly `infer`). Untyped patterns never instantiate the
+  wrapper → zero cost.
 - **`type_rewrite.hpp`** — rewrites over **types**, proven convergent by egraph. Alias expansion
-  (`String ↝ Array<Character>`), tensor normalization (`Tensor<Float,[1,N]> ↝ Vector<Float,N>`), generic
-  simplification (`Optional<Optional<T>> ↝ Optional<T>`). Backing = the **exact egraph round-trip Tarka already
-  uses for terms** (`intern_into_egraph → saturate → reconstruct_from_egraph`), reused on `type_ref` with sort
-  tracking. The dormant `egraph_constraint_solver` is activated for a new `constraint_kind::equivalent`
+  (`String ↝ Array<Character>`), tensor normalization (`Tensor<Float,[1,N]> ↝ Vector<Float,N>`), generic simplification
+  (`Optional<Optional<T>> ↝ Optional<T>`). Backing = the **exact egraph round-trip Tarka already uses for terms**
+  (`intern_into_egraph → saturate → reconstruct_from_egraph`), reused on `type_ref` with sort tracking. The dormant
+  `egraph_constraint_solver` is activated for a new `constraint_kind::equivalent`
   (`solver_class = egraph`, still `__has_include`-guarded).
 
 ### Shape Algebra
@@ -1207,21 +1207,21 @@ Capabilities and effects — once plain metadata — become **first-class constr
 
 Obligations lower to Tarka `Term`s and discharge via the existing `tarka_smt_constraint_solver` — no new solver.
 
-- New ext `constraint_kind`s: `refine` (refinement predicate), `prove` (proof obligation), `arith` (arithmetic).
-  Each carries a `tarka::Term*` in `constraint.payload` (existing bridge contract: cast `tarka::Term*` →
+- New ext `constraint_kind`s: `refine` (refinement predicate), `prove` (proof obligation), `arith` (arithmetic). Each
+  carries a `tarka::Term*` in `constraint.payload` (existing bridge contract: cast `tarka::Term*` →
   `uint64_t`); routed to `solver_class = smt`.
 - Examples: `prove(index < tensor_size)` before an unchecked subscript rewrite; `divide(a,b) ↝ a/b` **requires**
   `prove(b != 0)`; `forall path: writes(path) ⇒ has_cap(Write)`.
 - **`verify.hpp`** — `verify(expr, analysis_store, smt_solver) → verification_report` collects `prove/refine/arith`
   obligations from the analysis record, batches them into Tarka, returns `{ proven | refuted(model) | unknown }`
   per obligation (reuses `validation_report` merge; refuted attaches the Tarka counter-model as `SmtValue`).
-- **Zero-cost path:** with `no_smt_backend` every obligation resolves to `deferred` — verification degrades to
-  core best-effort, build stays SMT-free.
+- **Zero-cost path:** with `no_smt_backend` every obligation resolves to `deferred` — verification degrades to core
+  best-effort, build stays SMT-free.
 
 ### Refinement Types & Semantic Query Engine
 
-- **Refinement types** — base type + `refine` predicate `Term` (`{ v: Int | v > 0 }`); refinement subtyping =
-  SMT implication (`p ⇒ q`) via the bridge. Dependent constraints (value-indexed types) become `arith`/`prove`
+- **Refinement types** — base type + `refine` predicate `Term` (`{ v: Int | v > 0 }`); refinement subtyping = SMT
+  implication (`p ⇒ q`) via the bridge. Dependent constraints (value-indexed types) become `arith`/`prove`
   obligations over interned dim/value vars.
 - **`query.hpp`** — lazy fluent query over AST + analysis store (for LSP / refactor / static analysis):
 
@@ -1294,8 +1294,8 @@ vakya/query.hpp                      → analysis_store.hpp
 9. Query                                 query.hpp   (LSP / refactor / static analysis)
 ```
 
-Cheap solvers run first; Tarka runs last, only on residual obligations. Every stage after 1 is opt-in — dropping
-Tarka reduces stages 4/8 to `deferred` and the pipeline still type-checks and rewrites as with the core stack.
+Cheap solvers run first; Tarka runs last, only on residual obligations. Every stage after 1 is opt-in — dropping Tarka
+reduces stages 4/8 to `deferred` and the pipeline still type-checks and rewrites as with the core stack.
 
 Domain/ecosystem concerns (domain registry, interactions, conversions, differentiation, algebras, packages, execution
 affinity) live in the **Sutra Domain Framework** (`sutra::domain`), a Sutra-owned layer *above* Vākya — see
@@ -1313,75 +1313,77 @@ analysis, verification. The layer touches Vākya with exactly one additive field
 
 ### From Reasoning to Optimization
 
-The reasoning layer moved effects, capabilities, shapes, and refinements into the *reasoning* phase. This layer moves the remaining
-**optimization / verification / scheduling facts** into that same phase, so Crank / Pravaha / Medha inherit
-*proven* facts instead of re-deriving them. The invariant: **Vākya proves a fact once, at the type level; every
+The reasoning layer moved effects, capabilities, shapes, and refinements into the *reasoning* phase. This layer moves
+the remaining **optimization / verification / scheduling facts** into that same phase, so Crank / Pravaha / Medha
+inherit *proven* facts instead of re-deriving them. The invariant: **Vākya proves a fact once, at the type level; every
 consumer reads it.** Vākya gains **no** downstream dependency — the consumer-side adapters (scheduler pools, IR
 mutation) live in the consumer trees; Vākya emits only neutral facts.
 
-Every optimization obligation routes through an *existing* solver: an ext-band `constraint_kind` (`>= 1000`) already falls to
-the Tarka SMT bridge with **zero new solver code**, and the registry seeds the cheaper `graph` / `rule` / `unify` /
-`egraph` fast paths where a decision is possible without SMT. With `no_smt_backend`, every optimization proof degrades to
+Every optimization obligation routes through an *existing* solver: an ext-band `constraint_kind` (`>= 1000`) already
+falls to the Tarka SMT bridge with **zero new solver code**, and the registry seeds the cheaper `graph` / `rule` /
+`unify` /
+`egraph` fast paths where a decision is possible without SMT. With `no_smt_backend`, every optimization proof degrades
+to
 `deferred` (never a spurious failure) and the build stays SMT-free.
 
 ### Widened `analysis_record`
 
 The record stays a trivially-copyable POD (`static_assert(std::is_trivially_copyable_v<analysis_record>)`); every
-optimization field is a handle / enum / integer and defaults to null / unknown / 0 (zero-cost when unused). Payloads live in
-per-phase side-arenas keyed by these handles.
+optimization field is a handle / enum / integer and defaults to null / unknown / 0 (zero-cost when unused). Payloads
+live in per-phase side-arenas keyed by these handles.
 
-| field | type | meaning |
-|---|---|---|
-| `region` | `region_ref` | aliasing region of this node's value |
-| `effect_row` | `effect_row_ref` | polymorphic effect row `{concrete \| ρ}` |
-| `rw` | `rw_summary_ref` | read/write region summary |
-| `state` | `typestate_id` | affine typestate protocol state |
-| `simd_width` | `uint16` | synthesized SIMD lane count (0 = none) |
-| `tile_hint` | `uint16` | synthesized loop-tile size (0 = none) |
-| `affinity` | `execution_affinity` | scheduling hint |
-| `cost` | `cost_class` | compile-time cost lattice band |
-| `cert_id` | `uint32` | rewrite_certificate index (0 = none) |
+| field        | type                 | meaning                                  |
+|--------------|----------------------|------------------------------------------|
+| `region`     | `region_ref`         | aliasing region of this node's value     |
+| `effect_row` | `effect_row_ref`     | polymorphic effect row `{concrete \| ρ}` |
+| `rw`         | `rw_summary_ref`     | read/write region summary                |
+| `state`      | `typestate_id`       | affine typestate protocol state          |
+| `simd_width` | `uint16`             | synthesized SIMD lane count (0 = none)   |
+| `tile_hint`  | `uint16`             | synthesized loop-tile size (0 = none)    |
+| `affinity`   | `execution_affinity` | scheduling hint                          |
+| `cost`       | `cost_class`         | compile-time cost lattice band           |
+| `cert_id`    | `uint32`             | rewrite_certificate index (0 = none)     |
 
 The handle tags + enums are declared in a minimal `vakya/types/opt_handles.hpp` that `analysis_store.hpp` includes,
 keeping the record's dependency surface tiny; full logic lives in the per-phase headers.
 
 ### Header Reference Table
 
-| header | provides |
-|---|---|
-| `vakya/types/opt_handles.hpp` | fwd handle tags (`region_ref`/`effect_row_ref`/`rw_summary_ref`) + enums (`execution_affinity`, `cost_class`, `typestate_id`) |
-| `vakya/types/region.hpp` | `region_arena` (root/field/index projection tree, alias-class `union_find`), `regions_syntactically_disjoint` |
-| `vakya/alias.hpp` | `kDisjointKind`, `make_disjoint_constraint`, `may_alias`, `disjoint_solver` |
-| `vakya/types/effect_row.hpp` | `effect_row_arena` (`{concrete \| tail}`), `subsumes` (Rémy/Leijen row rule), `kEffectSubKind`, `effect_row_solver` |
+| header                        | provides                                                                                                                                         |
+|-------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| `vakya/types/opt_handles.hpp` | fwd handle tags (`region_ref`/`effect_row_ref`/`rw_summary_ref`) + enums (`execution_affinity`, `cost_class`, `typestate_id`)                    |
+| `vakya/types/region.hpp`      | `region_arena` (root/field/index projection tree, alias-class `union_find`), `regions_syntactically_disjoint`                                    |
+| `vakya/alias.hpp`             | `kDisjointKind`, `make_disjoint_constraint`, `may_alias`, `disjoint_solver`                                                                      |
+| `vakya/types/effect_row.hpp`  | `effect_row_arena` (`{concrete \| tail}`), `subsumes` (Rémy/Leijen row rule), `kEffectSubKind`, `effect_row_solver`                              |
 | `vakya/types/value_param.hpp` | const-generic value params (`value_param_type_tag`), `unify_value`, `kValueEqKind`, `synthesize_simd_width` / `synthesize_tile` (`width_policy`) |
-| `vakya/types/typestate.hpp` | `protocol_descriptor` / `transition` / `check_transition`, `affine_scope` RAII, `kTransitionKind` |
-| `vakya/types/rw_summary.hpp` | `rw_summary_arena`, `predict_conflict`, `kNoConflictKind`, `no_conflict_solver` |
-| `vakya/exec_affinity.hpp` | `synthesize_affinity` (folds effect row / rw / cost → hint), `affinity_policy` |
-| `vakya/cost.hpp` | `cost_join` (⊔ max monoid), `synthesize_cost` / `synthesize_shape_cost`, `cost_policy` |
-| `vakya/types/refine.hpp` | `refinement_type_tag` / `intern_refinement`, `syntactic_subtype`, `refine_subtype_obligation` (`kRefineSubKind`), elision bits |
-| `vakya/proof_carrying.hpp` | `rewrite_certificate` / `certificate_arena`, `certify_rewrite`, `verified_rewrite_engine`, `kEquivCertKind` |
+| `vakya/types/typestate.hpp`   | `protocol_descriptor` / `transition` / `check_transition`, `affine_scope` RAII, `kTransitionKind`                                                |
+| `vakya/types/rw_summary.hpp`  | `rw_summary_arena`, `predict_conflict`, `kNoConflictKind`, `no_conflict_solver`                                                                  |
+| `vakya/exec_affinity.hpp`     | `synthesize_affinity` (folds effect row / rw / cost → hint), `affinity_policy`                                                                   |
+| `vakya/cost.hpp`              | `cost_join` (⊔ max monoid), `synthesize_cost` / `synthesize_shape_cost`, `cost_policy`                                                           |
+| `vakya/types/refine.hpp`      | `refinement_type_tag` / `intern_refinement`, `syntactic_subtype`, `refine_subtype_obligation` (`kRefineSubKind`), elision bits                   |
+| `vakya/proof_carrying.hpp`    | `rewrite_certificate` / `certificate_arena`, `certify_rewrite`, `verified_rewrite_engine`, `kEquivCertKind`                                      |
 
 ### Optimization Constraint-Kind Routing
 
-The reasoning layer consumed the ext band offsets +0 (`equivalent`), +1/+2/+3 (`refine`/`prove`/`arith`), +10/+11/+12 (shape dim
-eq/pos/matmul). The optimization layer claims +20..+26 to avoid all collisions. Each kind is seeded in
+The reasoning layer consumed the ext band offsets +0 (`equivalent`), +1/+2/+3 (`refine`/`prove`/`arith`), +10/+11/+12
+(shape dim eq/pos/matmul). The optimization layer claims +20..+26 to avoid all collisions. Each kind is seeded in
 `make_builtin_constraint_registry` for a cheap fast-path class; anything the fast path can't decide falls to the SMT
-band (Tarka bridge, zero extra code). Kind constants are **defined in their owning headers** (single source of
-truth); the registry only routes them.
+band (Tarka bridge, zero extra code). Kind constants are **defined in their owning headers** (single source of truth);
+the registry only routes them.
 
-| offset | kind | solver_class | fast path / residual |
-|---|---|---|---|
-| +20 | `disjoint` | `graph` | `union_find` root + syntactic disjointness; symbolic index → SMT |
-| +21 | `effect_subsume` | `rule` | bitmask subset + tail rule; distinct symbolic tails → SMT |
-| +22 | `value_eq` | `unify` | literal equality / MGU bind; symbolic value → SMT |
-| +23 | `transition` | `rule` | `check_transition` table lookup; dynamic state → SMT |
-| +24 | `no_conflict` | `graph` | pairwise region disjointness; symbolic pair → SMT |
-| +25 | `refine_sub` | `smt` | implication `P ⇒ Q` (Tarka); `no_smt_backend` → deferred |
-| +26 | `equiv_cert` | `egraph` | e-class congruence witness; else → SMT |
+| offset | kind             | solver_class | fast path / residual                                             |
+|--------|------------------|--------------|------------------------------------------------------------------|
+| +20    | `disjoint`       | `graph`      | `union_find` root + syntactic disjointness; symbolic index → SMT |
+| +21    | `effect_subsume` | `rule`       | bitmask subset + tail rule; distinct symbolic tails → SMT        |
+| +22    | `value_eq`       | `unify`      | literal equality / MGU bind; symbolic value → SMT                |
+| +23    | `transition`     | `rule`       | `check_transition` table lookup; dynamic state → SMT             |
+| +24    | `no_conflict`    | `graph`      | pairwise region disjointness; symbolic pair → SMT                |
+| +25    | `refine_sub`     | `smt`        | implication `P ⇒ Q` (Tarka); `no_smt_backend` → deferred         |
+| +26    | `equiv_cert`     | `egraph`     | e-class congruence witness; else → SMT                           |
 
 Value-level *type* tags use a separate namespace (`type_descriptor::stable_id` ext band): `value_param_type_tag`
-= `kTypeKindExtensionBase + 50`, `refinement_type_tag` = `+51` — no `type_kind` enum edit (users don't pay for a
-wider enum they don't use).
+= `kTypeKindExtensionBase + 50`, `refinement_type_tag` = `+51` — no `type_kind` enum edit (users don't pay for a wider
+enum they don't use).
 
 ### Consumer-Boundary Discipline
 
@@ -1393,11 +1395,11 @@ The optimization layer writes **neutral facts**; it ships **no** scheduler, no I
   inputs** — no ISA width or magnitude band is hardcoded in the logic; the defaults are portable, documented starting
   points.
 - `verified_rewrite_engine` gates application on a `rewrite_policy`: an e-graph witness is proven-by-construction; an
-  SMT verdict is proven/refuted/deferred; a `deferred` rewrite is applied only under `allow_deferred` and always
-  flagged via `cert_id` so a consumer can re-verify. Refuted rewrites are never applied.
-- `refine.hpp` elision bits (`kElisionBoundsCheck` / `kElisionNullCheck` / `kElisionOverflow`) are a bit convention
-  over the free `analysis_record::features` vector — Vākya *sets* the bit once a guard is discharged; the consumer
-  *reads* it to drop the runtime check.
+  SMT verdict is proven/refuted/deferred; a `deferred` rewrite is applied only under `allow_deferred` and always flagged
+  via `cert_id` so a consumer can re-verify. Refuted rewrites are never applied.
+- `refine.hpp` elision bits (`kElisionBoundsCheck` / `kElisionNullCheck` / `kElisionOverflow`) are a bit convention over
+  the free `analysis_record::features` vector — Vākya *sets* the bit once a guard is discharged; the consumer *reads* it
+  to drop the runtime check.
 
 Vākya stays pure: it keeps no downward dependency and touches no consumer type.
 
@@ -1409,12 +1411,12 @@ Vākya's `type_arena` is the **HandleStore flavor** of `lang::ir_module` (see `d
 
 ### Handle alignment
 
-| Concept | vakya | generic IR |
-|---|---|---|
-| Node id | `type_ref = generational_handle<type_tag, uint32_t>` | `ir_module<…, handle_store<type_tag>>::node_handle` |
-| Storage | `slot_map<type_node, type_ref>` | `slot_map` inside `handle_store` specialization |
-| Interning | `kosha::core::Cache` keyed on `type_hash` (FNV-1a) | `kosha_dedup_adapter` satisfies generic Dedup seam |
-| Arena backing | `smriti::pools::LinearArena` | caller-supplied via policy (retained unchanged) |
+| Concept       | vakya                                                | generic IR                                          |
+|---------------|------------------------------------------------------|-----------------------------------------------------|
+| Node id       | `type_ref = generational_handle<type_tag, uint32_t>` | `ir_module<…, handle_store<type_tag>>::node_handle` |
+| Storage       | `slot_map<type_node, type_ref>`                      | `slot_map` inside `handle_store` specialization     |
+| Interning     | `kosha::core::Cache` keyed on `type_hash` (FNV-1a)   | `kosha_dedup_adapter` satisfies generic Dedup seam  |
+| Arena backing | `smriti::pools::LinearArena`                         | caller-supplied via policy (retained unchanged)     |
 
 `type_ref` and `ir_module<…, handle_store<type_tag>>::node_handle` are the **same type** — no conversion needed.
 
@@ -1432,11 +1434,13 @@ type_ir_module_view view = arena.as_ir_module_view();
 type_ir_module_view egraph_view = arena.as_egraph_view();  // same view
 ```
 
-The existing `LinearArena + slot_map + kosha` hot path is fully retained — the view holds a `const*` to the arena's private `store_` and never copies nodes.
+The existing `LinearArena + slot_map + kosha` hot path is fully retained — the view holds a `const*` to the arena's
+private `store_` and never copies nodes.
 
 ### kosha Dedup adapter
 
-`kosha_dedup_adapter` wraps `type_intern_cache_t` so the same LRU cache that drives `type_arena::intern()` satisfies the generic `Dedup` policy seam:
+`kosha_dedup_adapter` wraps `type_intern_cache_t` so the same LRU cache that drives `type_arena::intern()` satisfies the
+generic `Dedup` policy seam:
 
 ```cpp
 vakya::types::type_intern_cache_t cache{256};
@@ -1446,15 +1450,16 @@ vakya::types::kosha_dedup_adapter adapter{&cache};
 type_ref canonical = adapter.dedup(type_hash(*n), ref);
 ```
 
-This means frontends that compose with `type_arena` get structural hash-consing for free through the same kosha cache — no second interner introduced.
+This means frontends that compose with `type_arena` get structural hash-consing for free through the same kosha cache —
+no second interner introduced.
 
 ### When to use the view vs. the native API
 
-| Need | Recommendation |
-|---|---|
-| Type inference / unification | Use `type_arena` native API (`intern`, `get`, `canonicalize`) |
-| Generic IR tooling (egraph, LiteGraph, dominance) | Use `as_ir_module_view()` / `as_egraph_view()` |
-| Structural hash-consing for a new frontend | Use `kosha_dedup_adapter` over `type_arena`'s cache |
+| Need                                              | Recommendation                                                |
+|---------------------------------------------------|---------------------------------------------------------------|
+| Type inference / unification                      | Use `type_arena` native API (`intern`, `get`, `canonicalize`) |
+| Generic IR tooling (egraph, LiteGraph, dominance) | Use `as_ir_module_view()` / `as_egraph_view()`                |
+| Structural hash-consing for a new frontend        | Use `kosha_dedup_adapter` over `type_arena`'s cache           |
 
 ## Consumer Integration
 
@@ -1466,6 +1471,7 @@ Pebble owns Vākya independently. A downstream project includes the Vākya heade
 ## Master End-to-End Vākya Pipeline Examples
 
 ### 1. Structural AST Construction, Hash Deduplication & Folds
+
 ```cpp
 #include "vakya/vakya.hpp"
 #include <iostream>
@@ -1495,6 +1501,7 @@ int main() {
 ```
 
 ### 2. Declarative Pattern Matching & Algebraic Simplification
+
 ```cpp
 #include "vakya/vakya.hpp"
 #include "vakya/pattern.hpp"
@@ -1522,6 +1529,7 @@ int main() {
 ```
 
 ### 3. Hindley-Milner Type Inference with Tarka SMT Verification
+
 ```cpp
 #include "vakya/vakya_types.hpp"
 #include "vakya/smt.hpp"

@@ -37,7 +37,6 @@
 #include "../core/source_view.hpp"
 
 namespace lang::samasa {
-
     // ---- skip_until_sync ---------------------------------------------------
 
     template <class SyncSet>
@@ -58,8 +57,10 @@ namespace lang::samasa {
             if (end_off > start_off) {
                 byte_span span{start_off, end_off - start_off};
                 ctx.events().error(samasa_diag_code::recover_skipped, span);
-                ctx.emit({samasa_diag_code::recover_skipped, {},
-                    "error: skipped tokens during recovery", ::lang::severity::error});
+                ctx.emit({
+                    samasa_diag_code::recover_skipped, {},
+                    "error: skipped tokens during recovery", ::lang::severity::error
+                });
                 ctx.inc_repairs();
             }
         }
@@ -80,8 +81,10 @@ namespace lang::samasa {
             if (ctx.over_repair_limit()) return;
             const auto off = ctx.cursor().at_end() ? 0u : ctx.cursor().peek().offset;
             ctx.events().error(samasa_diag_code::recover_inserted, {off, 0});
-            ctx.emit({samasa_diag_code::recover_inserted, {},
-                "error: missing token inserted", ::lang::severity::error});
+            ctx.emit({
+                samasa_diag_code::recover_inserted, {},
+                "error: missing token inserted", ::lang::severity::error
+            });
             ctx.inc_repairs();
         }
     };
@@ -103,8 +106,10 @@ namespace lang::samasa {
             if (ctx.over_repair_limit()) return;
             const auto off = ctx.cursor().at_end() ? 0u : ctx.cursor().peek().offset;
             ctx.events().error(samasa_diag_code::recover_inserted, {off, 0});
-            ctx.emit({samasa_diag_code::recover_inserted, {},
-                "error: missing token inserted", ::lang::severity::error});
+            ctx.emit({
+                samasa_diag_code::recover_inserted, {},
+                "error: missing token inserted", ::lang::severity::error
+            });
             ctx.inc_repairs();
         }
     };
@@ -118,8 +123,10 @@ namespace lang::samasa {
             const auto off = ctx.cursor().peek().offset;
             const auto len = ctx.cursor().peek().length;
             ctx.events().error(samasa_diag_code::recover_deleted, {off, len});
-            ctx.emit({samasa_diag_code::recover_deleted, {},
-                "error: unexpected token deleted", ::lang::severity::error});
+            ctx.emit({
+                samasa_diag_code::recover_deleted, {},
+                "error: unexpected token deleted", ::lang::severity::error
+            });
             ctx.set_cursor(ctx.cursor().advance());
             ctx.inc_repairs();
         }
@@ -133,8 +140,10 @@ namespace lang::samasa {
         template <class Ctx>
         void operator()(Ctx& ctx) const {
             ctx.events().error(samasa_diag_code::recover_wrapped, span);
-            ctx.emit({samasa_diag_code::recover_wrapped, {},
-                "error: wrapped malformed region", ::lang::severity::error});
+            ctx.emit({
+                samasa_diag_code::recover_wrapped, {},
+                "error: wrapped malformed region", ::lang::severity::error
+            });
         }
     };
 
@@ -159,13 +168,13 @@ namespace lang::samasa {
 
     template <class Pattern, class Recovery>
     struct recover_with {
-        Pattern  pattern;
+        Pattern pattern;
         Recovery recovery;
 
         template <class Ctx>
         [[nodiscard]] auto match(Ctx& ctx) const {
             using Stream = typename Ctx::stream_type;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
 
             auto r = pattern.match(ctx);
             if (r.ok()) {
@@ -184,7 +193,7 @@ namespace lang::samasa {
     };
 
     template <class Pattern, class Recovery>
-    [[nodiscard]] constexpr recover_with<Pattern,Recovery>
+    [[nodiscard]] constexpr recover_with<Pattern, Recovery>
     make_recover_with(Pattern p, Recovery r) { return {std::move(p), std::move(r)}; }
 
     // ---- recovery_makes_progress_v (specializations) -----------------------
@@ -222,8 +231,10 @@ namespace lang::samasa {
                 const auto off = ctx.cursor().peek().offset;
                 const auto len = ctx.cursor().peek().length;
                 ctx.events().error(samasa_diag_code::recover_deleted, {off, len});
-                ctx.emit({samasa_diag_code::recover_deleted, {},
-                    "error: deleted unexpected token (cost 1)", ::lang::severity::error});
+                ctx.emit({
+                    samasa_diag_code::recover_deleted, {},
+                    "error: deleted unexpected token (cost 1)", ::lang::severity::error
+                });
                 ctx.set_cursor(ctx.cursor().advance());
                 ctx.inc_repairs();
                 return;
@@ -251,7 +262,7 @@ namespace lang::samasa {
         template <class Ctx>
         [[nodiscard]] auto match(Ctx& ctx) const {
             using Stream = typename Ctx::stream_type;
-            using R      = parse_result<Stream>;
+            using R = parse_result<Stream>;
 
             auto r = pattern.match(ctx);
             if (r.ok()) {
@@ -269,7 +280,6 @@ namespace lang::samasa {
     };
 
     template <class Pattern, class SyncSet, class RepairPolicy = default_repair_policy>
-    [[nodiscard]] constexpr recover_with_repair<Pattern,SyncSet,RepairPolicy>
+    [[nodiscard]] constexpr recover_with_repair<Pattern, SyncSet, RepairPolicy>
     make_recover_repair(Pattern p) { return {std::move(p)}; }
-
 } // namespace lang::samasa

@@ -40,7 +40,9 @@
 
 // Transitional implementation detail for the historical symbolic frontend.
 // This is scoped to Pravaha; it does not create a dependency on Lithe.
-namespace pravaha { namespace lithe = ::vakya; }
+namespace pravaha {
+    namespace lithe = ::vakya;
+}
 
 namespace pravaha {
     // ============================================================================
@@ -74,7 +76,7 @@ namespace pravaha {
         // C++23 comparison constraints on current macOS libc++.
         [[nodiscard]] bool operator==(const PravahaError& other) const noexcept {
             return kind == other.kind && message == other.message &&
-                   task_identity == other.task_identity;
+                task_identity == other.task_identity;
         }
 
         static PravahaError make(ErrorKind k, std::string_view msg,

@@ -89,7 +89,7 @@ namespace vakya::types {
         // No externally-observable effect. Heavy pure compute → parallel pool.
         if (rec.cost != cost_class::unknown &&
             static_cast<std::uint8_t>(rec.cost) >=
-                static_cast<std::uint8_t>(policy.cpu_bound_from))
+            static_cast<std::uint8_t>(policy.cpu_bound_from))
             return execution_affinity::cpu_bound;
 
         // No effects at all and no write set → freely reorderable / memoizable.

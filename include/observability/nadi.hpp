@@ -1,4 +1,5 @@
 #pragma once
+#include "meta/akshara.hpp"
 
 #include <array>
 #include <atomic>
@@ -25,28 +26,11 @@ namespace utils::nadi {
     };
 
     // ---------------------------------------------------------------------------
-    // 2. Compile-Time String Literal (NTTP)
+    // 2. Compile-Time String Literal (NTTP) — Aliased to akshara::fixed_string
     // ---------------------------------------------------------------------------
 
     template <std::size_t N>
-    struct FixedString {
-        std::array<char, N> data{};
-
-        consteval FixedString(const char (&src)[N]) noexcept {
-            std::copy(src, src + N, data.data());
-        }
-
-        [[nodiscard]] constexpr std::string_view view() const noexcept {
-            // N includes the null terminator; exclude it from the view.
-            return {data.data(), N - 1};
-        }
-
-        [[nodiscard]] constexpr bool operator==(const FixedString&) const noexcept = default;
-    };
-
-    // Deduction guide: char[N] → FixedString<N>
-    template <std::size_t N>
-    FixedString(const char (&)[N]) -> FixedString<N>;
+    using FixedString = akshara::fixed_string<N>;
 
     // ---------------------------------------------------------------------------
     // 3. Typed Payload Channels
@@ -280,7 +264,7 @@ namespace utils::nadi {
         using EndPulse = Pulse<Category>;
 
         // source_location captured at constructor call site; wrapping disables location capture.
-        explicit active_pulse_scope(
+        explicit active_pulse_scope (
             Fields
         ...
         fields
@@ -392,10 +376,19 @@ namespace utils::nadi {
     // transition required by capture_lineage().
     template <typename ClockPolicy, SinkPolicy Sink, FixedString Category, typename... Fields>
     struct disabled_pulse_scope {
-        explicit disabled_pulse_scope(
-            Fields... /*fields*/,
-            std::source_location /*loc*/ = std::source_location::current()) noexcept
-            : previous_lineage_{detail::current_lineage}, id_{generate_event_id()} {
+        explicit disabled_pulse_scope (
+            Fields
+        ... /*fields*/
+        ,
+        std::source_location /*loc*/= std
+        ::source_location::current()
+        )
+        noexcept
+        :
+        previous_lineage_ { detail::current_lineage }
+        ,
+        id_ { generate_event_id() }
+ {
             const auto parent_scope_id = previous_lineage_.trace_id.value;
             const auto root_scope_id = parent_scope_id == 0
                 ? id_.value
@@ -418,8 +411,8 @@ namespace utils::nadi {
 
     template <typename ClockPolicy, SinkPolicy Sink, FixedString Category, typename... Fields>
     using BasicPulseScope = std::conditional_t<Sink::enabled,
-                                                active_pulse_scope<ClockPolicy, Sink, Category, Fields...>,
-                                                disabled_pulse_scope<ClockPolicy, Sink, Category, Fields...>>;
+                                               active_pulse_scope<ClockPolicy, Sink, Category, Fields...>,
+                                               disabled_pulse_scope<ClockPolicy, Sink, Category, Fields...>>;
 
     // PulseScope — convenience alias using SteadyClockPolicy.
     // PulseScope<Sink, Category, Fields...> is equivalent to

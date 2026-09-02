@@ -1,7 +1,12 @@
 #include "catch_amalgamated.hpp"
 #include "kalpana/kalpana.hpp"
 
-TEST_CASE("Kalpana: Brush Deposition Mechanics", "[kalpana][brush][deposit]") {
+TEST_CASE (
+"Kalpana: Brush Deposition Mechanics"
+,
+"[kalpana][brush][deposit]"
+)
+ {
     using namespace kalpana;
     using namespace kalpana::deposit;
 

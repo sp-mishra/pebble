@@ -132,7 +132,7 @@ namespace egraph {
             std::size_t i = 0;
             for (; i + lanes <= pairs; i += lanes) {
                 auto v = hn::Load(d, reinterpret_cast<const std::uint64_t*>(data + 2 * i));
-                v = hn::Xor(v, hn::ShiftRight<17>(v));
+                v = hn::Xor(v, hn::ShiftRight < 17 > (v));
                 v = hn::Mul(v, hn::Set(d, kMix));
                 acc = hn::Add(acc, v);
             }

@@ -1,16 +1,23 @@
 # Tutorial: The Immutable Chronicler of Pebble Island — Durable Logging with Nitya
 
-Welcome to **Pebble Island**. As the Island Chronicler, you are charged with recording every financial transaction, legal treaty, vault access, and state transition in the realm. 
+Welcome to **Pebble Island**. As the Island Chronicler, you are charged with recording every financial transaction,
+legal treaty, vault access, and state transition in the realm.
 
-Disaster can strike at any moment — sudden power failures, earthquakes, or disk corruption. If a transaction is acknowledged to an island citizen, it must **never be lost**. Furthermore, recording records must never become a bottleneck for the island's bustling economy.
+Disaster can strike at any moment — sudden power failures, earthquakes, or disk corruption. If a transaction is
+acknowledged to an island citizen, it must **never be lost**. Furthermore, recording records must never become a
+bottleneck for the island's bustling economy.
 
-To achieve this, you will use **Nitya** (Sanskrit for *Eternal/Perpetual*) — Pebble's zero-allocation, lock-free, policy-driven Durable Log Engine (DLE) and Write-Ahead Log (WAL).
+To achieve this, you will use **Nitya** (Sanskrit for *Eternal/Perpetual*) — Pebble's zero-allocation, lock-free,
+policy-driven Durable Log Engine (DLE) and Write-Ahead Log (WAL).
 
-This tutorial assumes **zero prior knowledge of Write-Ahead Logs or storage engines**. We will build intuition from the ground up, starting with basic append operations and advancing to zero-copy group commits, background durability flushes, corruption recovery, replication streaming, and automated retention rules.
+This tutorial assumes **zero prior knowledge of Write-Ahead Logs or storage engines**. We will build intuition from the
+ground up, starting with basic append operations and advancing to zero-copy group commits, background durability
+flushes, corruption recovery, replication streaming, and automated retention rules.
 
 ---
 
 ## Table of Contents
+
 1. [What is a Write-Ahead Log (WAL)?](#1-what-is-a-write-ahead-log-wal)
 2. [The One-File Compilation Blueprint](#2-the-one-file-compilation-blueprint)
 3. [Act 1: The First Inscription (Basic Append & Sync)](#act-1-the-first-inscription-basic-append--sync)
@@ -27,14 +34,19 @@ This tutorial assumes **zero prior knowledge of Write-Ahead Logs or storage engi
 
 ## 1. What is a Write-Ahead Log (WAL)?
 
-In database systems and distributed infrastructure, in-memory caches and complex B-Trees are fast but volatile. When a crash occurs, any unwritten state in RAM vanishes.
+In database systems and distributed infrastructure, in-memory caches and complex B-Trees are fast but volatile. When a
+crash occurs, any unwritten state in RAM vanishes.
 
-A **Write-Ahead Log (WAL)** is an append-only sequence of immutable records written sequentially to disk. Before mutating in-memory state, the system writes the intent to the log. 
+A **Write-Ahead Log (WAL)** is an append-only sequence of immutable records written sequentially to disk. Before
+mutating in-memory state, the system writes the intent to the log.
 
 ### Why Nitya?
+
 - **Zero Heap Allocations on Hot Path**: Memory-mapped (`Setu`) write buffers.
-- **Physical Byte Offset LSNs**: Every record's Log Sequence Number (LSN) corresponds directly to its physical byte offset in the linear log space.
-- **CRC32-C Integrity Validation**: Dual-checksum verification with packed headers and trailers protecting against torn writes.
+- **Physical Byte Offset LSNs**: Every record's Log Sequence Number (LSN) corresponds directly to its physical byte
+  offset in the linear log space.
+- **CRC32-C Integrity Validation**: Dual-checksum verification with packed headers and trailers protecting against torn
+  writes.
 - **Lock-Free Concurrency**: Concurrent workers reserve space concurrently without holding coarse-grained file locks.
 
 ---
@@ -78,9 +90,12 @@ int main() {
 ## Act 1: The First Inscription (Basic Append & Sync)
 
 ### The Story
-The Harbor Master needs to record incoming ships. When a ship docks, its name is appended to the log. The Harbor Master calls `sync()` to ensure the bytes are physically flushed to the storage disk before granting the ship entrance.
+
+The Harbor Master needs to record incoming ships. When a ship docks, its name is appended to the log. The Harbor Master
+calls `sync()` to ensure the bytes are physically flushed to the storage disk before granting the ship entrance.
 
 ### The Code
+
 ```cpp
 void act1_basic_append() {
     std::filesystem::path wal_dir = "./harbor_wal";
@@ -118,12 +133,15 @@ void act1_basic_append() {
 ## Act 2: The Multi-Volume Archive (Segment File Rotation)
 
 ### The Concept
-A single log file cannot grow infinitely. Nitya partitions the continuous LSN address space into **fixed-size segment files** (e.g. `seg_0000000000000000.wal`, `seg_0000000000000001.wal`).
+
+A single log file cannot grow infinitely. Nitya partitions the continuous LSN address space into **fixed-size segment
+files** (e.g. `seg_0000000000000000.wal`, `seg_0000000000000001.wal`).
 
 - Each segment starts with a 44-byte packed `segment_header`.
 - When a record exceeds the segment size, Nitya automatically **seals** the current segment and **rotates** to the next.
 
 ### The Code
+
 ```cpp
 void act2_segment_rotation() {
     std::filesystem::path wal_dir = "./rotation_wal";
@@ -157,12 +175,16 @@ void act2_segment_rotation() {
 ## Act 3: High-Throughput Inscriptions (Zero-Copy Reserve-Publish Pipeline)
 
 ### The Concept
-Calling `append()` copies payload buffers. For high-performance telemetry and database engines, Nitya provides a **zero-copy 2-phase pipeline**:
+
+Calling `append()` copies payload buffers. For high-performance telemetry and database engines, Nitya provides a
+**zero-copy 2-phase pipeline**:
+
 1. **`reserve(payload_size)`**: Atomically reserves a slice in the memory-mapped segment without taking locks.
 2. **Direct Memory Write**: You format or serialize data directly into `reservation.payload_buffer()`.
 3. **`publish(reservation)`**: Computes CRC32-C checksums and marks the record ready for commit.
 
 ### The Code
+
 ```cpp
 void act3_zero_copy_pipeline() {
     std::filesystem::path wal_dir = "./zerocopy_wal";
@@ -203,11 +225,15 @@ void act3_zero_copy_pipeline() {
 ## Act 4: The Background Durability Daemon (Group Commit & Flusher)
 
 ### The Concept
+
 Calling `fsync` after every individual record limits throughput to disk IOPS (~1,000 writes/sec).
 
-Nitya features a background **Group Commit Durability Flusher**. Threads append records concurrently without blocking for disk sync. The background flusher periodically batches and flushes dirty bytes based on **time intervals** and **byte watermarks**.
+Nitya features a background **Group Commit Durability Flusher**. Threads append records concurrently without blocking
+for disk sync. The background flusher periodically batches and flushes dirty bytes based on **time intervals** and
+**byte watermarks**.
 
 ### The Code
+
 ```cpp
 void act4_background_flusher() {
     std::filesystem::path wal_dir = "./group_commit_wal";
@@ -242,9 +268,12 @@ void act4_background_flusher() {
 ## Act 5: Reconstructing History (Reading & Scanning the Log)
 
 ### The Concept
-To recover state or stream transactions to consumers, Nitya provides zero-allocation point reads and sequential iterators across segment boundaries.
+
+To recover state or stream transactions to consumers, Nitya provides zero-allocation point reads and sequential
+iterators across segment boundaries.
 
 ### The Code
+
 ```cpp
 void act5_read_and_scan() {
     std::filesystem::path wal_dir = "./scan_wal";
@@ -279,14 +308,18 @@ void act5_read_and_scan() {
 ## Act 6: Surviving the Storm (Crash Recovery Modes)
 
 ### The Concept
+
 When an application crashes mid-write, the end of the log may contain incomplete frames or corrupted bytes.
 
 Nitya provides three recovery policies via `recovery_mode`:
+
 1. **`recovery_mode::strict`**: Fails immediately if any CRC mismatch or corrupt header is encountered.
-2. **`recovery_mode::stop_at_first_error`** (Standard): Recovers all valid records up to the crash point, truncates the torn write, and resumes cleanly.
+2. **`recovery_mode::stop_at_first_error`** (Standard): Recovers all valid records up to the crash point, truncates the
+   torn write, and resumes cleanly.
 3. **`recovery_mode::salvage`**: Skips over corrupt byte regions and recovers any valid downstream frames.
 
 ### The Code
+
 ```cpp
 void act6_crash_recovery() {
     std::filesystem::path wal_dir = "./recovery_wal";
@@ -320,11 +353,15 @@ void act6_crash_recovery() {
 ## Act 7: The Messenger Birds (Replication Subscriptions)
 
 ### The Concept
-In distributed clusters (such as Raft or Primary-Replica architectures), follower nodes need to tail the primary's log in real-time.
 
-Nitya provides a **Replication Stream Subscription Engine** that notifies streaming consumers whenever new LSNs are published or flushed.
+In distributed clusters (such as Raft or Primary-Replica architectures), follower nodes need to tail the primary's log
+in real-time.
+
+Nitya provides a **Replication Stream Subscription Engine** that notifies streaming consumers whenever new LSNs are
+published or flushed.
 
 ### The Code
+
 ```cpp
 void act7_replication_stream() {
     std::filesystem::path wal_dir = "./replication_wal";
@@ -354,13 +391,16 @@ void act7_replication_stream() {
 ## Act 8: The Ancient Scribe's Law (Automated Retention & Archival)
 
 ### The Concept
+
 Old segments that have already been backed up to cold storage or checkpointed should be reclaimed to free disk space.
 
 Nitya integrates with **EasyRules** for declarative administrative retention policies:
+
 - **`truncate_before(lsn)`**: Reclaims physical segment files whose `sealed_lsn <= lsn`.
 - **`archive_segment(segment_id)`**: Marks segments as archived for backup pipelines.
 
 ### The Code
+
 ```cpp
 void act8_retention_and_cleanup() {
     std::filesystem::path wal_dir = "./retention_wal";
@@ -393,15 +433,15 @@ void act8_retention_and_cleanup() {
 
 ## 11. Quick API Reference & Cheat Sheet
 
-| Category | Method | Description |
-|---|---|---|
-| **Lifecycle** | `wal log(opts)` | Initialize or open WAL engine |
-| **Simple Writes** | `log.append(span)` | Append record and advance tail LSN |
-| **Zero-Copy Writes** | `log.reserve(size)`, `log.publish(res)` | 2-phase non-blocking mapped buffer write |
-| **Durability** | `log.sync()` | Force synchronous `fsync` to disk |
-| **Coordinates** | `log.tail_lsn()`, `log.flushed_lsn()` | Query current allocation & disk watermarks |
-| **Reads** | `log.read(lsn)` | Point lookup of a record by physical LSN |
-| **Scans** | `log.scan(start_lsn)` | Sequential log iterator |
-| **Recovery** | `log.recover(mode)` | Crash recovery (`strict`, `stop_at_first_error`, `salvage`) |
-| **Replication** | `log.create_subscription(lsn)` | Real-time stream consumer for followers |
-| **Retention** | `log.truncate_before(lsn)` | Reclaim sealed historical segment files |
+| Category             | Method                                  | Description                                                 |
+|----------------------|-----------------------------------------|-------------------------------------------------------------|
+| **Lifecycle**        | `wal log(opts)`                         | Initialize or open WAL engine                               |
+| **Simple Writes**    | `log.append(span)`                      | Append record and advance tail LSN                          |
+| **Zero-Copy Writes** | `log.reserve(size)`, `log.publish(res)` | 2-phase non-blocking mapped buffer write                    |
+| **Durability**       | `log.sync()`                            | Force synchronous `fsync` to disk                           |
+| **Coordinates**      | `log.tail_lsn()`, `log.flushed_lsn()`   | Query current allocation & disk watermarks                  |
+| **Reads**            | `log.read(lsn)`                         | Point lookup of a record by physical LSN                    |
+| **Scans**            | `log.scan(start_lsn)`                   | Sequential log iterator                                     |
+| **Recovery**         | `log.recover(mode)`                     | Crash recovery (`strict`, `stop_at_first_error`, `salvage`) |
+| **Replication**      | `log.create_subscription(lsn)`          | Real-time stream consumer for followers                     |
+| **Retention**        | `log.truncate_before(lsn)`              | Reclaim sealed historical segment files                     |

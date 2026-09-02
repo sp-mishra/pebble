@@ -3,7 +3,12 @@
 #include <array>
 #include <cmath>
 
-TEST_CASE("Prakriti: MuscleStore add keeps stable SoA rows", "[prakriti][muscle][store]") {
+TEST_CASE (
+"Prakriti: MuscleStore add keeps stable SoA rows"
+,
+"[prakriti][muscle][store]"
+)
+ {
     prakriti::MuscleStore<> store;
     const auto id = store.add({
         .origin = 1,
@@ -23,7 +28,12 @@ TEST_CASE("Prakriti: MuscleStore add keeps stable SoA rows", "[prakriti][muscle]
     REQUIRE(store.rest_length[id] == Catch::Approx(0.30f));
 }
 
-TEST_CASE("Prakriti: MuscleSolver shortens an activated segment", "[prakriti][muscle][solver]") {
+TEST_CASE (
+"Prakriti: MuscleSolver shortens an activated segment"
+,
+"[prakriti][muscle][solver]"
+)
+ {
     prakriti::ParticleStore particles;
     const auto a = particles.add({.position = {0.0f, 0.0f}, .mass = 1.0f});
     const auto b = particles.add({.position = {0.40f, 0.0f}, .mass = 1.0f});
@@ -62,7 +72,12 @@ TEST_CASE("Prakriti: MuscleSolver shortens an activated segment", "[prakriti][mu
     REQUIRE(store.lambda_accum[0] != 0.0f);
 }
 
-TEST_CASE("Prakriti: ThreeCompartmentFatigue reduces effective activation", "[prakriti][muscle][fatigue]") {
+TEST_CASE (
+"Prakriti: ThreeCompartmentFatigue reduces effective activation"
+,
+"[prakriti][muscle][fatigue]"
+)
+ {
     prakriti::ThreeCompartmentFatigue::State state{
         .active_motor_units = 0.5f,
         .resting_motor_units = 0.4f,
@@ -73,7 +88,12 @@ TEST_CASE("Prakriti: ThreeCompartmentFatigue reduces effective activation", "[pr
     REQUIRE(effective == Catch::Approx(0.4f));
 }
 
-TEST_CASE("Prakriti: HillTypeFiber batch API matches scalar API", "[prakriti][muscle][fiber][batch]") {
+TEST_CASE (
+"Prakriti: HillTypeFiber batch API matches scalar API"
+,
+"[prakriti][muscle][fiber][batch]"
+)
+ {
     const std::array<float, 4> activation{0.2f, 0.5f, 0.8f, 1.0f};
     const std::array<float, 4> lce{0.08f, 0.10f, 0.12f, 0.14f};
     const std::array<float, 4> vce{-0.2f, -0.1f, 0.0f, 0.1f};
@@ -96,7 +116,12 @@ TEST_CASE("Prakriti: HillTypeFiber batch API matches scalar API", "[prakriti][mu
     }
 }
 
-TEST_CASE("Prakriti: NonlinearTendon batch API matches scalar API", "[prakriti][muscle][tendon][batch]") {
+TEST_CASE (
+"Prakriti: NonlinearTendon batch API matches scalar API"
+,
+"[prakriti][muscle][tendon][batch]"
+)
+ {
     const std::array<float, 4> tendon_len{0.03f, 0.05f, 0.06f, 0.08f};
     const std::array<float, 4> slack_len{0.05f, 0.05f, 0.05f, 0.05f};
     std::array<float, 4> batch{};
@@ -110,7 +135,12 @@ TEST_CASE("Prakriti: NonlinearTendon batch API matches scalar API", "[prakriti][
     }
 }
 
-TEST_CASE("Prakriti: LinearTendon and RigidTendon batch APIs match scalar API", "[prakriti][muscle][tendon][batch]") {
+TEST_CASE (
+"Prakriti: LinearTendon and RigidTendon batch APIs match scalar API"
+,
+"[prakriti][muscle][tendon][batch]"
+)
+ {
     const std::array<float, 4> tendon_len{0.03f, 0.05f, 0.06f, 0.08f};
     const std::array<float, 4> slack_len{0.05f, 0.05f, 0.05f, 0.05f};
     std::array<float, 4> linear_batch{};

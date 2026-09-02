@@ -17,49 +17,47 @@
 #endif
 
 namespace gati {
-
 #if defined(GATI_HAS_PRAVAHA)
 
-class ParallelExecutor {
-public:
-    explicit ParallelExecutor(unsigned threads = 0)
-        : backend_(threads ? threads : std::thread::hardware_concurrency()),
-          runner_(backend_) {}
+    class ParallelExecutor {
+    public:
+        explicit ParallelExecutor(unsigned threads = 0)
+            : backend_(threads ? threads : std::thread::hardware_concurrency()),
+              runner_(backend_) {}
 
-    template <typename BodyFn>
-    void for_range(std::size_t count, BodyFn&& body, std::size_t chunk = 256) {
-        if (count == 0) return;
-        index_range r{count};
-        auto expr = pravaha::lazy_parallel_for(
-            r, [body = std::forward<BodyFn>(body)](std::size_t i) { body(i); }, chunk);
-        (void)runner_.submit(std::move(expr));
-    }
+        template <typename BodyFn>
+        void for_range(std::size_t count, BodyFn&& body, std::size_t chunk = 256) {
+            if (count == 0) return;
+            index_range r{count};
+            auto expr = pravaha::lazy_parallel_for(
+                r, [body = std::forward<BodyFn>(body)](std::size_t i) { body(i); }, chunk);
+            (void)runner_.submit(std::move(expr));
+        }
 
-private:
-    struct index_range {
-        std::size_t n;
-        [[nodiscard]] std::size_t size() const noexcept { return n; }
-        [[nodiscard]] std::size_t operator[](std::size_t i) const noexcept { return i; }
+    private:
+        struct index_range {
+            std::size_t n;
+            [[nodiscard]] std::size_t size() const noexcept { return n; }
+            [[nodiscard]] std::size_t operator[](std::size_t i) const noexcept { return i; }
+        };
+
+        pravaha::JThreadBackend backend_;
+        pravaha::Runner<pravaha::JThreadBackend> runner_;
     };
-
-    pravaha::JThreadBackend backend_;
-    pravaha::Runner<pravaha::JThreadBackend> runner_;
-};
 
 #else // Serial fallback
 
-class ParallelExecutor {
-public:
-    explicit ParallelExecutor(unsigned = 0) {}
+    class ParallelExecutor {
+    public:
+        explicit ParallelExecutor(unsigned = 0) {}
 
-    template <typename BodyFn>
-    void for_range(std::size_t count, BodyFn&& body, std::size_t = 0) {
-        for (std::size_t i = 0; i < count; ++i) {
-            body(i);
+        template <typename BodyFn>
+        void for_range(std::size_t count, BodyFn&& body, std::size_t = 0) {
+            for (std::size_t i = 0; i < count; ++i) {
+                body(i);
+            }
         }
-    }
-};
+    };
 
 #endif
-
 } // namespace gati

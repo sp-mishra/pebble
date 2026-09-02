@@ -138,7 +138,7 @@ Nodes are stored as `std::unique_ptr<TreeNode>` within a `Container` (default: `
 
 - Prevents moving old pointers (node pointers remain valid across insertions)
 - Enables precise parent/child relationship tracking
-- Allows O(1) sibling navigation via stored sibling indices
+- Allows O (1) sibling navigation via stored sibling indices
 
 ### SIMD-Accelerated Statistics
 
@@ -460,7 +460,7 @@ struct TreeNode {
 
 **Key Design Points:**
 
-- `sibling_index` stored explicitly for O(1) sibling navigation
+- `sibling_index` stored explicitly for O (1) sibling navigation
 - Unique `node_id` for debugging and serialization
 - Destructors automatically cascade (unique_ptr cleanup)
 
@@ -1602,7 +1602,7 @@ int main() {
 
 2. **Unique IDs**: Every node has auto-incremented unique ID for debugging, serialization, and structural hashing.
 
-3. **Sibling indices**: O(1) sibling navigation via stored index in parent's children list.
+3. **Sibling indices**: O (1) sibling navigation via stored index in parent's children list.
 
 4. **Copy semantics**: Copy constructor performs deep copy (independent tree); move semantics transfer ownership
    cheaply.
@@ -1630,10 +1630,10 @@ int main() {
 
 **macOS C++23 Compiler Requirements:**
 
-| macOS Version | Clang/LLVM Version    | C++23 Support                               | Recommendation                           |
-|---------------|-----------------------|---------------------------------------------|------------------------------------------|
+| macOS Version | Clang/LLVM Version    | C++23 Support                               | Recommendation                            |
+|---------------|-----------------------|---------------------------------------------|-------------------------------------------|
 | 14 Sonoma     | clang 15.0+ (default) | Full                                        | ✅ Supported                              |
-| 13 Ventura    | clang 14.0+ (default) | Partial (requires `-fexperimental-library`) | ⚠️ Test carefully                        |
+| 13 Ventura    | clang 14.0+ (default) | Partial (requires `-fexperimental-library`) | ⚠️ Test carefully                         |
 | 12 Monterey   | clang 13.0 (default)  | Limited                                     | ❌ Upgrade or use `-std=c++2b` explicitly |
 
 **Build Configuration:**

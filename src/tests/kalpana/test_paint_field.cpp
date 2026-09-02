@@ -2,7 +2,12 @@
 #include "kalpana/color/paint_field.hpp"
 #include "kalpana/color/spectral.hpp"
 
-TEST_CASE("PaintField: construction and dimensions", "[kalpana][paint_field]") {
+TEST_CASE (
+"PaintField: construction and dimensions"
+,
+"[kalpana][paint_field]"
+)
+ {
     using namespace kalpana;
     PaintField<> f(16, 16, 1.0f);
     REQUIRE(f.valid());
@@ -10,14 +15,24 @@ TEST_CASE("PaintField: construction and dimensions", "[kalpana][paint_field]") {
     REQUIRE(f.cols() == 16);
 }
 
-TEST_CASE("PaintField: initial state is zero", "[kalpana][paint_field]") {
+TEST_CASE (
+"PaintField: initial state is zero"
+,
+"[kalpana][paint_field]"
+)
+ {
     using namespace kalpana;
     PaintField<> f(8, 8, 1.0f);
     REQUIRE(f.total_mass() == Catch::Approx(0.0f));
     REQUIRE(f.water_mass() == Catch::Approx(0.0f));
 }
 
-TEST_CASE("PaintField: splat deposits pigment", "[kalpana][paint_field]") {
+TEST_CASE (
+"PaintField: splat deposits pigment"
+,
+"[kalpana][paint_field]"
+)
+ {
     using namespace kalpana;
     PaintField<> f(32, 32, 1.0f);
 
@@ -42,7 +57,12 @@ TEST_CASE("PaintField: splat deposits pigment", "[kalpana][paint_field]") {
     REQUIRE(f.water_mass() > 0.0f);
 }
 
-TEST_CASE("PaintField: sample returns correct cell", "[kalpana][paint_field]") {
+TEST_CASE (
+"PaintField: sample returns correct cell"
+,
+"[kalpana][paint_field]"
+)
+ {
     using namespace kalpana;
     PaintField<> f(16, 16, 1.0f);
 
@@ -60,7 +80,12 @@ TEST_CASE("PaintField: sample returns correct cell", "[kalpana][paint_field]") {
     REQUIRE(km_sum > 0.0f);
 }
 
-TEST_CASE("PaintField: resolve_color blends with canvas", "[kalpana][paint_field]") {
+TEST_CASE (
+"PaintField: resolve_color blends with canvas"
+,
+"[kalpana][paint_field]"
+)
+ {
     using namespace kalpana;
     PaintField<> f(8, 8, 1.0f);
 

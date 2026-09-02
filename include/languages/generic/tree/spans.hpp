@@ -14,15 +14,14 @@
 #include <string>
 
 namespace lang {
-
     // ---- byte_span ---------------------------------------------------------
 
     struct byte_span {
         std::uint32_t offset = 0;
         std::uint32_t length = 0;
 
-        [[nodiscard]] constexpr bool          empty() const noexcept { return length == 0; }
-        [[nodiscard]] constexpr std::uint32_t end()   const noexcept { return offset + length; }
+        [[nodiscard]] constexpr bool empty() const noexcept { return length == 0; }
+        [[nodiscard]] constexpr std::uint32_t end() const noexcept { return offset + length; }
 
         [[nodiscard]] constexpr bool operator==(const byte_span&) const noexcept = default;
 
@@ -31,7 +30,7 @@ namespace lang {
             if (a.empty()) return b;
             if (b.empty()) return a;
             const std::uint32_t lo = a.offset < b.offset ? a.offset : b.offset;
-            const std::uint32_t hi = a.end()  > b.end()  ? a.end()  : b.end();
+            const std::uint32_t hi = a.end() > b.end() ? a.end() : b.end();
             return {lo, hi - lo};
         }
     };
@@ -41,10 +40,10 @@ namespace lang {
 
     struct token_range {
         std::uint32_t start = 0;
-        std::uint32_t end   = 0;
+        std::uint32_t end = 0;
 
-        [[nodiscard]] constexpr std::uint32_t size()  const noexcept { return end - start; }
-        [[nodiscard]] constexpr bool          empty() const noexcept { return start == end; }
+        [[nodiscard]] constexpr std::uint32_t size() const noexcept { return end - start; }
+        [[nodiscard]] constexpr bool empty() const noexcept { return start == end; }
 
         [[nodiscard]] constexpr bool operator==(const token_range&) const noexcept = default;
     };
@@ -53,9 +52,8 @@ namespace lang {
     // Describes a source mutation: replace [offset, offset+removed_length) with inserted_text.
 
     struct text_edit {
-        std::uint32_t offset         = 0;
+        std::uint32_t offset = 0;
         std::uint32_t removed_length = 0;
-        std::string   inserted_text;
+        std::string inserted_text;
     };
-
 } // namespace lang

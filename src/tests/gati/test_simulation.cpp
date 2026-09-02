@@ -2,7 +2,12 @@
 #include "gati/simulation.hpp"
 #include "akruti/primitives.hpp"
 
-TEST_CASE("Gati: Unified Simulation Facade", "[gati][simulation]") {
+TEST_CASE (
+"Gati: Unified Simulation Facade"
+,
+"[gati][simulation]"
+)
+ {
     gati::Simulation sim;
 
     akruti::Circle c{{0, 0}, 1.0f};

@@ -63,7 +63,6 @@
 #include <vector>
 
 namespace petika {
-
     // ============================================================================
     // Options & Configuration
     // ============================================================================
@@ -121,7 +120,9 @@ namespace petika {
     struct ImmediateCommitPolicy {
         static constexpr bool is_immediate = true;
         // These members satisfy the concept but are never exercised on the fast path.
-        template <typename M> bool stage(M&&) noexcept { return true; }
+        template <typename M>
+        bool stage(M&&) noexcept { return true; }
+
         [[nodiscard]] std::size_t pending() const noexcept { return 0; }
     };
 
@@ -138,10 +139,12 @@ namespace petika {
         template <typename Mutation>
         struct staging {
             std::vector<Mutation> buffer;
+
             bool stage(Mutation m) {
                 buffer.push_back(std::move(m));
                 return buffer.size() >= BufferSize;
             }
+
             [[nodiscard]] std::size_t pending() const noexcept { return buffer.size(); }
             std::vector<Mutation> drain() { return std::exchange(buffer, {}); }
         };
@@ -180,9 +183,15 @@ namespace petika {
 
     // Default: no filter; all lookups pass through to the engine.
     struct NoBloomFilter {
-        template <typename K> void insert(const K&) noexcept {}
-        template <typename K> void remove(const K&) noexcept {}
-        template <typename K> [[nodiscard]] bool maybe_contains(const K&) const noexcept { return true; }
+        template <typename K>
+        void insert(const K&) noexcept {}
+
+        template <typename K>
+        void remove(const K&) noexcept {}
+
+        template <typename K>
+        [[nodiscard]] bool maybe_contains(const K&) const noexcept { return true; }
+
         void reset() noexcept {}
     };
 
@@ -223,8 +232,10 @@ namespace petika {
             // Three independent hash probes using splitmix64-style mixing.
             std::size_t h = std::hash<K>{}(key);
             auto mix = [](std::size_t x) noexcept -> std::size_t {
-                x ^= x >> 30; x *= 0xbf58476d1ce4e5b9ull;
-                x ^= x >> 27; x *= 0x94d049bb133111ebull;
+                x ^= x >> 30;
+                x *= 0xbf58476d1ce4e5b9ull;
+                x ^= x >> 27;
+                x *= 0x94d049bb133111ebull;
                 return x ^ (x >> 31);
             };
             const std::size_t h0 = mix(h) & (kBits - 1);
@@ -257,8 +268,9 @@ namespace petika {
     struct EpochBasedGC {
         [[nodiscard]] nitya::lsn_t min_snapshot_lsn() const noexcept {
             std::shared_lock lk{mu_};
-            return active_.empty() ? std::numeric_limits<nitya::lsn_t>::max()
-                                   : *active_.begin();
+            return active_.empty()
+                       ? std::numeric_limits<nitya::lsn_t>::max()
+                       : *active_.begin();
         }
 
         void register_snapshot(nitya::lsn_t lsn) {
@@ -290,6 +302,7 @@ namespace petika {
             key_type key;
             value_type value;
         };
+
         struct Observation {
             key_type key;
             nitya::lsn_t version{};
@@ -300,10 +313,12 @@ namespace petika {
 
         Transaction(const Transaction&) = delete;
         Transaction& operator=(const Transaction&) = delete;
+
         Transaction(Transaction&& o) noexcept
             : store_{o.store_}, snapshot_lsn_{o.snapshot_lsn_}, active_{std::exchange(o.active_, false)},
               mutations_{std::move(o.mutations_)}, observations_{std::move(o.observations_)},
               mutation_index_{std::move(o.mutation_index_)}, observed_keys_{std::move(o.observed_keys_)} {}
+
         Transaction& operator=(Transaction&&) = delete;
         ~Transaction() { release_snapshot(); }
 
@@ -331,7 +346,8 @@ namespace petika {
             }
             if constexpr (requires(const StoreType& store, const key_type& k, nitya::lsn_t at) {
                 { store.get_at(k, at) } -> std::same_as<Result<value_type>>;
-            }) return store_->get_at(key, snapshot_lsn_);
+            })
+                return store_->get_at(key, snapshot_lsn_);
             else return store_->get(key);
         }
 
@@ -354,7 +370,8 @@ namespace petika {
             if (!observed_keys_.insert(key).second) return;
             if constexpr (requires(const StoreType& store, const key_type& k, nitya::lsn_t at) {
                 { store.version_at(k, at) } -> std::same_as<nitya::lsn_t>;
-            }) observations_.push_back({key, store_->version_at(key, snapshot_lsn_)});
+            })
+                observations_.push_back({key, store_->version_at(key, snapshot_lsn_)});
         }
 
         void clear_state() noexcept {
@@ -365,7 +382,10 @@ namespace petika {
         }
 
         void release_snapshot() noexcept {
-            if (active_) { store_->gc().release_snapshot(snapshot_lsn_); active_ = false; }
+            if (active_) {
+                store_->gc().release_snapshot(snapshot_lsn_);
+                active_ = false;
+            }
         }
 
         StoreType* store_;
@@ -373,8 +393,8 @@ namespace petika {
         bool active_{false};
         std::vector<Mutation> mutations_;
         std::vector<Observation> observations_;
-        std::unordered_map<key_type, std::size_t> mutation_index_;   // key -> latest mutation idx
-        std::unordered_set<key_type> observed_keys_;                  // O(1) observation dedup
+        std::unordered_map<key_type, std::size_t> mutation_index_; // key -> latest mutation idx
+        std::unordered_set<key_type> observed_keys_; // O(1) observation dedup
     };
 
     template <typename StoreType>
@@ -389,17 +409,22 @@ namespace petika {
 
         Snapshot(const Snapshot&) = delete;
         Snapshot& operator=(const Snapshot&) = delete;
+
         Snapshot(Snapshot&& o) noexcept
             : id_{o.id_}, snapshot_lsn_{o.snapshot_lsn_}, store_{o.store_},
               gc_{std::exchange(o.gc_, nullptr)} {}
+
         Snapshot& operator=(Snapshot&& o) noexcept {
             if (this != &o) {
                 release();
-                id_ = o.id_; snapshot_lsn_ = o.snapshot_lsn_; store_ = o.store_;
+                id_ = o.id_;
+                snapshot_lsn_ = o.snapshot_lsn_;
+                store_ = o.store_;
                 gc_ = std::exchange(o.gc_, nullptr);
             }
             return *this;
         }
+
         ~Snapshot() { release(); }
 
         [[nodiscard]] std::uint64_t id() const noexcept { return id_; }
@@ -408,14 +433,19 @@ namespace petika {
         Result<value_type> get(const key_type& key) const {
             if constexpr (requires(const StoreType& store, const key_type& k, nitya::lsn_t at) {
                 { store.engine().get_at(k, at) } -> std::same_as<Result<value_type>>;
-            }) return store_->engine().get_at(key, snapshot_lsn_);
+            })
+                return store_->engine().get_at(key, snapshot_lsn_);
             else return store_->get(key);
         }
 
     private:
         void release() noexcept {
-            if (gc_) { gc_->release_snapshot(snapshot_lsn_); gc_ = nullptr; }
+            if (gc_) {
+                gc_->release_snapshot(snapshot_lsn_);
+                gc_ = nullptr;
+            }
         }
+
         std::uint64_t id_;
         nitya::lsn_t snapshot_lsn_;
         const StoreType* store_;
@@ -461,7 +491,8 @@ namespace petika {
 #if defined(__cpp_lib_generator) && __cpp_lib_generator >= 202207L
                 gen_ = engine.template scan_lazy<OwnedEntry>(first, last); // lazy: nothing walked until iterated
 #endif
-            } else {
+            }
+            else {
                 // Eager fallback: materialise via the callback scan.
                 engine.scan(first, last, [&](const auto& entry) {
                     entries_.push_back({entry.key, entry.value, entry.lsn});
@@ -474,21 +505,26 @@ namespace petika {
 #if defined(__cpp_lib_generator) && __cpp_lib_generator >= 202207L
                 return gen_.begin();
 #endif
-            } else {
+            }
+            else {
                 return entries_.begin();
             }
         }
+
         auto end() const noexcept {
             if constexpr (kEngineHasCursor) {
 #if defined(__cpp_lib_generator) && __cpp_lib_generator >= 202207L
                 return gen_.end();
 #endif
-            } else {
+            }
+            else {
                 return entries_.end();
             }
         }
+
         [[nodiscard]] std::size_t size() const noexcept
             requires (!kEngineHasCursor) { return entries_.size(); }
+
         [[nodiscard]] bool empty() const noexcept
             requires (!kEngineHasCursor) { return entries_.empty(); }
 
@@ -511,8 +547,7 @@ namespace petika {
         typename ConcurrencyPolicy = std::shared_mutex,
         typename WriteBuffer = ImmediateCommitPolicy,
         typename BloomFilter = NoBloomFilter,
-        typename SnapshotGCPolicy = NoGC
-    >
+        typename SnapshotGCPolicy = NoGC>
     class Petika {
     public:
         using key_type = typename Engine::key_type;
@@ -535,19 +570,20 @@ namespace petika {
         // stay if-constexpr-detected because not every engine provides them.
         // ------------------------------------------------------------------------
         static_assert(StorageEngine<Engine, key_type, value_type>,
-            "Petika Engine must satisfy the StorageEngine concept "
-            "(put/get/erase/contains/size/empty/clear/apply_log_record returning Result<T>).");
+                      "Petika Engine must satisfy the StorageEngine concept "
+                      "(put/get/erase/contains/size/empty/clear/apply_log_record returning Result<T>).");
         static_assert(SerializerFor<Serializer, key_type, value_type>,
-            "Petika Serializer must satisfy SerializerFor<Serializer, Key, Value> "
-            "(serialize_key/value + deserialize_key/value).");
+                      "Petika Serializer must satisfy SerializerFor<Serializer, Key, Value> "
+                      "(serialize_key/value + deserialize_key/value).");
         static_assert(MutexPolicy<ConcurrencyPolicy> ||
                       requires(ConcurrencyPolicy& m) { m.lock(); m.unlock(); m.lock_shared(); m.unlock_shared(); },
-            "Petika ConcurrencyPolicy must provide lock/unlock/lock_shared/unlock_shared "
-            "(std::shared_mutex or NullMutex satisfy this).");
+                      "Petika ConcurrencyPolicy must provide lock/unlock/lock_shared/unlock_shared "
+                      "(std::shared_mutex or NullMutex satisfy this).");
         static_assert(SnapshotGCPolicyConcept<SnapshotGCPolicy>,
-            "Petika SnapshotGCPolicy must satisfy SnapshotGCPolicyConcept "
-            "(min_snapshot_lsn/register_snapshot/release_snapshot). Use NoGC or EpochBasedGC.");
-        static_assert(WriteBufferPolicy<WriteBuffer, typename Transaction<Petika>::Mutation> || WriteBuffer::is_immediate,
+                      "Petika SnapshotGCPolicy must satisfy SnapshotGCPolicyConcept "
+                      "(min_snapshot_lsn/register_snapshot/release_snapshot). Use NoGC or EpochBasedGC.");
+        static_assert(
+            WriteBufferPolicy<WriteBuffer, typename Transaction<Petika>::Mutation> || WriteBuffer::is_immediate,
             "Petika WriteBuffer must be ImmediateCommitPolicy or GroupCommitPolicy<N>.");
 
         explicit Petika(PetikaOptions opts = PetikaOptions{})
@@ -583,6 +619,7 @@ namespace petika {
                 std::ignore = flush_write_buffer();
             }
         }
+
         Petika(const Petika&) = delete;
         Petika& operator=(const Petika&) = delete;
         Petika(Petika&&) noexcept = default;
@@ -639,14 +676,16 @@ namespace petika {
             if (!bloom_.maybe_contains(key)) return std::unexpected(StorageError::NotFound);
             if constexpr (requires(const Engine& engine, const key_type& k, nitya::lsn_t at) {
                 { engine.get_at(k, at) } -> std::same_as<Result<value_type>>;
-            }) return engine_.get_at(key, lsn);
+            })
+                return engine_.get_at(key, lsn);
             else return engine_.get(key);
         }
 
         [[nodiscard]] nitya::lsn_t version_at(const key_type& key, const nitya::lsn_t lsn) const {
             if constexpr (requires(const Engine& engine, const key_type& k, nitya::lsn_t at) {
                 { engine.version_at(k, at) } -> std::same_as<nitya::lsn_t>;
-            }) return engine_.version_at(key, lsn);
+            })
+                return engine_.version_at(key, lsn);
             else return 0;
         }
 
@@ -715,7 +754,9 @@ namespace petika {
             records.reserve(mutations.size());
             for (const auto& m : mutations) {
                 records.push_back(WalPayloadCodec::encode(m.op, Serializer::serialize_key(m.key),
-                    m.op == EntryOp::Put ? Serializer::serialize_value(m.value) : std::string{}));
+                                                          m.op == EntryOp::Put
+                                                              ? Serializer::serialize_value(m.value)
+                                                              : std::string{}));
             }
             auto envelope = WalPayloadCodec::encode_batch(records);
 
@@ -837,7 +878,9 @@ namespace petika {
                     for (const auto& m : mutations) {
                         if (m.op == EntryOp::Put) bloom_.insert(m.key);
                     }
-                    ++replayed; manifest_.last_lsn = rec.lsn; continue;
+                    ++replayed;
+                    manifest_.last_lsn = rec.lsn;
+                    continue;
                 }
                 // Non-batch record: parse with the single-record decoder.
                 auto parsed = WalPayloadCodec::decode(rec.payload);
@@ -850,9 +893,11 @@ namespace petika {
                 if (op == EntryOp::Put) {
                     key = Serializer::deserialize_key(k_sv);
                     val = Serializer::deserialize_value(v_sv);
-                } else if (op == EntryOp::Delete) {
+                }
+                else if (op == EntryOp::Delete) {
                     key = Serializer::deserialize_key(k_sv);
-                } else if (op == EntryOp::Clear) {
+                }
+                else if (op == EntryOp::Clear) {
                     bloom_.reset();
                 }
 
@@ -894,7 +939,10 @@ namespace petika {
 
         // Staging type for GroupCommit; empty for the immediate fast path.
         template <typename W>
-        struct buffer_of { using type = std::monostate; };
+        struct buffer_of {
+            using type = std::monostate;
+        };
+
         template <std::size_t N>
         struct buffer_of<GroupCommitPolicy<N>> {
             using type = typename GroupCommitPolicy<N>::template staging<mutation_type>;
@@ -973,8 +1021,8 @@ namespace petika {
                                           Comparator>;
 
     using SingleVersionStringSkipStore = Petika<JournaledSkipEngine<std::string, std::string, LexicalComparator>,
-                                                 StringSerializer,
-                                                 LexicalComparator>;
+                                                StringSerializer,
+                                                LexicalComparator>;
 
     template <typename Key, typename Value, typename Comparator = LexicalComparator>
     using MvccSkipStore = Petika<MvccJournaledSkipEngine<Key, Value, Comparator>,
@@ -1039,5 +1087,4 @@ namespace petika {
                               nitya::nadi_telemetry,
                               std::shared_mutex,
                               ImmediateCommitPolicy>;
-
 } // namespace petika

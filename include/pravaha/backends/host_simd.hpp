@@ -11,7 +11,10 @@
 #include <hwy/highway.h>
 #include <hwy/aligned_allocator.h>
 #include <hwy/contrib/math/math-inl.h>  // hn::Sin/Cos/Exp/Log for math-tag SIMD
-namespace pravaha::backends { namespace lithe = ::vakya; }
+
+namespace pravaha::backends {
+    namespace lithe = ::vakya;
+}
 
 // ============================================================================
 // Part 2: simd_detail — fused element-wise / reduction kernels (Highway)

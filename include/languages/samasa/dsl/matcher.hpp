@@ -13,7 +13,6 @@
 #include "../core/result.hpp"
 
 namespace lang::samasa {
-
     // MatcherContext concept — required by parse_context but not directly imported
     // here to keep this header lean. Users can substitute any type providing:
     //   - events() -> event_stream<SK>&
@@ -34,5 +33,4 @@ namespace lang::samasa {
     concept matcher = MatcherContext<Ctx> && requires(const M& m, Ctx& ctx) {
         { m.match(ctx) };
     };
-
 } // namespace lang::samasa

@@ -1,22 +1,26 @@
 # Manas — ML + Neural Cognition Library
 
 Full-stack C++23/26 machine learning library. Three pillars:
+
 1. **Classical ML** (`manas/ml/`) — SVM, KMeans, KNN, linear models, decision trees, random forests, naive Bayes, PCA
 2. **Deep Learning** (`manas/nn/`) — reverse-mode autodiff, layers, optimizers, loss functions
 3. **Evolutionary NN** (`manas/`) — genetically encoded neural brains for digital organisms
 
 ## Design Principles
+
 - Header-only, zero-overhead
 - No virtual functions, no macros
 - Policy-based design — swap kernel / criterion / activation / optimizer at compile time
 - C++23 concepts enforce interfaces
-- Reuses pebble internals: `ts::tensor` (gemm/SIMD), `containers::dynamic::SmallVector` (SBO), `pravaha::parallel_for_eager` (batch parallelism), `ga::Dual` (forward autodiff)
+- Reuses pebble internals: `ts::tensor` (gemm/SIMD), `containers::dynamic::SmallVector` (SBO),
+  `pravaha::parallel_for_eager` (batch parallelism), `ga::Dual` (forward autodiff)
 
 ---
 
 ## Classical ML (`include/manas/ml/`)
 
 ### Linear Models
+
 ```cpp
 #include <manas/ml/ml.hpp>
 using namespace manas::ml;
@@ -35,6 +39,7 @@ auto probs   = lr.predict_proba(X_test);
 ```
 
 ### SVM
+
 ```cpp
 // Policy: LinearKernel | PolynomialKernel | RBFKernel | SigmoidKernel
 SVM<RBFKernel> svm(/*C=*/1.0f, /*tol=*/1e-3f, /*max_iter=*/1000, RBFKernel{0.5f});
@@ -47,6 +52,7 @@ auto n_sv   = svm.n_support_vectors();
 SMO (Sequential Minimal Optimization) training.
 
 ### K-Means
+
 ```cpp
 // Policy: RandomInit | KMeansPPInit
 KMeans<KMeansPPInit> km(/*k=*/3, /*max_iter=*/300, /*tol=*/1e-4f, /*seed=*/42);
@@ -60,6 +66,7 @@ auto assign  = km.predict(X_test);
 Lloyd's algorithm + optional KMeans++ init.
 
 ### KNN
+
 ```cpp
 // Policy: L2Distance | L1Distance
 KNNClassifier<L2Distance> knn(/*k=*/5);
@@ -69,6 +76,7 @@ auto pred = knn.predict(X_test);
 ```
 
 ### Naive Bayes
+
 ```cpp
 GaussianNaiveBayes gnb(/*var_smoothing=*/1e-9f);
 gnb.fit(X, y);
@@ -77,6 +85,7 @@ auto proba   = gnb.predict_proba(X_test);
 ```
 
 ### Decision Trees
+
 ```cpp
 // CriterionPolicy: GiniCriterion | EntropyCriterion | MSECriterion
 DecisionTreeClassifier dt(/*max_depth=*/10, /*min_samples_split=*/2, /*min_samples_leaf=*/1);
@@ -88,6 +97,7 @@ auto pred = dt.predict(X_test);
 CART algorithm with Gini / Entropy / MSE impurity.
 
 ### Random Forest
+
 ```cpp
 // FeatPolicy: SqrtFeatures | LogFeatures | AllFeatures
 RandomForestClassifier rf(/*n_trees=*/100, /*max_depth=*/8, /*min_split=*/2, /*seed=*/42);
@@ -100,6 +110,7 @@ auto n    = rf.n_estimators();
 Bootstrap + feature subsampling. Parallel tree training via `pravaha::parallel_for_eager`.
 
 ### PCA
+
 ```cpp
 PCA pca(/*n_components=*/10);
 pca.fit(X);
@@ -112,6 +123,7 @@ auto expl_var    = pca.explained_variance();
 Power iteration deflation for top-k eigenvectors.
 
 ### Concepts & Kernels
+
 ```cpp
 // Compile-time enforcement
 static_assert(manas::ml::Estimator<LinearRegression<>>);
@@ -129,6 +141,7 @@ SigmoidKernel     {alpha, beta}   // k(a,b) = tanh(α·dot+β)
 ## Deep Learning (`include/manas/nn/`)
 
 ### Reverse-Mode Autodiff
+
 ```cpp
 #include <manas/nn/nn.hpp>
 using namespace manas::nn;
@@ -156,6 +169,7 @@ y.grad();  // tensor holding dy
 **Activations**: `relu`, `sigmoid`, `tanh_op`, `gelu`, `softmax`, `log_softmax`, `elu`, `leaky_relu`
 
 ### Initializers
+
 ```cpp
 ZerosInit{}({shape})
 OnesInit{}({shape})
@@ -169,6 +183,7 @@ OrthogonalInit{gain, seed}({n, m})    // Gram-Schmidt QR
 ### Layers
 
 #### Dense
+
 ```cpp
 // ActPolicy: ActivationNone | ActivationReLU | ActivationSigmoid
 //            ActivationTanh | ActivationGELU | ActivationSoftmax
@@ -179,24 +194,28 @@ auto params = layer.parameters();      // ParamList = SmallVector<Parameter*>
 ```
 
 #### BatchNorm1D
+
 ```cpp
 BatchNorm1D bn(num_features, /*eps=*/1e-5f, /*momentum=*/0.1f);
 auto y = bn.forward(x, training);     // full forward + backward (gamma, beta, x)
 ```
 
 #### LayerNorm
+
 ```cpp
 LayerNorm ln(normalized_shape, eps);
 auto y = ln.forward(x, training);
 ```
 
 #### Dropout
+
 ```cpp
 Dropout drop(/*p=*/0.5f, /*seed=*/42);
 auto y = drop.forward(x, training);   // inverted dropout, identity in eval mode
 ```
 
 #### Embedding
+
 ```cpp
 Embedding emb(vocab_size, embed_dim);
 // x: [N] integer indices as float -> [N, embed_dim]
@@ -204,6 +223,7 @@ auto y = emb.forward(x_indices, training);
 ```
 
 ### Loss Functions
+
 ```cpp
 mse_loss(pred, target)         // mean squared error
 mae_loss(pred, target)         // mean absolute error
@@ -218,6 +238,7 @@ kl_div_loss(log_p, q)          // KL divergence
 All return scalar `TensorVar`, fully differentiable.
 
 ### Optimizers
+
 ```cpp
 // ClipPolicy: NoClip | GlobalNormClip{max_norm}
 SGD<>     sgd(lr, momentum=0.0f, nesterov=false, weight_decay=0.0f);
@@ -235,6 +256,7 @@ sgd.step(params);
 ```
 
 ### Sequential Model
+
 ```cpp
 Sequential net;
 net.add(Dense<ActivationReLU>(784, 256, true, "fc1"))

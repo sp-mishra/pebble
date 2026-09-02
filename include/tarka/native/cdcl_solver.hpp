@@ -54,7 +54,7 @@ namespace tarka::native {
         std::uint16_t lbd = 0;
         float activity = 0.0f;
         std::uint8_t tier = 0; // 0=core (kept), 1=mid, 2=local (first to be dropped)
-        bool used = false;     // touched as a reason since last reduce — protects one round
+        bool used = false; // touched as a reason since last reduce — protects one round
     };
 
     // Watch-list entry: the watched clause plus a *blocking literal* — a cached
@@ -129,9 +129,15 @@ namespace tarka::native {
             }
             tmp_.resize(j);
 
-            if (tmp_.empty()) { unsat_ = true; return false; }
+            if (tmp_.empty()) {
+                unsat_ = true;
+                return false;
+            }
             if (tmp_.size() == 1) {
-                if (!enqueue(tmp_[0], kNullClause)) { unsat_ = true; return false; }
+                if (!enqueue(tmp_[0], kNullClause)) {
+                    unsat_ = true;
+                    return false;
+                }
                 return true;
             }
 
@@ -259,12 +265,26 @@ namespace tarka::native {
         // ---------------------------------------------------------------------
 
         void reset() {
-            assign_.clear(); reason_.clear(); level_.clear(); activity_.clear();
-            phase_.clear(); watches_.clear(); clauses_.clear(); lits_.clear();
-            trail_.clear(); trail_lim_.clear(); pending_theory_.clear(); unsat_core_.clear();
-            qhead_ = 0; unsat_ = false; restart_count_ = 0; var_inc_ = 1.0;
-            order_heap_.clear(); heap_built_ = false;
-            lbd_ema_fast_ = lbd_ema_slow_ = 0.0; lbd_ema_count_ = 0;
+            assign_.clear();
+            reason_.clear();
+            level_.clear();
+            activity_.clear();
+            phase_.clear();
+            watches_.clear();
+            clauses_.clear();
+            lits_.clear();
+            trail_.clear();
+            trail_lim_.clear();
+            pending_theory_.clear();
+            unsat_core_.clear();
+            qhead_ = 0;
+            unsat_ = false;
+            restart_count_ = 0;
+            var_inc_ = 1.0;
+            order_heap_.clear();
+            heap_built_ = false;
+            lbd_ema_fast_ = lbd_ema_slow_ = 0.0;
+            lbd_ema_count_ = 0;
         }
 
     private:
@@ -273,6 +293,7 @@ namespace tarka::native {
         // vector so priorities update in place while vars sit in the heap.
         struct activity_order {
             const std::vector<double>* act = nullptr;
+
             [[nodiscard]] bool operator()(std::uint32_t a, std::uint32_t b) const noexcept {
                 return (*act)[a] > (*act)[b];
             }
@@ -382,7 +403,10 @@ namespace tarka::native {
             for (std::size_t ci = 0; ci < clauses_.size(); ++ci) {
                 ClauseHeader& h = clauses_[ci];
                 if (h.deleted || !h.learnt || h.tier != 2 || h.size <= 2) continue;
-                if (h.used) { h.used = false; continue; } // reprieve one round
+                if (h.used) {
+                    h.used = false;
+                    continue;
+                } // reprieve one round
                 candidates.push_back(ClauseRef{static_cast<std::uint32_t>(ci)});
             }
             if (candidates.size() <= 100) return;
@@ -502,7 +526,10 @@ namespace tarka::native {
                     const Watch w = ws[i++];
                     // Blocking-literal fast path: if the cached blocker is already
                     // satisfied the clause is too — keep the watch, skip the deref.
-                    if (value(w.blocker) == LBool::True) { ws[j++] = w; continue; }
+                    if (value(w.blocker) == LBool::True) {
+                        ws[j++] = w;
+                        continue;
+                    }
 
                     const ClauseRef cr = w.cr;
                     if (clauses_[clause_index(cr)].deleted) continue;
@@ -511,7 +538,10 @@ namespace tarka::native {
                     if (ls[0] == falsified) std::swap(ls[0], ls[1]);
                     const Lit other = ls[0];
                     // if ls[0] true, clause satisfied — keep watch, refresh blocker
-                    if (value(other) == LBool::True) { ws[j++] = Watch{cr, other}; continue; }
+                    if (value(other) == LBool::True) {
+                        ws[j++] = Watch{cr, other};
+                        continue;
+                    }
                     // look for a new watch among ls[2..]
                     bool moved = false;
                     for (std::size_t k = 2; k < ls.size(); ++k) {
@@ -564,7 +594,8 @@ namespace tarka::native {
                         bump_var(v);
                         if (level_[vi] >= decision_level()) {
                             ++path_count;
-                        } else {
+                        }
+                        else {
                             analyze_tmp_.push_back(q);
                         }
                     }
@@ -575,7 +606,8 @@ namespace tarka::native {
                 reason = reason_[var_index(lit_var(p))];
                 (void)seen_set_.remove(var_index(lit_var(p)));
                 --path_count;
-            } while (path_count > 0);
+            }
+            while (path_count > 0);
 
             // asserting literal is ¬p (the UIP)
             analyze_tmp_[0] = lit_neg(p);
@@ -585,7 +617,10 @@ namespace tarka::native {
             std::size_t max_i = 1;
             for (std::size_t i = 1; i < analyze_tmp_.size(); ++i) {
                 const std::uint32_t lv = level_[var_index(lit_var(analyze_tmp_[i]))];
-                if (lv > bj) { bj = lv; max_i = i; }
+                if (lv > bj) {
+                    bj = lv;
+                    max_i = i;
+                }
             }
             if (analyze_tmp_.size() > 1) std::swap(analyze_tmp_[1], analyze_tmp_[max_i]);
 
@@ -594,7 +629,8 @@ namespace tarka::native {
             // asserting literal is unassigned after backjump — enqueue cannot conflict
             if (analyze_tmp_.size() == 1) {
                 (void)enqueue(analyze_tmp_[0], kNullClause);
-            } else {
+            }
+            else {
                 const ClauseRef cr = alloc_clause(analyze_tmp_, /*learnt=*/true);
                 attach_watches(cr);
                 update_lbd_ema(clauses_[clause_index(cr)].lbd);
@@ -608,7 +644,8 @@ namespace tarka::native {
             const double x = static_cast<double>(lbd);
             if (lbd_ema_count_ == 0) {
                 lbd_ema_fast_ = lbd_ema_slow_ = x;
-            } else {
+            }
+            else {
                 lbd_ema_fast_ += kEmaFastAlpha * (x - lbd_ema_fast_);
                 lbd_ema_slow_ += kEmaSlowAlpha * (x - lbd_ema_slow_);
             }
@@ -739,7 +776,11 @@ namespace tarka::native {
             std::uint64_t k = 1;
             while (true) {
                 if (i == (k << 1u) - 1u) return k;
-                if (i < (k << 1u) - 1u) { i = i - ((k) - 1u); k = 1; continue; }
+                if (i < (k << 1u) - 1u) {
+                    i = i - ((k) - 1u);
+                    k = 1;
+                    continue;
+                }
                 k <<= 1u;
             }
         }

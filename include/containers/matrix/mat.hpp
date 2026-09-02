@@ -25,21 +25,23 @@
 #include <variant>
 
 namespace ga {
-
     // -----------------------------------------------------------------------
     // Tag types for forced construction
     // -----------------------------------------------------------------------
-    struct dense_tag  {};
+    struct dense_tag {};
+
     struct sparse_tag {};
+
     struct banded_tag {
         std::size_t bandwidth{1};
     };
+
     struct static_tag {};
 
     // -----------------------------------------------------------------------
     // MatSelectionPolicy concept
     // -----------------------------------------------------------------------
-    template<typename P>
+    template <typename P>
     concept MatSelectionPolicy = requires(std::size_t r, std::size_t c, float density_hint) {
         { P::select(r, c, density_hint) } -> std::same_as<ga::MatKind>;
     };
@@ -48,17 +50,17 @@ namespace ga {
     // Thresholds — configurable per translation unit
     // -----------------------------------------------------------------------
     struct Thresholds {
-        std::size_t static_max{16};       // R*C <= this → Static
-        float       dense_min_density{0.1f}; // density > this → Dense
+        std::size_t static_max{16}; // R*C <= this → Static
+        float dense_min_density{0.1f}; // density > this → Dense
     };
 
     // -----------------------------------------------------------------------
     // SelectionPolicy<Thresholds> — default policy with tunable thresholds
     // -----------------------------------------------------------------------
-    template<Thresholds TH = Thresholds{}>
+    template <Thresholds TH = Thresholds{}>
     struct SelectionPolicy {
         static constexpr MatKind select(std::size_t r, std::size_t c,
-                                         float density_hint) noexcept {
+                                        float density_hint) noexcept {
             if (r * c <= TH.static_max) return MatKind::Static;
             if (density_hint > TH.dense_min_density) return MatKind::Dense;
             return MatKind::Sparse;
@@ -70,7 +72,7 @@ namespace ga {
     // -----------------------------------------------------------------------
     // MatAdaptorPolicy concept
     // -----------------------------------------------------------------------
-    template<typename AP, typename T>
+    template <typename AP, typename T>
     concept MatAdaptorPolicy = requires(const MatUsageStats& stats) {
         { AP::should_convert(stats) } -> std::same_as<std::optional<MatKind>>;
     };
@@ -101,32 +103,37 @@ namespace ga {
     // -----------------------------------------------------------------------
     // ga::Mat<T, CP, SP, AP> — unified matrix type
     // -----------------------------------------------------------------------
-    template<typename T,
-             typename CP = ts::DefaultComputationPolicy,
-             typename SP = ts::DefaultStoragePolicy,
-             typename SelectPolicy = DefaultSelectionPolicy,
-             typename AdaptPolicy  = NoAdaptorPolicy>
+    template <typename T,
+              typename CP = ts::DefaultComputationPolicy,
+              typename SP = ts::DefaultStoragePolicy,
+              typename SelectPolicy = DefaultSelectionPolicy,
+              typename AdaptPolicy = NoAdaptorPolicy>
     class Mat {
     public:
         using value_type = T;
         using computation_policy = CP;
-        using storage_policy     = SP;
+        using storage_policy = SP;
 
         // Underlying storage types
-        using DenseT   = Matrix<T, SP, CP>;
-        using SparseT  = CsrMatrix<T>;
-        using DiaT     = DiaMatrix<T>;
-        using Storage  = std::variant<DenseT, SparseT, DiaT>;
+        using DenseT = Matrix<T, SP, CP>;
+        using SparseT = CsrMatrix<T>;
+        using DiaT = DiaMatrix<T>;
+        using Storage = std::variant<DenseT, SparseT, DiaT>;
 
         // Proxy for element access: dense allows mutation, sparse allows only read
         struct ElemProxy {
-            Mat&        mat;
+            Mat& mat;
             std::size_t r, c;
+
             operator T() const {
                 return static_cast<const Mat&>(mat).operator()(r, c);
             }
+
             ElemProxy& operator=(T val) {
-                if (auto* p = std::get_if<DenseT>(&mat.storage_)) { (*p)(r,c) = val; return *this; }
+                if (auto* p = std::get_if<DenseT>(&mat.storage_)) {
+                    (*p)(r, c) = val;
+                    return *this;
+                }
                 throw std::runtime_error("Mat: mutable element access requires Dense storage");
             }
         };
@@ -143,9 +150,11 @@ namespace ga {
         Mat(std::size_t rows, std::size_t cols, dense_tag) {
             storage_ = DenseT(rows, cols);
         }
+
         Mat(std::size_t rows, std::size_t cols, sparse_tag) {
             storage_ = SparseT(rows, cols);
         }
+
         Mat(std::size_t rows, std::size_t cols, banded_tag tag) {
             std::vector<std::ptrdiff_t> offsets;
             for (std::ptrdiff_t k = -static_cast<std::ptrdiff_t>(tag.bandwidth);
@@ -155,24 +164,26 @@ namespace ga {
         }
 
         // Construct from existing types
-        explicit Mat(DenseT  m) : storage_(std::move(m)) {}
+        explicit Mat(DenseT m) : storage_(std::move(m)) {}
         explicit Mat(SparseT m) : storage_(std::move(m)) {}
-        explicit Mat(DiaT    m) : storage_(std::move(m)) {}
+        explicit Mat(DiaT m) : storage_(std::move(m)) {}
 
         // ---- Dimension queries -----------------------------------------------
 
         [[nodiscard]] std::size_t rows() const noexcept {
             return std::visit([](const auto& m) -> std::size_t { return m.rows(); }, storage_);
         }
+
         [[nodiscard]] std::size_t cols() const noexcept {
             return std::visit([](const auto& m) -> std::size_t { return m.cols(); }, storage_);
         }
+
         [[nodiscard]] MatKind kind() const noexcept {
             return std::visit([](const auto& m) -> MatKind {
                 using M = std::decay_t<decltype(m)>;
-                if constexpr (std::is_same_v<M, DenseT>)  return MatKind::Dense;
+                if constexpr (std::is_same_v<M, DenseT>) return MatKind::Dense;
                 if constexpr (std::is_same_v<M, SparseT>) return MatKind::Sparse;
-                if constexpr (std::is_same_v<M, DiaT>)    return MatKind::Diagonal;
+                if constexpr (std::is_same_v<M, DiaT>) return MatKind::Diagonal;
                 return MatKind::Dense;
             }, storage_);
         }
@@ -196,13 +207,13 @@ namespace ga {
         }
 
         // ---- Dense / sparse access ------------------------------------------
-        [[nodiscard]] DenseT*  as_dense()  { return std::get_if<DenseT>(&storage_); }
+        [[nodiscard]] DenseT* as_dense() { return std::get_if<DenseT>(&storage_); }
         [[nodiscard]] SparseT* as_sparse() { return std::get_if<SparseT>(&storage_); }
-        [[nodiscard]] DiaT*    as_dia()    { return std::get_if<DiaT>(&storage_); }
+        [[nodiscard]] DiaT* as_dia() { return std::get_if<DiaT>(&storage_); }
 
-        [[nodiscard]] const DenseT*  as_dense()  const { return std::get_if<DenseT>(&storage_); }
+        [[nodiscard]] const DenseT* as_dense() const { return std::get_if<DenseT>(&storage_); }
         [[nodiscard]] const SparseT* as_sparse() const { return std::get_if<SparseT>(&storage_); }
-        [[nodiscard]] const DiaT*    as_dia()    const { return std::get_if<DiaT>(&storage_); }
+        [[nodiscard]] const DiaT* as_dia() const { return std::get_if<DiaT>(&storage_); }
 
         // ---- Adaptation (explicit, caller-driven) ----------------------------
 
@@ -228,8 +239,8 @@ namespace ga {
         const MatUsageStats& usage_stats() const noexcept { return usage_; }
 
     private:
-        Storage            storage_;
-        MatUsageStats      usage_;
+        Storage storage_;
+        MatUsageStats usage_;
 
         void construct_kind(MatKind kind, std::size_t rows, std::size_t cols) {
             switch (kind) {
@@ -258,7 +269,7 @@ namespace ga {
                     // CSR → Dense
                     DenseT dense(sp->nrows, sp->ncols, T{0});
                     for (std::size_t i = 0; i < sp->nrows; ++i)
-                        for (std::size_t jj = sp->row_ptr[i]; jj < sp->row_ptr[i+1]; ++jj)
+                        for (std::size_t jj = sp->row_ptr[i]; jj < sp->row_ptr[i + 1]; ++jj)
                             dense(i, sp->col_idx[jj]) = sp->values[jj];
                     storage_ = std::move(dense);
                 }
@@ -266,11 +277,12 @@ namespace ga {
                     auto csr = dia->to_csr();
                     DenseT dense(csr.nrows, csr.ncols, T{0});
                     for (std::size_t i = 0; i < csr.nrows; ++i)
-                        for (std::size_t jj = csr.row_ptr[i]; jj < csr.row_ptr[i+1]; ++jj)
+                        for (std::size_t jj = csr.row_ptr[i]; jj < csr.row_ptr[i + 1]; ++jj)
                             dense(i, csr.col_idx[jj]) = csr.values[jj];
                     storage_ = std::move(dense);
                 }
-            } else if (target == MatKind::Sparse) {
+            }
+            else if (target == MatKind::Sparse) {
                 if (auto* dp = std::get_if<DenseT>(&storage_)) {
                     storage_ = dense_to_csr(*dp);
                 }
@@ -281,11 +293,10 @@ namespace ga {
     // -----------------------------------------------------------------------
     // ga::inspect overload for ga::Mat
     // -----------------------------------------------------------------------
-    template<typename T, typename CP, typename SP, typename SelP, typename AdP>
-    [[nodiscard]] MatInfo inspect(const Mat<T,CP,SP,SelP,AdP>& m) noexcept {
+    template <typename T, typename CP, typename SP, typename SelP, typename AdP>
+    [[nodiscard]] MatInfo inspect(const Mat<T, CP, SP, SelP, AdP>& m) noexcept {
         return m.info();
     }
-
 } // namespace ga
 
 #endif // PEBBLE_CONTAINERS_MATRIX_MAT_HPP

@@ -39,30 +39,29 @@
 #include "limits.hpp"
 
 namespace lang::samasa {
-
     // ---- Allocation policy tags --------------------------------------------
 
-    struct fixed_buffer_policy  {};   // std::array-backed, capacity-checked
-    struct arena_buffer_policy  {};   // bump arena owned by caller
-    struct dynamic_buffer_policy {};  // std::vector/pmr (runtime default)
+    struct fixed_buffer_policy {}; // std::array-backed, capacity-checked
+    struct arena_buffer_policy {}; // bump arena owned by caller
+    struct dynamic_buffer_policy {}; // std::vector/pmr (runtime default)
 
     // ---- parse_options -----------------------------------------------------
 
     struct parse_options {
         limits budget;
-        bool   preserve_trivia = true;
-        bool   build_red_tree  = false; // red_tree<SK>::build(output.tree) on demand
+        bool preserve_trivia = true;
+        bool build_red_tree = false; // red_tree<SK>::build(output.tree) on demand
     };
 
     // ---- parse_output<SK,TK> — runtime, heap/arena -------------------------
 
     template <class SyntaxKind, class TokenKind>
     struct parse_output {
-        green_tree<SyntaxKind>              tree;
-        token_buffer<TokenKind>             tokens;
-        lang::collecting_sink<diagnostic>   diagnostics;
-        lang::parse_tree_stats              stats;
-        bool                                success = false;
+        green_tree<SyntaxKind> tree;
+        token_buffer<TokenKind> tokens;
+        lang::collecting_sink<diagnostic> diagnostics;
+        lang::parse_tree_stats stats;
+        bool success = false;
     };
 
     // ---- static_parse_event<SK> — one record in the compile-time event log --
@@ -72,10 +71,10 @@ namespace lang::samasa {
 
     template <class SyntaxKind>
     struct static_parse_event {
-        event_kind    kind        = event_kind::tombstone;
-        SyntaxKind    node_kind   = {};         // begin_node / end_node: syntax kind
-        std::uint32_t token_index = 0;          // token event: index into token array
-        byte_span     span        = {};          // end_node / error: byte span
+        event_kind kind = event_kind::tombstone;
+        SyntaxKind node_kind = {}; // begin_node / end_node: syntax kind
+        std::uint32_t token_index = 0; // token event: index into token array
+        byte_span span = {}; // end_node / error: byte span
     };
 
     // ---- static_token_buffer<TK, MaxTokens, MaxTrivia> ---------------------
@@ -85,7 +84,7 @@ namespace lang::samasa {
     template <class TK, std::uint32_t MaxTokens, std::uint32_t MaxTrivia = MaxTokens * 2>
     struct static_token_buffer {
         containers::static_vector<token<TK>, MaxTokens> tokens;
-        containers::static_vector<trivia,    MaxTrivia>  trivia_entries;
+        containers::static_vector<trivia, MaxTrivia> trivia_entries;
 
         [[nodiscard]] constexpr bool push_token(token<TK> t) noexcept {
             return tokens.push_back(t);
@@ -98,6 +97,7 @@ namespace lang::samasa {
         [[nodiscard]] constexpr std::uint32_t size() const noexcept {
             return static_cast<std::uint32_t>(tokens.size());
         }
+
         [[nodiscard]] constexpr bool overflow() const noexcept {
             return tokens.overflow() || trivia_entries.overflow();
         }
@@ -135,6 +135,7 @@ namespace lang::samasa {
         [[nodiscard]] constexpr std::uint32_t size() const noexcept {
             return static_cast<std::uint32_t>(diagnostics.size());
         }
+
         [[nodiscard]] constexpr bool overflow() const noexcept { return diagnostics.overflow(); }
     };
 
@@ -147,18 +148,17 @@ namespace lang::samasa {
     template <class SyntaxKind, class TokenKind,
               std::uint32_t MaxTokens = 4096,
               std::uint32_t MaxEvents = 4096,
-              std::uint32_t MaxDiags  = 256>
+              std::uint32_t MaxDiags = 256>
     struct static_parse_output {
-        std::array<token<TokenKind>,                MaxTokens> tokens{};
-        std::uint32_t                                          token_count = 0;
+        std::array<token<TokenKind>, MaxTokens> tokens{};
+        std::uint32_t token_count = 0;
         // Full CST event log (begin/end/token/error). Canonical name going forward.
         // Template parameter MaxEvents controls array capacity.
         std::array<static_parse_event<SyntaxKind>, MaxEvents> events{};
-        std::uint32_t                                          event_count = 0;
+        std::uint32_t event_count = 0;
         // Diagnostics
-        std::array<diagnostic,                     MaxDiags>  diagnostics{};
-        std::uint32_t                                          diag_count  = 0;
-        bool                                                   success = false;
+        std::array<diagnostic, MaxDiags> diagnostics{};
+        std::uint32_t diag_count = 0;
+        bool success = false;
     };
-
 } // namespace lang::samasa

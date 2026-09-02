@@ -56,17 +56,16 @@
 #include <vector>
 
 namespace lang {
-
     // =========================================================================
     // import_spec — one import statement
     // =========================================================================
 
     struct import_spec {
-        std::string    module_name;
-        version_triple min_version{0, 0, 0};        // version constraint lower bound
-        version_triple max_version{255, 255, 255};   // version constraint upper bound
-        std::uint64_t  required_capabilities = 0;   // capability gate (0 = no gate)
-        bool           is_optional = false;          // if true, not-found is a warning
+        std::string module_name;
+        version_triple min_version{0, 0, 0}; // version constraint lower bound
+        version_triple max_version{255, 255, 255}; // version constraint upper bound
+        std::uint64_t required_capabilities = 0; // capability gate (0 = no gate)
+        bool is_optional = false; // if true, not-found is a warning
     };
 
     // =========================================================================
@@ -74,9 +73,9 @@ namespace lang {
     // =========================================================================
 
     struct resolved_import {
-        module_descriptor           desc;
-        std::vector<symbol_entry>   exported_symbols; // symbols flowing into importer
-        bool                        was_cached = false;
+        module_descriptor desc;
+        std::vector<symbol_entry> exported_symbols; // symbols flowing into importer
+        bool was_cached = false;
     };
 
     // =========================================================================
@@ -85,12 +84,13 @@ namespace lang {
 
     struct import_error_kind {
         enum class kind : std::uint8_t {
-            not_found,           // LANG-IMP-001
-            resolution_failed,   // LANG-IMP-002
-            circular,            // LANG-IMP-003
-            version_mismatch,    // LANG-IMP-004
+            not_found, // LANG-IMP-001
+            resolution_failed, // LANG-IMP-002
+            circular, // LANG-IMP-003
+            version_mismatch, // LANG-IMP-004
             capability_mismatch, // LANG-IMP-005
         };
+
         kind value = kind::not_found;
 
         constexpr import_error_kind() = default;
@@ -98,10 +98,10 @@ namespace lang {
 
         [[nodiscard]] static constexpr std::string_view to_code(import_error_kind k) noexcept {
             switch (k.value) {
-            case kind::not_found:           return "LANG-IMP-001";
-            case kind::resolution_failed:   return "LANG-IMP-002";
-            case kind::circular:            return "LANG-IMP-003";
-            case kind::version_mismatch:    return "LANG-IMP-004";
+            case kind::not_found: return "LANG-IMP-001";
+            case kind::resolution_failed: return "LANG-IMP-002";
+            case kind::circular: return "LANG-IMP-003";
+            case kind::version_mismatch: return "LANG-IMP-004";
             case kind::capability_mismatch: return "LANG-IMP-005";
             }
             return "LANG-IMP-000";
@@ -112,9 +112,9 @@ namespace lang {
 
     struct import_error {
         import_error_kind kind;
-        std::string       module_name;
-        std::string       message;
-        std::string       code;
+        std::string module_name;
+        std::string message;
+        std::string code;
     };
 
     using import_diagnostic = lang_diagnostic<import_error_kind>;
@@ -147,9 +147,9 @@ namespace lang {
         }
 
         struct resolve_result {
-            std::vector<std::string>   compile_order; // topo-sorted (importees first)
+            std::vector<std::string> compile_order; // topo-sorted (importees first)
             std::vector<resolved_import> resolved;
-            std::vector<import_error>  errors;
+            std::vector<import_error> errors;
             std::vector<import_diagnostic> diagnostics;
 
             [[nodiscard]] bool ok() const noexcept { return errors.empty(); }
@@ -191,39 +191,39 @@ namespace lang {
                 std::vector<std::string> path;
                 bool found_cycle = false;
 
-                std::function<void(const std::string&)> dfs =
+                std::function < void(const std::string &) > dfs =
                     [&](const std::string& n) {
-                    if (found_cycle) return;
-                    color[n] = 1;
-                    path.push_back(n);
-                    if (auto it = adj.find(n); it != adj.end()) {
-                        for (const auto& dep : it->second) {
-                            if (color[dep] == 1) {
-                                // Cycle: collect participating modules.
-                                auto start = std::find(path.begin(), path.end(), dep);
-                                std::string cycle_str;
-                                for (auto ci = start; ci != path.end(); ++ci) {
-                                    if (!cycle_str.empty()) cycle_str += " → ";
-                                    cycle_str += *ci;
-                                }
-                                cycle_str += " → " + dep;
+                        if (found_cycle) return;
+                        color[n] = 1;
+                        path.push_back(n);
+                        if (auto it = adj.find(n); it != adj.end()) {
+                            for (const auto& dep : it->second) {
+                                if (color[dep] == 1) {
+                                    // Cycle: collect participating modules.
+                                    auto start = std::find(path.begin(), path.end(), dep);
+                                    std::string cycle_str;
+                                    for (auto ci = start; ci != path.end(); ++ci) {
+                                        if (!cycle_str.empty()) cycle_str += " → ";
+                                        cycle_str += *ci;
+                                    }
+                                    cycle_str += " → " + dep;
 
-                                import_error e;
-                                e.kind        = import_error_kind{import_error_kind::kind::circular};
-                                e.module_name = dep;
-                                e.message     = "circular import detected: " + cycle_str;
-                                e.code        = std::string(import_error_kind::to_code(
-                                                    import_error_kind{import_error_kind::kind::circular}));
-                                result.errors.push_back(std::move(e));
-                                found_cycle = true;
-                                return;
+                                    import_error e;
+                                    e.kind = import_error_kind{import_error_kind::kind::circular};
+                                    e.module_name = dep;
+                                    e.message = "circular import detected: " + cycle_str;
+                                    e.code = std::string(import_error_kind::to_code(
+                                        import_error_kind{import_error_kind::kind::circular}));
+                                    result.errors.push_back(std::move(e));
+                                    found_cycle = true;
+                                    return;
+                                }
+                                if (color[dep] == 0) dfs(dep);
                             }
-                            if (color[dep] == 0) dfs(dep);
                         }
-                    }
-                    path.pop_back();
-                    color[n] = 2;
-                };
+                        path.pop_back();
+                        color[n] = 2;
+                    };
 
                 for (const auto& n : all_nodes)
                     if (color[n] == 0) dfs(n);
@@ -250,7 +250,8 @@ namespace lang {
                     if (d == 0) queue.push_back(k);
 
                 while (!queue.empty()) {
-                    auto n = queue.back(); queue.pop_back();
+                    auto n = queue.back();
+                    queue.pop_back();
                     order.push_back(n);
                     if (auto it = rev.find(n); it != rev.end())
                         for (const auto& importer : it->second)
@@ -272,19 +273,19 @@ namespace lang {
                     if (!desc_opt) {
                         if (spec.is_optional) {
                             import_diagnostic d;
-                            d.kind    = import_error_kind{import_error_kind::kind::not_found};
-                            d.symbol  = spec.module_name;
+                            d.kind = import_error_kind{import_error_kind::kind::not_found};
+                            d.symbol = spec.module_name;
                             d.message = "optional module '" + spec.module_name + "' not found";
-                            d.level   = severity::warning;
+                            d.level = severity::warning;
                             result.diagnostics.push_back(std::move(d));
                             continue;
                         }
                         import_error e;
-                        e.kind        = import_error_kind{import_error_kind::kind::not_found};
+                        e.kind = import_error_kind{import_error_kind::kind::not_found};
                         e.module_name = spec.module_name;
-                        e.message     = "module '" + spec.module_name + "' not found";
-                        e.code        = std::string(import_error_kind::to_code(
-                                            import_error_kind{import_error_kind::kind::not_found}));
+                        e.message = "module '" + spec.module_name + "' not found";
+                        e.code = std::string(import_error_kind::to_code(
+                            import_error_kind{import_error_kind::kind::not_found}));
                         result.errors.push_back(std::move(e));
                         continue;
                     }
@@ -293,14 +294,14 @@ namespace lang {
 
                     // 3. Version constraint.
                     if (!(spec.min_version <= desc.version &&
-                          desc.version    <= spec.max_version)) {
+                        desc.version <= spec.max_version)) {
                         import_error e;
-                        e.kind        = import_error_kind{import_error_kind::kind::version_mismatch};
+                        e.kind = import_error_kind{import_error_kind::kind::version_mismatch};
                         e.module_name = spec.module_name;
-                        e.message     = "module '" + spec.module_name +
+                        e.message = "module '" + spec.module_name +
                             "' version not in required range";
-                        e.code        = std::string(import_error_kind::to_code(
-                                            import_error_kind{import_error_kind::kind::version_mismatch}));
+                        e.code = std::string(import_error_kind::to_code(
+                            import_error_kind{import_error_kind::kind::version_mismatch}));
                         result.errors.push_back(std::move(e));
                         continue;
                     }
@@ -311,12 +312,12 @@ namespace lang {
                         std::uint64_t cap = (it != caps_map.end()) ? it->second : 0;
                         if ((cap & spec.required_capabilities) != spec.required_capabilities) {
                             import_error e;
-                            e.kind        = import_error_kind{import_error_kind::kind::capability_mismatch};
+                            e.kind = import_error_kind{import_error_kind::kind::capability_mismatch};
                             e.module_name = spec.module_name;
-                            e.message     = "module '" + spec.module_name +
+                            e.message = "module '" + spec.module_name +
                                 "' lacks required capabilities";
-                            e.code        = std::string(import_error_kind::to_code(
-                                                import_error_kind{import_error_kind::kind::capability_mismatch}));
+                            e.code = std::string(import_error_kind::to_code(
+                                import_error_kind{import_error_kind::kind::capability_mismatch}));
                             result.errors.push_back(std::move(e));
                             continue;
                         }
@@ -346,5 +347,4 @@ namespace lang {
     private:
         std::unordered_map<std::string, std::vector<import_spec>> imports_;
     };
-
 } // namespace lang

@@ -51,7 +51,7 @@ namespace lang::module {
         };
 
         [[nodiscard]] inline std::size_t ceil_divide(const std::size_t value,
-                                                      const std::size_t divisor) noexcept {
+                                                     const std::size_t divisor) noexcept {
             return value / divisor + (value % divisor != 0 ? 1 : 0);
         }
     } // namespace detail
@@ -67,7 +67,7 @@ namespace lang::module {
         pravaha::JThreadBackend& backend,
         const parallel_compile_policy policy = {})
         -> std::expected<parallel_compile_result<std::remove_cvref_t<std::invoke_result_t<
-            CompileOne&, const std::ranges::range_value_t<Modules>&>>>, parallel_compile_error> {
+                             CompileOne&, const std::ranges::range_value_t<Modules>&>>>, parallel_compile_error> {
         using module_type = std::ranges::range_value_t<Modules>;
         using result_type = std::remove_cvref_t<std::invoke_result_t<CompileOne&, const module_type&>>;
         static_assert(!std::is_void_v<result_type>, "module compilation must return a value");
@@ -112,8 +112,8 @@ namespace lang::module {
             for (std::size_t first = 0; first < count; first += chunk_size) {
                 const auto last = std::min(count, first + chunk_size);
                 if (!backend.submit(pravaha::TaskCommand::make(
-                        [first, last, &compile_range]() noexcept { compile_range(first, last); },
-                        "lang.module.compile"))) {
+                    [first, last, &compile_range]() noexcept { compile_range(first, last); },
+                    "lang.module.compile"))) {
                     failure.record("Pravaha rejected module compilation task submission");
                     break;
                 }

@@ -22,46 +22,46 @@
 #include <vector>
 
 namespace ga {
-
     // -----------------------------------------------------------------------
     // SolveHints — flags for sparse solve dispatch
     // -----------------------------------------------------------------------
     struct SolveHints {
-        bool no_reorder{false};  // skip AMD reordering
+        bool no_reorder{false}; // skip AMD reordering
     };
 
     // -----------------------------------------------------------------------
     // CsrMatrix<T> — Compressed Sparse Row
     // -----------------------------------------------------------------------
-    template<typename T>
+    template <typename T>
     struct CsrMatrix {
         std::size_t nrows{0}, ncols{0};
-        std::vector<T>          values;   // nnz values
+        std::vector<T> values; // nnz values
         std::vector<std::size_t> col_idx; // column indices, length nnz
         std::vector<std::size_t> row_ptr; // row start offsets, length nrows+1
 
         CsrMatrix() = default;
+
         CsrMatrix(std::size_t r, std::size_t c) : nrows(r), ncols(c) {
             row_ptr.assign(r + 1, 0);
         }
 
         [[nodiscard]] std::size_t rows() const noexcept { return nrows; }
         [[nodiscard]] std::size_t cols() const noexcept { return ncols; }
-        [[nodiscard]] std::size_t nnz()  const noexcept { return values.size(); }
+        [[nodiscard]] std::size_t nnz() const noexcept { return values.size(); }
 
         // Element access (O(log nnz/row))
         [[nodiscard]] T get(std::size_t r, std::size_t c) const {
-            for (std::size_t jj = row_ptr[r]; jj < row_ptr[r+1]; ++jj)
+            for (std::size_t jj = row_ptr[r]; jj < row_ptr[r + 1]; ++jj)
                 if (col_idx[jj] == c) return values[jj];
             return T{0};
         }
 
         // Build from triplet (row, col, val) lists
         static CsrMatrix from_triplets(
-                std::size_t r, std::size_t c,
-                const std::vector<std::size_t>& rows,
-                const std::vector<std::size_t>& cols,
-                const std::vector<T>& vals) {
+            std::size_t r, std::size_t c,
+            const std::vector<std::size_t>& rows,
+            const std::vector<std::size_t>& cols,
+            const std::vector<T>& vals) {
             const std::size_t nnz = vals.size();
             if (rows.size() != nnz || cols.size() != nnz)
                 throw std::invalid_argument("from_triplets: rows/cols/vals size mismatch");
@@ -72,13 +72,13 @@ namespace ga {
                     throw std::out_of_range("from_triplets: triplet index out of bounds");
                 ++mat.row_ptr[rows[k] + 1];
             }
-            for (std::size_t i = 1; i <= r; ++i) mat.row_ptr[i] += mat.row_ptr[i-1];
+            for (std::size_t i = 1; i <= r; ++i) mat.row_ptr[i] += mat.row_ptr[i - 1];
             mat.values.resize(nnz);
             mat.col_idx.resize(nnz);
             std::vector<std::size_t> pos = mat.row_ptr;
             for (std::size_t k = 0; k < nnz; ++k) {
                 std::size_t dest = pos[rows[k]]++;
-                mat.values[dest]  = vals[k];
+                mat.values[dest] = vals[k];
                 mat.col_idx[dest] = cols[k];
             }
             // sort columns within each row and coalesce duplicates by summation
@@ -88,7 +88,7 @@ namespace ga {
             coalesced_values.reserve(nnz);
             coalesced_cols.reserve(nnz);
             for (std::size_t i = 0; i < r; ++i) {
-                std::size_t beg = mat.row_ptr[i], end = mat.row_ptr[i+1];
+                std::size_t beg = mat.row_ptr[i], end = mat.row_ptr[i + 1];
                 std::vector<std::size_t> ord(end - beg);
                 std::iota(ord.begin(), ord.end(), std::size_t{0});
                 std::sort(ord.begin(), ord.end(), [&](std::size_t a, std::size_t b) {
@@ -109,7 +109,8 @@ namespace ga {
                     }
                     if (col == last_col) {
                         acc += val;
-                    } else {
+                    }
+                    else {
                         if (acc != T{0}) {
                             coalesced_cols.push_back(last_col);
                             coalesced_values.push_back(acc);
@@ -135,12 +136,12 @@ namespace ga {
     // -----------------------------------------------------------------------
     // CooMatrix<T> — coordinate format
     // -----------------------------------------------------------------------
-    template<typename T>
+    template <typename T>
     struct CooMatrix {
         std::size_t nrows{0}, ncols{0};
         std::vector<std::size_t> row_idx;
         std::vector<std::size_t> col_idx;
-        std::vector<T>           values;
+        std::vector<T> values;
 
         CooMatrix() = default;
         CooMatrix(std::size_t r, std::size_t c) : nrows(r), ncols(c) {}
@@ -153,7 +154,7 @@ namespace ga {
 
         [[nodiscard]] std::size_t rows() const noexcept { return nrows; }
         [[nodiscard]] std::size_t cols() const noexcept { return ncols; }
-        [[nodiscard]] std::size_t nnz()  const noexcept { return values.size(); }
+        [[nodiscard]] std::size_t nnz() const noexcept { return values.size(); }
 
         [[nodiscard]] CsrMatrix<T> to_csr() const {
             return CsrMatrix<T>::from_triplets(nrows, ncols, row_idx, col_idx, values);
@@ -164,13 +165,14 @@ namespace ga {
     // DiaMatrix<T> — diagonal format for banded / structured matrices
     // Each diagonal stored as a full-length vector with offset.
     // -----------------------------------------------------------------------
-    template<typename T>
+    template <typename T>
     struct DiaMatrix {
         std::size_t nrows{0}, ncols{0};
         std::vector<std::ptrdiff_t> offsets; // diagonal offsets (0 = main diag)
-        std::vector<std::vector<T>> diags;   // each diag[k] has length = nrows
+        std::vector<std::vector<T>> diags; // each diag[k] has length = nrows
 
         DiaMatrix() = default;
+
         DiaMatrix(std::size_t r, std::size_t c,
                   std::vector<std::ptrdiff_t> offs)
             : nrows(r), ncols(c), offsets(std::move(offs)) {
@@ -189,7 +191,7 @@ namespace ga {
             for (std::size_t k = 0; k < offsets.size(); ++k) {
                 std::ptrdiff_t off = offsets[k];
                 if ((off >= 0 && c == r + static_cast<std::size_t>(off)) ||
-                    (off <  0 && r == c + static_cast<std::size_t>(-off)))
+                    (off < 0 && r == c + static_cast<std::size_t>(-off)))
                     return diags[k][r];
             }
             return T{0};
@@ -220,7 +222,7 @@ namespace ga {
     // -----------------------------------------------------------------------
     // spmv_into — y ← A·x (CSR) into preallocated output
     // -----------------------------------------------------------------------
-    template<typename T>
+    template <typename T>
     void spmv_into(const CsrMatrix<T>& A, const Vector<T>& x, Vector<T>& y) {
         if (A.ncols != x.size())
             throw std::invalid_argument("spmv: dimension mismatch");
@@ -231,7 +233,7 @@ namespace ga {
         // row-parallel: each row is independent
         for (std::size_t i = 0; i < A.nrows; ++i) {
             const std::size_t row_beg = A.row_ptr[i];
-            const std::size_t row_end = A.row_ptr[i+1];
+            const std::size_t row_end = A.row_ptr[i + 1];
             T s = T{0};
             for (std::size_t jj = row_beg; jj < row_end; ++jj)
                 s += A.values[jj] * x_data[A.col_idx[jj]];
@@ -242,7 +244,7 @@ namespace ga {
     // -----------------------------------------------------------------------
     // spmv — y ← A·x  (CSR, returns new vector)
     // -----------------------------------------------------------------------
-    template<typename T>
+    template <typename T>
     [[nodiscard]] Vector<T> spmv(const CsrMatrix<T>& A, const Vector<T>& x) {
         Vector<T> y(A.nrows, T{0});
         spmv_into(A, x, y);
@@ -250,7 +252,7 @@ namespace ga {
     }
 
     // Dia SpMV — structured/banded
-    template<typename T>
+    template <typename T>
     [[nodiscard]] Vector<T> spmv(const DiaMatrix<T>& A, const Vector<T>& x) {
         if (A.ncols != x.size())
             throw std::invalid_argument("spmv(dia): dimension mismatch");
@@ -269,17 +271,17 @@ namespace ga {
     // -----------------------------------------------------------------------
     // spmm — C ← A·B  (CSR × Dense, returns Matrix)
     // -----------------------------------------------------------------------
-    template<typename T, typename SP = ts::DefaultStoragePolicy,
-             typename CP = ts::DefaultComputationPolicy>
-    [[nodiscard]] Matrix<T,SP,CP> spmm(const CsrMatrix<T>& A,
-                                        const Matrix<T,SP,CP>& B) {
+    template <typename T, typename SP = ts::DefaultStoragePolicy,
+              typename CP = ts::DefaultComputationPolicy>
+    [[nodiscard]] Matrix<T, SP, CP> spmm(const CsrMatrix<T>& A,
+                                         const Matrix<T, SP, CP>& B) {
         if (A.ncols != B.rows())
             throw std::invalid_argument("spmm: dimension mismatch");
-        Matrix<T,SP,CP> C(A.nrows, B.cols(), T{0});
+        Matrix<T, SP, CP> C(A.nrows, B.cols(), T{0});
         const std::size_t b_cols = B.cols();
         for (std::size_t i = 0; i < A.nrows; ++i) {
             const std::size_t row_beg = A.row_ptr[i];
-            const std::size_t row_end = A.row_ptr[i+1];
+            const std::size_t row_end = A.row_ptr[i + 1];
             for (std::size_t jj = row_beg; jj < row_end; ++jj) {
                 std::size_t j = A.col_idx[jj];
                 const T aij = A.values[jj];
@@ -293,15 +295,19 @@ namespace ga {
     // -----------------------------------------------------------------------
     // dense_to_csr — convert Matrix to CsrMatrix (drops zeros)
     // -----------------------------------------------------------------------
-    template<typename T, typename SP, typename CP>
-    [[nodiscard]] CsrMatrix<T> dense_to_csr(const Matrix<T,SP,CP>& A,
-                                              T tol = T{0}) {
+    template <typename T, typename SP, typename CP>
+    [[nodiscard]] CsrMatrix<T> dense_to_csr(const Matrix<T, SP, CP>& A,
+                                            T tol = T{0}) {
         std::vector<std::size_t> rs, cs;
         std::vector<T> vs;
         for (std::size_t i = 0; i < A.rows(); ++i)
             for (std::size_t j = 0; j < A.cols(); ++j) {
-                T v = A(i,j);
-                if (std::abs(v) > tol) { rs.push_back(i); cs.push_back(j); vs.push_back(v); }
+                T v = A(i, j);
+                if (std::abs(v) > tol) {
+                    rs.push_back(i);
+                    cs.push_back(j);
+                    vs.push_back(v);
+                }
             }
         return CsrMatrix<T>::from_triplets(A.rows(), A.cols(), rs, cs, vs);
     }
@@ -311,7 +317,7 @@ namespace ga {
     // Returns permutation vector p s.t. A_perm = A[p, p] has less fill.
     // Algorithm: greedy minimum external degree (Amestoy-Davis-Duff 1996).
     // -----------------------------------------------------------------------
-    template<typename T>
+    template <typename T>
     [[nodiscard]] std::vector<std::size_t> amd_order(const CsrMatrix<T>& A) {
         const std::size_t N = A.rows();
         if (A.rows() != A.cols())
@@ -320,9 +326,12 @@ namespace ga {
         // Build adjacency (symmetric + no self-loops)
         std::vector<std::vector<std::size_t>> adj(N);
         for (std::size_t i = 0; i < N; ++i) {
-            for (std::size_t jj = A.row_ptr[i]; jj < A.row_ptr[i+1]; ++jj) {
+            for (std::size_t jj = A.row_ptr[i]; jj < A.row_ptr[i + 1]; ++jj) {
                 std::size_t j = A.col_idx[jj];
-                if (j != i) { adj[i].push_back(j); adj[j].push_back(i); }
+                if (j != i) {
+                    adj[i].push_back(j);
+                    adj[j].push_back(i);
+                }
             }
         }
         // deduplicate adjacency
@@ -344,7 +353,10 @@ namespace ga {
                 if (eliminated[i]) continue;
                 std::size_t deg = 0;
                 for (std::size_t j : adj[i]) if (!eliminated[j]) ++deg;
-                if (deg < best_deg) { best_deg = deg; best = i; }
+                if (deg < best_deg) {
+                    best_deg = deg;
+                    best = i;
+                }
             }
             perm.push_back(best);
             eliminated[best] = true;
@@ -368,10 +380,10 @@ namespace ga {
     // -----------------------------------------------------------------------
     // apply_permutation — reorder CSR rows+cols by permutation p
     // -----------------------------------------------------------------------
-    template<typename T>
+    template <typename T>
     [[nodiscard]] CsrMatrix<T> apply_permutation(
-            const CsrMatrix<T>& A,
-            const std::vector<std::size_t>& p) {
+        const CsrMatrix<T>& A,
+        const std::vector<std::size_t>& p) {
         const std::size_t N = A.rows();
         // Build inverse permutation
         std::vector<std::size_t> pinv(N);
@@ -381,7 +393,7 @@ namespace ga {
         std::vector<T> vs;
         for (std::size_t i = 0; i < N; ++i) {
             std::size_t pi = p[i];
-            for (std::size_t jj = A.row_ptr[pi]; jj < A.row_ptr[pi+1]; ++jj) {
+            for (std::size_t jj = A.row_ptr[pi]; jj < A.row_ptr[pi + 1]; ++jj) {
                 rs.push_back(i);
                 cs.push_back(pinv[A.col_idx[jj]]);
                 vs.push_back(A.values[jj]);
@@ -389,7 +401,6 @@ namespace ga {
         }
         return CsrMatrix<T>::from_triplets(N, N, rs, cs, vs);
     }
-
 } // namespace ga
 
 #endif // PEBBLE_CONTAINERS_MATRIX_SPARSE_HPP

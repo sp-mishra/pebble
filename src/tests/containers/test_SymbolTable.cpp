@@ -868,7 +868,12 @@ TEST_CASE (
     REQUIRE(errors.load() == 0);
 }
 
-TEST_CASE("InternPool: arena memory allocation and reset on clear", "[SymbolTable][InternPool][mem]") {
+TEST_CASE (
+"InternPool: arena memory allocation and reset on clear"
+,
+"[SymbolTable][InternPool][mem]"
+)
+ {
     InternPool pool;
     REQUIRE(pool.size() == 0);
 

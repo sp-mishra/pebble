@@ -180,8 +180,8 @@ Sinks are customizable backends. Common implementations:
 
 ### NoSink
 
-Discard all pulses while preserving thread-local execution lineage. Use it when
-code must propagate a trace context without routing events; omit `PulseScope`
+Discard all pulses while preserving thread-local execution lineage. Use it when code must propagate a trace context
+without routing events; omit `PulseScope`
 entirely when the instrumentation boundary itself must compile away.
 
 ### RingBufferSink

@@ -130,7 +130,7 @@ considered for final result selection.
     - Other command-line errors (example not found, no examples with tag) are also printed to `stderr`.
 
 - Exit codes used by the runner (as implemented in `exemain.cpp` and `Registry`):
-    - `0` — success, requested example(s) passed
+    - `0` — success, requested example (s) passed
     - `1` — usage error or requested example/tag not found
     - `2` — at least one example ran and failed
 

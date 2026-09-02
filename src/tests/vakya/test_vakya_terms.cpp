@@ -46,25 +46,45 @@ using namespace vakya::types;
 // 1-4. effect_row subsumption
 // ============================================================================
 
-TEST_CASE("opt effect_row: closed subsumes subset", "[opt][effect_row]") {
+TEST_CASE (
+"opt effect_row: closed subsumes subset"
+,
+"[opt][effect_row]"
+)
+ {
     const effect_row_node sub{kEffectMaskIO, kNoEffectTail};
     const effect_row_node sup{kEffectMaskIO | kEffectMaskMemory, kNoEffectTail};
     CHECK(subsumes(sub, sup) == row_subsume_result::subsumes);
 }
 
-TEST_CASE("opt effect_row: concrete leak refuted", "[opt][effect_row]") {
+TEST_CASE (
+"opt effect_row: concrete leak refuted"
+,
+"[opt][effect_row]"
+)
+ {
     const effect_row_node sub{kEffectMaskNetwork, kNoEffectTail};
     const effect_row_node sup{kEffectMaskIO, kNoEffectTail};
     CHECK(subsumes(sub, sup) == row_subsume_result::not_subsumes);
 }
 
-TEST_CASE("opt effect_row: open sup absorbs", "[opt][effect_row]") {
+TEST_CASE (
+"opt effect_row: open sup absorbs"
+,
+"[opt][effect_row]"
+)
+ {
     const effect_row_node sub{kEffectMaskNetwork, kNoEffectTail};
     const effect_row_node sup{0, 7 /*some tail var*/};
     CHECK(subsumes(sub, sup) == row_subsume_result::subsumes);
 }
 
-TEST_CASE("opt effect_row: distinct symbolic tails deferred", "[opt][effect_row]") {
+TEST_CASE (
+"opt effect_row: distinct symbolic tails deferred"
+,
+"[opt][effect_row]"
+)
+ {
     const effect_row_node sub{kEffectMaskIO, 1};
     const effect_row_node sup{kEffectMaskIO, 2};
     CHECK(subsumes(sub, sup) == row_subsume_result::deferred);
@@ -74,7 +94,12 @@ TEST_CASE("opt effect_row: distinct symbolic tails deferred", "[opt][effect_row]
 // 5. effect_row interning
 // ============================================================================
 
-TEST_CASE("opt effect_row: structural interning", "[opt][effect_row]") {
+TEST_CASE (
+"opt effect_row: structural interning"
+,
+"[opt][effect_row]"
+)
+ {
     effect_row_arena arena;
     const effect_row_ref r1 = arena.intern_effect_row(kEffectMaskIO);
     const effect_row_ref r2 = arena.intern_effect_row(kEffectMaskIO);
@@ -89,7 +114,12 @@ TEST_CASE("opt effect_row: structural interning", "[opt][effect_row]") {
 // 6-7. effect_row_solver
 // ============================================================================
 
-TEST_CASE("opt effect_row: solver solved", "[opt][effect_row]") {
+TEST_CASE (
+"opt effect_row: solver solved"
+,
+"[opt][effect_row]"
+)
+ {
     static_assert(constraint_solver<effect_row_solver>);
     effect_row_arena arena;
     const effect_row_ref sub = arena.intern_effect_row(kEffectMaskIO);
@@ -102,7 +132,12 @@ TEST_CASE("opt effect_row: solver solved", "[opt][effect_row]") {
     CHECK(r.status == solve_status::solved);
 }
 
-TEST_CASE("opt effect_row: solver unsatisfiable", "[opt][effect_row]") {
+TEST_CASE (
+"opt effect_row: solver unsatisfiable"
+,
+"[opt][effect_row]"
+)
+ {
     effect_row_arena arena;
     const effect_row_ref sub = arena.intern_effect_row(kEffectMaskNetwork);
     const effect_row_ref sup = arena.intern_effect_row(kEffectMaskIO);
@@ -118,7 +153,12 @@ TEST_CASE("opt effect_row: solver unsatisfiable", "[opt][effect_row]") {
 // 8-10. value_param
 // ============================================================================
 
-TEST_CASE("opt value_param: literal intern", "[opt][value_param]") {
+TEST_CASE (
+"opt value_param: literal intern"
+,
+"[opt][value_param]"
+)
+ {
     type_arena arena;
     const type_ref v = intern_value_param(arena, 42u);
     CHECK(is_value_param(arena, v));
@@ -126,7 +166,12 @@ TEST_CASE("opt value_param: literal intern", "[opt][value_param]") {
     CHECK(value_param_literal(arena, v) == 42u);
 }
 
-TEST_CASE("opt value_param: unify_value", "[opt][value_param]") {
+TEST_CASE (
+"opt value_param: unify_value"
+,
+"[opt][value_param]"
+)
+ {
     type_arena arena;
     const type_ref a = intern_value_param(arena, 4u);
     const type_ref b = intern_value_param(arena, 4u);
@@ -137,7 +182,12 @@ TEST_CASE("opt value_param: unify_value", "[opt][value_param]") {
     CHECK(unify_value(arena, a, sym) == value_unify_result::deferred);
 }
 
-TEST_CASE("opt value_param: symbolic not literal", "[opt][value_param]") {
+TEST_CASE (
+"opt value_param: symbolic not literal"
+,
+"[opt][value_param]"
+)
+ {
     type_arena arena;
     const type_ref sym = intern_value_var(arena, 3u);
     CHECK(is_value_param(arena, sym));
@@ -149,29 +199,54 @@ TEST_CASE("opt value_param: symbolic not literal", "[opt][value_param]") {
 // 11-15. SIMD width + tile synthesis
 // ============================================================================
 
-TEST_CASE("opt value_param: simd_width divides extent", "[opt][simd]") {
+TEST_CASE (
+"opt value_param: simd_width divides extent"
+,
+"[opt][simd]"
+)
+ {
     // Default policy: 128-bit lane / 32-bit elem = 4 lanes. Extent 16 → 4.
     CHECK(synthesize_simd_width(16u) == 4u);
     CHECK(synthesize_simd_width(8u) == 4u);
 }
 
-TEST_CASE("opt value_param: simd_width prime extent", "[opt][simd]") {
+TEST_CASE (
+"opt value_param: simd_width prime extent"
+,
+"[opt][simd]"
+)
+ {
     CHECK(synthesize_simd_width(7u) == 0u); // no lane count > 1 divides 7
 }
 
-TEST_CASE("opt value_param: simd_width tiny extent", "[opt][simd]") {
+TEST_CASE (
+"opt value_param: simd_width tiny extent"
+,
+"[opt][simd]"
+)
+ {
     CHECK(synthesize_simd_width(1u) == 0u);
     CHECK(synthesize_simd_width(0u) == 0u);
 }
 
-TEST_CASE("opt value_param: tile clamps to extent", "[opt][simd]") {
+TEST_CASE (
+"opt value_param: tile clamps to extent"
+,
+"[opt][simd]"
+)
+ {
     width_policy pol;
     // budget = 4096 / 4 = 1024; extent 100 clamps to 100.
     CHECK(synthesize_tile(100u, pol) == 100u);
     CHECK(synthesize_tile(4096u, pol) == 1024u);
 }
 
-TEST_CASE("opt value_param: synth from arena literal", "[opt][simd]") {
+TEST_CASE (
+"opt value_param: synth from arena literal"
+,
+"[opt][simd]"
+)
+ {
     type_arena arena;
     const type_ref extent = intern_value_param(arena, 16u);
     CHECK(synthesize_simd_width(arena, extent) == 4u);
@@ -184,7 +259,12 @@ TEST_CASE("opt value_param: synth from arena literal", "[opt][simd]") {
 // 16-18. refinement subtyping
 // ============================================================================
 
-TEST_CASE("opt refine: intern + accessors", "[opt][refine]") {
+TEST_CASE (
+"opt refine: intern + accessors"
+,
+"[opt][refine]"
+)
+ {
     type_arena arena;
     const type_ref base = arena.intern_primitive<integer_type_tag>();
     const type_ref r = intern_refinement(arena, base, 0xDEAD);
@@ -193,7 +273,12 @@ TEST_CASE("opt refine: intern + accessors", "[opt][refine]") {
     CHECK(refinement_predicate(arena, r) == 0xDEAD);
 }
 
-TEST_CASE("opt refine: syntactic_subtype", "[opt][refine]") {
+TEST_CASE (
+"opt refine: syntactic_subtype"
+,
+"[opt][refine]"
+)
+ {
     type_arena arena;
     const type_ref base = arena.intern_primitive<integer_type_tag>();
     const type_ref p = intern_refinement(arena, base, 0x11);
@@ -203,7 +288,12 @@ TEST_CASE("opt refine: syntactic_subtype", "[opt][refine]") {
     CHECK(syntactic_subtype(arena, p, top)); // anything ⇒ ⊤
 }
 
-TEST_CASE("opt refine: distinct predicates not decided", "[opt][refine]") {
+TEST_CASE (
+"opt refine: distinct predicates not decided"
+,
+"[opt][refine]"
+)
+ {
     type_arena arena;
     const type_ref base = arena.intern_primitive<integer_type_tag>();
     const type_ref p = intern_refinement(arena, base, 0x11);
@@ -215,7 +305,12 @@ TEST_CASE("opt refine: distinct predicates not decided", "[opt][refine]") {
 // 19. refine_sub routes to smt in registry
 // ============================================================================
 
-TEST_CASE("opt refine: kRefineSubKind routes to smt", "[opt][refine]") {
+TEST_CASE (
+"opt refine: kRefineSubKind routes to smt"
+,
+"[opt][refine]"
+)
+ {
     auto reg = make_builtin_constraint_registry();
     const constraint_descriptor* d =
         reg.find(static_cast<std::uint32_t>(kRefineSubKind));
@@ -235,7 +330,12 @@ TEST_CASE("opt refine: kRefineSubKind routes to smt", "[opt][refine]") {
 // 20. elision bits
 // ============================================================================
 
-TEST_CASE("opt refine: elision bits", "[opt][refine]") {
+TEST_CASE (
+"opt refine: elision bits"
+,
+"[opt][refine]"
+)
+ {
     analysis_record rec;
     CHECK_FALSE(has_elision(rec, kElisionBoundsCheck));
     mark_elision(rec, kElisionBoundsCheck);

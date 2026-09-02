@@ -1,7 +1,12 @@
 #include "catch_amalgamated.hpp"
 #include "kalpana/kalpana.hpp"
 
-TEST_CASE("Kalpana: Effect Node Factory and Chain Composition", "[kalpana][effect]") {
+TEST_CASE (
+"Kalpana: Effect Node Factory and Chain Composition"
+,
+"[kalpana][effect]"
+)
+ {
     using namespace kalpana;
 
     SECTION("Individual EffectNode construction") {

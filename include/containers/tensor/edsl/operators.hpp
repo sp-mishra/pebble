@@ -17,7 +17,6 @@
 #include <iostream>
 
 namespace ts::edsl {
-
     enum class op_kind {
         constant,
         param_ref,
@@ -81,26 +80,26 @@ namespace ts::edsl {
         expr(double val) : expr(static_cast<float>(val)) {}
         expr(int val) : expr(static_cast<float>(val)) {}
 
-        expr(const param &p)
+        expr(const param& p)
             : node(std::make_shared<expr_node>(op_kind::param_ref, tensor_shape{})) {
             const_cast<expr_node*>(node.get())->name_payload = p.name;
         }
 
-        template<size_t Rank>
-        expr(const sym_tensor<Rank> &st)
+        template <size_t Rank>
+        expr(const sym_tensor<Rank>& st)
             : node(std::make_shared<expr_node>(op_kind::tensor_ref, st.shape)) {
             const_cast<expr_node*>(node.get())->name_payload = st.name;
         }
 
-        template<size_t Rank>
-        expr(const tensor_param<Rank> &tp)
+        template <size_t Rank>
+        expr(const tensor_param<Rank>& tp)
             : node(std::make_shared<expr_node>(op_kind::tensor_ref, tp.expected_shape)) {
             const_cast<expr_node*>(node.get())->name_payload = tp.name;
         }
 
         // Lift concrete Tensor into Expression
-        template<typename T, typename SP, typename CP>
-        expr(const DynamicTensor<T, SP, CP> &t)
+        template <typename T, typename SP, typename CP>
+        expr(const DynamicTensor<T, SP, CP>& t)
             : node(std::make_shared<expr_node>(op_kind::tensor_ref, t.shape())) {
             // Unnamed concrete tensor payload
         }
@@ -117,12 +116,12 @@ namespace ts::edsl {
         return expr(*this);
     }
 
-    template<size_t Rank>
+    template <size_t Rank>
     tensor_param<Rank>::operator expr() const {
         return expr(*this);
     }
 
-    template<size_t Rank>
+    template <size_t Rank>
     sym_tensor<Rank>::operator expr() const {
         return expr(*this);
     }
@@ -130,112 +129,114 @@ namespace ts::edsl {
     // ========================================================================
     // Binary Arithmetic Operator Overloads
     // ========================================================================
-    inline expr operator+(const expr &lhs, const expr &rhs) {
+    inline expr operator+(const expr& lhs, const expr& rhs) {
         tensor_shape s = infer_broadcast_shape(lhs.shape(), rhs.shape());
         return expr(std::make_shared<expr_node>(op_kind::add, std::move(s), std::vector{lhs.node, rhs.node}));
     }
 
-    inline expr operator-(const expr &lhs, const expr &rhs) {
+    inline expr operator-(const expr& lhs, const expr& rhs) {
         tensor_shape s = infer_broadcast_shape(lhs.shape(), rhs.shape());
         return expr(std::make_shared<expr_node>(op_kind::sub, std::move(s), std::vector{lhs.node, rhs.node}));
     }
 
-    inline expr operator*(const expr &lhs, const expr &rhs) {
+    inline expr operator*(const expr& lhs, const expr& rhs) {
         tensor_shape s = infer_broadcast_shape(lhs.shape(), rhs.shape());
         return expr(std::make_shared<expr_node>(op_kind::mul, std::move(s), std::vector{lhs.node, rhs.node}));
     }
 
-    inline expr operator/(const expr &lhs, const expr &rhs) {
+    inline expr operator/(const expr& lhs, const expr& rhs) {
         tensor_shape s = infer_broadcast_shape(lhs.shape(), rhs.shape());
         return expr(std::make_shared<expr_node>(op_kind::div, std::move(s), std::vector{lhs.node, rhs.node}));
     }
 
-    inline expr operator-(const expr &e) {
+    inline expr operator-(const expr& e) {
         return expr(std::make_shared<expr_node>(op_kind::neg, e.shape(), std::vector{e.node}));
     }
 
     // ========================================================================
     // Core Tensor & Neural Network Builders
     // ========================================================================
-    inline expr matmul(const expr &a, const expr &b) {
+    inline expr matmul(const expr& a, const expr& b) {
         tensor_shape s = infer_matmul_shape(a.shape(), b.shape());
         return expr(std::make_shared<expr_node>(op_kind::matmul, std::move(s), std::vector{a.node, b.node}));
     }
 
-    inline expr relu(const expr &e) {
+    inline expr relu(const expr& e) {
         return expr(std::make_shared<expr_node>(op_kind::relu, e.shape(), std::vector{e.node}));
     }
 
-    inline expr sigmoid(const expr &e) {
+    inline expr sigmoid(const expr& e) {
         return expr(std::make_shared<expr_node>(op_kind::sigmoid, e.shape(), std::vector{e.node}));
     }
 
-    inline expr gelu(const expr &e) {
+    inline expr gelu(const expr& e) {
         return expr(std::make_shared<expr_node>(op_kind::gelu, e.shape(), std::vector{e.node}));
     }
 
-    inline expr exp(const expr &e) {
+    inline expr exp(const expr& e) {
         return expr(std::make_shared<expr_node>(op_kind::exp, e.shape(), std::vector{e.node}));
     }
 
-    inline expr log(const expr &e) {
+    inline expr log(const expr& e) {
         return expr(std::make_shared<expr_node>(op_kind::log, e.shape(), std::vector{e.node}));
     }
 
-    inline expr sqrt(const expr &e) {
+    inline expr sqrt(const expr& e) {
         return expr(std::make_shared<expr_node>(op_kind::sqrt, e.shape(), std::vector{e.node}));
     }
 
-    inline expr abs(const expr &e) {
+    inline expr abs(const expr& e) {
         return expr(std::make_shared<expr_node>(op_kind::abs, e.shape(), std::vector{e.node}));
     }
 
-    inline expr softmax(const expr &e, int axis = -1) {
+    inline expr softmax(const expr& e, int axis = -1) {
         auto n = std::make_shared<expr_node>(op_kind::softmax, e.shape(), std::vector{e.node});
         n->axis_payload = axis;
         return expr(n);
     }
 
-    inline expr reduce_sum(const expr &e, int axis = -1, bool keepdims = false) {
+    inline expr reduce_sum(const expr& e, int axis = -1, bool keepdims = false) {
         tensor_shape s = infer_reduction_shape(e.shape(), axis, keepdims);
         auto n = std::make_shared<expr_node>(op_kind::reduce_sum, std::move(s), std::vector{e.node});
         n->axis_payload = axis;
         return expr(n);
     }
 
-    inline expr reduce_mean(const expr &e, int axis = -1, bool keepdims = false) {
+    inline expr reduce_mean(const expr& e, int axis = -1, bool keepdims = false) {
         tensor_shape s = infer_reduction_shape(e.shape(), axis, keepdims);
         auto n = std::make_shared<expr_node>(op_kind::reduce_mean, std::move(s), std::vector{e.node});
         n->axis_payload = axis;
         return expr(n);
     }
 
-    inline expr reduce_max(const expr &e, int axis = -1, bool keepdims = false) {
+    inline expr reduce_max(const expr& e, int axis = -1, bool keepdims = false) {
         tensor_shape s = infer_reduction_shape(e.shape(), axis, keepdims);
         auto n = std::make_shared<expr_node>(op_kind::reduce_max, std::move(s), std::vector{e.node});
         n->axis_payload = axis;
         return expr(n);
     }
 
-    inline expr transpose(const expr &e) {
+    inline expr transpose(const expr& e) {
         tensor_shape s = infer_transpose_shape(e.shape());
         return expr(std::make_shared<expr_node>(op_kind::transpose, std::move(s), std::vector{e.node}));
     }
 
-    inline expr reshape(const expr &e, tensor_shape target_shape) {
+    inline expr reshape(const expr& e, tensor_shape target_shape) {
         return expr(std::make_shared<expr_node>(op_kind::reshape, std::move(target_shape), std::vector{e.node}));
     }
 
     // ========================================================================
     // Converting helper to convert any leaf to expr
     // ========================================================================
-    template<typename T>
-    inline expr to_expr(const T &val) {
+    template <typename T>
+    inline expr to_expr(const T& val) {
         if constexpr (std::is_same_v<T, expr>) {
             return val;
-        } else if constexpr (requires { expr(val); }) {
+        }
+        else if constexpr (requires { expr(val); }) {
             return expr(val);
-        } else {
+        }
+        else {
             return static_cast<expr>(val);
         }
     }
@@ -243,127 +244,126 @@ namespace ts::edsl {
     // ========================================================================
     // Free Function Overloads taking Leaf types directly
     // ========================================================================
-    template<typename A, typename B>
+    template <typename A, typename B>
         requires (!std::is_same_v<std::decay_t<A>, expr> || !std::is_same_v<std::decay_t<B>, expr>)
-    inline expr matmul(const A &a, const B &b) {
+    inline expr matmul(const A& a, const B& b) {
         return matmul(to_expr(a), to_expr(b));
     }
 
-    template<typename T>
+    template <typename T>
         requires (!std::is_same_v<std::decay_t<T>, expr>)
-    inline expr relu(const T &e) {
+    inline expr relu(const T& e) {
         return relu(to_expr(e));
     }
 
-    template<typename T>
+    template <typename T>
         requires (!std::is_same_v<std::decay_t<T>, expr>)
-    inline expr sigmoid(const T &e) {
+    inline expr sigmoid(const T& e) {
         return sigmoid(to_expr(e));
     }
 
-    template<typename T>
+    template <typename T>
         requires (!std::is_same_v<std::decay_t<T>, expr>)
-    inline expr gelu(const T &e) {
+    inline expr gelu(const T& e) {
         return gelu(to_expr(e));
     }
 
-    template<typename T>
+    template <typename T>
         requires (!std::is_same_v<std::decay_t<T>, expr>)
-    inline expr exp(const T &e) {
+    inline expr exp(const T& e) {
         return exp(to_expr(e));
     }
 
-    template<typename T>
+    template <typename T>
         requires (!std::is_same_v<std::decay_t<T>, expr>)
-    inline expr log(const T &e) {
+    inline expr log(const T& e) {
         return log(to_expr(e));
     }
 
-    template<typename T>
+    template <typename T>
         requires (!std::is_same_v<std::decay_t<T>, expr>)
-    inline expr sqrt(const T &e) {
+    inline expr sqrt(const T& e) {
         return sqrt(to_expr(e));
     }
 
-    template<typename T>
+    template <typename T>
         requires (!std::is_same_v<std::decay_t<T>, expr>)
-    inline expr abs(const T &e) {
+    inline expr abs(const T& e) {
         return abs(to_expr(e));
     }
 
-    template<typename T>
+    template <typename T>
         requires (!std::is_same_v<std::decay_t<T>, expr>)
-    inline expr softmax(const T &e, int axis = -1) {
+    inline expr softmax(const T& e, int axis = -1) {
         return softmax(to_expr(e), axis);
     }
 
-    template<typename T>
+    template <typename T>
         requires (!std::is_same_v<std::decay_t<T>, expr>)
-    inline expr reduce_sum(const T &e, int axis = -1, bool keepdims = false) {
+    inline expr reduce_sum(const T& e, int axis = -1, bool keepdims = false) {
         return reduce_sum(to_expr(e), axis, keepdims);
     }
 
-    template<typename T>
+    template <typename T>
         requires (!std::is_same_v<std::decay_t<T>, expr>)
-    inline expr reduce_mean(const T &e, int axis = -1, bool keepdims = false) {
+    inline expr reduce_mean(const T& e, int axis = -1, bool keepdims = false) {
         return reduce_mean(to_expr(e), axis, keepdims);
     }
 
-    template<typename T>
+    template <typename T>
         requires (!std::is_same_v<std::decay_t<T>, expr>)
-    inline expr reduce_max(const T &e, int axis = -1, bool keepdims = false) {
+    inline expr reduce_max(const T& e, int axis = -1, bool keepdims = false) {
         return reduce_max(to_expr(e), axis, keepdims);
     }
 
-    template<typename T>
+    template <typename T>
         requires (!std::is_same_v<std::decay_t<T>, expr>)
-    inline expr transpose(const T &e) {
+    inline expr transpose(const T& e) {
         return transpose(to_expr(e));
     }
 
-    template<typename T>
+    template <typename T>
         requires (!std::is_same_v<std::decay_t<T>, expr>)
-    inline expr reshape(const T &e, tensor_shape target_shape) {
+    inline expr reshape(const T& e, tensor_shape target_shape) {
         return reshape(to_expr(e), std::move(target_shape));
     }
 
     // Leaf arithmetic overloads
-    template<typename A, typename B>
+    template <typename A, typename B>
         requires ((requires { to_expr(std::declval<A>()); } && requires { to_expr(std::declval<B>()); }) &&
-                 (!std::is_same_v<std::decay_t<A>, expr> || !std::is_same_v<std::decay_t<B>, expr>) &&
-                 (std::is_same_v<std::decay_t<A>, expr> || std::is_same_v<std::decay_t<B>, expr> ||
-                  requires { std::declval<A>().name; } || requires { std::declval<B>().name; }))
-    inline expr operator+(const A &a, const B &b) {
+            (!std::is_same_v<std::decay_t<A>, expr> || !std::is_same_v<std::decay_t<B>, expr>) &&
+            (std::is_same_v<std::decay_t<A>, expr> || std::is_same_v<std::decay_t<B>, expr> ||
+                requires { std::declval<A>().name; } || requires { std::declval<B>().name; }))
+    inline expr operator+(const A& a, const B& b) {
         return to_expr(a) + to_expr(b);
     }
 
-    template<typename A, typename B>
+    template <typename A, typename B>
         requires ((requires { to_expr(std::declval<A>()); } && requires { to_expr(std::declval<B>()); }) &&
-                 (!std::is_same_v<std::decay_t<A>, expr> || !std::is_same_v<std::decay_t<B>, expr>) &&
-                 (std::is_same_v<std::decay_t<A>, expr> || std::is_same_v<std::decay_t<B>, expr> ||
-                  requires { std::declval<A>().name; } || requires { std::declval<B>().name; }))
-    inline expr operator-(const A &a, const B &b) {
+            (!std::is_same_v<std::decay_t<A>, expr> || !std::is_same_v<std::decay_t<B>, expr>) &&
+            (std::is_same_v<std::decay_t<A>, expr> || std::is_same_v<std::decay_t<B>, expr> ||
+                requires { std::declval<A>().name; } || requires { std::declval<B>().name; }))
+    inline expr operator-(const A& a, const B& b) {
         return to_expr(a) - to_expr(b);
     }
 
-    template<typename A, typename B>
+    template <typename A, typename B>
         requires ((requires { to_expr(std::declval<A>()); } && requires { to_expr(std::declval<B>()); }) &&
-                 (!std::is_same_v<std::decay_t<A>, expr> || !std::is_same_v<std::decay_t<B>, expr>) &&
-                 (std::is_same_v<std::decay_t<A>, expr> || std::is_same_v<std::decay_t<B>, expr> ||
-                  requires { std::declval<A>().name; } || requires { std::declval<B>().name; }))
-    inline expr operator*(const A &a, const B &b) {
+            (!std::is_same_v<std::decay_t<A>, expr> || !std::is_same_v<std::decay_t<B>, expr>) &&
+            (std::is_same_v<std::decay_t<A>, expr> || std::is_same_v<std::decay_t<B>, expr> ||
+                requires { std::declval<A>().name; } || requires { std::declval<B>().name; }))
+    inline expr operator*(const A& a, const B& b) {
         return to_expr(a) * to_expr(b);
     }
 
-    template<typename A, typename B>
+    template <typename A, typename B>
         requires ((requires { to_expr(std::declval<A>()); } && requires { to_expr(std::declval<B>()); }) &&
-                 (!std::is_same_v<std::decay_t<A>, expr> || !std::is_same_v<std::decay_t<B>, expr>) &&
-                 (std::is_same_v<std::decay_t<A>, expr> || std::is_same_v<std::decay_t<B>, expr> ||
-                  requires { std::declval<A>().name; } || requires { std::declval<B>().name; }))
-    inline expr operator/(const A &a, const B &b) {
+            (!std::is_same_v<std::decay_t<A>, expr> || !std::is_same_v<std::decay_t<B>, expr>) &&
+            (std::is_same_v<std::decay_t<A>, expr> || std::is_same_v<std::decay_t<B>, expr> ||
+                requires { std::declval<A>().name; } || requires { std::declval<B>().name; }))
+    inline expr operator/(const A& a, const B& b) {
         return to_expr(a) / to_expr(b);
     }
-
 } // namespace ts::edsl
 
 #endif // PEBBLE_CONTAINERS_TENSOR_EDSL_OPERATORS_HPP

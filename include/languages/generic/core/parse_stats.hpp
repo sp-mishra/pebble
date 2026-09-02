@@ -23,15 +23,14 @@
 #include <unordered_map>
 
 namespace lang {
-
     // =========================================================================
     // phase_timings — wall-clock duration per frontend phase
     // =========================================================================
 
     struct phase_timings {
         std::chrono::nanoseconds lex_and_parse{0}; // lexing + parsing wall time
-        std::chrono::nanoseconds ast_build{0};      // AST construction wall time
-        std::chrono::nanoseconds total{0};           // sum of all phases
+        std::chrono::nanoseconds ast_build{0}; // AST construction wall time
+        std::chrono::nanoseconds total{0}; // sum of all phases
     };
 
     // =========================================================================
@@ -63,5 +62,4 @@ namespace lang {
         // Timings
         phase_timings timings;
     };
-
 } // namespace lang

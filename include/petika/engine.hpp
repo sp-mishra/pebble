@@ -32,7 +32,7 @@ namespace petika {
         TransactionAborted,
         NotSupported,
         InternalError,
-        Retry = 10  // OCC conflict — caller should retry from a fresh snapshot
+        Retry = 10 // OCC conflict — caller should retry from a fresh snapshot
     };
 
     template <typename T>
@@ -50,10 +50,10 @@ namespace petika {
         std::uint32_t version{1};
         nitya::lsn_t last_lsn{0};
         nitya::lsn_t checkpoint_lsn{0};
-        nitya::lsn_t compaction_lsn{0};     // LSN at which last compaction/GC ran
+        nitya::lsn_t compaction_lsn{0}; // LSN at which last compaction/GC ran
         std::uint64_t snapshot_id{0};
         std::uint64_t record_count{0};
-        std::uint64_t wal_bytes_written{0};  // cumulative WAL bytes appended
+        std::uint64_t wal_bytes_written{0}; // cumulative WAL bytes appended
     };
 
     // Core engine concept — minimum interface all Petika engines must satisfy.
@@ -84,8 +84,8 @@ namespace petika {
         std::vector<std::pair<EntryOp, Key>> batch,
         nitya::lsn_t lsn
     ) {
-        { engine.apply_batch(batch, lsn) } -> std::same_as<Result<void>>;
-    };
+            { engine.apply_batch(batch, lsn) } -> std::same_as<Result<void>>;
+        };
 
     // MutexPolicy concept — enables ConcurrencyPolicy injection into Petika.
     template <typename P>
@@ -103,5 +103,4 @@ namespace petika {
         constexpr void lock_shared() noexcept {}
         constexpr void unlock_shared() noexcept {}
     };
-
 } // namespace petika

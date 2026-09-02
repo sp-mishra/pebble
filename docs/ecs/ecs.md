@@ -1,11 +1,12 @@
-#pragma once
-// ============================================================================
-// docs/ecs/ecs.md — High-Performance C++23/26 Standalone Entity-Component System
-// ============================================================================
+#pragma once // ============================================================================ // docs/ecs/ecs.md —
+High-Performance C++23/26 Standalone Entity-Component
+System // ============================================================================
 
 # pebble::ecs — High-Performance C++23/26 Standalone Entity-Component System
 
-`pebble::ecs` is a modern, cache-coherent, header-only Entity-Component System engineered for extreme performance, minimal memory footprints, and zero runtime waste. It strictly follows Pebble's zero-overhead principle: **strictly zero virtual functions, zero macros, zero RTTI, and zero heap allocation during queries**.
+`pebble::ecs` is a modern, cache-coherent, header-only Entity-Component System engineered for extreme performance,
+minimal memory footprints, and zero runtime waste. It strictly follows Pebble's zero-overhead principle: **strictly zero
+virtual functions, zero macros, zero RTTI, and zero heap allocation during queries**.
 
 Include: `#include <ecs/ecs.hpp>`
 
@@ -30,29 +31,37 @@ Include: `#include <ecs/ecs.hpp>`
 ```
 
 1. **Stale-Safe Generational Handles (`Entity`)** (`include/ecs/entity.hpp`):
-   - Backed by `containers::generational_handle<entity_tag, std::uint32_t>`.
-   - Comprises a 32-bit entity index and a 32-bit generation counter. Stale handles are detected in $O(1)$.
-2. **Dense $O(1)$ Component Stores (`ComponentStore<C>`)** (`include/ecs/component_store.hpp`):
-   - Stores components contiguously in a cache-aligned dense vector alongside sparse lookup tables.
-   - Dispatched via `ErasedStore` compile-time function pointer table — **zero virtual methods, zero `std::shared_ptr` atomic refcounts**.
+    - Backed by `containers::generational_handle<entity_tag, std::uint32_t>`.
+    - Comprises a 32-bit entity index and a 32-bit generation counter. Stale handles are detected in $O (1)$.
+2. **Dense $O (1)$ Component Stores (`ComponentStore<C>`)** (`include/ecs/component_store.hpp`):
+    - Stores components contiguously in a cache-aligned dense vector alongside sparse lookup tables.
+    - Dispatched via `ErasedStore` compile-time function pointer table — **zero virtual methods, zero `std::shared_ptr`
+      atomic refcounts**.
 3. **Pluggable Policy Architecture** (`include/ecs/storage_policy.hpp`):
-   - `StoragePolicy`: `SparseSetStoragePolicy` (default, dynamic composition) or `ArchetypeStoragePolicy` (columnar bulk SoA).
-   - `AllocPolicy`: `ArenaAllocPolicy` (default linear arena) or `SystemAllocPolicy`.
-   - `SchedulerPolicy`: `AutoSchedulerPolicy` (topological graph execution) or `ManualSchedulerPolicy`.
-   - `SparsePolicy`: `PagedSparsePolicy` (on-demand 4KB page chunks) or `FlatSparsePolicy`.
+    - `StoragePolicy`: `SparseSetStoragePolicy` (default, dynamic composition) or `ArchetypeStoragePolicy` (columnar
+      bulk SoA).
+    - `AllocPolicy`: `ArenaAllocPolicy` (default linear arena) or `SystemAllocPolicy`.
+    - `SchedulerPolicy`: `AutoSchedulerPolicy` (topological graph execution) or `ManualSchedulerPolicy`.
+    - `SparsePolicy`: `PagedSparsePolicy` (on-demand 4KB page chunks) or `FlatSparsePolicy`.
 4. **Auto-Lead-Store Dense Join View (`World::view`)** (`include/ecs/world.hpp`):
-   - Dynamically evaluates component store sizes and automatically drives iteration through the smallest store (*lead store*), executing branchless $O(1)$ sparse probes into companion stores for optimal iteration efficiency.
-   - Supports `Without<Cs...>` exclusion filter: `world.view<Position>(Without<Frozen>{}, fn)` skips entities with any excluded component. Zero cost when no exclusion is specified.
-   - `chunk_view<Components...>(fn)` passes `std::span<C>` slices for SoA-friendly SIMD processing; falls back to per-entity iteration for `SparseSetStoragePolicy`.
+    - Dynamically evaluates component store sizes and automatically drives iteration through the smallest store (*lead
+      store*), executing branchless $O (1)$ sparse probes into companion stores for optimal iteration efficiency.
+    - Supports `Without<Cs...>` exclusion filter: `world.view<Position>(Without<Frozen>{}, fn)` skips entities with any
+      excluded component. Zero cost when no exclusion is specified.
+    - `chunk_view<Components...>(fn)` passes `std::span<C>` slices for SoA-friendly SIMD processing; falls back to
+      per-entity iteration for `SparseSetStoragePolicy`.
 5. **Arena-Backed Command Buffer (`CommandBuffer`)** (`include/ecs/command_buffer.hpp`):
-   - Records structural mutations (`spawn`, `despawn`, `add`, `remove`, `emplace`) into a `smriti::pools::LinearArena` bump allocator.
-   - `spawn_batch(N)` records N deferred spawns in a single arena entry, returning a `std::span<Entity>` of placeholder handles; expanded to N generational allocations on `flush_commands()`.
-   - Zero `std::function` heap allocations. Thread-local recording with `LocalCommandBuffer`.
+    - Records structural mutations (`spawn`, `despawn`, `add`, `remove`, `emplace`) into a `smriti::pools::LinearArena`
+      bump allocator.
+    - `spawn_batch(N)` records N deferred spawns in a single arena entry, returning a `std::span<Entity>` of placeholder
+      handles; expanded to N generational allocations on `flush_commands()`.
+    - Zero `std::function` heap allocations. Thread-local recording with `LocalCommandBuffer`.
 6. **Reactive Observers & Relations (`include/ecs/observer.hpp`, `include/ecs/relation.hpp`)**:
-   - `OnAdd<C>` and `OnRemove<C>` hooks without virtual dispatch or `std::function` closures.
-   - Typed entity relations (`ChildOf`, `Targets`, `MemberOf`) with cascading despawn.
+    - `OnAdd<C>` and `OnRemove<C>` hooks without virtual dispatch or `std::function` closures.
+    - Typed entity relations (`ChildOf`, `Targets`, `MemberOf`) with cascading despawn.
 7. **Topological System Scheduler (`include/ecs/scheduler.hpp`)**:
-   - Analyzes `Reads<...>` and `Writes<...>` traits to order systems via `containers::topological_sort` on a `containers::LiteGraph`.
+    - Analyzes `Reads<...>` and `Writes<...>` traits to order systems via `containers::topological_sort` on a
+      `containers::LiteGraph`.
 
 ---
 
@@ -97,6 +106,9 @@ world.flush_commands(); // Deterministic sync point
 
 ## 3. Subsystem Integration
 
-- **Gati Integration**: Gati binds `pebble::ecs::World` as its central state substrate, orchestrating components such as `Transform`, `MaterialComponent`, and `ElementalComponent`.
-- **Spandana Integration**: Spandana timelines manipulate component properties directly via type-safe accessors and deferred command buffers.
-- **Kalpana Separation**: `pebble::ecs` has **zero visual dependencies**; Kalpana extracts presentation state independently through read-only views during frame assembly.
+- **Gati Integration**: Gati binds `pebble::ecs::World` as its central state substrate, orchestrating components such as
+  `Transform`, `MaterialComponent`, and `ElementalComponent`.
+- **Spandana Integration**: Spandana timelines manipulate component properties directly via type-safe accessors and
+  deferred command buffers.
+- **Kalpana Separation**: `pebble::ecs` has **zero visual dependencies**; Kalpana extracts presentation state
+  independently through read-only views during frame assembly.

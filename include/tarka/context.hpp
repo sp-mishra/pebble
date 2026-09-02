@@ -188,7 +188,8 @@ namespace tarka {
             if (const SortImpl** head = sort_table_.find(h)) {
                 impl->coll_next = *head;
                 sort_table_.insert_or_assign(h, impl);
-            } else {
+            }
+            else {
                 sort_table_.insert(h, impl);
             }
             journal_sort(h);
@@ -259,7 +260,8 @@ namespace tarka {
             if (const TermImpl** head = term_table_.find(h)) {
                 impl->coll_next = *head;
                 term_table_.insert_or_assign(h, impl);
-            } else {
+            }
+            else {
                 term_table_.insert(h, impl);
             }
             journal_term(h);
@@ -409,23 +411,24 @@ namespace tarka {
             for (std::size_t i = journal_.size(); i > cp.journal_mark; --i) {
                 const journal_entry& e = journal_[i - 1];
                 switch (e.kind) {
-                    case journal_kind::term: {
-                        if (const TermImpl** head = term_table_.find(e.hash)) {
-                            const TermImpl* next = (*head)->coll_next;
-                            if (next) term_table_.insert_or_assign(e.hash, next);
-                            else term_table_.erase(e.hash);
-                        }
-                        break;
+                case journal_kind::term: {
+                    if (const TermImpl** head = term_table_.find(e.hash)) {
+                        const TermImpl* next = (*head)->coll_next;
+                        if (next) term_table_.insert_or_assign(e.hash, next);
+                        else term_table_.erase(e.hash);
                     }
-                    case journal_kind::sort: {
-                        if (const SortImpl** head = sort_table_.find(e.hash)) {
-                            const SortImpl* next = (*head)->coll_next;
-                            if (next) sort_table_.insert_or_assign(e.hash, next);
-                            else sort_table_.erase(e.hash);
-                        }
-                        break;
+                    break;
+                }
+                case journal_kind::sort: {
+                    if (const SortImpl** head = sort_table_.find(e.hash)) {
+                        const SortImpl* next = (*head)->coll_next;
+                        if (next) sort_table_.insert_or_assign(e.hash, next);
+                        else sort_table_.erase(e.hash);
                     }
-                    case journal_kind::symbol: symbols_.erase(e.hash); break;
+                    break;
+                }
+                case journal_kind::symbol: symbols_.erase(e.hash);
+                    break;
                 }
             }
             journal_.resize(cp.journal_mark);
@@ -452,6 +455,7 @@ namespace tarka {
         // undo cache insertions in reverse. Only populated while a checkpoint is
         // live has no bearing — recording is unconditional and cheap (one push).
         enum class journal_kind : std::uint8_t { term, sort, symbol };
+
         struct journal_entry {
             std::uint64_t hash;
             journal_kind kind;
@@ -476,9 +480,11 @@ namespace tarka {
         void journal_term(std::uint64_t h) {
             if (checkpoint_depth_ > 0) journal_.push_back({h, journal_kind::term});
         }
+
         void journal_sort(std::uint64_t h) {
             if (checkpoint_depth_ > 0) journal_.push_back({h, journal_kind::sort});
         }
+
         void journal_symbol(std::uint64_t h) {
             if (checkpoint_depth_ > 0) journal_.push_back({h, journal_kind::symbol});
         }
@@ -669,70 +675,70 @@ namespace tarka {
     template <Op O>
     [[nodiscard]] constexpr op_info make_op_info() noexcept {
         return {
-            op_descriptor<O>::stable_id,
-            op_descriptor<O>::symbol,
-            op_descriptor<O>::arity,
-            op_descriptor<O>::is_commutative,
-            op_descriptor<O>::theory_bits
+            op_descriptor < O > ::stable_id,
+            op_descriptor < O > ::symbol,
+            op_descriptor < O > ::arity,
+            op_descriptor < O > ::is_commutative,
+            op_descriptor < O > ::theory_bits
         };
     }
 
     [[nodiscard]] inline op_info get_op_info(Op o) noexcept {
         switch (o) {
-            case Op::Lit: return make_op_info<Op::Lit>();
-            case Op::Sym: return make_op_info<Op::Sym>();
-            case Op::Forall: return make_op_info<Op::Forall>();
-            case Op::Exists: return make_op_info<Op::Exists>();
-            case Op::True: return make_op_info<Op::True>();
-            case Op::False: return make_op_info<Op::False>();
-            case Op::Not: return make_op_info<Op::Not>();
-            case Op::And: return make_op_info<Op::And>();
-            case Op::Or: return make_op_info<Op::Or>();
-            case Op::Xor: return make_op_info<Op::Xor>();
-            case Op::Implies: return make_op_info<Op::Implies>();
-            case Op::Ite: return make_op_info<Op::Ite>();
-            case Op::Eq: return make_op_info<Op::Eq>();
-            case Op::Distinct: return make_op_info<Op::Distinct>();
-            case Op::Add: return make_op_info<Op::Add>();
-            case Op::Sub: return make_op_info<Op::Sub>();
-            case Op::Mul: return make_op_info<Op::Mul>();
-            case Op::Div: return make_op_info<Op::Div>();
-            case Op::Mod: return make_op_info<Op::Mod>();
-            case Op::Neg: return make_op_info<Op::Neg>();
-            case Op::Lt: return make_op_info<Op::Lt>();
-            case Op::Le: return make_op_info<Op::Le>();
-            case Op::Gt: return make_op_info<Op::Gt>();
-            case Op::Ge: return make_op_info<Op::Ge>();
-            case Op::BvAdd: return make_op_info<Op::BvAdd>();
-            case Op::BvSub: return make_op_info<Op::BvSub>();
-            case Op::BvMul: return make_op_info<Op::BvMul>();
-            case Op::BvUdiv: return make_op_info<Op::BvUdiv>();
-            case Op::BvSdiv: return make_op_info<Op::BvSdiv>();
-            case Op::BvUrem: return make_op_info<Op::BvUrem>();
-            case Op::BvSrem: return make_op_info<Op::BvSrem>();
-            case Op::BvNeg: return make_op_info<Op::BvNeg>();
-            case Op::BvAnd: return make_op_info<Op::BvAnd>();
-            case Op::BvOr: return make_op_info<Op::BvOr>();
-            case Op::BvXor: return make_op_info<Op::BvXor>();
-            case Op::BvNot: return make_op_info<Op::BvNot>();
-            case Op::BvShl: return make_op_info<Op::BvShl>();
-            case Op::BvLshr: return make_op_info<Op::BvLshr>();
-            case Op::BvAshr: return make_op_info<Op::BvAshr>();
-            case Op::BvUlt: return make_op_info<Op::BvUlt>();
-            case Op::BvUle: return make_op_info<Op::BvUle>();
-            case Op::BvSlt: return make_op_info<Op::BvSlt>();
-            case Op::BvSle: return make_op_info<Op::BvSle>();
-            case Op::BvConcat: return make_op_info<Op::BvConcat>();
-            case Op::BvExtract: return make_op_info<Op::BvExtract>();
-            case Op::BvZeroExt: return make_op_info<Op::BvZeroExt>();
-            case Op::BvSignExt: return make_op_info<Op::BvSignExt>();
-            case Op::Select: return make_op_info<Op::Select>();
-            case Op::Store: return make_op_info<Op::Store>();
-            case Op::Apply: return make_op_info<Op::Apply>();
-            default: {
-                const auto id = static_cast<std::uint16_t>(o);
-                return {id, "?", -1, false, theory_bit(theory_family::core)};
-            }
+        case Op::Lit: return make_op_info<Op::Lit>();
+        case Op::Sym: return make_op_info<Op::Sym>();
+        case Op::Forall: return make_op_info<Op::Forall>();
+        case Op::Exists: return make_op_info<Op::Exists>();
+        case Op::True: return make_op_info<Op::True>();
+        case Op::False: return make_op_info<Op::False>();
+        case Op::Not: return make_op_info<Op::Not>();
+        case Op::And: return make_op_info<Op::And>();
+        case Op::Or: return make_op_info<Op::Or>();
+        case Op::Xor: return make_op_info<Op::Xor>();
+        case Op::Implies: return make_op_info<Op::Implies>();
+        case Op::Ite: return make_op_info<Op::Ite>();
+        case Op::Eq: return make_op_info<Op::Eq>();
+        case Op::Distinct: return make_op_info<Op::Distinct>();
+        case Op::Add: return make_op_info<Op::Add>();
+        case Op::Sub: return make_op_info<Op::Sub>();
+        case Op::Mul: return make_op_info<Op::Mul>();
+        case Op::Div: return make_op_info<Op::Div>();
+        case Op::Mod: return make_op_info<Op::Mod>();
+        case Op::Neg: return make_op_info<Op::Neg>();
+        case Op::Lt: return make_op_info<Op::Lt>();
+        case Op::Le: return make_op_info<Op::Le>();
+        case Op::Gt: return make_op_info<Op::Gt>();
+        case Op::Ge: return make_op_info<Op::Ge>();
+        case Op::BvAdd: return make_op_info<Op::BvAdd>();
+        case Op::BvSub: return make_op_info<Op::BvSub>();
+        case Op::BvMul: return make_op_info<Op::BvMul>();
+        case Op::BvUdiv: return make_op_info<Op::BvUdiv>();
+        case Op::BvSdiv: return make_op_info<Op::BvSdiv>();
+        case Op::BvUrem: return make_op_info<Op::BvUrem>();
+        case Op::BvSrem: return make_op_info<Op::BvSrem>();
+        case Op::BvNeg: return make_op_info<Op::BvNeg>();
+        case Op::BvAnd: return make_op_info<Op::BvAnd>();
+        case Op::BvOr: return make_op_info<Op::BvOr>();
+        case Op::BvXor: return make_op_info<Op::BvXor>();
+        case Op::BvNot: return make_op_info<Op::BvNot>();
+        case Op::BvShl: return make_op_info<Op::BvShl>();
+        case Op::BvLshr: return make_op_info<Op::BvLshr>();
+        case Op::BvAshr: return make_op_info<Op::BvAshr>();
+        case Op::BvUlt: return make_op_info<Op::BvUlt>();
+        case Op::BvUle: return make_op_info<Op::BvUle>();
+        case Op::BvSlt: return make_op_info<Op::BvSlt>();
+        case Op::BvSle: return make_op_info<Op::BvSle>();
+        case Op::BvConcat: return make_op_info<Op::BvConcat>();
+        case Op::BvExtract: return make_op_info<Op::BvExtract>();
+        case Op::BvZeroExt: return make_op_info<Op::BvZeroExt>();
+        case Op::BvSignExt: return make_op_info<Op::BvSignExt>();
+        case Op::Select: return make_op_info<Op::Select>();
+        case Op::Store: return make_op_info<Op::Store>();
+        case Op::Apply: return make_op_info<Op::Apply>();
+        default: {
+            const auto id = static_cast<std::uint16_t>(o);
+            return {id, "?", -1, false, theory_bit(theory_family::core)};
+        }
         }
     }
 } // namespace tarka

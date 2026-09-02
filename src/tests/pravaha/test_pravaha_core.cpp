@@ -4,7 +4,12 @@
 
 #include <type_traits>
 
-TEST_CASE("Pravaha core task graph remains independently usable", "[pravaha][core]") {
+TEST_CASE (
+"Pravaha core task graph remains independently usable"
+,
+"[pravaha][core]"
+)
+ {
     auto first = pravaha::task("first", [] {});
     auto second = pravaha::task("second", [] {});
     auto pipeline = first | second;

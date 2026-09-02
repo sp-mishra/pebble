@@ -142,41 +142,41 @@ namespace tarka::native {
 
         Lit blast_predicate(Term t) {
             switch (t.op()) {
-                case Op::Eq: {
-                    auto ch = t.children();
-                    if (ch.size() == 2 && ch[0].sort().valid() && ch[0].sort().kind() == SortKind::BitVec) {
-                        return blast_eq(blast(ch[0]), blast(ch[1]));
-                    }
-                    break;
+            case Op::Eq: {
+                auto ch = t.children();
+                if (ch.size() == 2 && ch[0].sort().valid() && ch[0].sort().kind() == SortKind::BitVec) {
+                    return blast_eq(blast(ch[0]), blast(ch[1]));
                 }
-                case Op::Distinct: {
-                    auto ch = t.children();
-                    if (ch.size() == 2 && ch[0].sort().valid() && ch[0].sort().kind() == SortKind::BitVec) {
-                        return lit_neg(blast_eq(blast(ch[0]), blast(ch[1])));
-                    }
-                    break;
+                break;
+            }
+            case Op::Distinct: {
+                auto ch = t.children();
+                if (ch.size() == 2 && ch[0].sort().valid() && ch[0].sort().kind() == SortKind::BitVec) {
+                    return lit_neg(blast_eq(blast(ch[0]), blast(ch[1])));
                 }
-                case Op::BvUlt: {
-                    auto ch = t.children();
-                    if (ch.size() == 2) return blast_ult(blast(ch[0]), blast(ch[1]));
-                    break;
-                }
-                case Op::BvUle: {
-                    auto ch = t.children();
-                    if (ch.size() == 2) return blast_ule(blast(ch[0]), blast(ch[1]));
-                    break;
-                }
-                case Op::BvSlt: {
-                    auto ch = t.children();
-                    if (ch.size() == 2) return blast_slt(blast(ch[0]), blast(ch[1]));
-                    break;
-                }
-                case Op::BvSle: {
-                    auto ch = t.children();
-                    if (ch.size() == 2) return blast_sle(blast(ch[0]), blast(ch[1]));
-                    break;
-                }
-                default: break;
+                break;
+            }
+            case Op::BvUlt: {
+                auto ch = t.children();
+                if (ch.size() == 2) return blast_ult(blast(ch[0]), blast(ch[1]));
+                break;
+            }
+            case Op::BvUle: {
+                auto ch = t.children();
+                if (ch.size() == 2) return blast_ule(blast(ch[0]), blast(ch[1]));
+                break;
+            }
+            case Op::BvSlt: {
+                auto ch = t.children();
+                if (ch.size() == 2) return blast_slt(blast(ch[0]), blast(ch[1]));
+                break;
+            }
+            case Op::BvSle: {
+                auto ch = t.children();
+                if (ch.size() == 2) return blast_sle(blast(ch[0]), blast(ch[1]));
+                break;
+            }
+            default: break;
             }
             return const_lit(true);
         }
@@ -185,144 +185,144 @@ namespace tarka::native {
             const std::uint32_t width = t.sort().valid() ? t.sort().scalar_param() : 32;
 
             switch (t.op()) {
-                case Op::Lit: {
-                    if (auto bv = t.ctx().bv_literal(t.ptr()->payload_hash)) {
-                        std::vector<Lit> bits;
-                        bits.reserve(bv->width);
-                        for (std::uint32_t i = 0; i < bv->width; ++i) {
-                            const bool bit = (bv->bits & (1ULL << i)) != 0;
-                            bits.push_back(const_lit(bit));
-                        }
-                        return bits;
-                    }
-                    break;
-                }
-                case Op::Sym: {
+            case Op::Lit: {
+                if (auto bv = t.ctx().bv_literal(t.ptr()->payload_hash)) {
                     std::vector<Lit> bits;
-                    bits.reserve(width);
-                    for (std::uint32_t i = 0; i < width; ++i) {
-                        bits.push_back(new_lit());
+                    bits.reserve(bv->width);
+                    for (std::uint32_t i = 0; i < bv->width; ++i) {
+                        const bool bit = (bv->bits & (1ULL << i)) != 0;
+                        bits.push_back(const_lit(bit));
                     }
                     return bits;
                 }
-                case Op::BvNot: {
-                    auto in = blast(t.children()[0]);
-                    std::vector<Lit> out;
-                    out.reserve(in.size());
-                    for (Lit l : in) out.push_back(lit_neg(l));
-                    return out;
+                break;
+            }
+            case Op::Sym: {
+                std::vector<Lit> bits;
+                bits.reserve(width);
+                for (std::uint32_t i = 0; i < width; ++i) {
+                    bits.push_back(new_lit());
                 }
-                case Op::BvAnd: {
-                    auto a = blast(t.children()[0]);
-                    auto b = blast(t.children()[1]);
-                    return blast_bitwise_and(a, b);
+                return bits;
+            }
+            case Op::BvNot: {
+                auto in = blast(t.children()[0]);
+                std::vector<Lit> out;
+                out.reserve(in.size());
+                for (Lit l : in) out.push_back(lit_neg(l));
+                return out;
+            }
+            case Op::BvAnd: {
+                auto a = blast(t.children()[0]);
+                auto b = blast(t.children()[1]);
+                return blast_bitwise_and(a, b);
+            }
+            case Op::BvOr: {
+                auto a = blast(t.children()[0]);
+                auto b = blast(t.children()[1]);
+                return blast_bitwise_or(a, b);
+            }
+            case Op::BvXor: {
+                auto a = blast(t.children()[0]);
+                auto b = blast(t.children()[1]);
+                return blast_bitwise_xor(a, b);
+            }
+            case Op::BvAdd: {
+                auto a = blast(t.children()[0]);
+                auto b = blast(t.children()[1]);
+                return blast_add(a, b);
+            }
+            case Op::BvSub: {
+                auto a = blast(t.children()[0]);
+                auto b = blast(t.children()[1]);
+                return blast_sub(a, b);
+            }
+            case Op::BvNeg: {
+                auto a = blast(t.children()[0]);
+                return blast_neg(a);
+            }
+            case Op::BvMul: {
+                auto a = blast(t.children()[0]);
+                auto b = blast(t.children()[1]);
+                return blast_mul(a, b);
+            }
+            case Op::BvUdiv: {
+                auto a = blast(t.children()[0]);
+                auto b = blast(t.children()[1]);
+                return blast_udiv(a, b);
+            }
+            case Op::BvSdiv: {
+                auto a = blast(t.children()[0]);
+                auto b = blast(t.children()[1]);
+                return blast_sdiv(a, b);
+            }
+            case Op::BvUrem: {
+                auto a = blast(t.children()[0]);
+                auto b = blast(t.children()[1]);
+                return blast_urem(a, b);
+            }
+            case Op::BvSrem: {
+                auto a = blast(t.children()[0]);
+                auto b = blast(t.children()[1]);
+                return blast_srem(a, b);
+            }
+            case Op::BvShl: {
+                auto a = blast(t.children()[0]);
+                auto b = blast(t.children()[1]);
+                return blast_shl(a, b);
+            }
+            case Op::BvLshr: {
+                auto a = blast(t.children()[0]);
+                auto b = blast(t.children()[1]);
+                return blast_lshr(a, b);
+            }
+            case Op::BvAshr: {
+                auto a = blast(t.children()[0]);
+                auto b = blast(t.children()[1]);
+                return blast_ashr(a, b);
+            }
+            case Op::BvConcat: {
+                auto a = blast(t.children()[0]);
+                auto b = blast(t.children()[1]);
+                // Concat(a, b): b is low bits, a is high bits
+                std::vector<Lit> out = b;
+                out.insert(out.end(), a.begin(), a.end());
+                return out;
+            }
+            case Op::BvExtract: {
+                auto in = blast(t.children()[0]);
+                // Slices according to scalar_param / child indices
+                std::vector<Lit> out;
+                const std::size_t n = in.size();
+                for (std::size_t i = 0; i < n && i < width; ++i) {
+                    out.push_back(in[i]);
                 }
-                case Op::BvOr: {
-                    auto a = blast(t.children()[0]);
-                    auto b = blast(t.children()[1]);
-                    return blast_bitwise_or(a, b);
+                return out;
+            }
+            case Op::BvZeroExt: {
+                auto in = blast(t.children()[0]);
+                std::vector<Lit> out = in;
+                while (out.size() < width) {
+                    out.push_back(const_lit(false));
                 }
-                case Op::BvXor: {
-                    auto a = blast(t.children()[0]);
-                    auto b = blast(t.children()[1]);
-                    return blast_bitwise_xor(a, b);
+                return out;
+            }
+            case Op::BvSignExt: {
+                auto in = blast(t.children()[0]);
+                std::vector<Lit> out = in;
+                const Lit sign = in.empty() ? const_lit(false) : in.back();
+                while (out.size() < width) {
+                    out.push_back(sign);
                 }
-                case Op::BvAdd: {
-                    auto a = blast(t.children()[0]);
-                    auto b = blast(t.children()[1]);
-                    return blast_add(a, b);
-                }
-                case Op::BvSub: {
-                    auto a = blast(t.children()[0]);
-                    auto b = blast(t.children()[1]);
-                    return blast_sub(a, b);
-                }
-                case Op::BvNeg: {
-                    auto a = blast(t.children()[0]);
-                    return blast_neg(a);
-                }
-                case Op::BvMul: {
-                    auto a = blast(t.children()[0]);
-                    auto b = blast(t.children()[1]);
-                    return blast_mul(a, b);
-                }
-                case Op::BvUdiv: {
-                    auto a = blast(t.children()[0]);
-                    auto b = blast(t.children()[1]);
-                    return blast_udiv(a, b);
-                }
-                case Op::BvSdiv: {
-                    auto a = blast(t.children()[0]);
-                    auto b = blast(t.children()[1]);
-                    return blast_sdiv(a, b);
-                }
-                case Op::BvUrem: {
-                    auto a = blast(t.children()[0]);
-                    auto b = blast(t.children()[1]);
-                    return blast_urem(a, b);
-                }
-                case Op::BvSrem: {
-                    auto a = blast(t.children()[0]);
-                    auto b = blast(t.children()[1]);
-                    return blast_srem(a, b);
-                }
-                case Op::BvShl: {
-                    auto a = blast(t.children()[0]);
-                    auto b = blast(t.children()[1]);
-                    return blast_shl(a, b);
-                }
-                case Op::BvLshr: {
-                    auto a = blast(t.children()[0]);
-                    auto b = blast(t.children()[1]);
-                    return blast_lshr(a, b);
-                }
-                case Op::BvAshr: {
-                    auto a = blast(t.children()[0]);
-                    auto b = blast(t.children()[1]);
-                    return blast_ashr(a, b);
-                }
-                case Op::BvConcat: {
-                    auto a = blast(t.children()[0]);
-                    auto b = blast(t.children()[1]);
-                    // Concat(a, b): b is low bits, a is high bits
-                    std::vector<Lit> out = b;
-                    out.insert(out.end(), a.begin(), a.end());
-                    return out;
-                }
-                case Op::BvExtract: {
-                    auto in = blast(t.children()[0]);
-                    // Slices according to scalar_param / child indices
-                    std::vector<Lit> out;
-                    const std::size_t n = in.size();
-                    for (std::size_t i = 0; i < n && i < width; ++i) {
-                        out.push_back(in[i]);
-                    }
-                    return out;
-                }
-                case Op::BvZeroExt: {
-                    auto in = blast(t.children()[0]);
-                    std::vector<Lit> out = in;
-                    while (out.size() < width) {
-                        out.push_back(const_lit(false));
-                    }
-                    return out;
-                }
-                case Op::BvSignExt: {
-                    auto in = blast(t.children()[0]);
-                    std::vector<Lit> out = in;
-                    const Lit sign = in.empty() ? const_lit(false) : in.back();
-                    while (out.size() < width) {
-                        out.push_back(sign);
-                    }
-                    return out;
-                }
-                case Op::Ite: {
-                    auto cond = blast_predicate(t.children()[0]);
-                    auto a = blast(t.children()[1]);
-                    auto b = blast(t.children()[2]);
-                    return blast_ite(cond, a, b);
-                }
-                default: break;
+                return out;
+            }
+            case Op::Ite: {
+                auto cond = blast_predicate(t.children()[0]);
+                auto a = blast(t.children()[1]);
+                auto b = blast(t.children()[2]);
+                return blast_ite(cond, a, b);
+            }
+            default: break;
             }
 
             // Fallback: mint fresh bits

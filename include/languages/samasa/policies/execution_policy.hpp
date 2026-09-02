@@ -10,7 +10,6 @@
 #include <cstdint>
 
 namespace lang::samasa {
-
     struct runtime_execution {
         static constexpr bool is_consteval = false;
     };
@@ -18,8 +17,7 @@ namespace lang::samasa {
     struct consteval_execution {
         static constexpr bool is_consteval = true;
         std::uint32_t max_tokens = 4096;
-        std::uint32_t max_nodes  = 4096;
-        std::uint32_t max_diags  = 64;
+        std::uint32_t max_nodes = 4096;
+        std::uint32_t max_diags = 64;
     };
-
 } // namespace lang::samasa

@@ -9,8 +9,8 @@ namespace lang::samasa {
     template <class Grammar>
     struct grammar_metadata {
         static constexpr auto validation = validate_grammar<Grammar>();
-        static constexpr auto first      = first_sets<Grammar>();
-        static constexpr auto follow     = follow_sets<Grammar>();
+        static constexpr auto first = first_sets<Grammar>();
+        static constexpr auto follow = follow_sets<Grammar>();
         static constexpr std::size_t rule_count = Grammar::rule_count;
         static constexpr bool valid = validation.ok();
     };

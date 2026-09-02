@@ -33,26 +33,25 @@
 #include <vector>
 
 namespace lang {
-
     // =========================================================================
     // module_kind
     // =========================================================================
 
     enum class module_kind : std::uint8_t {
-        source            = 0,  // source file on disk
-        embedded_src      = 1,  // in-memory source text
-        embedded_artifact = 2,  // pre-compiled binary artifact
-        native            = 3,  // registered host (C++) module
-        package_root      = 4,  // package root module (module.lang)
+        source = 0, // source file on disk
+        embedded_src = 1, // in-memory source text
+        embedded_artifact = 2, // pre-compiled binary artifact
+        native = 3, // registered host (C++) module
+        package_root = 4, // package root module (module.lang)
     };
 
     [[nodiscard]] constexpr std::string_view to_string(module_kind k) noexcept {
         switch (k) {
-        case module_kind::source:            return "source";
-        case module_kind::embedded_src:      return "embedded_src";
+        case module_kind::source: return "source";
+        case module_kind::embedded_src: return "embedded_src";
         case module_kind::embedded_artifact: return "embedded_artifact";
-        case module_kind::native:            return "native";
-        case module_kind::package_root:      return "package_root";
+        case module_kind::native: return "native";
+        case module_kind::package_root: return "package_root";
         }
         return "unknown";
     }
@@ -86,11 +85,13 @@ namespace lang {
         std::uint16_t patch = 0;
 
         [[nodiscard]] constexpr bool operator==(const version_triple&) const noexcept = default;
+
         [[nodiscard]] constexpr bool operator<(const version_triple& o) const noexcept {
             if (major != o.major) return major < o.major;
             if (minor != o.minor) return minor < o.minor;
             return patch < o.patch;
         }
+
         [[nodiscard]] constexpr bool operator<=(const version_triple& o) const noexcept {
             return !(o < *this);
         }
@@ -101,7 +102,7 @@ namespace lang {
     // =========================================================================
 
     struct module_capabilities {
-        std::uint64_t effect_mask     = 0;
+        std::uint64_t effect_mask = 0;
         std::uint64_t capability_mask = 0;
     };
 
@@ -110,13 +111,13 @@ namespace lang {
     // =========================================================================
 
     struct module_descriptor {
-        std::string         name;           // "math.vector"
-        version_triple      version{};
-        module_kind         kind = module_kind::source;
-        module_hash         content_hash{};
+        std::string name; // "math.vector"
+        version_triple version{};
+        module_kind kind = module_kind::source;
+        module_hash content_hash{};
         module_capabilities capabilities{};
-        std::string         source_path;    // filesystem path (kind == source)
-        std::string         package_name;   // package clause
+        std::string source_path; // filesystem path (kind == source)
+        std::string package_name; // package clause
     };
 
     // =========================================================================
@@ -124,9 +125,9 @@ namespace lang {
     // =========================================================================
 
     struct resolver_config {
-        bool        allow_system_paths    = false;
-        bool        allow_package_registry = false;
-        std::string source_extension      = ".lang"; // override per language
+        bool allow_system_paths = false;
+        bool allow_package_registry = false;
+        std::string source_extension = ".lang"; // override per language
     };
 
     // =========================================================================
@@ -163,8 +164,8 @@ namespace lang {
 
         void add_embedded_src(std::string module_name, std::string source) {
             module_descriptor d;
-            d.name         = module_name;
-            d.kind         = module_kind::embedded_src;
+            d.name = module_name;
+            d.kind = module_kind::embedded_src;
             d.content_hash = hash_source(source);
             embedded_src_[module_name] = {std::move(d), std::move(source)};
         }
@@ -172,16 +173,16 @@ namespace lang {
         // Runtime-injected source (tier 4 — separate from embedded_src).
         void add_in_memory(std::string module_name, std::string source) {
             module_descriptor d;
-            d.name         = module_name;
-            d.kind         = module_kind::embedded_src;
+            d.name = module_name;
+            d.kind = module_kind::embedded_src;
             d.content_hash = hash_source(source);
             in_memory_[module_name] = {std::move(d), std::move(source)};
         }
 
         void add_project_path(std::filesystem::path p) { project_paths_.push_back(std::move(p)); }
-        void add_app_path(std::filesystem::path p)     { app_paths_.push_back(std::move(p));     }
-        void add_cache_path(std::filesystem::path p)   { cache_paths_.push_back(std::move(p));   }
-        void add_system_path(std::filesystem::path p)  { system_paths_.push_back(std::move(p));  }
+        void add_app_path(std::filesystem::path p) { app_paths_.push_back(std::move(p)); }
+        void add_cache_path(std::filesystem::path p) { cache_paths_.push_back(std::move(p)); }
+        void add_system_path(std::filesystem::path p) { system_paths_.push_back(std::move(p)); }
 
         // ── resolution ────────────────────────────────────────────────────────
 
@@ -189,14 +190,14 @@ namespace lang {
         resolve(std::string_view import_name) const {
             auto key = std::string(import_name);
 
-            if (auto it = native_.find(key); it != native_.end())            return it->second;
+            if (auto it = native_.find(key); it != native_.end()) return it->second;
             if (auto it = embedded_artifact_.find(key); it != embedded_artifact_.end()) return it->second;
             if (auto it = embedded_src_.find(key); it != embedded_src_.end()) return it->second.desc;
-            if (auto it = in_memory_.find(key); it != in_memory_.end())      return it->second.desc;
+            if (auto it = in_memory_.find(key); it != in_memory_.end()) return it->second.desc;
 
             if (auto d = search_paths(import_name, project_paths_)) return d;
-            if (auto d = search_paths(import_name, app_paths_))     return d;
-            if (auto d = search_paths(import_name, cache_paths_))   return d;
+            if (auto d = search_paths(import_name, app_paths_)) return d;
+            if (auto d = search_paths(import_name, cache_paths_)) return d;
 
             if (config_.allow_system_paths) {
                 if (auto d = search_paths(import_name, system_paths_)) return d;
@@ -222,7 +223,11 @@ namespace lang {
         std::unordered_map<std::string, module_descriptor> native_;
         std::unordered_map<std::string, module_descriptor> embedded_artifact_;
 
-        struct src_entry { module_descriptor desc; std::string source; };
+        struct src_entry {
+            module_descriptor desc;
+            std::string source;
+        };
+
         std::unordered_map<std::string, src_entry> embedded_src_;
         std::unordered_map<std::string, src_entry> in_memory_;
 
@@ -236,8 +241,11 @@ namespace lang {
             std::filesystem::path p;
             std::string seg;
             for (char c : name) {
-                if (c == '.') { p /= seg; seg.clear(); }
-                else           seg += c;
+                if (c == '.') {
+                    p /= seg;
+                    seg.clear();
+                }
+                else seg += c;
             }
             if (!seg.empty()) p /= seg;
             p.replace_extension(config_.source_extension);
@@ -252,8 +260,8 @@ namespace lang {
                 auto full = base / rel;
                 if (std::filesystem::exists(full)) {
                     module_descriptor d;
-                    d.name        = std::string(name);
-                    d.kind        = module_kind::source;
+                    d.name = std::string(name);
+                    d.kind = module_kind::source;
                     d.source_path = full.string();
                     return d;
                 }
@@ -294,11 +302,13 @@ namespace lang {
             rev_adj_[imt_str].push_back(imp_str);
             // Auto-register nodes if not already present.
             if (!name_to_desc_.count(imp_str)) {
-                module_descriptor d; d.name = imp_str;
+                module_descriptor d;
+                d.name = imp_str;
                 name_to_desc_[imp_str] = std::move(d);
             }
             if (!name_to_desc_.count(imt_str)) {
-                module_descriptor d; d.name = imt_str;
+                module_descriptor d;
+                d.name = imt_str;
                 name_to_desc_[imt_str] = std::move(d);
             }
         }
@@ -327,7 +337,8 @@ namespace lang {
                 if (d == 0) queue.push_back(k);
 
             while (!queue.empty()) {
-                auto n = queue.back(); queue.pop_back();
+                auto n = queue.back();
+                queue.pop_back();
                 order.push_back(n);
                 if (auto it = rev_adj_.find(n); it != rev_adj_.end())
                     for (const auto& importer : it->second)
@@ -346,26 +357,26 @@ namespace lang {
 
             std::vector<std::string> cycle, path;
 
-            std::function<bool(const std::string&)> dfs =
+            std::function < bool(const std::string &) > dfs =
                 [&](const std::string& n) -> bool {
-                color[n] = 1; // gray = in stack
-                path.push_back(n);
-                if (auto it = adj_.find(n); it != adj_.end()) {
-                    for (const auto& dep : it->second) {
-                        if (color[dep] == 1) {
-                            // Found cycle — collect path from dep onward.
-                            auto start = std::find(path.begin(), path.end(), dep);
-                            cycle.assign(start, path.end());
-                            cycle.push_back(dep); // close the loop
-                            return true;
+                    color[n] = 1; // gray = in stack
+                    path.push_back(n);
+                    if (auto it = adj_.find(n); it != adj_.end()) {
+                        for (const auto& dep : it->second) {
+                            if (color[dep] == 1) {
+                                // Found cycle — collect path from dep onward.
+                                auto start = std::find(path.begin(), path.end(), dep);
+                                cycle.assign(start, path.end());
+                                cycle.push_back(dep); // close the loop
+                                return true;
+                            }
+                            if (color[dep] == 0 && dfs(dep)) return true;
                         }
-                        if (color[dep] == 0 && dfs(dep)) return true;
                     }
-                }
-                path.pop_back();
-                color[n] = 2; // black = done
-                return false;
-            };
+                    path.pop_back();
+                    color[n] = 2; // black = done
+                    return false;
+                };
 
             for (const auto& [k, _] : name_to_desc_)
                 if (color[k] == 0 && dfs(k)) break;
@@ -390,10 +401,9 @@ namespace lang {
         [[nodiscard]] const std::vector<dep_edge>& edges() const noexcept { return edges_; }
 
     private:
-        std::unordered_map<std::string, module_descriptor>           name_to_desc_;
-        std::vector<dep_edge>                                         edges_;
-        std::unordered_map<std::string, std::vector<std::string>>    adj_;     // importer → [importees]
-        std::unordered_map<std::string, std::vector<std::string>>    rev_adj_; // importee → [importers]
+        std::unordered_map<std::string, module_descriptor> name_to_desc_;
+        std::vector<dep_edge> edges_;
+        std::unordered_map<std::string, std::vector<std::string>> adj_; // importer → [importees]
+        std::unordered_map<std::string, std::vector<std::string>> rev_adj_; // importee → [importers]
     };
-
 } // namespace lang

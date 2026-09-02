@@ -9,7 +9,12 @@
 // consumers — akruti::CatmullRomSpline and gati::Curve<Scalar> (Cubic interp) — evaluate to
 // that exact primitive. No engine re-derives the basis.
 
-TEST_CASE("Catmull-Rom: pebble::math scalar & vec overloads agree component-wise", "[math][catmull_rom]") {
+TEST_CASE (
+"Catmull-Rom: pebble::math scalar & vec overloads agree component-wise"
+,
+"[math][catmull_rom]"
+)
+ {
     const float p0 = 0.0f, p1 = 1.0f, p2 = 3.0f, p3 = 2.0f;
     const pebble::math::vec2 v0{p0, 10.0f}, v1{p1, 20.0f}, v2{p2, 30.0f}, v3{p3, 40.0f};
 
@@ -20,7 +25,12 @@ TEST_CASE("Catmull-Rom: pebble::math scalar & vec overloads agree component-wise
     }
 }
 
-TEST_CASE("Catmull-Rom: akruti CatmullRomSpline mid-segment == pebble::math primitive", "[akruti][catmull_rom]") {
+TEST_CASE (
+"Catmull-Rom: akruti CatmullRomSpline mid-segment == pebble::math primitive"
+,
+"[akruti][catmull_rom]"
+)
+ {
     akruti::CatmullRomSpline spline;
     spline.points.push_back(akruti::Vec2<akruti::Scalar>{0.0f, 0.0f});
     spline.points.push_back(akruti::Vec2<akruti::Scalar>{10.0f, 0.0f});
@@ -41,7 +51,12 @@ TEST_CASE("Catmull-Rom: akruti CatmullRomSpline mid-segment == pebble::math prim
     REQUIRE(got.y == Catch::Approx(expect[1]).margin(1e-4));
 }
 
-TEST_CASE("Catmull-Rom: gati Curve<Scalar> Cubic sample == pebble::math primitive", "[gati][catmull_rom]") {
+TEST_CASE (
+"Catmull-Rom: gati Curve<Scalar> Cubic sample == pebble::math primitive"
+,
+"[gati][catmull_rom]"
+)
+ {
     gati::Curve<gati::Scalar> curve;
     curve.add(0.0f, 0.0f, gati::Interp::Cubic);
     curve.add(1.0f, 1.0f, gati::Interp::Cubic);

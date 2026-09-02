@@ -3,7 +3,12 @@
 #include "akruti/spline.hpp"
 #include <cmath>
 
-TEST_CASE("Akruti: Cubic Bézier Curve Evaluation and Arc-Length", "[akruti][spline]") {
+TEST_CASE (
+"Akruti: Cubic Bézier Curve Evaluation and Arc-Length"
+,
+"[akruti][spline]"
+)
+ {
     akruti::CubicBezierCurve bezier{
         .p0 = {0.0f, 0.0f},
         .p1 = {0.0f, 10.0f},
@@ -29,7 +34,12 @@ TEST_CASE("Akruti: Cubic Bézier Curve Evaluation and Arc-Length", "[akruti][spl
     REQUIRE(len < 25.0f);
 }
 
-TEST_CASE("Akruti: Spline Shape Contract (SDF, AABB, Support)", "[akruti][spline]") {
+TEST_CASE (
+"Akruti: Spline Shape Contract (SDF, AABB, Support)"
+,
+"[akruti][spline]"
+)
+ {
     akruti::CubicBezierCurve bezier{
         .p0 = {0.0f, 0.0f},
         .p1 = {0.0f, 10.0f},
@@ -51,7 +61,12 @@ TEST_CASE("Akruti: Spline Shape Contract (SDF, AABB, Support)", "[akruti][spline
     REQUIRE(box.hi[0] >= 11.0f);
 }
 
-TEST_CASE("Akruti: Spline CSG Shape Arithmetic Participation", "[akruti][spline][csg]") {
+TEST_CASE (
+"Akruti: Spline CSG Shape Arithmetic Participation"
+,
+"[akruti][spline][csg]"
+)
+ {
     akruti::CubicBezierCurve bezier{
         .p0 = {0.0f, 0.0f},
         .p1 = {5.0f, 5.0f},

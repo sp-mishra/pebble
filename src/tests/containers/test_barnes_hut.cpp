@@ -5,7 +5,12 @@
 
 using namespace containers::spatial;
 
-TEST_CASE("BarnesHut: Gravitational Field Solver & Multipole Evaluation", "[barnes_hut][gravity][nbody]") {
+TEST_CASE (
+"BarnesHut: Gravitational Field Solver & Multipole Evaluation"
+,
+"[barnes_hut][gravity][nbody]"
+)
+ {
     BarnesHutTree tree;
 
     SECTION("2-Body Newtonian Interaction") {

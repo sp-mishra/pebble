@@ -128,8 +128,9 @@ namespace tarka::features {
                         if (c.op() != Op::Lit) ++non_const;
                     if (non_const >= 2) {
                         const bool real_sort = cur->sort().kind() == SortKind::Real;
-                        bits |= real_sort ? theory_bit(theory_family::nra)
-                                          : theory_bit(theory_family::nia);
+                        bits |= real_sort
+                                    ? theory_bit(theory_family::nra)
+                                    : theory_bit(theory_family::nia);
                     }
                 }
 
@@ -213,7 +214,8 @@ namespace tarka {
             lithe::features::feature_vector fv;
             if (auto cached = store.get(key)) {
                 fv = *cached;
-            } else {
+            }
+            else {
                 fv = features::theory_extractor{}.extract(t);
                 store.put(key, fv, lithe::features::feature_source::custom);
             }

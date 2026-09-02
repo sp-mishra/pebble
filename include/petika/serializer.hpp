@@ -99,7 +99,8 @@ namespace petika {
             if constexpr (std::is_integral_v<T>) {
                 const T le = detail::to_le(v);
                 std::memcpy(s.data(), &le, sizeof(T));
-            } else {
+            }
+            else {
                 std::memcpy(s.data(), &v, sizeof(T));
             }
             return s;
@@ -140,15 +141,24 @@ namespace petika {
 
         // Zero-allocation variant: writes into caller-supplied buffer, returns bytes written.
         static std::size_t encode_to(std::byte* buf, EntryOp op,
-                                      std::string_view k, std::string_view v) noexcept {
+                                     std::string_view k, std::string_view v) noexcept {
             const auto k_len = detail::to_le(static_cast<std::uint32_t>(k.size()));
             const auto v_len = detail::to_le(static_cast<std::uint32_t>(v.size()));
             std::byte* p = buf;
-            *reinterpret_cast<std::uint8_t*>(p) = static_cast<std::uint8_t>(op); p += 1;
-            std::memcpy(p, &k_len, 4); p += 4;
-            if (!k.empty()) { std::memcpy(p, k.data(), k.size()); p += k.size(); }
-            std::memcpy(p, &v_len, 4); p += 4;
-            if (!v.empty()) { std::memcpy(p, v.data(), v.size()); p += v.size(); }
+            *reinterpret_cast<std::uint8_t*>(p) = static_cast<std::uint8_t>(op);
+            p += 1;
+            std::memcpy(p, &k_len, 4);
+            p += 4;
+            if (!k.empty()) {
+                std::memcpy(p, k.data(), k.size());
+                p += k.size();
+            }
+            std::memcpy(p, &v_len, 4);
+            p += 4;
+            if (!v.empty()) {
+                std::memcpy(p, v.data(), v.size());
+                p += v.size();
+            }
             return static_cast<std::size_t>(p - buf);
         }
 
@@ -192,13 +202,17 @@ namespace petika {
             for (const auto& r : records) bytes += sizeof(std::uint32_t) + r.size();
             std::vector<std::byte> out(bytes);
             auto* p = out.data();
-            *reinterpret_cast<std::uint8_t*>(p) = static_cast<std::uint8_t>(EntryOp::Batch); ++p;
+            *reinterpret_cast<std::uint8_t*>(p) = static_cast<std::uint8_t>(EntryOp::Batch);
+            ++p;
             const auto count = detail::to_le(static_cast<std::uint32_t>(records.size()));
-            std::memcpy(p, &count, sizeof(count)); p += sizeof(count);
+            std::memcpy(p, &count, sizeof(count));
+            p += sizeof(count);
             for (const auto& r : records) {
                 const auto n = detail::to_le(static_cast<std::uint32_t>(r.size()));
-                std::memcpy(p, &n, sizeof(n)); p += sizeof(n);
-                std::memcpy(p, r.data(), r.size()); p += r.size();
+                std::memcpy(p, &n, sizeof(n));
+                p += sizeof(n);
+                std::memcpy(p, r.data(), r.size());
+                p += r.size();
             }
             return out;
         }
@@ -210,17 +224,23 @@ namespace petika {
             auto* p = payload.data() + 1;
             auto remaining = payload.size() - 1;
             std::uint32_t count{};
-            std::memcpy(&count, p, sizeof(count)); p += sizeof(count); remaining -= sizeof(count);
+            std::memcpy(&count, p, sizeof(count));
+            p += sizeof(count);
+            remaining -= sizeof(count);
             count = detail::from_le(count);
             std::vector<std::vector<std::byte>> out;
             out.reserve(count);
             for (std::uint32_t i = 0; i < count; ++i) {
                 if (remaining < sizeof(std::uint32_t)) return std::nullopt;
                 std::uint32_t n{};
-                std::memcpy(&n, p, sizeof(n)); p += sizeof(n); remaining -= sizeof(n);
+                std::memcpy(&n, p, sizeof(n));
+                p += sizeof(n);
+                remaining -= sizeof(n);
                 n = detail::from_le(n);
                 if (n > remaining) return std::nullopt;
-                out.emplace_back(p, p + n); p += n; remaining -= n;
+                out.emplace_back(p, p + n);
+                p += n;
+                remaining -= n;
             }
             return remaining == 0 ? std::optional{std::move(out)} : std::nullopt;
         }
@@ -248,5 +268,4 @@ namespace petika {
     concept ThreeWayComparator = requires(const C& c, const T& a, const T& b) {
         { c.three_way(a, b) } -> std::same_as<std::strong_ordering>;
     };
-
 } // namespace petika

@@ -19,23 +19,20 @@
 #include "meta/akshara.hpp"
 
 namespace lang::samasa {
-
     template <akshara::fixed_string Spelling, auto Kind>
     struct operator_token {
         static constexpr auto spelling = Spelling;
-        static constexpr auto kind     = Kind;
+        static constexpr auto kind = Kind;
         static constexpr std::size_t length = Spelling.length;
     };
 
     template <class... OTs>
     struct operator_trie {
-
         // Match the longest operator starting at src[pos].
         // Returns the matched TokenKind and consumed length, or nullopt.
         template <class TokenKind>
         [[nodiscard]] static constexpr auto match(std::string_view src, std::size_t pos)
-            -> std::optional<std::pair<TokenKind, std::size_t>>
-        {
+            -> std::optional<std::pair<TokenKind, std::size_t>> {
             using result_t = std::pair<TokenKind, std::size_t>;
             std::optional<result_t> best;
 
@@ -53,5 +50,4 @@ namespace lang::samasa {
 
         static constexpr std::size_t size = sizeof...(OTs);
     };
-
 } // namespace lang::samasa

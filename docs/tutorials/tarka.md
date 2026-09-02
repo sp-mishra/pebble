@@ -1,14 +1,20 @@
 # Tutorial: The Grand Master of Pebble Island — Automated Theorem Proving with Tarka
 
-Welcome to **Pebble Island**. As the Chief Systems Architect and Detective of the realm, you are faced with a wide variety of computational puzzles: scheduling guards, decrypting cryptographic vaults, balancing national budgets without floating-point errors, validating hardware circuits, proving memory drivers free of data-leaks, verifying compiler optimizations, and coordinating parallel solver fleets.
+Welcome to **Pebble Island**. As the Chief Systems Architect and Detective of the realm, you are faced with a wide
+variety of computational puzzles: scheduling guards, decrypting cryptographic vaults, balancing national budgets without
+floating-point errors, validating hardware circuits, proving memory drivers free of data-leaks, verifying compiler
+optimizations, and coordinating parallel solver fleets.
 
-Instead of writing ad-hoc heuristics or slow brute-force loops, you will use **Tarka** — Pebble's modern, zero-overhead, non-Z3 native Automated Theorem Prover and SMT (Satisfiability Modulo Theories) substrate.
+Instead of writing ad-hoc heuristics or slow brute-force loops, you will use **Tarka** — Pebble's modern, zero-overhead,
+non-Z3 native Automated Theorem Prover and SMT (Satisfiability Modulo Theories) substrate.
 
-This tutorial assumes **zero prior knowledge of Z3 or formal methods**. Every concept is introduced step-by-step with intuitive storytelling, rigorous mathematical intuition, and copy-pasteable, compiling modern C++23 code snippets.
+This tutorial assumes **zero prior knowledge of Z3 or formal methods**. Every concept is introduced step-by-step with
+intuitive storytelling, rigorous mathematical intuition, and copy-pasteable, compiling modern C++23 code snippets.
 
 ---
 
 ## Table of Contents
+
 1. [The Foundational Concepts: What is SMT?](#1-the-foundational-concepts-what-is-smt)
 2. [The One-File Compilation Blueprint](#2-the-one-file-compilation-blueprint)
 3. [Act 1: The Island Guards (Propositional Logic & Boolean CDCL)](#act-1-the-island-guards-propositional-logic--boolean-cdcl)
@@ -38,43 +44,49 @@ This tutorial assumes **zero prior knowledge of Z3 or formal methods**. Every co
 ## 1. The Foundational Concepts: What is SMT?
 
 In ordinary programming, you write algorithms that compute an output from an input:
-$$\text{Input} \longrightarrow f(x) \longrightarrow \text{Output}$$
+$$\text{Input} \longrightarrow f (x) \longrightarrow \text{Output}$$
 
-In **Constraint Solving and Automated Theorem Proving**, you describe the **rules and invariants** that your solution must satisfy, and the computer computes the inputs that make all rules true:
+In **Constraint Solving and Automated Theorem Proving**, you describe the **rules and invariants** that your solution
+must satisfy, and the computer computes the inputs that make all rules true:
 $$\text{Rules \& Invariants} \longrightarrow \text{Tarka Solver} \longrightarrow \text{Valid Assignment (SAT) or Proof of Impossibility (UNSAT)}$$
 
 ### SAT vs. SMT
-- **SAT (Propositional Satisfiability)**: Solves formulas containing only raw `true`/`false` variables combined with $\land$ (AND), $\lor$ (OR), and $\neg$ (NOT).
-- **SMT (Satisfiability Modulo Theories)**: Extends SAT with rich domain-specific reasoning engines:
-  - **BitVectors (`QF_BV`)**: Machine words of fixed bit-width (e.g., 8-bit, 32-bit, 64-bit). Handles 2's complement math, overflow, bitwise logic, shifts, and division by zero.
-  - **Linear Arithmetic (`QF_LRA`/`QF_LIA`)**: Exact equations and inequalities ($3x + 4.5y \le 100$) evaluated over exact fractions without floating-point error.
-  - **Arrays (`QF_AX`)**: Unbounded key-value maps supporting `select` (read) and `store` (write) operations.
-  - **Uninterpreted Functions (`QF_UF`)**: Abstract functions satisfying the congruence axiom ($x = y \implies f(x) = f(y)$).
 
-### How Tarka *thinks*: the DPLL(T) loop (intuition)
+- **SAT (Propositional Satisfiability)**: Solves formulas containing only raw `true`/`false` variables combined
+  with $\land$ (AND), $\lor$ (OR), and $\neg$ (NOT).
+- **SMT (Satisfiability Modulo Theories)**: Extends SAT with rich domain-specific reasoning engines:
+    - **BitVectors (`QF_BV`)**: Machine words of fixed bit-width (e.g., 8-bit, 32-bit, 64-bit). Handles 2's complement
+      math, overflow, bitwise logic, shifts, and division by zero.
+    - **Linear Arithmetic (`QF_LRA`/`QF_LIA`)**: Exact equations and inequalities ($3x + 4.5y \le 100$) evaluated over
+      exact fractions without floating-point error.
+    - **Arrays (`QF_AX`)**: Unbounded key-value maps supporting `select` (read) and `store` (write) operations.
+    - **Uninterpreted Functions (`QF_UF`)**: Abstract functions satisfying the congruence axiom
+      ($x = y \implies f (x) = f (y)$).
+
+### How Tarka *thinks*: the DPLL (T) loop (intuition)
 
 You never need to touch these gears, but knowing they exist makes every later Act click into place.
 
 Imagine the solver as a **detective with two assistants**:
 
 1. **The Boolean skeleton (CDCL SAT core).** Tarka first forgets *what* each atom means and treats each one
-   ($x < 10$, $\text{select}(A,i)=v$, …) as a plain true/false light switch. It then plays a fast guessing game:
+   ($x < 10$, $\text{select} (A,i)=v$, …) as a plain true/false light switch. It then plays a fast guessing game:
    flip a switch (a **decision**), race through the forced consequences (**Boolean Constraint Propagation** —
-   "if this is on, that must be off"), and when two forced consequences collide it has found a **conflict**. From
-   the conflict it *learns a new rule* (a **learned clause**) so it never repeats that mistake, jumps back
-   (**backjump**), and tries again. This learn-from-failure loop is **CDCL** (Conflict-Driven Clause Learning).
+   "if this is on, that must be off"), and when two forced consequences collide it has found a **conflict**. From the
+   conflict it *learns a new rule* (a **learned clause**) so it never repeats that mistake, jumps back (**backjump**),
+   and tries again. This learn-from-failure loop is **CDCL** (Conflict-Driven Clause Learning).
 
-2. **The theory assistants (the "T" in DPLL(T)).** Whenever the skeleton settles on a consistent set of switches,
-   each theory (arithmetic, arrays, bitvectors, UF) checks whether that combination is *actually possible in its
-   domain*. If arithmetic notices the switches imply both $x \ge 5$ and $x \le 3$, it shouts "impossible!" and hands
-   back a **theory lemma** — a new rule the skeleton must respect. The skeleton adds it and keeps going. This
-   hand-off repeats until the whole thing is consistent (**Sat**) or every path is exhausted (**Unsat**).
+2. **The theory assistants (the "T" in DPLL (T)).** Whenever the skeleton settles on a consistent set of switches, each
+   theory (arithmetic, arrays, bitvectors, UF) checks whether that combination is *actually possible in its domain*. If
+   arithmetic notices the switches imply both $x \ge 5$ and $x \le 3$, it shouts "impossible!" and hands back a **theory
+   lemma** — a new rule the skeleton must respect. The skeleton adds it and keeps going. This hand-off repeats until the
+   whole thing is consistent (**Sat**) or every path is exhausted (**Unsat**).
 
 Three levers make this fast, all always-on in Tarka's native engine:
 
-- **VSIDS branching** — which switch to flip next? Tarka keeps an *activity score* per variable, bumps the ones
-  involved in recent conflicts, and always branches on the hottest one, popped from a
-  `containers::associative::order_heap` in $O(\log n)$. Conflicts steer the search toward the hard part of the problem.
+- **VSIDS branching** — which switch to flip next? Tarka keeps an *activity score* per variable, bumps the ones involved
+  in recent conflicts, and always branches on the hottest one, popped from a
+  `containers::associative::order_heap` in $O (\log n)$. Conflicts steer the search toward the hard part of the problem.
 - **LBD-tiered clause learning** — learned rules are graded by **LBD** (how many decision levels they glue together).
   Low-LBD "glue" clauses are gold and kept; noisy high-LBD ones are periodically dropped so memory stays bounded.
 - **Adaptive restarts** — when progress stalls, Tarka abandons the current guess-tree and restarts (keeping what it
@@ -82,11 +94,11 @@ Three levers make this fast, all always-on in Tarka's native engine:
 
 ### The theory lattice & the router (intuition)
 
-A formula's **theory signature** is just the set of theories its operators touch. `x < 10 && p` touches
-arithmetic + Boolean; `select(store(A,i,v),i)` touches arrays. A backend is **eligible** only if it can handle
-everything in the signature. `RouterEngine<Backends...>` computes the signature once, filters to eligible backends,
-and picks one — so `RouterEngine<z3_backend>` can *never* silently answer a query Z3 doesn't support, and a
-single-backend engine always routes to its one backend. You will see this in [Act 13](#act-13-the-router-room).
+A formula's **theory signature** is just the set of theories its operators touch. `x < 10 && p` touches arithmetic +
+Boolean; `select(store(A,i,v),i)` touches arrays. A backend is **eligible** only if it can handle everything in the
+signature. `RouterEngine<Backends...>` computes the signature once, filters to eligible backends, and picks one — so
+`RouterEngine<z3_backend>` can *never* silently answer a query Z3 doesn't support, and a single-backend engine always
+routes to its one backend. You will see this in [Act 13](#act-13-the-router-room).
 
 ---
 
@@ -125,15 +137,20 @@ int main() {
 ## Act 1: The Island Guards (Propositional Logic & Boolean CDCL)
 
 ### The Mystery
+
 The island has three guards: **Alice**, **Bob**, and **Charlie**.
+
 1. At least one guard must be on duty: $(\text{Alice} \lor \text{Bob} \lor \text{Charlie})$.
-2. If Alice is on duty, Bob refuses to work: $(\text{Alice} \implies \neg\text{Bob}) \equiv (\neg\text{Alice} \lor \neg\text{Bob})$.
-3. If Charlie is on duty, Alice must also be present: $(\text{Charlie} \implies \text{Alice}) \equiv (\neg\text{Charlie} \lor \text{Alice})$.
+2. If Alice is on duty, Bob refuses to
+   work: $(\text{Alice} \implies \neg\text{Bob}) \equiv (\neg\text{Alice} \lor \neg\text{Bob})$.
+3. If Charlie is on duty, Alice must also be
+   present: $(\text{Charlie} \implies \text{Alice}) \equiv (\neg\text{Charlie} \lor \text{Alice})$.
 4. Bob is taking a vacation today: $\neg\text{Bob}$.
 
 Let's find the valid roster!
 
 ### The Code
+
 ```cpp
 void act1_solve_guards() {
     Context ctx; // Manages the bump arena and term hash-consing
@@ -171,11 +188,13 @@ void act1_solve_guards() {
 ## Act 2: The Cryptographic Vault (BitVectors & Binary Arithmetic — QF_BV)
 
 ### The Mystery
+
 The ancient treasure vault is locked with a 32-bit passcode $X$. The inscription reads:
 $$(X \oplus \text{0xCAFEBABE}) + 42 = \text{0xDEADBEEF}$$
 Furthermore, the unsigned division of $X$ by 16 must equal 0x076B2026.
 
 ### The Code
+
 ```cpp
 void act2_crack_vault() {
     Context ctx;
@@ -213,14 +232,18 @@ void act2_crack_vault() {
 ## Act 3: The King's Ledger (Linear Real & Integer Arithmetic — QF_LRA / QF_LIA)
 
 ### The Problem
+
 The Island Treasury is budgeting resources between **Lighthouse Maintenance** ($L$) and **Harbor Dredging** ($H$).
+
 1. The total budget cannot exceed 100 thousand gold coins: $L + H \le 100$.
 2. Dredging must be allocated at least twice the lighthouse budget plus 10 thousand coins: $H \ge 2L + 10$.
 3. The lighthouse requires a minimum of 25 thousand coins: $L \ge 25$.
 
-Tarka uses **exact rational arithmetic** (`containers::numeric::exact_rational`), completely avoiding floating-point precision loss.
+Tarka uses **exact rational arithmetic** (`containers::numeric::exact_rational`), completely avoiding floating-point
+precision loss.
 
 ### The Code
+
 ```cpp
 void act3_balance_treasury() {
     Context ctx;
@@ -258,12 +281,15 @@ void act3_balance_treasury() {
 ## Act 4: The Black-Box Guilds (Equality with Uninterpreted Functions — QF_UF)
 
 ### The Problem
-You do not know the proprietary algorithm used by the Alchemist Guild's function $f(x)$. However, by the **Congruence Axiom**, if inputs are identical, outputs must be identical:
-$$a = b \implies f(a) = f(b)$$
 
-Let's prove that given $x = y$ and $y = z$, it is impossible for $f(x) \ne f(z)$.
+You do not know the proprietary algorithm used by the Alchemist Guild's function $f (x)$. However, by the **Congruence
+Axiom**, if inputs are identical, outputs must be identical:
+$$a = b \implies f (a) = f (b)$$
+
+Let's prove that given $x = y$ and $y = z$, it is impossible for $f (x) \ne f (z)$.
 
 ### The Code
+
 ```cpp
 void act4_verify_congruence() {
     Context ctx;
@@ -295,15 +321,19 @@ void act4_verify_congruence() {
 ## Act 5: The Secure Memory Driver (Array Theory & Extensionality — QF_AX)
 
 ### The Problem
+
 Arrays in SMT represent unbounded memory spaces.
+
 - `store(arr, idx, val)` returns a new array with `val` written to `idx`.
 - `select(arr, idx)` reads the value at `idx`.
 
-**Axiom 1 (Read-over-Write)**: $\text{select}(\text{store}(A, i, v), i) = v$.  
-**Axiom 2 (Isolation)**: $i \ne j \implies \text{select}(\text{store}(A, i, v), j) = \text{select}(A, j)$.  
-**Axiom 3 (Extensionality)**: If two arrays differ ($A \ne B$), there exists a witness address $k$ such that $\text{select}(A, k) \ne \text{select}(B, k)$.
+**Axiom 1 (Read-over-Write)**: $\text{select} (\text{store} (A, i, v), i) = v$.  
+**Axiom 2 (Isolation)**: $i \ne j \implies \text{select} (\text{store} (A, i, v), j) = \text{select} (A, j)$.  
+**Axiom 3 (Extensionality)**: If two arrays differ ($A \ne B$), there exists a witness address $k$ such
+that $\text{select} (A, k) \ne \text{select} (B, k)$.
 
 ### The Code
+
 ```cpp
 void act5_verify_memory_safety() {
     Context ctx;
@@ -340,7 +370,8 @@ void act5_verify_memory_safety() {
 
 ## Act 6: Multi-Theory Synthesis (QF_AUFBV Combination)
 
-In modern verification, systems use Arrays, BitVectors, and Uninterpreted Functions together. Tarka integrates them through Nelson-Oppen multi-theory propagation.
+In modern verification, systems use Arrays, BitVectors, and Uninterpreted Functions together. Tarka integrates them
+through Nelson-Oppen multi-theory propagation.
 
 ```cpp
 void act6_combined_theories() {
@@ -381,7 +412,8 @@ void act6_combined_theories() {
 ## Act 7: Universal Laws (Quantifier Reasoning & E-Matching)
 
 Tarka's native quantifier engine supports:
-- **`Op::Exists`**: Skolemization ($\exists x. P(x) \implies P(c_{\text{skolem}})$).
+
+- **`Op::Exists`**: Skolemization ($\exists x. P (x) \implies P (c_{\text{skolem}})$).
 - **`Op::Forall`**: E-matching over active ground terms in EUF equivalence classes.
 
 ```cpp
@@ -417,7 +449,8 @@ void act7_universal_quantifier() {
 
 ## Act 8: The Detective's Inquiry (Assumptions & Minimal Unsat Cores)
 
-When a complex system of rules fails, you need to know **which specific rules** caused the contradiction. Tarka solves under temporary assumptions and returns the **Unsat Core**.
+When a complex system of rules fails, you need to know **which specific rules** caused the contradiction. Tarka solves
+under temporary assumptions and returns the **Unsat Core**.
 
 ```cpp
 void act8_diagnose_unsat_core() {
@@ -452,12 +485,13 @@ void act8_diagnose_unsat_core() {
 
 ## Act 9: The Preprocessing Crucible (Algebraic Simplification & E-Graphs)
 
-Before formulas enter the CDCL SAT engine, Tarka applies pre-encoding algebraic normalization and constant folding (`simplifier.hpp`) along with Equality Saturation (`egraph_opt.hpp`):
+Before formulas enter the CDCL SAT engine, Tarka applies pre-encoding algebraic normalization and constant folding
+(`simplifier.hpp`) along with Equality Saturation (`egraph_opt.hpp`):
 
-- $\neg(\neg x) \to x$
+- $\neg (\neg x) \to x$
 - $x \land \text{true} \to x$, $x \lor \text{false} \to x$
 - $x \oplus x \to 0$, $x - x \to 0$
-- $\text{select}(\text{store}(A, i, v), i) \to v$
+- $\text{select} (\text{store} (A, i, v), i) \to v$
 
 ```cpp
 void act9_pre_simplification() {
@@ -512,7 +546,8 @@ void act10_smt2_interop() {
 
 ## Act 11: Trust But Mathematically Verify (Model Validator)
 
-When a solver claims `Sat`, can you trust the certificate? Tarka includes an independent **Model Validator** that substitutes extracted concrete values back into the original mathematical equations.
+When a solver claims `Sat`, can you trust the certificate? Tarka includes an independent **Model Validator** that
+substitutes extracted concrete values back into the original mathematical equations.
 
 ```cpp
 void act11_validate_model() {
@@ -546,7 +581,9 @@ void act11_validate_model() {
 
 ## Act 12: Parallel Races (Competitive Multi-Engine Portfolio)
 
-When solving critical queries, you can race `backend::native` alongside external backends (such as `z3_backend`) concurrently across a persistent lock-free worker thread pool. The first engine to find a definitive answer cancels all other workers with zero thread hangs.
+When solving critical queries, you can race `backend::native` alongside external backends (such as `z3_backend`)
+concurrently across a persistent lock-free worker thread pool. The first engine to find a definitive answer cancels all
+other workers with zero thread hangs.
 
 ```cpp
 void act12_portfolio_solving() {
@@ -575,9 +612,10 @@ void act12_portfolio_solving() {
 ## Act 13: The Router Room
 
 ### The Problem
-You built `RouterEngine` with several backends. Which one actually answered your last query? A wrong choice — a
-backend that silently lacks a theory — would be a soundness disaster. Tarka never guesses by index; it computes the
-formula's **theory signature** and filters to capable backends. `active_index()` tells you where the query landed.
+
+You built `RouterEngine` with several backends. Which one actually answered your last query? A wrong choice — a backend
+that silently lacks a theory — would be a soundness disaster. Tarka never guesses by index; it computes the formula's
+**theory signature** and filters to capable backends. `active_index()` tells you where the query landed.
 
 ```cpp
 void act13_router_room() {
@@ -606,14 +644,16 @@ names, and a backend that cannot handle the signature is simply never eligible.
 ## Act 14: The Impossible Roster
 
 ### The Mystery
+
 The Quartermaster insists he can assign **$N+1$ distinct sailors** to **$N$ distinct bunks**, one sailor per bunk, no
 two sharing. This is the classic **pigeonhole principle**: provably impossible. Proving *impossibility* is where CDCL
 shines — the solver must exhaustively refute every arrangement, and its **conflict-driven clause learning** plus
 **LBD-tiered** clause database are what keep that search tractable.
 
 We encode $p_{s,b}$ = "sailor $s$ sleeps in bunk $b$":
+
 - **Each sailor gets a bunk:** for every sailor $s$, $\bigvee_b p_{s,b}$.
-- **No bunk is shared:** for every bunk $b$ and sailors $s \ne s'$, $\neg(p_{s,b} \land p_{s',b})$.
+- **No bunk is shared:** for every bunk $b$ and sailors $s \ne s'$, $\neg (p_{s,b} \land p_{s',b})$.
 
 ```cpp
 void act14_pigeonhole(int N) {
@@ -655,8 +695,9 @@ void act14_pigeonhole(int N) {
 ## Act 15: The Constant-Folding Forge
 
 ### The Idea
-Before a single SAT variable is created, Tarka's `simplifier` evaporates arithmetic and Boolean sub-terms whose value
-is already fixed. Fewer atoms reach the encoder, so the solver starts smaller. This is pure rewriting — no search.
+
+Before a single SAT variable is created, Tarka's `simplifier` evaporates arithmetic and Boolean sub-terms whose value is
+already fixed. Fewer atoms reach the encoder, so the solver starts smaller. This is pure rewriting — no search.
 
 ```cpp
 void act15_constant_folding() {
@@ -696,6 +737,7 @@ void act15_constant_folding() {
 ## Act 16: The Shrinking Blueprint
 
 ### The Idea
+
 Terms are **hash-consed**: two structurally identical sub-terms are the *same* node in memory. So the true size of a
 formula is its number of **distinct** nodes (a DAG count), not the inflated count a naive tree walk would give.
 `egraph_node_count_dag` measures the real size, and the equality-saturation optimizer only accepts a rewrite when it
@@ -727,6 +769,7 @@ void act16_dag_size() {
 ## Act 17: The Time-Traveling Ledger
 
 ### The Problem
+
 An auditor explores *hypotheticals*: "assume the harbor tax passes — still solvable? Now undo that and assume the
 lighthouse levy instead." Re-building the whole formula each time is wasteful. Tarka supports **incremental** solving:
 `push()` opens a new scope, assertions stack on top, and `pop()` rewinds exactly to the previous checkpoint — keeping
@@ -763,17 +806,21 @@ baseline; each `pop` undoes exactly one scope without throwing away learned clau
 
 ## 15. Quick API Reference & Cheat Sheet
 
-| Category | API Call | Description |
-| **Sort Creation** | `ctx.bool_sort()`, `ctx.int_sort()`, `ctx.real_sort()`, `ctx.bv_sort(N)`, `ctx.array_sort(I, E)`, `ctx.function_sort(D, R)` | Allocate canonical 16-byte sort handles |
-| **Constants** | `ctx.make_bool(b)`, `ctx.make_int(v, s)`, `ctx.make_real(num, den)`, `ctx.make_value(bits, bv_sort)` | Construct typed constant values |
-| **Symbols** | `ctx.make_symbol("name", sort)` | Construct symbolic variable |
-| **BitVector Ops** | `Op::BvAdd`, `Op::BvSub`, `Op::BvMul`, `Op::BvUdiv`, `Op::BvSdiv`, `Op::BvUrem`, `Op::BvSrem`, `Op::BvAnd`, `Op::BvOr`, `Op::BvXor`, `Op::BvShl`, `Op::BvLshr`, `Op::BvAshr`, `Op::BvUlt`, `Op::BvSlt` | Exact bit-blasted operations |
-| **Array Ops** | `Op::Select`, `Op::Store` | Memory map reads and writes |
-| **Solving** | `solver.assert_formula(t)`, `solver.check_sat()`, `solver.solve(t)`, `solver.check_sat_assuming(assumptions)` | Drive the DPLL(T) solver; `solve` = assert + check |
-| **Incremental** | `solver.push()`, `solver.pop()` | Stack/rewind assertion scopes for hypotheticals (Act 17) |
-| **Routing** | `solver.active_index()`, `is_conclusive(res)` | Which backend answered; whether a result is Sat/Unsat (not Unknown/Deferred) |
-| **Model** | `solver.get_value(t)`, `model_validator::format_model(m)`, `model_validator::validate(asserts, m)` | Extract, format, and verify SAT certificates |
-| **Diagnostics** | `solver.get_unsat_core()` | Extract minimal contradictory sub-formulas |
-| **Preprocessing** | `simplifier::simplify(t)`, `egraph_optimize(t)`, `egraph_node_count_dag(t)` | Const-fold/normalize (Act 15); equality-saturation shrink & DAG size (Act 16) |
-| **Decision heap** | `containers::associative::order_heap<Cmp>` (`insert`/`remove_max`/`increase`/`decrease`/`contains`/`clear`) | Generic mutable-key max-heap backing VSIDS branching (§1) |
-| **SMT-LIB2** | `parse_smt2_lexy(str)` or `parse_smt2_samasa(str)`, then `lower_to_tarka(...)` | Parse through shared IR; print benchmarks |
+| Category | API Call | Description | | **Sort Creation** | `ctx.bool_sort()`, `ctx.int_sort()`, `ctx.real_sort()`,
+`ctx.bv_sort(N)`, `ctx.array_sort(I, E)`, `ctx.function_sort(D, R)` | Allocate canonical 16-byte sort handles | |
+**Constants** | `ctx.make_bool(b)`, `ctx.make_int(v, s)`, `ctx.make_real(num, den)`, `ctx.make_value(bits, bv_sort)` |
+Construct typed constant values | | **Symbols** | `ctx.make_symbol("name", sort)` | Construct symbolic variable | |
+**BitVector Ops** | `Op::BvAdd`, `Op::BvSub`, `Op::BvMul`, `Op::BvUdiv`, `Op::BvSdiv`, `Op::BvUrem`, `Op::BvSrem`,
+`Op::BvAnd`, `Op::BvOr`, `Op::BvXor`, `Op::BvShl`, `Op::BvLshr`, `Op::BvAshr`, `Op::BvUlt`, `Op::BvSlt` | Exact
+bit-blasted operations | | **Array Ops** | `Op::Select`, `Op::Store` | Memory map reads and writes | | **Solving** |
+`solver.assert_formula(t)`, `solver.check_sat()`, `solver.solve(t)`, `solver.check_sat_assuming(assumptions)` | Drive
+the DPLL (T) solver; `solve` = assert + check | | **Incremental** | `solver.push()`, `solver.pop()` | Stack/rewind
+assertion scopes for hypotheticals (Act 17) | | **Routing** | `solver.active_index()`, `is_conclusive(res)` | Which
+backend answered; whether a result is Sat/Unsat (not Unknown/Deferred) | | **Model** | `solver.get_value(t)`,
+`model_validator::format_model(m)`, `model_validator::validate(asserts, m)` | Extract, format, and verify SAT
+certificates | | **Diagnostics** | `solver.get_unsat_core()` | Extract minimal contradictory sub-formulas | |
+**Preprocessing** | `simplifier::simplify(t)`, `egraph_optimize(t)`, `egraph_node_count_dag(t)` | Const-fold/normalize
+(Act 15); equality-saturation shrink & DAG size (Act 16) | | **Decision heap** |
+`containers::associative::order_heap<Cmp>` (`insert`/`remove_max`/`increase`/`decrease`/`contains`/`clear`) | Generic
+mutable-key max-heap backing VSIDS branching (§1) | | **SMT-LIB2** | `parse_smt2_lexy(str)` or `parse_smt2_samasa(str)`,
+then `lower_to_tarka(...)` | Parse through shared IR; print benchmarks |

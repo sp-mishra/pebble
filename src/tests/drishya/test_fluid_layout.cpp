@@ -20,16 +20,21 @@ using M = MonospaceMetrics;
 using P = DefaultPainter;
 
 namespace {
-// A row container whose children divide the main axis.
-auto make_row() {
-    auto row = w::hstack();
-    row.style_.width = L::SizeSpec::Percent(100.0f);
-    row.style_.height = L::SizeSpec::Percent(100.0f);
-    return row;
-}
+    // A row container whose children divide the main axis.
+    auto make_row() {
+        auto row = w::hstack();
+        row.style_.width = L::SizeSpec::Percent(100.0f);
+        row.style_.height = L::SizeSpec::Percent(100.0f);
+        return row;
+    }
 } // namespace
 
-TEST_CASE("fluid: Fr(1)/Fr(1) splits a row into equal halves", "[drishya][fluid]") {
+TEST_CASE (
+"fluid: Fr(1)/Fr(1) splits a row into equal halves"
+,
+"[drishya][fluid]"
+)
+ {
     M m;
     App<M, P> app(m);
     const NodeId root = app.set_root(make_row());
@@ -50,7 +55,12 @@ TEST_CASE("fluid: Fr(1)/Fr(1) splits a row into equal halves", "[drishya][fluid]
     CHECK(rb.w == Catch::Approx(150.0f).margin(0.5f));
 }
 
-TEST_CASE("fluid: Fr(1)/Fr(2) splits a row 1:2", "[drishya][fluid]") {
+TEST_CASE (
+"fluid: Fr(1)/Fr(2) splits a row 1:2"
+,
+"[drishya][fluid]"
+)
+ {
     M m;
     App<M, P> app(m);
     const NodeId root = app.set_root(make_row());
@@ -72,7 +82,12 @@ TEST_CASE("fluid: Fr(1)/Fr(2) splits a row 1:2", "[drishya][fluid]") {
     CHECK(rb.w == Catch::Approx(ra.w * 2.0f).margin(1.0f));
 }
 
-TEST_CASE("fluid: Clamp bounds a preferred size between min and max", "[drishya][fluid]") {
+TEST_CASE (
+"fluid: Clamp bounds a preferred size between min and max"
+,
+"[drishya][fluid]"
+)
+ {
     M m;
     App<M, P> app(m);
     const NodeId root = app.set_root(make_row());
@@ -92,7 +107,12 @@ TEST_CASE("fluid: Clamp bounds a preferred size between min and max", "[drishya]
     CHECK(rc.w >= 40.0f - 0.5f);
 }
 
-TEST_CASE("fluid: Aspect derives the cross axis from the main axis", "[drishya][fluid]") {
+TEST_CASE (
+"fluid: Aspect derives the cross axis from the main axis"
+,
+"[drishya][fluid]"
+)
+ {
     M m;
     App<M, P> app(m);
     const NodeId root = app.set_root(make_row());

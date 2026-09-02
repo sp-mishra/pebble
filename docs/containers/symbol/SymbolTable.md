@@ -56,7 +56,7 @@ The symbol subsystem is built from three cooperating components:
  └─────────────────────────────────────────────────────────────┘
 ```
 
-`SymbolTable` is the **primary O(1) lookup store**. `NamespaceIndex` is a **secondary non-owning index** for
+`SymbolTable` is the **primary O (1) lookup store**. `NamespaceIndex` is a **secondary non-owning index** for
 namespace-scoped enumeration and LCA path queries. The two are independent: `NamespaceIndex` is not automatically
 updated when `SymbolTable` changes.
 
@@ -88,7 +88,7 @@ Move and copy are both **deleted** (see [§11](#11-design-notes)).
 ### `NamespaceIndex`
 
 Wraps `NAryTree<string_view, symbol_entry*>`. Splits qualified names (`"a::b::c::sym"`) on `"::"` and maintains a trie
-of namespace components. Used for `enumerate()` and LCA-based `path()` queries. **Not used for the O(1) resolve path.**
+of namespace components. Used for `enumerate()` and LCA-based `path()` queries. **Not used for the O (1) resolve path.**
 
 ---
 
@@ -445,8 +445,8 @@ string copy. On a cache hit the only work is: acquire shared lock, one hash + po
 ### `insertion_order_` for rollback
 
 `insertion_order_` is a `std::vector<string_view>` that mirrors registration order. `rollback()` pops from the back and
-erases from `map_` until the target size is reached. This makes rollback O(d) in the number of removed entries.
-`unregister()` also removes from `insertion_order_` via `std::erase`, which is O(n) — prefer `rollback()` for batch
+erases from `map_` until the target size is reached. This makes rollback O (d) in the number of removed entries.
+`unregister()` also removes from `insertion_order_` via `std::erase`, which is O (n) — prefer `rollback()` for batch
 removals.
 
 ### Duplicate-safe NamespaceIndex::insert

@@ -15,7 +15,12 @@
 
 using namespace prakriti;
 
-TEST_CASE("phase fractions sum to one across temperature", "[prakriti][material]") {
+TEST_CASE (
+"phase fractions sum to one across temperature"
+,
+"[prakriti][material]"
+)
+ {
     auto p = MaterialRegistry::water();
     for (Scalar t = -50; t <= 200; t += 10) {
         auto pf = phase_from_temperature(t, p);
@@ -24,7 +29,12 @@ TEST_CASE("phase fractions sum to one across temperature", "[prakriti][material]
     }
 }
 
-TEST_CASE("cold water is solid, hot is gas", "[prakriti][material]") {
+TEST_CASE (
+"cold water is solid, hot is gas"
+,
+"[prakriti][material]"
+)
+ {
     auto p = MaterialRegistry::water();
     auto cold = phase_from_temperature(-20, p);
     REQUIRE(cold.solid() > 0.9f);
@@ -34,13 +44,23 @@ TEST_CASE("cold water is solid, hot is gas", "[prakriti][material]") {
     REQUIRE(mid.liquid() > 0.5f);
 }
 
-TEST_CASE("phase_blend is barycentric", "[prakriti][material]") {
+TEST_CASE (
+"phase_blend is barycentric"
+,
+"[prakriti][material]"
+)
+ {
     PhaseFractions pf; pf.f = {0.25f, 0.25f, 0.25f, 0.25f};
     std::array<Scalar, kPhaseCount> vals{1, 2, 3, 4};
     REQUIRE(phase_blend(vals, pf) == Catch::Approx(2.5f));
 }
 
-TEST_CASE("Tait EOS rises above rest density, clamps negatives", "[prakriti][material]") {
+TEST_CASE (
+"Tait EOS rises above rest density, clamps negatives"
+,
+"[prakriti][material]"
+)
+ {
     auto p = MaterialRegistry::water();
     const Scalar rho0 = p.rest_density;
     Scalar p_hi = tait_pressure(rho0 * 1.1f, rho0, p, 0, 20, true);
@@ -54,7 +74,12 @@ TEST_CASE("Tait EOS rises above rest density, clamps negatives", "[prakriti][mat
     REQUIRE(p_gas > p_eq);
 }
 
-TEST_CASE("DefaultMaterialLaw coefficients", "[prakriti][material]") {
+TEST_CASE (
+"DefaultMaterialLaw coefficients"
+,
+"[prakriti][material]"
+)
+ {
     DefaultMaterialLaw law;
     auto p = MaterialRegistry::water();
     PhaseFractions liquid; liquid.f = {0, 0, 1, 0};
@@ -66,7 +91,12 @@ TEST_CASE("DefaultMaterialLaw coefficients", "[prakriti][material]") {
     REQUIRE(law.target_density(p, gas) < law.target_density(p, liquid));
 }
 
-TEST_CASE("dry ice sublimates directly from solid to gas", "[prakriti][material][sublimation]") {
+TEST_CASE (
+"dry ice sublimates directly from solid to gas"
+,
+"[prakriti][material][sublimation]"
+)
+ {
     auto dry_ice = MaterialRegistry::dry_ice();
     auto cold = phase_from_temperature(-100, dry_ice);
     REQUIRE(cold.solid() > 0.9f);
@@ -79,7 +109,12 @@ TEST_CASE("dry ice sublimates directly from solid to gas", "[prakriti][material]
 
 #include "prakriti/material/celestial.hpp"
 
-TEST_CASE("comet tail sublimation activates near hot stars", "[prakriti][celestial][comet]") {
+TEST_CASE (
+"comet tail sublimation activates near hot stars"
+,
+"[prakriti][celestial][comet]"
+)
+ {
     pebble::math::vec2 star_pos{0.0f, 0.0f};
     const float star_temp = 5500.0f;
     const float star_radius = 12.0f;
@@ -99,7 +134,12 @@ TEST_CASE("comet tail sublimation activates near hot stars", "[prakriti][celesti
     REQUIRE(res_active.is_ion_plasma);
 }
 
-TEST_CASE("open world boundless culling and rim detection", "[prakriti][celestial][open_world]") {
+TEST_CASE (
+"open world boundless culling and rim detection"
+,
+"[prakriti][celestial][open_world]"
+)
+ {
     pebble::math::vec2 center{640.0f, 400.0f};
 
     // Body inside active viewport
@@ -120,10 +160,15 @@ TEST_CASE("open world boundless culling and rim detection", "[prakriti][celestia
     REQUIRE(cull_deep.should_recycle);
 }
 
-TEST_CASE("external inflow entity generation", "[prakriti][celestial][inflow]") {
+TEST_CASE (
+"external inflow entity generation"
+,
+"[prakriti][celestial][inflow]"
+)
+ {
     const float vw = 1280.0f;
     const float vh = 800.0f;
-    
+
     auto galaxy = prakriti::celestial::generate_random_inflow(vw, vh, 200.0f, 0.0f, 0.5f, prakriti::celestial::InflowEntityType::RogueProtogalaxy);
     REQUIRE(galaxy.core_mass >= 400.0f);
     REQUIRE(galaxy.satellite_count >= 8);
@@ -137,7 +182,12 @@ TEST_CASE("external inflow entity generation", "[prakriti][celestial][inflow]") 
     REQUIRE(star.ingress_vel[0] > 0.0f);
 }
 
-TEST_CASE("roche lobe overflow mass transfer", "[prakriti][celestial][rlof]") {
+TEST_CASE (
+"roche lobe overflow mass transfer"
+,
+"[prakriti][celestial][rlof]"
+)
+ {
     // Large donor star (R = 25 px, M = 200) close to massive accretor (M = 800) at distance 40 px
     auto res = prakriti::celestial::evaluate_roche_lobe_overflow(200.0f, 25.0f, 800.0f, 40.0f, 0.016f);
     REQUIRE(res.is_overflowing);
@@ -149,7 +199,12 @@ TEST_CASE("roche lobe overflow mass transfer", "[prakriti][celestial][rlof]") {
     REQUIRE_FALSE(res_far.is_overflowing);
 }
 
-TEST_CASE("tidal locking dissipation torque", "[prakriti][celestial][tidal]") {
+TEST_CASE (
+"tidal locking dissipation torque"
+,
+"[prakriti][celestial][tidal]"
+)
+ {
     // Rapidly rotating moon (omega = 25 rad/s) in close orbit (d = 30 px, v_rel = 15 px/s -> Omega_orb = 0.5 rad/s)
     auto res = prakriti::celestial::evaluate_tidal_locking_torque(
         50.0f, 6.0f, 25.0f, 500.0f, 30.0f, 15.0f, 0.016f
@@ -159,17 +214,27 @@ TEST_CASE("tidal locking dissipation torque", "[prakriti][celestial][tidal]") {
     REQUIRE(res.orbital_damping_force > 0.0f);
 }
 
-TEST_CASE("sedov-taylor blast wave expansion", "[prakriti][celestial][sedov]") {
+TEST_CASE (
+"sedov-taylor blast wave expansion"
+,
+"[prakriti][celestial][sedov]"
+)
+ {
     const float e_blast = 2000.0f;
     const float rho = 1.0f;
-    
+
     float r1 = prakriti::celestial::compute_sedov_taylor_radius(e_blast, rho, 0.1f);
     float r2 = prakriti::celestial::compute_sedov_taylor_radius(e_blast, rho, 0.5f);
     REQUIRE(r1 > 0.0f);
     REQUIRE(r2 > r1); // Self-similar expansion over time
 }
 
-TEST_CASE("mhd magnetic flux tube between rotating stars", "[prakriti][celestial][mhd]") {
+TEST_CASE (
+"mhd magnetic flux tube between rotating stars"
+,
+"[prakriti][celestial][mhd]"
+)
+ {
     pebble::math::vec2 p1{100.0f, 100.0f};
     pebble::math::vec2 p2{200.0f, 100.0f};
     auto tube = prakriti::celestial::compute_mhd_flux_tube(p1, 300.0f, 15.0f, p2, 400.0f, -15.0f);
@@ -177,7 +242,12 @@ TEST_CASE("mhd magnetic flux tube between rotating stars", "[prakriti][celestial
     REQUIRE(tube.current_intensity > 0.0f);
 }
 
-TEST_CASE("planetary jeans atmospheric retention and escape", "[prakriti][celestial][jeans]") {
+TEST_CASE (
+"planetary jeans atmospheric retention and escape"
+,
+"[prakriti][celestial][jeans]"
+)
+ {
     // 1. Massive, cold planet (M = 150, R = 4.0, T = 15 C) -> High retention
     auto retained = prakriti::celestial::evaluate_jeans_atmospheric_escape(150.0f, 4.0f, 15.0f, 0.0f, 0.016f);
     REQUIRE(retained.retains_atmosphere);
@@ -189,7 +259,12 @@ TEST_CASE("planetary jeans atmospheric retention and escape", "[prakriti][celest
     REQUIRE(escaped.jeans_loss_rate > 0.0f);
 }
 
-TEST_CASE("surface hydrology and liquid ocean condensation", "[prakriti][celestial][hydrology]") {
+TEST_CASE (
+"surface hydrology and liquid ocean condensation"
+,
+"[prakriti][celestial][hydrology]"
+)
+ {
     // Habitable temperate planet with water volatile content
     auto hydro_hab = prakriti::celestial::evaluate_surface_hydrology_phase(22.0f, 0.4f, 120.0f);
     REQUIRE(hydro_hab.in_habitable_zone);
@@ -202,7 +277,12 @@ TEST_CASE("surface hydrology and liquid ocean condensation", "[prakriti][celesti
     REQUIRE(hydro_hot.ocean_coverage == Catch::Approx(0.0f));
 }
 
-TEST_CASE("strange quark star deconfined phase transition", "[prakriti][celestial][strange_star]") {
+TEST_CASE (
+"strange quark star deconfined phase transition"
+,
+"[prakriti][celestial][strange_star]"
+)
+ {
     // High-mass neutron star under extreme core pressure
     auto trans = prakriti::celestial::evaluate_strange_star_transition(860.0f, true, 240.0f);
     REQUIRE(trans.triggers_strange_star);
@@ -210,7 +290,12 @@ TEST_CASE("strange quark star deconfined phase transition", "[prakriti][celestia
     REQUIRE(trans.strange_radius < 2.6f);
 }
 
-TEST_CASE("pulsar timing array nano-hertz gw modulation", "[prakriti][celestial][pta]") {
+TEST_CASE (
+"pulsar timing array nano-hertz gw modulation"
+,
+"[prakriti][celestial][pta]"
+)
+ {
     const float base_omega = 45.0f;
     const float gw_strain = 0.4f;
     auto pta = prakriti::celestial::evaluate_pulsar_gw_timing_residual(base_omega, gw_strain, 2.0f, 0.125f);
@@ -223,7 +308,12 @@ TEST_CASE("pulsar timing array nano-hertz gw modulation", "[prakriti][celestial]
 #include "prakriti/celestial/sector_multipole.hpp"
 #include "prakriti/celestial/sector_cache_manager.hpp"
 
-TEST_CASE("splitmix64 spatial hash determinism and sector generation", "[prakriti][celestial][openworld]") {
+TEST_CASE (
+"splitmix64 spatial hash determinism and sector generation"
+,
+"[prakriti][celestial][openworld]"
+)
+ {
     prakriti::celestial::SectorKey k1{4, -8};
     prakriti::celestial::SectorKey k2{4, -8};
     prakriti::celestial::SectorKey k3{5, -8};
@@ -240,7 +330,12 @@ TEST_CASE("splitmix64 spatial hash determinism and sector generation", "[prakrit
     REQUIRE(sec1.barycenter_x == Catch::Approx(sec2.barycenter_x));
 }
 
-TEST_CASE("fast multipole method far field gravity tensor", "[prakriti][celestial][fmm]") {
+TEST_CASE (
+"fast multipole method far field gravity tensor"
+,
+"[prakriti][celestial][fmm]"
+)
+ {
     prakriti::celestial::SectorData sec;
     sec.total_mass = 12000.0f;
     sec.barycenter_x = 10000.0f;
@@ -256,7 +351,12 @@ TEST_CASE("fast multipole method far field gravity tensor", "[prakriti][celestia
     REQUIRE(a_grav[1] > 0.0f);
 }
 
-TEST_CASE("glaze sector data serialization and kosha cache", "[prakriti][celestial][glaze_cache]") {
+TEST_CASE (
+"glaze sector data serialization and kosha cache"
+,
+"[prakriti][celestial][glaze_cache]"
+)
+ {
     prakriti::celestial::SectorCacheManager mgr(16);
 
     prakriti::celestial::SectorKey key{12, -3};
@@ -272,7 +372,12 @@ TEST_CASE("glaze sector data serialization and kosha cache", "[prakriti][celesti
     REQUIRE(sec_restored.bodies[0].mass == Catch::Approx(999.0f));
 }
 
-TEST_CASE("dormant sector macro node collective gravity calculation", "[prakriti][celestial][collective_gravity]") {
+TEST_CASE (
+"dormant sector macro node collective gravity calculation"
+,
+"[prakriti][celestial][collective_gravity]"
+)
+ {
     prakriti::celestial::SectorMacroNode macro;
     macro.total_mass = 5000.0f;
     macro.bx = 1200.0f;
@@ -287,7 +392,12 @@ TEST_CASE("dormant sector macro node collective gravity calculation", "[prakriti
     REQUIRE(a_coll[1] > 0.0f);
 }
 
-TEST_CASE("spatial hash grid insertion and neighbor query", "[containers][spatial][spatial_hash_grid]") {
+TEST_CASE (
+"spatial hash grid insertion and neighbor query"
+,
+"[containers][spatial][spatial_hash_grid]"
+)
+ {
     containers::spatial::SpatialHashGrid<std::uint32_t, 32.0f, 1024> grid(100);
     grid.insert(1, 10.0f, 10.0f);
     grid.insert(2, 15.0f, 12.0f);
@@ -307,7 +417,12 @@ TEST_CASE("spatial hash grid insertion and neighbor query", "[containers][spatia
     REQUIRE(std::find(found.begin(), found.end(), 3) == found.end());
 }
 
-TEST_CASE("soa vector contiguous column storage and swap pop", "[containers][dynamic][soa_vector]") {
+TEST_CASE (
+"soa vector contiguous column storage and swap pop"
+,
+"[containers][dynamic][soa_vector]"
+)
+ {
     containers::dynamic::SoAVector<float, float, int> soa;
     soa.push_back(1.0f, 2.0f, 100);
     soa.push_back(3.0f, 4.0f, 200);
@@ -325,7 +440,12 @@ TEST_CASE("soa vector contiguous column storage and swap pop", "[containers][dyn
     REQUIRE(soa.get_column<0>()[0] == Catch::Approx(5.0f));
 }
 
-TEST_CASE("hierarchical block stepper rung computation", "[gati][stepper][block_stepper]") {
+TEST_CASE (
+"hierarchical block stepper rung computation"
+,
+"[gati][stepper][block_stepper]"
+)
+ {
     const auto rung_slow = gati::stepper::compute_acceleration_rung(0.001f, 10.0f);
     const auto rung_fast = gati::stepper::compute_acceleration_rung(500.0f, 20.0f);
 
@@ -333,7 +453,12 @@ TEST_CASE("hierarchical block stepper rung computation", "[gati][stepper][block_
     REQUIRE(rung_fast >= 2);
 }
 
-TEST_CASE("static and small soa vector policy storage", "[containers][dynamic][soa_vector]") {
+TEST_CASE (
+"static and small soa vector policy storage"
+,
+"[containers][dynamic][soa_vector]"
+)
+ {
     containers::dynamic::StaticSoAVector<8, float, float> static_soa;
     static_soa.push_back(10.0f, 20.0f);
     static_soa.push_back(30.0f, 40.0f);
@@ -346,7 +471,12 @@ TEST_CASE("static and small soa vector policy storage", "[containers][dynamic][s
     REQUIRE(small_soa.get_column<1>()[0] == Catch::Approx(200.0f));
 }
 
-TEST_CASE("gati spatial tile streamer viewport tracking", "[gati][world][spatial_tile_streamer]") {
+TEST_CASE (
+"gati spatial tile streamer viewport tracking"
+,
+"[gati][world][spatial_tile_streamer]"
+)
+ {
     gati::world::SpatialTileStreamer<320.0f, 200.0f> streamer;
     std::size_t discovered = 0;
     std::size_t active = 0;
@@ -363,7 +493,12 @@ TEST_CASE("gati spatial tile streamer viewport tracking", "[gati][world][spatial
     REQUIRE(streamer.visited_count() == discovered);
 }
 
-TEST_CASE("barnes hut parallel force sweep calculation", "[containers][spatial][barnes_hut]") {
+TEST_CASE (
+"barnes hut parallel force sweep calculation"
+,
+"[containers][spatial][barnes_hut]"
+)
+ {
     containers::spatial::BarnesHutTree tree;
     std::vector<containers::spatial::BarnesHutBody> bodies = {
         {.pos = {0.0f, 0.0f}, .vel = {0.0f, 0.0f}, .mass = 1000.0f, .id = 0},
@@ -382,7 +517,12 @@ TEST_CASE("barnes hut parallel force sweep calculation", "[containers][spatial][
     REQUIRE(forces[2][0] > 0.0f);
 }
 
-TEST_CASE("gati celestial system unified simulation step", "[gati][systems][celestial_system]") {
+TEST_CASE (
+"gati celestial system unified simulation step"
+,
+"[gati][systems][celestial_system]"
+)
+ {
     gati::systems::CelestialSystem system(18000.0f, 0.5f);
     prakriti::celestial::SectorCacheManager cache_mgr(8);
 
@@ -406,7 +546,12 @@ TEST_CASE("gati celestial system unified simulation step", "[gati][systems][cele
     REQUIRE(bodies[1].acc[0] < 0.0f); // Accelerating toward central mass
 }
 
-TEST_CASE("relativistic doppler beaming asymmetry and precession", "[prakriti][celestial][doppler_beaming]") {
+TEST_CASE (
+"relativistic doppler beaming asymmetry and precession"
+,
+"[prakriti][celestial][doppler_beaming]"
+)
+ {
     // Approaching beam (direction towards observer, positive X)
     const pebble::math::vec2 beam_dir_approaching{1.0f, 0.0f};
     const float doppler_blue = 1.0f + std::max(0.0f, beam_dir_approaching[0]) * 0.35f;
@@ -420,7 +565,12 @@ TEST_CASE("relativistic doppler beaming asymmetry and precession", "[prakriti][c
     REQUIRE(doppler_blue > doppler_red);
 }
 
-TEST_CASE("soa vector simd verlet integration", "[containers][dynamic][soa_vector]") {
+TEST_CASE (
+"soa vector simd verlet integration"
+,
+"[containers][dynamic][soa_vector]"
+)
+ {
     // Columns: x, y, vx, vy, ax, ay
     containers::dynamic::SoAVector<float, float, float, float, float, float> soa;
     soa.push_back(0.0f, 0.0f, 10.0f, 20.0f, 2.0f, 4.0f);
@@ -438,7 +588,12 @@ TEST_CASE("soa vector simd verlet integration", "[containers][dynamic][soa_vecto
 // SoAVector enhanced API tests
 // ============================================================================
 
-TEST_CASE("soa_vector resize fills all columns with provided values", "[containers][dynamic][soa_vector]") {
+TEST_CASE (
+"soa_vector resize fills all columns with provided values"
+,
+"[containers][dynamic][soa_vector]"
+)
+ {
     containers::dynamic::SoAVector<float, int> soa;
     soa.resize(4, 1.5f, 7);
 
@@ -449,7 +604,12 @@ TEST_CASE("soa_vector resize fills all columns with provided values", "[containe
     }
 }
 
-TEST_CASE("soa_vector resize with defaults zero-inits", "[containers][dynamic][soa_vector]") {
+TEST_CASE (
+"soa_vector resize with defaults zero-inits"
+,
+"[containers][dynamic][soa_vector]"
+)
+ {
     containers::dynamic::SoAVector<float, float> soa;
     soa.resize(3);
     REQUIRE(soa.size() == 3);
@@ -457,7 +617,12 @@ TEST_CASE("soa_vector resize with defaults zero-inits", "[containers][dynamic][s
     REQUIRE(soa.get_column<1>()[2] == Catch::Approx(0.0f));
 }
 
-TEST_CASE("soa_vector pop_back removes last element", "[containers][dynamic][soa_vector]") {
+TEST_CASE (
+"soa_vector pop_back removes last element"
+,
+"[containers][dynamic][soa_vector]"
+)
+ {
     containers::dynamic::SoAVector<float, int> soa;
     soa.push_back(1.0f, 10);
     soa.push_back(2.0f, 20);
@@ -468,7 +633,12 @@ TEST_CASE("soa_vector pop_back removes last element", "[containers][dynamic][soa
     REQUIRE(soa.get_column<1>()[1] == 20);
 }
 
-TEST_CASE("soa_vector erase_if removes matching elements via swap-pop", "[containers][dynamic][soa_vector]") {
+TEST_CASE (
+"soa_vector erase_if removes matching elements via swap-pop"
+,
+"[containers][dynamic][soa_vector]"
+)
+ {
     containers::dynamic::SoAVector<float, int> soa;
     for (int i = 0; i < 6; ++i)
         soa.push_back(static_cast<float>(i), i);
@@ -485,14 +655,24 @@ TEST_CASE("soa_vector erase_if removes matching elements via swap-pop", "[contai
     }
 }
 
-TEST_CASE("soa_vector erase_if on empty container is a no-op", "[containers][dynamic][soa_vector]") {
+TEST_CASE (
+"soa_vector erase_if on empty container is a no-op"
+,
+"[containers][dynamic][soa_vector]"
+)
+ {
     containers::dynamic::SoAVector<float, float> soa;
     const std::size_t removed = soa.erase_if([](float, float) { return true; });
     REQUIRE(removed == 0);
     REQUIRE(soa.empty());
 }
 
-TEST_CASE("soa_vector append_range merges two SoAs", "[containers][dynamic][soa_vector]") {
+TEST_CASE (
+"soa_vector append_range merges two SoAs"
+,
+"[containers][dynamic][soa_vector]"
+)
+ {
     containers::dynamic::SoAVector<float, int> a, b;
     a.push_back(1.0f, 1);
     a.push_back(2.0f, 2);
@@ -505,7 +685,12 @@ TEST_CASE("soa_vector append_range merges two SoAs", "[containers][dynamic][soa_
     REQUIRE(a.get_column<1>()[3] == 4);
 }
 
-TEST_CASE("soa_vector row() extracts tuple at index", "[containers][dynamic][soa_vector]") {
+TEST_CASE (
+"soa_vector row() extracts tuple at index"
+,
+"[containers][dynamic][soa_vector]"
+)
+ {
     containers::dynamic::SoAVector<float, int, double> soa;
     soa.push_back(1.5f, 42, 3.14);
     soa.push_back(2.5f, 99, 2.71);
@@ -516,7 +701,12 @@ TEST_CASE("soa_vector row() extracts tuple at index", "[containers][dynamic][soa
     REQUIRE(d == Catch::Approx(2.71));
 }
 
-TEST_CASE("soa_vector transform_columns dispatches kernel over aligned pointers", "[containers][dynamic][soa_vector]") {
+TEST_CASE (
+"soa_vector transform_columns dispatches kernel over aligned pointers"
+,
+"[containers][dynamic][soa_vector]"
+)
+ {
     containers::dynamic::SoAVector<float, float> soa;
     for (int i = 0; i < 8; ++i)
         soa.push_back(static_cast<float>(i), 0.0f);
@@ -532,7 +722,12 @@ TEST_CASE("soa_vector transform_columns dispatches kernel over aligned pointers"
         REQUIRE(soa.get_column<1>()[i] == Catch::Approx(static_cast<float>(i) * 2.0f));
 }
 
-TEST_CASE("soa_vector scale_column multiplies and biases", "[containers][dynamic][soa_vector]") {
+TEST_CASE (
+"soa_vector scale_column multiplies and biases"
+,
+"[containers][dynamic][soa_vector]"
+)
+ {
     containers::dynamic::SoAVector<float> soa;
     for (int i = 0; i < 4; ++i) soa.push_back(2.0f);
     soa.scale_column<0>(3.0f, 1.0f); // x*3+1 = 7
@@ -540,7 +735,12 @@ TEST_CASE("soa_vector scale_column multiplies and biases", "[containers][dynamic
         REQUIRE(soa.get_column<0>()[i] == Catch::Approx(7.0f));
 }
 
-TEST_CASE("soa_vector clamp_column keeps values in [lo, hi]", "[containers][dynamic][soa_vector]") {
+TEST_CASE (
+"soa_vector clamp_column keeps values in [lo, hi]"
+,
+"[containers][dynamic][soa_vector]"
+)
+ {
     containers::dynamic::SoAVector<float> soa;
     soa.push_back(-5.0f);
     soa.push_back(3.0f);
@@ -551,7 +751,12 @@ TEST_CASE("soa_vector clamp_column keeps values in [lo, hi]", "[containers][dyna
     REQUIRE(soa.get_column<0>()[2] == Catch::Approx(10.0f));
 }
 
-TEST_CASE("soa_vector AlignedSoAVector provides >=32-byte column alignment", "[containers][dynamic][soa_vector][aligned]") {
+TEST_CASE (
+"soa_vector AlignedSoAVector provides >=32-byte column alignment"
+,
+"[containers][dynamic][soa_vector][aligned]"
+)
+ {
     containers::dynamic::AlignedSoAVector<float, float> soa;
     soa.resize(64);
     const auto* p0 = soa.data<0>();
@@ -560,7 +765,12 @@ TEST_CASE("soa_vector AlignedSoAVector provides >=32-byte column alignment", "[c
     REQUIRE(reinterpret_cast<std::uintptr_t>(p1) % 32 == 0);
 }
 
-TEST_CASE("soa_vector double-precision verlet integration", "[containers][dynamic][soa_vector]") {
+TEST_CASE (
+"soa_vector double-precision verlet integration"
+,
+"[containers][dynamic][soa_vector]"
+)
+ {
     containers::dynamic::SoAVector<double, double, double, double, double, double> soa;
     soa.push_back(0.0, 0.0, 10.0, 20.0, 2.0, 4.0);
     const double dt = 0.5;
@@ -570,14 +780,24 @@ TEST_CASE("soa_vector double-precision verlet integration", "[containers][dynami
     REQUIRE(soa.get_column<2>()[0] == Catch::Approx(11.0));
 }
 
-TEST_CASE("soa_vector get() element access matches get_column", "[containers][dynamic][soa_vector]") {
+TEST_CASE (
+"soa_vector get() element access matches get_column"
+,
+"[containers][dynamic][soa_vector]"
+)
+ {
     containers::dynamic::SoAVector<float, int> soa;
     soa.push_back(3.14f, 42);
     REQUIRE(soa.get<0>(0) == Catch::Approx(3.14f));
     REQUIRE(soa.get<1>(0) == 42);
 }
 
-TEST_CASE("sph roche lobe gaseous planet tidal stripping", "[prakriti][celestial][sph_roche]") {
+TEST_CASE (
+"sph roche lobe gaseous planet tidal stripping"
+,
+"[prakriti][celestial][sph_roche]"
+)
+ {
     const pebble::math::vec2 donor_pos{0.0f, 0.0f};
     const float donor_mass = 50.0f;
     const float donor_radius = 8.0f; // Expanded gaseous envelope
@@ -598,7 +818,12 @@ TEST_CASE("sph roche lobe gaseous planet tidal stripping", "[prakriti][celestial
     REQUIRE(strip_state.stream_velocity > 0.0f);
 }
 
-TEST_CASE("morton z-order 2D curve spatial locality encoding", "[containers][spatial][morton]") {
+TEST_CASE (
+"morton z-order 2D curve spatial locality encoding"
+,
+"[containers][spatial][morton]"
+)
+ {
     const std::uint32_t code_0_0 = containers::spatial::morton_encode_2d(0, 0);
     const std::uint32_t code_1_0 = containers::spatial::morton_encode_2d(1, 0);
     const std::uint32_t code_0_1 = containers::spatial::morton_encode_2d(0, 1);
@@ -614,11 +839,16 @@ TEST_CASE("morton z-order 2D curve spatial locality encoding", "[containers][spa
     const std::uint32_t key_far = containers::spatial::morton_key_from_pos(5000.0f, 8000.0f);
 
     // Spatially close points produce closely clustered Morton keys
-    REQUIRE(std::abs(static_cast<std::int64_t>(key1) - static_cast<std::int64_t>(key2)) < 
+    REQUIRE(std::abs(static_cast<std::int64_t>(key1) - static_cast<std::int64_t>(key2)) <
             std::abs(static_cast<std::int64_t>(key1) - static_cast<std::int64_t>(key_far)));
 }
 
-TEST_CASE("fast unrolled barnes-hut gravity computation", "[containers][spatial][barnes_hut]") {
+TEST_CASE (
+"fast unrolled barnes-hut gravity computation"
+,
+"[containers][spatial][barnes_hut]"
+)
+ {
     containers::spatial::BarnesHutTree tree;
     std::vector<containers::spatial::BarnesHutBody> bodies = {
         {.pos = {0.0f, 0.0f}, .mass = 10000.0f, .id = 0},
@@ -641,7 +871,12 @@ TEST_CASE("fast unrolled barnes-hut gravity computation", "[containers][spatial]
     REQUIRE(std::abs(f2[1]) > std::abs(f2[0]) * 10.0f); // Y pull vastly dominates small X pull from body 1
 }
 
-TEST_CASE("snr multi-phase blast wave transition and compression", "[prakriti][celestial][snr_multiphase]") {
+TEST_CASE (
+"snr multi-phase blast wave transition and compression"
+,
+"[prakriti][celestial][snr_multiphase]"
+)
+ {
     const float explosion_energy = 1000.0f;
 
     // Early stage: Sedov-Taylor adiabatic phase (t = 0.2s)

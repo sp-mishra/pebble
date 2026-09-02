@@ -32,7 +32,6 @@
 #endif
 
 namespace petika {
-
     // BTreeEngine — StorageEngine/BatchEngine over BPlusMap.
     //
     // The LSN arguments satisfy the engine contract but are not persisted per key
@@ -45,8 +44,7 @@ namespace petika {
         typename Value,
         typename Comparator = std::less<Key>,
         typename Traits = pebble::containers::DefaultBPlusTreeTraits<Key, Value>,
-        typename Allocator = std::allocator<std::pair<const Key, Value>>
-    >
+        typename Allocator = std::allocator<std::pair<const Key, Value>>>
     class BTreeEngine {
     public:
         using key_type = Key;
@@ -85,8 +83,9 @@ namespace petika {
         }
 
         Result<void> erase(const Key& key, nitya::lsn_t /*lsn*/) {
-            return index_.erase(key) ? Result<void>{}
-                                     : std::unexpected(StorageError::NotFound);
+            return index_.erase(key)
+                       ? Result<void>{}
+                       : std::unexpected(StorageError::NotFound);
         }
 
         [[nodiscard]] bool contains(const Key& key) const { return index_.contains(key); }
@@ -109,18 +108,20 @@ namespace petika {
             for (const auto& m : mutations) {
                 if (m.op == EntryOp::Put) {
                     batch_inserts.push_back(&m.key);
-                } else if (m.op == EntryOp::Delete) {
+                }
+                else if (m.op == EntryOp::Delete) {
                     const bool from_batch = std::ranges::any_of(
                         batch_inserts, [&](const Key* k) { return equivalent(*k, m.key); });
                     if (!from_batch && !index_.contains(m.key))
                         return std::unexpected(StorageError::NotFound);
-                } else {
+                }
+                else {
                     return std::unexpected(StorageError::InvalidArg);
                 }
             }
             for (const auto& m : mutations) {
                 if (m.op == EntryOp::Put) index_.insert_or_assign(m.key, m.value);
-                else                      index_.erase(m.key);
+                else index_.erase(m.key);
             }
             return {};
         }
@@ -165,10 +166,10 @@ namespace petika {
 
         Result<void> apply_log_record(EntryOp op, const Key& key, const Value& value, nitya::lsn_t lsn) {
             switch (op) {
-            case EntryOp::Put:    return put(key, value, lsn);
+            case EntryOp::Put: return put(key, value, lsn);
             case EntryOp::Delete: return erase_for_replay(key, lsn);
-            case EntryOp::Clear:  return clear(lsn);
-            case EntryOp::Batch:  return std::unexpected(StorageError::NotSupported);
+            case EntryOp::Clear: return clear(lsn);
+            case EntryOp::Batch: return std::unexpected(StorageError::NotSupported);
             }
             return std::unexpected(StorageError::InvalidArg);
         }
@@ -194,5 +195,4 @@ namespace petika {
 
         map_type index_;
     };
-
 } // namespace petika

@@ -3,9 +3,14 @@
 
 using namespace akruti::layout;
 
-TEST_CASE("akruti::layout: Basic flexbox column and row solve", "[akruti][layout]") {
+TEST_CASE (
+"akruti::layout: Basic flexbox column and row solve"
+,
+"[akruti][layout]"
+)
+ {
     LayoutTree tree;
-    
+
     // Root container (Column, 200x400)
     LayoutNode root_node;
     root_node.style.axis = Axis::Column;
@@ -52,7 +57,12 @@ TEST_CASE("akruti::layout: Basic flexbox column and row solve", "[akruti][layout
     CHECK(engine.rect[2].h == 350.0f);
 }
 
-TEST_CASE("akruti::layout: Min/Max specifications and aspect ratio lock", "[akruti][layout]") {
+TEST_CASE (
+"akruti::layout: Min/Max specifications and aspect ratio lock"
+,
+"[akruti][layout]"
+)
+ {
     LayoutTree tree;
 
     LayoutNode node;
@@ -73,7 +83,12 @@ TEST_CASE("akruti::layout: Min/Max specifications and aspect ratio lock", "[akru
     CHECK(engine.measured[0].h == 120.0f);
 }
 
-TEST_CASE("akruti::layout: Padding, margin, and alignment positioning", "[akruti][layout]") {
+TEST_CASE (
+"akruti::layout: Padding, margin, and alignment positioning"
+,
+"[akruti][layout]"
+)
+ {
     LayoutTree tree;
 
     LayoutNode root;
@@ -105,7 +120,12 @@ TEST_CASE("akruti::layout: Padding, margin, and alignment positioning", "[akruti
     CHECK(engine.rect[1].h == 40.0f);
 }
 
-TEST_CASE("akruti::layout: Spatial hash hit testing and rectangle queries", "[akruti][layout]") {
+TEST_CASE (
+"akruti::layout: Spatial hash hit testing and rectangle queries"
+,
+"[akruti][layout]"
+)
+ {
     LayoutTree tree;
 
     LayoutNode root;
@@ -134,7 +154,12 @@ TEST_CASE("akruti::layout: Spatial hash hit testing and rectangle queries", "[ak
     CHECK(miss.value() == 0); // Hit root container
 }
 
-TEST_CASE("akruti::layout: Constraint graph and parent matching", "[akruti][layout]") {
+TEST_CASE (
+"akruti::layout: Constraint graph and parent matching"
+,
+"[akruti][layout]"
+)
+ {
     LayoutTree tree;
 
     LayoutNode root;
@@ -159,7 +184,12 @@ TEST_CASE("akruti::layout: Constraint graph and parent matching", "[akruti][layo
     CHECK(engine.rect[1].y == 75.0f);
 }
 
-TEST_CASE("akruti::layout: Text measurement integration", "[akruti][layout]") {
+TEST_CASE (
+"akruti::layout: Text measurement integration"
+,
+"[akruti][layout]"
+)
+ {
     LayoutTree tree;
 
     LayoutNode label;
@@ -184,7 +214,12 @@ TEST_CASE("akruti::layout: Text measurement integration", "[akruti][layout]") {
     CHECK(engine.measured[0].h == 24.0f);
 }
 
-TEST_CASE("akruti::layout: Layout snapshot capture and restore", "[akruti][layout]") {
+TEST_CASE (
+"akruti::layout: Layout snapshot capture and restore"
+,
+"[akruti][layout]"
+)
+ {
     LayoutTree tree;
 
     LayoutNode node;
@@ -216,7 +251,12 @@ TEST_CASE("akruti::layout: Layout snapshot capture and restore", "[akruti][layou
     CHECK(engine.measured[0].w == 100.0f);
 }
 
-TEST_CASE("akruti::layout: True incremental subtree solving", "[akruti][layout]") {
+TEST_CASE (
+"akruti::layout: True incremental subtree solving"
+,
+"[akruti][layout]"
+)
+ {
     LayoutTree tree;
 
     // Root container (Column, 400x600)
@@ -263,7 +303,12 @@ TEST_CASE("akruti::layout: True incremental subtree solving", "[akruti][layout]"
     CHECK(engine.rect[2].h == 450.0f);
 }
 
-TEST_CASE("akruti::layout: Smriti ScopedArena zero-heap scratch integration", "[akruti][layout]") {
+TEST_CASE (
+"akruti::layout: Smriti ScopedArena zero-heap scratch integration"
+,
+"[akruti][layout]"
+)
+ {
     smriti::pools::ScopedArena<4096> arena;
     void* ptr = arena.allocate(sizeof(Rect2D) * 10, alignof(Rect2D));
     REQUIRE(ptr != nullptr);
@@ -277,7 +322,12 @@ TEST_CASE("akruti::layout: Smriti ScopedArena zero-heap scratch integration", "[
 // used by the drishya widget engine. Existing behavior above is untouched.
 // ============================================================================
 
-TEST_CASE("akruti::layout: Fr weights split free space (1:1 and 1:2)", "[akruti][layout]") {
+TEST_CASE (
+"akruti::layout: Fr weights split free space (1:1 and 1:2)"
+,
+"[akruti][layout]"
+)
+ {
     LayoutTree tree;
 
     LayoutNode root;
@@ -303,7 +353,12 @@ TEST_CASE("akruti::layout: Fr weights split free space (1:1 and 1:2)", "[akruti]
     CHECK(engine.rect[2].w == Catch::Approx(200.0f).margin(0.5f));
 }
 
-TEST_CASE("akruti::layout: Clamp window bounds a preferred size", "[akruti][layout]") {
+TEST_CASE (
+"akruti::layout: Clamp window bounds a preferred size"
+,
+"[akruti][layout]"
+)
+ {
     LayoutTree tree;
 
     LayoutNode root;
@@ -327,7 +382,12 @@ TEST_CASE("akruti::layout: Clamp window bounds a preferred size", "[akruti][layo
     CHECK(engine.rect[1].w >= 40.0f - 0.5f);
 }
 
-TEST_CASE("akruti::layout: Aspect derives the cross axis from the main axis", "[akruti][layout]") {
+TEST_CASE (
+"akruti::layout: Aspect derives the cross axis from the main axis"
+,
+"[akruti][layout]"
+)
+ {
     LayoutTree tree;
 
     LayoutNode node;
@@ -344,7 +404,12 @@ TEST_CASE("akruti::layout: Aspect derives the cross axis from the main axis", "[
     CHECK(engine.rect[0].h == Catch::Approx(60.0f).margin(1.0f));
 }
 
-TEST_CASE("akruti::layout: hit_test_chain returns leaf-to-root ancestry", "[akruti][layout]") {
+TEST_CASE (
+"akruti::layout: hit_test_chain returns leaf-to-root ancestry"
+,
+"[akruti][layout]"
+)
+ {
     LayoutTree tree;
 
     LayoutNode root;
@@ -374,7 +439,12 @@ TEST_CASE("akruti::layout: hit_test_chain returns leaf-to-root ancestry", "[akru
     CHECK(chain[n - 1] == 0);  // root last
 }
 
-TEST_CASE("akruti::layout: for_each_leaf visits leaves in tab order", "[akruti][layout]") {
+TEST_CASE (
+"akruti::layout: for_each_leaf visits leaves in tab order"
+,
+"[akruti][layout]"
+)
+ {
     LayoutTree tree;
 
     LayoutNode root;
