@@ -1112,7 +1112,7 @@ table (exactly the proven `rule_registry` pattern). Extract the core once:
   uint8_t cost_hint; }`, `solver_class ∈ {unify, rule, graph, egraph, smt}`. Builtin seeding:
 
   | constraint_kind | solver_class | backing library |
-      |---|---|---|
+        |---|---|---|
   | `same_type`, `convertible`, `subtype` | `unify` | unification (Robinson MGU) |
   | `implements`, `requires_cap` | `rule` | EasyRules forward-chaining |
   | `same_rank`, `broadcastable`, `compatible` | `graph` | LiteGraph Tarjan SCC |
