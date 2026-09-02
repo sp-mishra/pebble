@@ -31,7 +31,7 @@
 
 namespace tarka { namespace detail {
         template <CancelableBackend... Bs>
-        struct all_cancelable : std::bool_constant<(CancelableBackend < Bs > &&...)>    {};
+        struct all_cancelable : std::bool_constant<(CancelableBackend < Bs > &&...)>     {};
     }
 
     template <CancelableBackend... Backends>

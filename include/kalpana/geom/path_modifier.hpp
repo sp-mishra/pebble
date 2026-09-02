@@ -312,6 +312,7 @@ namespace kalpana {namespace path_ops {
     template <typename OpContainer = containers::dynamic::SmallVector<std::function < Path(const Path &)>, 128>
 
 
+
     >
     class BasicPathModifier {
     public:
@@ -319,6 +320,7 @@ namespace kalpana {namespace path_ops {
 
         explicit BasicPathModifier (std::function<Path(const Path &)> op){
             ops_.push_back(std::move(op));
+
 
 
         }
