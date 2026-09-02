@@ -65,7 +65,8 @@ namespace akruti::deform {
 
         [[nodiscard]] AABB<Scalar> aabb() const noexcept {
             auto box = shape.aabb();
-            const Scalar max_scale = std::max(static_cast<Scalar>(1.0) + k * box.lo[1], static_cast<Scalar>(1.0) + k * box.hi[1]);
+            const Scalar max_scale = std::max(static_cast<Scalar>(1.0) + k * box.lo[1],
+                                              static_cast<Scalar>(1.0) + k * box.hi[1]);
             return AABB<Scalar>{
                 pebble::math::vec2(box.lo[0] * max_scale, box.lo[1]),
                 pebble::math::vec2(box.hi[0] * max_scale, box.hi[1])
@@ -114,7 +115,8 @@ namespace akruti::deform {
     };
 
     template <Shape S>
-    [[nodiscard]] constexpr SquashStretchShape<S> squash_stretch(S shape, Scalar factor = static_cast<Scalar>(1.0)) noexcept {
+    [[nodiscard]] constexpr SquashStretchShape<S> squash_stretch(
+        S shape, Scalar factor = static_cast<Scalar>(1.0)) noexcept {
         return SquashStretchShape<S>{std::move(shape), factor};
     }
 } // namespace akruti::deform

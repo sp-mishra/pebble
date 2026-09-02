@@ -259,7 +259,8 @@ namespace akruti {
                                                      (box.lo[1] + box.hi[1]) * 0.5f);
             const std::int32_t cx = static_cast<std::int32_t>(std::floor(center.x * inv_cell_));
             const std::int32_t cy = static_cast<std::int32_t>(std::floor(center.y * inv_cell_));
-            cell_of_.push_back((static_cast<std::uint32_t>(cx & 0xFFFF) << 16) | static_cast<std::uint32_t>(cy & 0xFFFF));
+            cell_of_.push_back(
+                (static_cast<std::uint32_t>(cx & 0xFFFF) << 16) | static_cast<std::uint32_t>(cy & 0xFFFF));
 
             const std::uint32_t slot = hash_slot(cx, cy);
             next_[index] = head_[slot];
@@ -276,7 +277,8 @@ namespace akruti {
 
             for (std::int32_t cy = min_cy; cy <= max_cy; ++cy) {
                 for (std::int32_t cx = min_cx; cx <= max_cx; ++cx) {
-                    const std::uint32_t target_packed = (static_cast<std::uint32_t>(cx & 0xFFFF) << 16) | static_cast<std::uint32_t>(cy & 0xFFFF);
+                    const std::uint32_t target_packed = (static_cast<std::uint32_t>(cx & 0xFFFF) << 16) | static_cast<
+                        std::uint32_t>(cy & 0xFFFF);
                     const std::uint32_t slot = hash_slot(cx, cy);
 
                     std::uint32_t cur = head_[slot];

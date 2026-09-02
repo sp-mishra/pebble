@@ -61,7 +61,9 @@ namespace akruti {
         const Scalar speed = motion.len();
         if (speed < static_cast<Scalar>(1e-9)) {
             // No motion: purely a static overlap query.
-            return gjk_overlap(a, b) ? TOIResult{.hit = true, .t = 0, .iters = 0} : TOIResult{.hit = false, .t = 1, .iters = 0};
+            return gjk_overlap(a, b)
+                       ? TOIResult{.hit = true, .t = 0, .iters = 0}
+                       : TOIResult{.hit = false, .t = 1, .iters = 0};
         }
         // Fast swept-AABB reject: skip expensive advancement for clearly non-overlapping pairs.
         if (!swept_aabb_overlap(a.aabb(), Vec2<Scalar>{}, b.aabb(), motion, static_cast<Scalar>(1))) {
@@ -91,10 +93,13 @@ namespace akruti {
     // fast bodies cannot tunnel through thin geometry. Given current separation and the substep
     // closing speed, returns the safe fraction of the step [0,1].
     [[nodiscard]] inline Scalar speculative_fraction(const Scalar separation, const Scalar closing_speed,
-                                                     const Scalar dt, const Scalar skin = static_cast<Scalar>(1e-3)) noexcept {
+                                                     const Scalar dt,
+                                                     const Scalar skin = static_cast<Scalar>(1e-3)) noexcept {
         const Scalar travel = closing_speed * dt;
         if (travel <= static_cast<Scalar>(0)) return static_cast<Scalar>(1);
         const Scalar safe = (separation - skin) / travel;
-        return safe < static_cast<Scalar>(0) ? static_cast<Scalar>(0) : (safe > static_cast<Scalar>(1) ? static_cast<Scalar>(1) : safe);
+        return safe < static_cast<Scalar>(0)
+                   ? static_cast<Scalar>(0)
+                   : (safe > static_cast<Scalar>(1) ? static_cast<Scalar>(1) : safe);
     }
 } // namespace akruti

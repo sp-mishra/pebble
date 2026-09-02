@@ -60,20 +60,26 @@ namespace akruti {
             }
             case CsgOp::SmoothUnion: {
                 const Scalar da = a->sdf(p), db = b->sdf(p);
-                const Scalar h = std::clamp(static_cast<Scalar>(0.5) + static_cast<Scalar>(0.5) * (db - da) / std::max(k, static_cast<Scalar>(1e-6)),
-                                            static_cast<Scalar>(0), static_cast<Scalar>(1));
+                const Scalar h = std::clamp(
+                    static_cast<Scalar>(0.5) + static_cast<Scalar>(0.5) * (db - da) / std::max(
+                        k, static_cast<Scalar>(1e-6)),
+                    static_cast<Scalar>(0), static_cast<Scalar>(1));
                 return db * (1 - h) + da * h - k * h * (1 - h);
             }
             case CsgOp::SmoothSubtract: {
                 const Scalar da = a->sdf(p), db = b->sdf(p);
-                const Scalar h = std::clamp(static_cast<Scalar>(0.5) - static_cast<Scalar>(0.5) * (da + db) / std::max(k, static_cast<Scalar>(1e-6)),
-                                            static_cast<Scalar>(0), static_cast<Scalar>(1));
+                const Scalar h = std::clamp(
+                    static_cast<Scalar>(0.5) - static_cast<Scalar>(0.5) * (da + db) / std::max(
+                        k, static_cast<Scalar>(1e-6)),
+                    static_cast<Scalar>(0), static_cast<Scalar>(1));
                 return da * (1 - h) + (-db) * h + k * h * (1 - h);
             }
             case CsgOp::SmoothIntersect: {
                 const Scalar da = a->sdf(p), db = b->sdf(p);
-                const Scalar h = std::clamp(static_cast<Scalar>(0.5) - static_cast<Scalar>(0.5) * (db - da) / std::max(k, static_cast<Scalar>(1e-6)),
-                                            static_cast<Scalar>(0), static_cast<Scalar>(1));
+                const Scalar h = std::clamp(
+                    static_cast<Scalar>(0.5) - static_cast<Scalar>(0.5) * (db - da) / std::max(
+                        k, static_cast<Scalar>(1e-6)),
+                    static_cast<Scalar>(0), static_cast<Scalar>(1));
                 return db * (1 - h) + da * h + k * h * (1 - h);
             }
             case CsgOp::ChamferUnion: {
@@ -252,8 +258,10 @@ namespace akruti {
             Scalar k{0.1f};
 
             [[nodiscard]] Scalar operator()(const Scalar da, const Scalar db) const noexcept {
-                const Scalar h = std::clamp(static_cast<Scalar>(0.5) - static_cast<Scalar>(0.5) * (da + db) / std::max(k, static_cast<Scalar>(1e-6)),
-                                            static_cast<Scalar>(0), static_cast<Scalar>(1));
+                const Scalar h = std::clamp(
+                    static_cast<Scalar>(0.5) - static_cast<Scalar>(0.5) * (da + db) / std::max(
+                        k, static_cast<Scalar>(1e-6)),
+                    static_cast<Scalar>(0), static_cast<Scalar>(1));
                 return da * (1 - h) + (-db) * h + k * h * (1 - h);
             }
         };
@@ -263,8 +271,10 @@ namespace akruti {
             Scalar k{0.1f};
 
             [[nodiscard]] Scalar operator()(const Scalar da, const Scalar db) const noexcept {
-                const Scalar h = std::clamp(static_cast<Scalar>(0.5) - static_cast<Scalar>(0.5) * (db - da) / std::max(k, static_cast<Scalar>(1e-6)),
-                                            static_cast<Scalar>(0), static_cast<Scalar>(1));
+                const Scalar h = std::clamp(
+                    static_cast<Scalar>(0.5) - static_cast<Scalar>(0.5) * (db - da) / std::max(
+                        k, static_cast<Scalar>(1e-6)),
+                    static_cast<Scalar>(0), static_cast<Scalar>(1));
                 return db * (1 - h) + da * h + k * h * (1 - h);
             }
         };
@@ -359,7 +369,8 @@ namespace akruti {
             return static_cast<std::uint32_t>(nodes_.size() - 1);
         }
 
-        std::uint32_t add_op(const CsgOp op, const std::uint32_t left, const std::uint32_t right, const Scalar param = 0) {
+        std::uint32_t add_op(const CsgOp op, const std::uint32_t left, const std::uint32_t right,
+                             const Scalar param = 0) {
             FlatNode n;
             n.is_leaf = false;
             n.op = op;

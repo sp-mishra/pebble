@@ -92,9 +92,9 @@ namespace akruti {
 
     template <Shape S>
     [[nodiscard]] inline Vec sdf_gradient(const S& shape, Vec p) noexcept {
-        if constexpr (std::is_same_v < S, Circle > || std::is_same_v < S, Box > ||
-            std::is_same_v < S, Capsule > || std::is_same_v < S, OrientedBox > ||
-            std::is_same_v < S, RoundedBox > || std::is_same_v < S, Segment >) {
+        if constexpr (std::is_same_v<S, Circle> || std::is_same_v<S, Box> ||
+            std::is_same_v<S, Capsule> || std::is_same_v<S, OrientedBox> ||
+            std::is_same_v<S, RoundedBox> || std::is_same_v<S, Segment>) {
             return sdf_gradient(shape, p);
         }
         else {

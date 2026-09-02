@@ -682,7 +682,8 @@ namespace akruti::khanda {
                 s.area = mp.area;
                 s.centroid = mp.centroid;
                 s.inertia = mp.inertia;
-            } else {
+            }
+            else {
                 s.area = area;
                 s.centroid = sb.center();
             }

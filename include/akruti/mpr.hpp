@@ -146,13 +146,17 @@ namespace akruti {
             case ShapeType::Circle: return dispatch_single.template operator()<Circle>(shape_a, type_b, shape_b);
             case ShapeType::Box: return dispatch_single.template operator()<Box>(shape_a, type_b, shape_b);
             case ShapeType::Capsule: return dispatch_single.template operator()<Capsule>(shape_a, type_b, shape_b);
-            case ShapeType::OrientedBox: return dispatch_single.template operator()<OrientedBox>(shape_a, type_b, shape_b);
+            case ShapeType::OrientedBox: return dispatch_single.template operator()<OrientedBox>(
+                    shape_a, type_b, shape_b);
             case ShapeType::Triangle: return dispatch_single.template operator()<Triangle>(shape_a, type_b, shape_b);
-            case ShapeType::RoundedBox: return dispatch_single.template operator()<RoundedBox>(shape_a, type_b, shape_b);
+            case ShapeType::RoundedBox: return dispatch_single.template operator()<
+                    RoundedBox>(shape_a, type_b, shape_b);
             case ShapeType::Sector: return dispatch_single.template operator()<Sector>(shape_a, type_b, shape_b);
             case ShapeType::Segment: return dispatch_single.template operator()<Segment>(shape_a, type_b, shape_b);
-            case ShapeType::ConvexPoly: return dispatch_single.template operator()<ConvexPoly<8>>(shape_a, type_b, shape_b);
-            case ShapeType::RoundedPoly: return dispatch_single.template operator()<RoundedPoly<8>>(shape_a, type_b, shape_b);
+            case ShapeType::ConvexPoly: return dispatch_single.template operator()<ConvexPoly<8>>(
+                    shape_a, type_b, shape_b);
+            case ShapeType::RoundedPoly: return dispatch_single.template operator()<RoundedPoly<8>>(
+                    shape_a, type_b, shape_b);
             default: return DistanceResult{};
             }
         }

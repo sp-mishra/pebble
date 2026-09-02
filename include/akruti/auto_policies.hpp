@@ -62,7 +62,8 @@ namespace akruti {
         void build_into(const Poly& boundary, const std::span<const Vec2<Scalar>> seeds, OutContainer& out) const {
             if (seeds.size() < 20) {
                 naive.build_into(boundary, seeds, out);
-            } else {
+            }
+            else {
                 fortune.build_into(boundary, seeds, out);
             }
         }

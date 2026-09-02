@@ -144,7 +144,8 @@ namespace akruti::layout {
             return (it != grid_.end()) ? it->second : std::vector<std::uint32_t>{};
         }
 
-        [[nodiscard]] containers::dynamic::SmallVector<std::uint32_t, 64 * sizeof(std::uint32_t)> query_rect(const Rect2D& rect) const {
+        [[nodiscard]] containers::dynamic::SmallVector<std::uint32_t, 64 * sizeof(std::uint32_t)> query_rect(
+            const Rect2D& rect) const {
             containers::dynamic::SmallVector<std::uint32_t, 64 * sizeof(std::uint32_t)> result;
             const CellKey min_cell = get_cell(rect.x, rect.y);
             const CellKey max_cell = get_cell(rect.x + rect.w, rect.y + rect.h);
