@@ -907,7 +907,7 @@ non-aggregate type via a `consteval operator T&`. The algorithm:
 
 1. `is_constructible_n<T>(index_sequence<0,…,N-1>)` — true if `T{any, any, …}` (N elements) is well-formed.
 2. **Binary search** (`count_fields_binary`) over `[0, max_aggregate_fields]` (default 32) finds the highest
-   constructible arity in O(log N) template instantiation depth. A **linear fallback** (`count_fields_linear`) is used
+   constructible arity in O (log N) template instantiation depth. A **linear fallback** (`count_fields_linear`) is used
    for non-monotonic cases (aggregates with reference members).
 3. The limit can be raised by changing `max_aggregate_fields` in the header.
 
@@ -977,8 +977,8 @@ It satisfies the structured-binding protocol via:
 
 - `std::tuple_size<MemberTie<Tup>>` — specialisation in `namespace std`
 - `std::tuple_element<I, MemberTie<Tup>>` — specialisation in `namespace std`
-- `get<I>(MemberTie<Tup>&)` / `get<I>(const MemberTie<Tup>&)` / `get<I>(MemberTie<Tup>&&)` — **overloads
-  in `namespace meta`** (not `namespace std`)
+- `get<I>(MemberTie<Tup>&)` / `get<I>(const MemberTie<Tup>&)` / `get<I>(MemberTie<Tup>&&)` — **overloads in
+  `namespace meta`** (not `namespace std`)
 
 Per `[namespace.std]`, only template *specializations* for user-defined types may be added to `namespace std`; injecting
 new function overloads there is undefined behaviour. The `get` overloads are therefore placed in `namespace meta`, where
@@ -1008,8 +1008,8 @@ Aggregate field names are positional placeholders (`field_0`, `field_1`, …), n
 does not expose source-level member names without reflection TS (`std::meta`). Until P2996 (reflection) is standardised,
 the only way to get semantic names is through custom `reflect_members` (Section 5.5).
 
-**Mitigation:** Use `is_synthetic()` to detect and skip positional names in generic code. The `semantic_view_t` filter (
-Section 5.14) does this automatically.
+**Mitigation:** Use `is_synthetic()` to detect and skip positional names in generic code. The `semantic_view_t` filter
+(Section 5.14) does this automatically.
 
 ### 8.2 Aggregate Field Limit
 
@@ -1248,6 +1248,7 @@ When P2996 lands, only `reflect_backend_t<T>` and the backend dispatch need upda
 ## 9. Master End-to-End Meta & Reflection Examples
 
 ### 9.1 Generic Zero-Boilerplate JSON Serializer Generator
+
 Using `meta::for_each` and aggregate reflection to generate a complete JSON serializer at compile time:
 
 ```cpp
@@ -1303,6 +1304,7 @@ int main() {
 ```
 
 ### 9.2 Compile-Time Schema Fingerprinting for Binary Wire Protocols
+
 ```cpp
 #include "meta/meta.hpp"
 #include <iostream>
@@ -1324,6 +1326,7 @@ int main() {
 ```
 
 ### 9.3 Type-Safe Enum-to-String and String-to-Enum Conversions
+
 ```cpp
 #include "meta/meta.hpp"
 #include <iostream>

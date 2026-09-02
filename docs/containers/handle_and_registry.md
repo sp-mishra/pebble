@@ -1,6 +1,8 @@
 # Handles, Slot Maps, Registries & Content Stores
 
-Pebble's associative handle and content storage subsystem (`include/containers/handle/`, `descriptor_registry.hpp`, `content_store.hpp`) provides type-safe, generational identifier abstractions, $O(1)$ memory slot mapping, hash descriptor routing, and immutable content-addressed storage.
+Pebble's associative handle and content storage subsystem (`include/containers/handle/`, `descriptor_registry.hpp`,
+`content_store.hpp`) provides type-safe, generational identifier abstractions, $O (1)$ memory slot mapping, hash
+descriptor routing, and immutable content-addressed storage.
 
 ---
 
@@ -43,6 +45,7 @@ Pebble's associative handle and content storage subsystem (`include/containers/h
 ## 2. Memory Layout & Algorithmic Mechanics
 
 ### 2.1 Generational Slot Map Dual-Table Architecture
+
 ```
    Handles (64-bit: index + gen)
       Handle(idx=0, gen=1) ───┐
@@ -63,13 +66,16 @@ Pebble's associative handle and content storage subsystem (`include/containers/h
    └──────────────────────┴──────────┴──────────┘
 ```
 
-When an element is deleted, the dense array is compacted by swapping the last element into the removed slot ($O(1)$ swap-and-pop), and the corresponding slot's generation counter is incremented. Old handles referencing the slot immediately become invalid.
+When an element is deleted, the dense array is compacted by swapping the last element into the removed slot ($O (1)$
+swap-and-pop), and the corresponding slot's generation counter is incremented. Old handles referencing the slot
+immediately become invalid.
 
 ---
 
 ## 3. End-to-End API Examples
 
 ### 3.1 `generational_handle` & `slot_map`
+
 ```cpp
 #include "containers/handle/generational_handle.hpp"
 #include "containers/associative/slot_map.hpp"
@@ -112,6 +118,7 @@ int main() {
 ```
 
 ### 3.2 `descriptor_registry` Named Symbol Routing
+
 ```cpp
 #include "containers/descriptor_registry.hpp"
 #include <iostream>

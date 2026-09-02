@@ -1,8 +1,11 @@
 # Tutorial: Zero to Hero with Vākya — Structural Construction & Expression AST EDSL
 
-Welcome to the **Vākya Tutorial**. Vākya (वाक्य, "sentence" / "structured expression" in Sanskrit) is Pebble's header-only, C++26-ready Embedded Domain-Specific Language (EDSL) for constructing, traversing, pattern matching, type-checking, and rewriting immutable expression ASTs and DAGs without macros or virtual functions.
+Welcome to the **Vākya Tutorial**. Vākya (वाक्य, "sentence" / "structured expression" in Sanskrit) is Pebble's
+header-only, C++26-ready Embedded Domain-Specific Language (EDSL) for constructing, traversing, pattern matching,
+type-checking, and rewriting immutable expression ASTs and DAGs without macros or virtual functions.
 
-Whether you are writing a programming language frontend, an optimizing compiler, an algebra engine, or a theorem proving bridge, Vākya provides a high-performance, type-safe structural foundation.
+Whether you are writing a programming language frontend, an optimizing compiler, an algebra engine, or a theorem proving
+bridge, Vākya provides a high-performance, type-safe structural foundation.
 
 ---
 
@@ -10,11 +13,12 @@ Whether you are writing a programming language frontend, an optimizing compiler,
 
 1. [The Philosophy: Why Vākya?](#1-the-philosophy-why-vākya)
 2. [Step 1: Building Your First Expression Tree](#step-1-building-your-first-expression-tree)
-3. [Step 2: Structural Hashing & Equality ($O(1)$ Hash-Consing)](#step-2-structural-hashing--equality-o1-hash-consing)
+3. [Step 2: Structural Hashing & Equality ($O (1)$ Hash-Consing)](#step-2-structural-hashing--equality-o1-hash-consing)
 4. [Step 3: Tree Traversals & Folds (`vakya::tree`)](#step-3-tree-traversals--folds-vakyatree)
 5. [Step 4: Pattern Matching & Destructuring (`vakya::pattern`)](#step-4-pattern-matching--destructuring-vakyapattern)
 6. [Step 5: Rule-Based Term Rewriting (`vakya::rule_registry`)](#step-5-rule-based-term-rewriting-vakyarule_registry)
-7. [Step 6: Type Systems, Unification & Constraints (`vakya::types`)](#step-6-type-systems-unification--constraints-vakyatypes)
+7. [Step 6: Type Systems, Unification & Constraints (
+   `vakya::types`)](#step-6-type-systems-unification--constraints-vakyatypes)
 8. [Step 7: SMT Verification Bridge (Tarka / Z3 Integration)](#step-7-smt-verification-bridge-tarka--z3-integration)
 9. [Vākya Cheat Sheet](#9-vākya-cheat-sheet)
 
@@ -22,12 +26,16 @@ Whether you are writing a programming language frontend, an optimizing compiler,
 
 ## 1. The Philosophy: Why Vākya?
 
-Traditional AST implementations rely on pointers, heap allocations for every binary node (`new BinaryOp(...)`), and runtime virtual function dispatch (`node->accept(visitor)`).
+Traditional AST implementations rely on pointers, heap allocations for every binary node (`new BinaryOp(...)`), and
+runtime virtual function dispatch (`node->accept(visitor)`).
 
 **Vākya takes a modern data-oriented approach**:
+
 1. **Value Semantics & Zero Allocation**: Small nodes live on the stack or in flat arrays.
-2. **Tag-Driven NTTP Metaprogramming**: Node operators (e.g. `Add`, `Mul`, `Var`, `Const`) are non-type template parameter tags.
-3. **Pure Structural Core**: Core construction has no dependencies and zero semantic baggage. Passes and type systems are modular, layered add-ons.
+2. **Tag-Driven NTTP Metaprogramming**: Node operators (e.g. `Add`, `Mul`, `Var`, `Const`) are non-type template
+   parameter tags.
+3. **Pure Structural Core**: Core construction has no dependencies and zero semantic baggage. Passes and type systems
+   are modular, layered add-ons.
 
 ---
 
@@ -65,9 +73,10 @@ void construction_demo() {
 
 ---
 
-## Step 2: Structural Hashing & Equality ($O(1)$ Hash-Consing)
+## Step 2: Structural Hashing & Equality ($O (1)$ Hash-Consing)
 
-Every expression computed in Vākya automatically maintains its deterministic structural hash. Two identical ASTs produce the same hash code regardless of memory location:
+Every expression computed in Vākya automatically maintains its deterministic structural hash. Two identical ASTs produce
+the same hash code regardless of memory location:
 
 ```cpp
 #include <vakya/vakya.hpp>
@@ -184,7 +193,8 @@ void register_algebraic_rules(RuleRegistry &registry) {
 
 ## Step 6: Type Systems, Unification & Constraints (`vakya::types`)
 
-For language compilers, Vākya includes an optional Hindley-Milner type inference engine and Robinson first-order unification solver:
+For language compilers, Vākya includes an optional Hindley-Milner type inference engine and Robinson first-order
+unification solver:
 
 ```cpp
 #include <vakya/types.hpp>
@@ -234,13 +244,13 @@ void verify_rewrite_correctness() {
 
 ## 9. Vākya Cheat Sheet
 
-| Task | Code Snippet |
-| :--- | :--- |
-| **Terminal Node** | `terminal<Tag>(value)` |
-| **Unary Node** | `unary<NegTag>(child)` |
-| **Binary Node** | `binary<AddTag>(lhs, rhs)` |
-| **Structural Equality**| `node1 == node2` or `structural_hash(node)` |
-| **Tree Fold** | `tree::fold(node, callback)` |
-| **Pattern Match** | `match_binary<AddTag>(wildcard(), literal(0)).match(node)` |
-| **Rewrite Registry** | `registry.add_rule(name, pattern, rewrite_fn)` |
-| **Type Unification** | `unifier.unify(type_var, concrete_type)` |
+| Task                    | Code Snippet                                               |
+|:------------------------|:-----------------------------------------------------------|
+| **Terminal Node**       | `terminal<Tag>(value)`                                     |
+| **Unary Node**          | `unary<NegTag>(child)`                                     |
+| **Binary Node**         | `binary<AddTag>(lhs, rhs)`                                 |
+| **Structural Equality** | `node1 == node2` or `structural_hash(node)`                |
+| **Tree Fold**           | `tree::fold(node, callback)`                               |
+| **Pattern Match**       | `match_binary<AddTag>(wildcard(), literal(0)).match(node)` |
+| **Rewrite Registry**    | `registry.add_rule(name, pattern, rewrite_fn)`             |
+| **Type Unification**    | `unifier.unify(type_var, concrete_type)`                   |

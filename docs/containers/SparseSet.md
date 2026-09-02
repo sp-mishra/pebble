@@ -11,11 +11,11 @@
 
 1. [Purpose](#1-purpose)
 2. [Briggs–Torczon Algorithm](#2-briggstorczon-algorithm)
-3. [O(1) Operations Explained](#3-o1-operations-explained)
+3. [O (1) Operations Explained](#3-o1-operations-explained)
 4. [Universe Capacity Concept](#4-universe-capacity-concept)
 5. [kInvalid Sentinel](#5-kinvalid-sentinel)
 6. [insert vs insert_or_update Semantics](#6-insert-vs-insert_or_update-semantics)
-7. [clear() O(n) vs reset() O(universe) Tradeoff](#7-clearon-vs-resetouniverse-tradeoff)
+7. [clear () O (n) vs reset () O (universe) Tradeoff](#7-clearon-vs-resetouniverse-tradeoff)
 8. [Set-Theoretic Operations — Value-Dropping Behaviour](#8-set-theoretic-operations--value-dropping-behaviour)
 9. [IndexT Overflow Risk](#9-indext-overflow-risk)
 10. [has_value Compile-Time Dispatch](#10-has_value-compile-time-dispatch)
@@ -29,13 +29,13 @@
 ## 1. Purpose
 
 `SparseSet<Key, Value, IndexT, DenseAlloc, SparseAlloc>` is a high-performance set/map optimized for **integer or
-enum-class keys with bounded universe**. Core operations (`insert`, `remove`, `contains`) are O(1) and branch-free on
-the hot path. Dense iteration is O(n) with perfect cache locality.
+enum-class keys with bounded universe**. Core operations (`insert`, `remove`, `contains`) are O (1) and branch-free on
+the hot path. Dense iteration is O (n) with perfect cache locality.
 
 Design goals:
 
-- **O(1) insert/remove/contains** — no hashing, no probing, no tree rotations.
-- **O(n) dense iteration** — elements stored packed, contiguous; ideal for ECS, bitmask-style workloads.
+- **O (1) insert/remove/contains** — no hashing, no probing, no tree rotations.
+- **O (n) dense iteration** — elements stored packed, contiguous; ideal for ECS, bitmask-style workloads.
 - **Optional satellite data** — acts as a pure set when `Value = std::monostate`, as a map otherwise.
 - **No virtual functions, no macros** — zero-cost pay-per-use design.
 - **`std::expected` error returns** — no exceptions thrown by the container.
@@ -66,12 +66,12 @@ times.
 4. `dense.pop_back()`.
 5. `sparse[k] = kInvalid`.
 
-This keeps the dense array contiguous without a gap at O(1) cost. It changes the iteration order (the last element moves
-to the removed slot).
+This keeps the dense array contiguous without a gap at O (1) cost. It changes the iteration order (the last element
+moves to the removed slot).
 
 ---
 
-## 3. O(1) Operations Explained
+## 3. O (1) Operations Explained
 
 | Operation           | Complexity     | Why                                        |
 |---------------------|----------------|--------------------------------------------|
@@ -83,14 +83,14 @@ to the removed slot).
 
 All of these are branch-free on the hot path (no hash collision resolution, no tree traversal). The only exception is
 `insert_or_update`, which may call `sparse_.resize()` if the key exceeds the current universe capacity — that
-reallocation is O(universe) but amortised over many calls.
+reallocation is O (universe) but amortised over many calls.
 
 ---
 
 ## 4. Universe Capacity Concept
 
-`capacity()` is the **universe bound**: keys must satisfy `0 ≤ key < capacity()`. This is not the number of elements (
-use `size()` for that).
+`capacity()` is the **universe bound**: keys must satisfy `0 ≤ key < capacity()`. This is not the number of elements
+(use `size()` for that).
 
 - `SparseSet(256)` creates a universe that can hold keys 0–255.
 - `insert(k)` returns `SSError::KeyOutOfRange` if `k >= capacity()`.
@@ -133,7 +133,7 @@ the distinction matters only for map usage.
 
 ---
 
-## 7. clear() O(n) vs reset() O(universe) Tradeoff
+## 7. clear () O (n) vs reset () O (universe) Tradeoff
 
 | Method                    | Complexity                    | Cost                                                    |
 |---------------------------|-------------------------------|---------------------------------------------------------|
@@ -228,13 +228,10 @@ for (uint32_t k : s) { /* k = 5, 3, 8 */ }
 the dense array. All pointer arithmetic and comparison operators are supported.
 
 **Range views** (lazy, zero-copy):
-| View | Type | Notes |
-|---|---|---|
-| `all_keys()` | `const Key&` | Same as iterating directly |
-| `all_values()` | `Value&` / `const Value&` | Requires `has_value` |
-| `all_pairs()` | `pair<const Key&, Value&>` | Requires `has_value` |
-| `dense_entries()` | `std::span<const Entry>` | Raw entry access; `Entry` has `.key` and `.val` |
-| `sparse_array()` | `std::span<const IndexT>` | Introspection / debugging |
+| View | Type | Notes | |---|---|---| | `all_keys()` | `const Key&` | Same as iterating directly | | `all_values()` |
+`Value&` / `const Value&` | Requires `has_value` | | `all_pairs()` | `pair<const Key&, Value&>` | Requires
+`has_value` | | `dense_entries()` | `std::span<const Entry>` | Raw entry access; `Entry` has `.key` and `.val` | |
+`sparse_array()` | `std::span<const IndexT>` | Introspection / debugging |
 
 Iteration order is **not sorted by key**. If sorted iteration is needed, copy keys and `std::ranges::sort`.
 

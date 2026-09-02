@@ -1,8 +1,8 @@
 # Containers — Module Index
 
-Header-only C++23 container library (`include/containers/`). No virtual, no macros; concept-based
-static polymorphism. This index catalogs every container in the module, its category, the concrete
-algorithm(s) it implements, and links to the detailed per-container docs where they exist.
+Header-only C++23 container library (`include/containers/`). No virtual, no macros; concept-based static polymorphism.
+This index catalogs every container in the module, its category, the concrete algorithm (s) it implements, and links to
+the detailed per-container docs where they exist.
 
 ## Table of Contents
 
@@ -23,8 +23,8 @@ algorithm(s) it implements, and links to the detailed per-container docs where t
 
 ## Architecture
 
-The module is organized by concern, not by a single class hierarchy. Every container is an independent,
-header-only unit; higher-level facilities (registries, caches) compose the lower-level ones by inclusion.
+The module is organized by concern, not by a single class hierarchy. Every container is an independent, header-only
+unit; higher-level facilities (registries, caches) compose the lower-level ones by inclusion.
 
 ```
 Compile-time            ct_parser (ct_trie)                         — pure constexpr
@@ -88,8 +88,10 @@ Concrete named algorithms per container, with the header they live in.
 
 - **LiteGraph** — flat SoA graph + 30+ algorithm library (+ Highway SIMD). See [LiteGraph.md](LiteGraph.md).
 - **DominatorTree** — Lengauer-Tarjan + iterative idom over a `LiteGraphModel`.
-- **DisjointSet** — canonical disjoint-set forest (union-by-rank + path-compression halving). Prefer this for all new code.
-- **union_find** — ⚠️ **Deprecated**: prefer `DisjointSet`. Uses union-by-rank + path-splitting. Currently used internally by `egraph`; do not use in new code.
+- **DisjointSet** — canonical disjoint-set forest (union-by-rank + path-compression halving). Prefer this for all new
+  code.
+- **union_find** — ⚠️ **Deprecated**: prefer `DisjointSet`. Uses union-by-rank + path-splitting. Currently used
+  internally by `egraph`; do not use in new code.
 - **egraph** — generic equality-saturation engine. See [egraph.md](egraph.md).
 
 ### Trees
@@ -105,9 +107,12 @@ Concrete named algorithms per container, with the header they live in.
 
 ### Spatial & Dynamic Storage
 
-- **SpatialHashGrid** — $O(N)$ zero-allocation broadphase grid with SplitMix64 coordinate hashing and Morton Z-order cache locality.
-- **SoAVector** — policy-driven Structure-of-Arrays vector (`StaticStoragePolicy`, `SmallVectorStoragePolicy`, `DynamicStoragePolicy`) with SIMD unrolled vectorization.
-- **BarnesHutTree** — $O(N \log N)$ hierarchical multipole gravity tree with unrolled fast reciprocal square root evaluation.
+- **SpatialHashGrid** — $O (N)$ zero-allocation broadphase grid with SplitMix64 coordinate hashing and Morton Z-order
+  cache locality.
+- **SoAVector** — policy-driven Structure-of-Arrays vector (`StaticStoragePolicy`, `SmallVectorStoragePolicy`,
+  `DynamicStoragePolicy`) with SIMD unrolled vectorization.
+- **BarnesHutTree** — $O (N \log N)$ hierarchical multipole gravity tree with unrolled fast reciprocal square root
+  evaluation.
 
 ### Dynamic / Inline Storage
 
@@ -116,7 +121,8 @@ Concrete named algorithms per container, with the header they live in.
 
 ### Lock-Free
 
-- **RingBuffer** (SPSC), **MPMCQueue** (Vyukov), **MPSCQueue** (Michael-Scott), **AtomicStack** (Treiber), **HazardRegistry** (hazard pointers). See [lockfree_containers.md](lockfree_containers.md).
+- **RingBuffer** (SPSC), **MPMCQueue** (Vyukov), **MPSCQueue** (Michael-Scott), **AtomicStack** (Treiber),
+  **HazardRegistry** (hazard pointers). See [lockfree_containers.md](lockfree_containers.md).
 
 ### Symbol / Interning
 
@@ -128,7 +134,8 @@ Concrete named algorithms per container, with the header they live in.
 
 - **descriptor_registry** — generational-handle registry keyed by FNV-1a name hash.
 - **content_store** — SHA-256 content-addressed blob store (filesystem + Setu backends).
-- **Kosha** — Robin-Hood open-addressing cache with ARC, LFU, LRU, FIFO, TTL, and cluster skeleton. See [kosha.md](kosha.md).
+- **Kosha** — Robin-Hood open-addressing cache with ARC, LFU, LRU, FIFO, TTL, and cluster skeleton.
+  See [kosha.md](kosha.md).
 - **canonical_codec** — deterministic serialization with sorted string table.
 - **conversion_graph** — Dijkstra least-cost conversion-path finder.
 
@@ -138,29 +145,30 @@ Concrete named algorithms per container, with the header they live in.
 
 ### Reactive
 
-- **Signal** / **Computed** / **Callback** — observable value cell, lazily-memoized derived value, and SBO move-only `void()` callback. See [reactive.md](reactive.md).
+- **Signal** / **Computed** / **Callback** — observable value cell, lazily-memoized derived value, and SBO move-only
+  `void()` callback. See [reactive.md](reactive.md).
 
 ---
 
 ## Detailed Docs
 
-| Container / Subsystem | Dedicated Documentation Guide |
-|:---|:---|
-| **Spatial Acceleration Structures** | [spatial.md](spatial.md) (`BarnesHutTree`, `SpatialHashGrid`, `AABBTree`) |
-| **Structure-of-Arrays & Static Vector** | [soa_vector.md](soa_vector.md) (`SoAVector` SIMD Kinematics, `static_vector`) |
-| **Handles, SlotMaps & Registries** | [handle_and_registry.md](handle_and_registry.md) (`generational_handle`, `slot_map`, `descriptor_registry`, `content_store`) |
-| **High-Performance Cache** | [kosha.md](kosha.md) (`kosha::core`, LRU/LFU/FIFO/ARC, `FlatHashStorage`, Sharding, TTL) |
-| **Multidimensional Tensor Engine** | [tensor.md](tensor.md) (`ts::tensor`, `ts::edsl`, MLX GPU backend, SmallTensor) |
-| **Versioned State & MVCC Substrate** | [anukrama.md](anukrama.md) (Immutable version chains, Snapshot isolation, `atomic_clock`) |
-| **B+ Tree Block Storage** | [bplus_tree.md](bplus_tree.md) (SoA node layouts, Highway SIMD search, Intrusive freelist recycling) |
-| **Lock-Free Concurrency Primitives** | [lockfree_containers.md](lockfree_containers.md) (Vyukov `MPMCQueue`, `RingBuffer`, `HazardRegistry`) |
-| **Math Vectors & Graphics Primitives**| [math_vector.md](math_vector.md) (`vec2/3/4`, `mat2/3/4`, `quat`, Look-At view & Perspective projections) |
-| **Small-Buffer Dynamic Array** | [SmallVector.md](SmallVector.md) (Inline SBO byte budgeting, allocator traits) |
-| **Sparse Set Indexing** | [SparseSet.md](SparseSet.md) (Briggs-Torczon dual-buffer sparse set) |
-| **LiteGraph Network Analysis** | [LiteGraph.md](LiteGraph.md) · [tutorial](../tutorials/LiteGraph.md) (30+ Graph algorithms, SIMD sweeps) |
-| **E-Graph Equality Saturation** | [egraph.md](egraph.md) (Congruence closure, AST rewriting) |
-| **N-Ary Tree Hierarchy** | [NAryTree.md](NAryTree.md) (First-child next-sibling pointer trees) |
-| **String Interning Pool** | [symbol/InternPool.md](symbol/InternPool.md) (Concurrent atomic string interning) |
-| **Symbol Table & Namespace Trie** | [symbol/SymbolTable.md](symbol/SymbolTable.md) (Scoped symbol resolution) |
-| **Reactive Value Primitives** | [reactive.md](reactive.md) (`Signal`, `Computed`, `Callback` — observable cells + memoized derivations) |
+| Container / Subsystem                   | Dedicated Documentation Guide                                                                                                |
+|:----------------------------------------|:-----------------------------------------------------------------------------------------------------------------------------|
+| **Spatial Acceleration Structures**     | [spatial.md](spatial.md) (`BarnesHutTree`, `SpatialHashGrid`, `AABBTree`)                                                    |
+| **Structure-of-Arrays & Static Vector** | [soa_vector.md](soa_vector.md) (`SoAVector` SIMD Kinematics, `static_vector`)                                                |
+| **Handles, SlotMaps & Registries**      | [handle_and_registry.md](handle_and_registry.md) (`generational_handle`, `slot_map`, `descriptor_registry`, `content_store`) |
+| **High-Performance Cache**              | [kosha.md](kosha.md) (`kosha::core`, LRU/LFU/FIFO/ARC, `FlatHashStorage`, Sharding, TTL)                                     |
+| **Multidimensional Tensor Engine**      | [tensor.md](tensor.md) (`ts::tensor`, `ts::edsl`, MLX GPU backend, SmallTensor)                                              |
+| **Versioned State & MVCC Substrate**    | [anukrama.md](anukrama.md) (Immutable version chains, Snapshot isolation, `atomic_clock`)                                    |
+| **B+ Tree Block Storage**               | [bplus_tree.md](bplus_tree.md) (SoA node layouts, Highway SIMD search, Intrusive freelist recycling)                         |
+| **Lock-Free Concurrency Primitives**    | [lockfree_containers.md](lockfree_containers.md) (Vyukov `MPMCQueue`, `RingBuffer`, `HazardRegistry`)                        |
+| **Math Vectors & Graphics Primitives**  | [math_vector.md](math_vector.md) (`vec2/3/4`, `mat2/3/4`, `quat`, Look-At view & Perspective projections)                    |
+| **Small-Buffer Dynamic Array**          | [SmallVector.md](SmallVector.md) (Inline SBO byte budgeting, allocator traits)                                               |
+| **Sparse Set Indexing**                 | [SparseSet.md](SparseSet.md) (Briggs-Torczon dual-buffer sparse set)                                                         |
+| **LiteGraph Network Analysis**          | [LiteGraph.md](LiteGraph.md) · [tutorial](../tutorials/LiteGraph.md) (30+ Graph algorithms, SIMD sweeps)                     |
+| **E-Graph Equality Saturation**         | [egraph.md](egraph.md) (Congruence closure, AST rewriting)                                                                   |
+| **N-Ary Tree Hierarchy**                | [NAryTree.md](NAryTree.md) (First-child next-sibling pointer trees)                                                          |
+| **String Interning Pool**               | [symbol/InternPool.md](symbol/InternPool.md) (Concurrent atomic string interning)                                            |
+| **Symbol Table & Namespace Trie**       | [symbol/SymbolTable.md](symbol/SymbolTable.md) (Scoped symbol resolution)                                                    |
+| **Reactive Value Primitives**           | [reactive.md](reactive.md) (`Signal`, `Computed`, `Callback` — observable cells + memoized derivations)                      |
 

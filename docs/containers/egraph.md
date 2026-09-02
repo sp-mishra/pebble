@@ -30,7 +30,7 @@
 `egraph` is a **zero-overhead, header-only equality saturation engine** for C++23. It provides:
 
 - **Hashcons deduplication** — structurally identical nodes share one e-class
-- **Union-find** — path-splitting + union-by-rank for O(α) merge/find
+- **Union-find** — path-splitting + union-by-rank for O (α) merge/find
 - **Egg-style deferred rebuild** — batch congruence closure; no per-merge allocation
 - **Generic rule packs** — commutativity, associativity, distributivity, identity rules as empty types
 - **Bottom-up DP extraction** — pick cheapest equivalent form via a pluggable cost model
@@ -225,7 +225,7 @@ exists, returns its root without inserting.
 [[nodiscard]] e_class_id find(e_class_id id) const
 ```
 
-Path-splitting union-find root. O(α) amortised. `const` via mutable storage.
+Path-splitting union-find root. O (α) amortised. `const` via mutable storage.
 
 ```cpp
 [[nodiscard]] bool merge(e_class_id a, e_class_id b)

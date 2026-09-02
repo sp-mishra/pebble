@@ -18,7 +18,7 @@ zero-overhead, type-safe DSL for declarative business logic without virtual func
 3. **Type Safety**: All facts are stored in a `std::variant<int, bool, std::string, double>` with compile-time type
    checking via `std::expected<T, RuleError>` for error handling.
 
-4. **Zero-Overhead Abstractions**: Facts storage uses `std::unordered_map` with transparent hashing for O(1) lookup.
+4. **Zero-Overhead Abstractions**: Facts storage uses `std::unordered_map` with transparent hashing for O (1) lookup.
    Rule evaluation is iterative with early exit on failure.
 
 ### Core Components
@@ -92,14 +92,14 @@ engine.add_listener(listener);
 
 ### Time Complexity
 
-- Rule evaluation: O(r) where r is the number of rules (iterates each once)
-- Predicate evaluation: O(1) for most predicates, O(n) for collection checks
-- Fact lookup: O(1) average (unordered_map with transparent hashing)
+- Rule evaluation: O (r) where r is the number of rules (iterates each once)
+- Predicate evaluation: O (1) for most predicates, O (n) for collection checks
+- Fact lookup: O (1) average (unordered_map with transparent hashing)
 
 ### Space Complexity
 
-- O(f) for facts storage (f = number of facts)
-- O(r) for rules storage
+- O (f) for facts storage (f = number of facts)
+- O (r) for rules storage
 - No per-rule allocation overhead beyond the rule object itself
 
 ### Optimization Techniques
@@ -224,7 +224,7 @@ All fact references support comparison operators:
 
 The engine is **not thread-safe** by default. For multi-threaded usage:
 
-- Protect engine.run() with mutex
+- Protect engine.run () with mutex
 - or use `concurrent_run()` (if implemented)
 
 ## Limitations & Future Work
@@ -232,7 +232,7 @@ The engine is **not thread-safe** by default. For multi-threaded usage:
 1. **No I/O Context**: Rule actions cannot perform async operations
 2. **Simple Type System**: Facts limited to int, bool, string, double
 3. **No Rule Transactions**: Changes are immediate, no rollback
-4. **in() API**: Collection operations require FactRef interface completion
+4. **in () API**: Collection operations require FactRef interface completion
 
 ## Related Concepts
 

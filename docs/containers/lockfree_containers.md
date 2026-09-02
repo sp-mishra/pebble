@@ -1,32 +1,38 @@
 # Lock-Free Containers (`include/containers/lockfree/`)
 
-Pebble's lock-free container library provides header-only, zero-overhead, multi-core concurrent primitives in modern C++23. It features wait-free single-producer single-consumer ring buffers, Dmitry Vyukov bounded multi-producer multi-consumer queues, unbounded Michael-Scott MPSC queues, Treiber atomic stacks with 128-bit ABA mitigation, and Hazard Pointer safe memory reclamation (`HazardRegistry`).
+Pebble's lock-free container library provides header-only, zero-overhead, multi-core concurrent primitives in modern
+C++23. It features wait-free single-producer single-consumer ring buffers, Dmitry Vyukov bounded multi-producer
+multi-consumer queues, unbounded Michael-Scott MPSC queues, Treiber atomic stacks with 128-bit ABA mitigation, and
+Hazard Pointer safe memory reclamation (`HazardRegistry`).
 
 ---
 
 ## 1. Concurrency Model & Selection Matrix
 
-| Container | Concurrency Model | Complexity (Push / Pop) | Dynamic Allocations | ABA Protection | Best Use Case |
-|:---|:---:|:---:|:---:|:---:|:---|
-| **`RingBuffer<T, N>`** | Single-Producer Single-Consumer (SPSC) | Wait-Free $O(1)$ / Wait-Free $O(1)$ | None (Stack / Fixed) | N/A (Single thread per side) | Thread-to-thread streaming, telemetry |
-| **`MPMCQueue<T, N>`** | Multi-Producer Multi-Consumer (MPMC) | Lock-Free $O(1)$ / Lock-Free $O(1)$ | None (Fixed circular buffer) | Sequence counter per slot | Task graph job stealing, thread pools |
-| **`MPSCQueue<T>`** | Multi-Producer Single-Consumer (MPSC) | Lock-Free $O(1)$ / Wait-Free $O(1)$ | Per-node | Hazard Pointers | Logging pipelines, command queues |
-| **`AtomicStack<T>`** | Multi-Producer Multi-Consumer (LIFO) | Lock-Free $O(1)$ / Lock-Free $O(1)$ | Per-node | 128-bit Tagged Pointers | Object pooling, free-lists |
+| Container              |           Concurrency Model            |       Complexity (Push / Pop)       |     Dynamic Allocations      |        ABA Protection        | Best Use Case                         |
+|:-----------------------|:--------------------------------------:|:-----------------------------------:|:----------------------------:|:----------------------------:|:--------------------------------------|
+| **`RingBuffer<T, N>`** | Single-Producer Single-Consumer (SPSC) | Wait-Free $O(1)$ / Wait-Free $O(1)$ |     None (Stack / Fixed)     | N/A (Single thread per side) | Thread-to-thread streaming, telemetry |
+| **`MPMCQueue<T, N>`**  |  Multi-Producer Multi-Consumer (MPMC)  | Lock-Free $O(1)$ / Lock-Free $O(1)$ | None (Fixed circular buffer) |  Sequence counter per slot   | Task graph job stealing, thread pools |
+| **`MPSCQueue<T>`**     | Multi-Producer Single-Consumer (MPSC)  | Lock-Free $O(1)$ / Wait-Free $O(1)$ |           Per-node           |       Hazard Pointers        | Logging pipelines, command queues     |
+| **`AtomicStack<T>`**   |  Multi-Producer Multi-Consumer (LIFO)  | Lock-Free $O(1)$ / Lock-Free $O(1)$ |           Per-node           |   128-bit Tagged Pointers    | Object pooling, free-lists            |
 
 ---
 
 ## 2. Algorithmic Mechanics & Invariants
 
 ### 2.1 Dmitry Vyukov's MPMC Sequence Counter Invariant
-`MPMCQueue<T, N>` avoids false sharing and lock contention by equipping each slot with an atomic sequence number `std::atomic<size_t> sequence`:
+
+`MPMCQueue<T, N>` avoids false sharing and lock contention by equipping each slot with an atomic sequence number
+`std::atomic<size_t> sequence`:
+
 - A slot at index `i` is ready for writing by turn `pos` when:
-  $$\text{slot.sequence.load(acquire)} == \text{pos}$$
+  $$\text{slot.sequence.load (acquire)} == \text{pos}$$
 - On successful CAS of the queue's `enqueue_pos`, the producer writes the payload and sets:
-  $$\text{slot.sequence.store(pos + 1, release)}$$
+  $$\text{slot.sequence.store (pos + 1, release)}$$
 - A consumer can read the slot when:
-  $$\text{slot.sequence.load(acquire)} == \text{pos} + 1$$
+  $$\text{slot.sequence.load (acquire)} == \text{pos} + 1$$
 - After reading, the consumer resets:
-  $$\text{slot.sequence.store(pos + \text{Capacity}, release)}$$
+  $$\text{slot.sequence.store (pos + \text{Capacity}, release)}$$
 
 ```
                    VYUKOV MPMC QUEUE MEMORY TOPOLOGY (CACHE-ALIGNED)
@@ -39,17 +45,21 @@ Pebble's lock-free container library provides header-only, zero-overhead, multi-
 ```
 
 ### 2.2 Hazard Pointer Safe Memory Reclamation (`HazardRegistry`)
+
 When popping from `AtomicStack` or `MPSCQueue`:
+
 1. The consumer acquires a hazard slot from its thread-local pool: `guard.protect(atomic_ptr)`.
 2. The pointer is guaranteed not to be deleted by other threads while protected in the global hazard registry.
 3. When a node is popped, it is placed on the thread-local retire list.
-4. When the retire list exceeds `RetireThreshold`, `scan()` reclaims all retired nodes not currently protected by any active thread's hazard pointers.
+4. When the retire list exceeds `RetireThreshold`, `scan()` reclaims all retired nodes not currently protected by any
+   active thread's hazard pointers.
 
 ---
 
 ## 3. End-to-End API Guide
 
 ### 3.1 Vyukov MPMC Bounded Task Queue
+
 ```cpp
 #include "containers/lockfree/MPMCQueue.hpp"
 #include <iostream>
@@ -91,6 +101,7 @@ int main() {
 ```
 
 ### 3.2 Wait-Free SPSC RingBuffer Telemetry Pipeline
+
 ```cpp
 #include "containers/lockfree/RingBuffer.hpp"
 #include <iostream>

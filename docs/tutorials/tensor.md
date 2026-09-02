@@ -1,8 +1,11 @@
 # Tutorial: Zero to Hero with Pebble Tensor & Symbolic EDSL
 
-Welcome to the **Pebble Tensor Tutorial**. Whether you are developing deep learning neural networks, high-performance physical simulations, computer graphics algorithms, or scientific compute pipelines, this guide will take you from zero to mastering Pebble's modern multidimensional tensor engine and symbolic Embedded Domain-Specific Language (EDSL).
+Welcome to the **Pebble Tensor Tutorial**. Whether you are developing deep learning neural networks, high-performance
+physical simulations, computer graphics algorithms, or scientific compute pipelines, this guide will take you from zero
+to mastering Pebble's modern multidimensional tensor engine and symbolic Embedded Domain-Specific Language (EDSL).
 
-This tutorial assumes no prior knowledge of lazy expression templates or tensor compilers. Everything is explained step-by-step with practical, copy-pasteable modern C++23/C++26 examples.
+This tutorial assumes no prior knowledge of lazy expression templates or tensor compilers. Everything is explained
+step-by-step with practical, copy-pasteable modern C++23/C++26 examples.
 
 ---
 
@@ -14,8 +17,10 @@ This tutorial assumes no prior knowledge of lazy expression templates or tensor 
 4. [Step 3: Compile-Time Static Tensors & Game Vectors](#step-3-compile-time-static-tensors--game-vectors)
 5. [Step 4: Memory Storage Policies (SBO & Smriti Arenas)](#step-4-memory-storage-policies-sbo--smriti-arenas)
 6. [Step 5: Structure-of-Arrays (SoA) Reflection Layouts](#step-5-structure-of-arrays-soa-reflection-layouts)
-7. [Step 6: Symbolic EDSL Level 1 — One-Shot Evaluation (`ts::eval`)](#step-6-symbolic-edsl-level-1--one-shot-evaluation-tseval)
-8. [Step 7: Symbolic EDSL Level 2 — Compile Once, Run Many (`ts::compile`)](#step-7-symbolic-edsl-level-2--compile-once-run-many-tscompile)
+7. [Step 6: Symbolic EDSL Level 1 — One-Shot Evaluation (
+   `ts::eval`)](#step-6-symbolic-edsl-level-1--one-shot-evaluation-tseval)
+8. [Step 7: Symbolic EDSL Level 2 — Compile Once, Run Many (
+   `ts::compile`)](#step-7-symbolic-edsl-level-2--compile-once-run-many-tscompile)
 9. [Step 8: Apple Silicon GPU Acceleration (MLX & Metal)](#step-8-apple-silicon-gpu-acceleration-mlx--metal)
 10. [Cheat Sheet & Architecture Reference](#10-cheat-sheet--architecture-reference)
 
@@ -23,7 +28,9 @@ This tutorial assumes no prior knowledge of lazy expression templates or tensor 
 
 ## 1. The Philosophy: Why Policy-Based Tensors?
 
-In traditional C++ tensor or matrix libraries (e.g. Eigen, Armadillo), memory allocation and math algorithms are often tightly coupled:
+In traditional C++ tensor or matrix libraries (e.g. Eigen, Armadillo), memory allocation and math algorithms are often
+tightly coupled:
+
 - An expression creates temporary heap allocations for intermediate steps.
 - Switching from CPU to SIMD or GPU requires rewriting data structures.
 - Small fixed vectors (like 3D points) use the same heavy abstractions as large matrices.
@@ -31,7 +38,9 @@ In traditional C++ tensor or matrix libraries (e.g. Eigen, Armadillo), memory al
 **Pebble Tensor (`ts::tensor`)** decouples **what** you compute from **where** it lives and **how** it executes:
 $$\text{Storage Policy (Memory)} + \text{Computation Policy (Backend)} \longrightarrow \text{Zero-Overhead Specialized Tensor}$$
 
-- **Storage Policies**: Standard Heap (`default_storage_policy`), Cache-line Small Buffer (`small_tensor_storage_policy<128>`), Bump/Arena Memory (`smriti_storage_policy`), Struct-of-Arrays (`soa_storage_policy`), or Apple GPU Unified Memory (`mlx_storage_policy`).
+- **Storage Policies**: Standard Heap (`default_storage_policy`), Cache-line Small Buffer
+  (`small_tensor_storage_policy<128>`), Bump/Arena Memory (`smriti_storage_policy`), Struct-of-Arrays
+  (`soa_storage_policy`), or Apple GPU Unified Memory (`mlx_storage_policy`).
 - **Computation Policies**: Pure CPU reference, Google Highway SIMD vectorization, or Apple Metal GPU.
 
 ---
@@ -68,7 +77,8 @@ int main() {
 
 ## Step 2: Lazy Expressions & Zero-Allocation Math
 
-When you write mathematical expressions like $D = A \times B + C$, traditional libraries might allocate an intermediate buffer for $(A \times B)$. Pebble uses **Expression Templates with C++23 Deducing This**:
+When you write mathematical expressions like $D = A \times B + C$, traditional libraries might allocate an intermediate
+buffer for $(A \times B)$. Pebble uses **Expression Templates with C++23 Deducing This**:
 
 ```cpp
 #include <containers/tensor/tensor.hpp>
@@ -96,7 +106,8 @@ void lazy_math_demo() {
 
 ## Step 3: Compile-Time Static Tensors & Game Vectors
 
-For physics engines, robotics, and game graphics, you don't want heap allocations or dynamic shape vectors. Pebble provides compile-time fixed `ts::static_tensor` and the `pebble::math` library:
+For physics engines, robotics, and game graphics, you don't want heap allocations or dynamic shape vectors. Pebble
+provides compile-time fixed `ts::static_tensor` and the `pebble::math` library:
 
 ```cpp
 #include <containers/numeric/math_vector.hpp>
@@ -131,14 +142,18 @@ void game_math_demo() {
 You can customize where tensors allocate their memory by changing their Storage Policy:
 
 ### 1. Small-Buffer Optimization (SBO)
+
 Keeps tensors $\le 128$ bytes strictly on the stack/cache line.
+
 ```cpp
 // Fits up to 32 floats inline without calling malloc()
 ts::small_tensor<float, 128> local_buf({4, 4});
 ```
 
 ### 2. High-Performance Smriti Arena Allocation
+
 Perfect for tight game loops or frame allocators:
+
 ```cpp
 #include <mem/smriti.hpp>
 
@@ -155,7 +170,9 @@ void arena_demo() {
 
 ## Step 5: Structure-of-Arrays (SoA) Reflection Layouts
 
-When simulating thousands of entities (e.g. particles or game objects), Array-of-Structures (`std::vector<Particle>`) destroys CPU cache efficiency. Pebble automatically decomposes arbitrary structs into parallel column arrays using compile-time reflection:
+When simulating thousands of entities (e.g. particles or game objects), Array-of-Structures (`std::vector<Particle>`)
+destroys CPU cache efficiency. Pebble automatically decomposes arbitrary structs into parallel column arrays using
+compile-time reflection:
 
 ```cpp
 #include <containers/tensor/tensor.hpp>
@@ -183,7 +200,8 @@ void soa_demo() {
 
 ## Step 6: Symbolic EDSL Level 1 — One-Shot Evaluation (`ts::eval`)
 
-Pebble features a symbolic EDSL with user-defined parameter literals (`"name"_p` for scalars and `"name"_t` for tensors):
+Pebble features a symbolic EDSL with user-defined parameter literals (`"name"_p` for scalars and `"name"_t` for
+tensors):
 
 ```cpp
 #include <containers/tensor/tensor_edsl.hpp>
@@ -280,15 +298,15 @@ void gpu_demo() {
 
 ## 10. Cheat Sheet & Architecture Reference
 
-| Feature | Code Example |
-| :--- | :--- |
-| **Tensor Creation** | `ts::tensor<float> t({3, 4});` |
-| **Multidimensional Index** | `t[row, col] = 5.0f;` |
-| **Game 3D Vectors** | `pebble::math::vec3 v(1.0f, 2.0f, 3.0f);` |
-| **Small Buffer (SBO)** | `ts::small_tensor<float, 64> t({2, 4});` |
-| **Arena Allocation** | `ts::smriti_tensor<float, BumpPool> t({10, 10}, pool);` |
-| **Symbolic Literals** | `"weight"_t = W, "learning_rate"_p = 0.01f` |
-| **Level 1 Eval** | `ts::eval(expr, "X"_t = x_val);` |
-| **Level 2 Compile** | `auto model = ts::compile(graph, ts::target::simd);` |
-| **Reductions** | `ts::sum(t)`, `ts::mean(t)`, `ts::max(t)`, `ts::min(t)` |
-| **Activations** | `relu(x)`, `sigmoid(x)`, `softmax(x)`, `gelu(x)` |
+| Feature                    | Code Example                                            |
+|:---------------------------|:--------------------------------------------------------|
+| **Tensor Creation**        | `ts::tensor<float> t({3, 4});`                          |
+| **Multidimensional Index** | `t[row, col] = 5.0f;`                                   |
+| **Game 3D Vectors**        | `pebble::math::vec3 v(1.0f, 2.0f, 3.0f);`               |
+| **Small Buffer (SBO)**     | `ts::small_tensor<float, 64> t({2, 4});`                |
+| **Arena Allocation**       | `ts::smriti_tensor<float, BumpPool> t({10, 10}, pool);` |
+| **Symbolic Literals**      | `"weight"_t = W, "learning_rate"_p = 0.01f`             |
+| **Level 1 Eval**           | `ts::eval(expr, "X"_t = x_val);`                        |
+| **Level 2 Compile**        | `auto model = ts::compile(graph, ts::target::simd);`    |
+| **Reductions**             | `ts::sum(t)`, `ts::mean(t)`, `ts::max(t)`, `ts::min(t)` |
+| **Activations**            | `relu(x)`, `sigmoid(x)`, `softmax(x)`, `gelu(x)`        |

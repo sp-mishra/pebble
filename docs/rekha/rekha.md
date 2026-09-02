@@ -1,8 +1,8 @@
 # Rekha (रेखा) — Backend-Agnostic Plotting and Graph Visualization
 
 Header-only C++23/C++26 plotting library built for zero-runtime-waste integration with Pebble.
-`rekha` uses policy-based static dispatch (no virtual functions) and can target multiple rendering backends.
-Default shipping backend: `KalpanaBackend`.
+`rekha` uses policy-based static dispatch (no virtual functions) and can target multiple rendering backends. Default
+shipping backend: `KalpanaBackend`.
 
 Include: `#include <rekha/rekha.hpp>`
 
@@ -11,20 +11,20 @@ Include: `#include <rekha/rekha.hpp>`
 ## What Rekha Provides
 
 - Major 2D statistical plots:
-  - `LinePlot`
-  - `AreaPlot`
-  - `StepPlot`
-  - `StemPlot`
-  - `ScatterPlot`
-  - `BubblePlot`
-  - `ErrorBarPlot`
-  - `BarPlot`
-  - `HistogramPlot`
-  - `HeatmapPlot`
-  - `PiePlot` / donut via `inner_radius`
+    - `LinePlot`
+    - `AreaPlot`
+    - `StepPlot`
+    - `StemPlot`
+    - `ScatterPlot`
+    - `BubblePlot`
+    - `ErrorBarPlot`
+    - `BarPlot`
+    - `HistogramPlot`
+    - `HeatmapPlot`
+    - `PiePlot` / donut via `inner_radius`
 - Graph drawing:
-  - `GraphPlot`
-  - Force-directed spring layout (`ForceDirectedLayout`) with tunable policies.
+    - `GraphPlot`
+    - Force-directed spring layout (`ForceDirectedLayout`) with tunable policies.
 - Backend abstraction via `PlotBackend` concept.
 - Basic legend overlay via `Figure::legend(true)`.
 - Multi-panel subplot layout via `Figure::subplots(rows, cols)` and `select_subplot(row, col)`.
@@ -34,20 +34,23 @@ Include: `#include <rekha/rekha.hpp>`
 - Legend placement control via `Figure::legend_position(...)`.
 - Auto legend placement via `Figure::legend_auto(true)` (chooses a lower-density corner).
 - Constrained spacing controls: `Figure::constrained_layout(true)` and `Figure::subplot_gap(x_gap, y_gap)`.
-- Tick label controls on `Axes`: `x_ticks`, `y_ticks`, `x_precision`, `y_precision`, `show_tick_labels`, `x_percent`, `y_percent`.
+- Tick label controls on `Axes`: `x_ticks`, `y_ticks`, `x_precision`, `y_precision`, `show_tick_labels`, `x_percent`,
+  `y_percent`.
 - Reusable theme presets via `Figure::theme(...)`:
-  - `Figure::theme_dark_neon()`
-  - `Figure::theme_scientific_light()`
-  - `Figure::theme_finance_dark()`
+    - `Figure::theme_dark_neon()`
+    - `Figure::theme_scientific_light()`
+    - `Figure::theme_finance_dark()`
 
 `src/app/pebble_rekha.cpp` uses `theme_dark_neon()` as the default dashboard style.
 
-Tick labels are generated from inferred data ranges (not normalized 0..1 axis fractions), so labels follow plot values directly.
+Tick labels are generated from inferred data ranges (not normalized 0..1 axis fractions), so labels follow plot values
+directly.
+
 - Kalpana integration:
-  - translates plots to `kalpana::Scene` nodes,
-  - optional software rasterization through `kalpana::DefaultCanvas`.
+    - translates plots to `kalpana::Scene` nodes,
+    - optional software rasterization through `kalpana::DefaultCanvas`.
 - Gati integration:
-  - `GraphLayoutRuntime` uses `gati::Clock` fixed-step updates to animate convergence deterministically.
+    - `GraphLayoutRuntime` uses `gati::Clock` fixed-step updates to animate convergence deterministically.
 
 ---
 
@@ -87,19 +90,21 @@ int main() {
 ## Public API Map
 
 - `rekha/types.hpp`
-  - `Scalar`, `Vec2`, `Range`, `Margin`, `Viewport`, styles.
+    - `Scalar`, `Vec2`, `Range`, `Margin`, `Viewport`, styles.
 - `rekha/series.hpp`
-  - `XYSeries`, `Graph`, `Edge`.
+    - `XYSeries`, `Graph`, `Edge`.
 - `rekha/scales.hpp`
-  - `LinearScale`, `Log10Scale`.
+    - `LinearScale`, `Log10Scale`.
 - `rekha/graph.hpp`
-  - `ForceSpringPolicy`, `LayoutConfig`, `ForceDirectedLayout`, `GraphLayoutRuntime`.
+    - `ForceSpringPolicy`, `LayoutConfig`, `ForceDirectedLayout`, `GraphLayoutRuntime`.
 - `rekha/backend.hpp`
-  - `PlotBackend` concept, `KalpanaBackend`.
+    - `PlotBackend` concept, `KalpanaBackend`.
 - `rekha/plot.hpp`
-  - `Figure`, `Axes`, subplot/annotation/legend controls, and plot variants (`LinePlot`, `AreaPlot`, `StepPlot`, `StemPlot`, `ScatterPlot`, `BubblePlot`, `ErrorBarPlot`, `BarPlot`, `HistogramPlot`, `HeatmapPlot`, `PiePlot`, `GraphPlot`).
+    - `Figure`, `Axes`, subplot/annotation/legend controls, and plot variants (`LinePlot`, `AreaPlot`, `StepPlot`,
+      `StemPlot`, `ScatterPlot`, `BubblePlot`, `ErrorBarPlot`, `BarPlot`, `HistogramPlot`, `HeatmapPlot`, `PiePlot`,
+      `GraphPlot`).
 - `rekha/rekha.hpp`
-  - umbrella include.
+    - umbrella include.
 
 ---
 
@@ -114,9 +119,11 @@ int main() {
 ## Testing
 
 Coverage entry point:
+
 - `src/tests/rekha/test_rekha.cpp`
 
 Test cases validate:
+
 - mixed-plot dispatch to backend primitives,
 - force-directed layout constraints,
 - Kalpana rasterization path.
@@ -154,6 +161,7 @@ Keyboard controls:
 - `ESC` quit
 
 If no backend is passed, default is selected in this order:
+
 - `notcurses` (when enabled)
 - `sokol` (when enabled)
 - `capture` (fallback)

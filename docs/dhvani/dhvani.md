@@ -1,7 +1,8 @@
 # Dhvani (ध्वनि) — Physically-Based Procedural Sound Engine
 
-Header-only C++23/C++26. No virtual, no macros. Zero dynamic heap allocation on audio synthesis paths.
-Dhvani provides physically-based procedural sound generation, modal synthesis, spatial 2D audio, composable signal graphs, and physics engine integration bridges.
+Header-only C++23/C++26. No virtual, no macros. Zero dynamic heap allocation on audio synthesis paths. Dhvani provides
+physically-based procedural sound generation, modal synthesis, spatial 2D audio, composable signal graphs, and physics
+engine integration bridges.
 
 Include: `#include <dhvani/dhvani.hpp>`, `#include <dhvani/sound_edsl.hpp>`
 
@@ -10,41 +11,47 @@ Include: `#include <dhvani/dhvani.hpp>`, `#include <dhvani/sound_edsl.hpp>`
 ## 1. Features
 
 1. **2D Spatial Audio (`dhvani/spatial.hpp`)**:
-   - Inverse-distance logarithmic attenuation relative to `AudioListener2D`.
-   - Equal-power stereo panning relative to listener forward orientation.
+    - Inverse-distance logarithmic attenuation relative to `AudioListener2D`.
+    - Equal-power stereo panning relative to listener forward orientation.
 2. **SPSC `SoundBus` Queue (`dhvani/dhvani.hpp`)**:
-   - Zero-allocation sound event queue decoupling simulation threads from platform audio sinks.
+    - Zero-allocation sound event queue decoupling simulation threads from platform audio sinks.
 3. **PCM Synthesis Primitives (`dhvani/synth/`)**:
-   - Oscillators: sine, saw, square, triangle, white noise (`waveform.hpp`).
-   - ADSR envelope state machine (`envelope.hpp`).
-   - RBJ cookbook biquad filters — LP/HP/BP/Notch, compile-time tag dispatch (`filter.hpp`).
-   - Karplus-Strong string model and N-mode modal resonators (`resonator.hpp`).
+    - Oscillators: sine, saw, square, triangle, white noise (`waveform.hpp`).
+    - ADSR envelope state machine (`envelope.hpp`).
+    - RBJ cookbook biquad filters — LP/HP/BP/Notch, compile-time tag dispatch (`filter.hpp`).
+    - Karplus-Strong string model and N-mode modal resonators (`resonator.hpp`).
 4. **Physical Sound Models (`dhvani/physical/`)**:
-   - `PhysicalMaterial` concept + presets: steel, glass, wood, rubber, cloth, concrete, ceramic (`material.hpp`).
-   - Impact voice: force + material → modal resonator excitation + ADSR (`impact.hpp`).
-   - Fracture voice: crack/shatter burst — brittleness-driven HP-filtered noise (`fracture.hpp`).
-   - Friction voice: velocity-modulated band-pass filtered noise (`surface.hpp`).
-   - Tear voice: periodic noise bursts, rate controlled by tear speed (`surface.hpp`).
-   - Metallic modal presets: Bell, Cymbal, Plate, Pipe, Spring with empirical inharmonic ratios (`metal.hpp`).
+    - `PhysicalMaterial` concept + presets: steel, glass, wood, rubber, cloth, concrete, ceramic (`material.hpp`).
+    - Impact voice: force + material → modal resonator excitation + ADSR (`impact.hpp`).
+    - Fracture voice: crack/shatter burst — brittleness-driven HP-filtered noise (`fracture.hpp`).
+    - Friction voice: velocity-modulated band-pass filtered noise (`surface.hpp`).
+    - Tear voice: periodic noise bursts, rate controlled by tear speed (`surface.hpp`).
+    - Metallic modal presets: Bell, Cymbal, Plate, Pipe, Spring with empirical inharmonic ratios (`metal.hpp`).
 5. **Fluent EDSL (`dhvani/sound_edsl.hpp`)**:
-   - `impact()`, `fracture()`, `friction()`, `tear()`, `metal_hit()` entry points.
-   - Method-chaining: `.material()`, `.force()`, `.velocity()`, `.metal()`, `.sample_rate()`.
-   - Terminal: `.build()` → `SoundEvent`, `.render<N>()` → stack-allocated `SampleBlock<N>`.
+    - `impact()`, `fracture()`, `friction()`, `tear()`, `metal_hit()` entry points.
+    - Method-chaining: `.material()`, `.force()`, `.velocity()`, `.metal()`, `.sample_rate()`.
+    - Terminal: `.build()` → `SoundEvent`, `.render<N>()` → stack-allocated `SampleBlock<N>`.
 6. **Signal Graph (`dhvani/graph/`)**:
-   - `AudioNode` concept — any type with `process(out, in, sr)` and `reset()`.
-   - `SoundGraph` — type-erased DAG evaluated in insertion order.
-   - Built-in nodes: `OscillatorNode`, `GainNode`, `LowPassNode`, `MixerNode`, `EnvelopeNode`.
+    - `AudioNode` concept — any type with `process(out, in, sr)` and `reset()`.
+    - `SoundGraph` — type-erased DAG evaluated in insertion order.
+    - Built-in nodes: `OscillatorNode`, `GainNode`, `LowPassNode`, `MixerNode`, `EnvelopeNode`.
 7. **Audio Backends (`dhvani/backend/`)**:
-   - `AudioBackend` concept — `sample_rate()`, `start(callback)`, `stop()`, `is_running()`.
-   - `NullBackend` — PCM capture to `std::vector` for testing and offline export.
-   - `MiniAudioBackend` — hardware playback via miniaudio (gated on `DHVANI_USE_MINIAUDIO`).
+    - `AudioBackend` concept — `sample_rate()`, `start(callback)`, `stop()`, `is_running()`.
+    - `NullBackend` — PCM capture to `std::vector` for testing and offline export.
+    - `MiniAudioBackend` — hardware playback via miniaudio (gated on `DHVANI_USE_MINIAUDIO`).
 8. **Physics Bridges** (config-driven — no hardcoded coefficients or magic strings):
-   - `GatiSoundBridge` (`dhvani/gati_bridge.hpp`) — Gati collision events → SoundBus cues. Selection thresholds live in a tunable `CollisionSonifyConfig`; cue names come from the shared `DhvaniCue` registry.
-   - `from_prakriti_material()` (`dhvani/prakriti_bridge.hpp`) — Prakriti particle state → `MaterialParams`. Density/temperature/**pressure** → stiffness/damping/brittleness mapping via a `PrakritiAcousticMap` (documented defaults reproduce the original behavior).
-   - `DhvaniCue` (`dhvani/gati_bridge.hpp`) — the single source of truth for procedural-cue names (`impact`, `fracture`, `friction`), shared with Spandana's sonification palette.
+    - `GatiSoundBridge` (`dhvani/gati_bridge.hpp`) — Gati collision events → SoundBus cues. Selection thresholds live in
+      a tunable `CollisionSonifyConfig`; cue names come from the shared `DhvaniCue` registry.
+    - `from_prakriti_material()` (`dhvani/prakriti_bridge.hpp`) — Prakriti particle state → `MaterialParams`.
+      Density/temperature/ **pressure** → stiffness/damping/brittleness mapping via a `PrakritiAcousticMap` (documented
+      defaults reproduce the original behavior).
+    - `DhvaniCue` (`dhvani/gati_bridge.hpp`) — the single source of truth for procedural-cue names (`impact`,
+      `fracture`, `friction`), shared with Spandana's sonification palette.
 9. **Spandana Timeline Integration**:
-   - `audio_cue(sound_bus, name)` (`dhvani/edsl.hpp`) — declarative cue directive.
-   - **Auto-sonification** (`spandana/edsl/audio_policy.hpp`) — `auto_sonify(SimProfile)` drives Dhvani from the *type of simulation* + prakriti/gati state through a compile-time `Sonifier` policy. See [§9](#9-auto-sonification-from-spandana).
+    - `audio_cue(sound_bus, name)` (`dhvani/edsl.hpp`) — declarative cue directive.
+    - **Auto-sonification** (`spandana/edsl/audio_policy.hpp`) — `auto_sonify(SimProfile)` drives Dhvani from the *type
+      of simulation* + prakriti/gati state through a compile-time `Sonifier` policy.
+      See [§9](#9-auto-sonification-from-spandana).
 
 ---
 
@@ -304,14 +311,19 @@ timeline.add(
 
 ## 9. Auto-Sonification from Spandana
 
-Dhvani can be driven automatically by a [Spandana](../spandana/spandana.md) simulation: *the type of simulation chooses the sound*, and the acoustic character is derived from prakriti material state and gati dynamics. The integration is a **compile-time policy** (`spandana/edsl/audio_policy.hpp`), so it adds nothing unless you opt in.
+Dhvani can be driven automatically by a [Spandana](../spandana/spandana.md) simulation: *the type of simulation chooses
+the sound*, and the acoustic character is derived from prakriti material state and gati dynamics. The integration is a
+**compile-time policy** (`spandana/edsl/audio_policy.hpp`), so it adds nothing unless you opt in.
 
 **How it fits together**
 
 - `SimProfile` names the event class: `Impact`, `Fracture`, `Friction`, `Fluid`, `Thermal`, `Explosion`.
-- `SonifyContext` carries the normalized simulation state — `density`, `temperature`, `pressure` (prakriti) and `intensity` (gati).
-- `sound_palette(profile, ctx)` is the one place that maps a profile + context to a cue. It runs the prakriti state through `from_prakriti_material()` to modulate pitch, then picks the matching `DhvaniCue` name.
-- `DhvaniSonifier{&bus}` plays that cue on a `SoundBus`; the default `NullSonifier` is an empty, no-op policy (zero bytes, zero calls).
+- `SonifyContext` carries the normalized simulation state — `density`, `temperature`, `pressure` (prakriti) and
+  `intensity` (gati).
+- `sound_palette(profile, ctx)` is the one place that maps a profile + context to a cue. It runs the prakriti state
+  through `from_prakriti_material()` to modulate pitch, then picks the matching `DhvaniCue` name.
+- `DhvaniSonifier{&bus}` plays that cue on a `SoundBus`; the default `NullSonifier` is an empty, no-op policy (zero
+  bytes, zero calls).
 
 ```cpp
 #include <spandana/edsl/audio_policy.hpp>
@@ -327,12 +339,16 @@ timeline.add(
         .via(DhvaniSonifier{&bus}));
 ```
 
-Because the cue names come from the shared `DhvaniCue` registry, the physics collision path (`GatiSoundBridge::on_collision`) and this Spandana palette emit the *same* procedural voices — there is one spelling of `impact`/`fracture`/`friction` across the whole engine.
+Because the cue names come from the shared `DhvaniCue` registry, the physics collision path
+(`GatiSoundBridge::on_collision`) and this Spandana palette emit the *same* procedural voices — there is one spelling of
+`impact`/`fracture`/`friction` across the whole engine.
 
 **Tuning the physics mapping**
 
-- `PrakritiAcousticMap` — coefficients for density/temperature/**pressure** → stiffness/damping/brittleness. Pressure now stiffens the medium (a compressed liquid rings more solidly).
-- `CollisionSonifyConfig` — thresholds deciding impact vs. fracture vs. friction from impulse, brittleness, and relative velocity.
+- `PrakritiAcousticMap` — coefficients for density/temperature/ **pressure** → stiffness/damping/brittleness. Pressure
+  now stiffens the medium (a compressed liquid rings more solidly).
+- `CollisionSonifyConfig` — thresholds deciding impact vs. fracture vs. friction from impulse, brittleness, and relative
+  velocity.
 
 Both default-construct to the original built-in behavior, so existing code is unaffected.
 
@@ -340,28 +356,28 @@ Both default-construct to the original built-in behavior, so existing code is un
 
 ## 10. File Reference
 
-| Header | Contents |
-|---|---|
-| `dhvani/dhvani.hpp` | `SoundBus`, `SoundCue` |
-| `dhvani/spatial.hpp` | `AudioListener2D`, `compute_spatial_audio()` |
-| `dhvani/edsl.hpp` | `audio_cue()` for Spandana timelines |
-| `dhvani/sound_edsl.hpp` | `SoundBuilder` EDSL, `impact()`, `fracture()`, `friction()`, `tear()`, `metal_hit()` |
-| `dhvani/gati_bridge.hpp` | `GatiSoundBridge`, `CollisionSoundEvent`, `CollisionSonifyConfig`, `DhvaniCue` |
-| `dhvani/prakriti_bridge.hpp` | `from_prakriti_material()`, `PrakritiAcousticMap` |
-| `spandana/edsl/audio_policy.hpp` | `auto_sonify()`, `SimProfile`, `SonifyContext`, `sound_palette()`, `NullSonifier`, `DhvaniSonifier` |
-| `dhvani/synth/buffer.hpp` | `Sample`, `SampleFrame`, `SampleBlock<N>` |
-| `dhvani/synth/waveform.hpp` | `OscillatorState`, `WaveShape`, `tick()`, `fill_block()` |
-| `dhvani/synth/envelope.hpp` | `ADSRParams`, `EnvelopeState`, `trigger()`, `tick()`, `done()` |
-| `dhvani/synth/filter.hpp` | `BiquadCoeffs`, `BiquadState`, `make_biquad<Tag>()`, `process()` |
-| `dhvani/synth/resonator.hpp` | `KarplusStrong<N>`, `ModalResonator<Modes>` |
-| `dhvani/physical/material.hpp` | `MaterialParams`, `PhysicalMaterial` concept, `MaterialPreset`, `presets::*` |
-| `dhvani/physical/impact.hpp` | `ImpactVoice<Modes>`, `make_impact_resonator()` |
-| `dhvani/physical/fracture.hpp` | `FractureVoice` |
-| `dhvani/physical/surface.hpp` | `FrictionVoice`, `TearVoice` |
-| `dhvani/physical/metal.hpp` | `MetalType`, `make_metal_resonator()` |
-| `dhvani/graph/node.hpp` | `AudioNode` concept, `NodeId`, `NodeConnection` |
-| `dhvani/graph/builtin_nodes.hpp` | `OscillatorNode`, `GainNode`, `LowPassNode`, `MixerNode`, `EnvelopeNode` |
-| `dhvani/graph/graph.hpp` | `SoundGraph` |
-| `dhvani/backend/backend.hpp` | `AudioBackend` concept |
-| `dhvani/backend/null_backend.hpp` | `NullBackend` |
-| `dhvani/backend/miniaudio.hpp` | `MiniAudioBackend` |
+| Header                            | Contents                                                                                            |
+|-----------------------------------|-----------------------------------------------------------------------------------------------------|
+| `dhvani/dhvani.hpp`               | `SoundBus`, `SoundCue`                                                                              |
+| `dhvani/spatial.hpp`              | `AudioListener2D`, `compute_spatial_audio()`                                                        |
+| `dhvani/edsl.hpp`                 | `audio_cue()` for Spandana timelines                                                                |
+| `dhvani/sound_edsl.hpp`           | `SoundBuilder` EDSL, `impact()`, `fracture()`, `friction()`, `tear()`, `metal_hit()`                |
+| `dhvani/gati_bridge.hpp`          | `GatiSoundBridge`, `CollisionSoundEvent`, `CollisionSonifyConfig`, `DhvaniCue`                      |
+| `dhvani/prakriti_bridge.hpp`      | `from_prakriti_material()`, `PrakritiAcousticMap`                                                   |
+| `spandana/edsl/audio_policy.hpp`  | `auto_sonify()`, `SimProfile`, `SonifyContext`, `sound_palette()`, `NullSonifier`, `DhvaniSonifier` |
+| `dhvani/synth/buffer.hpp`         | `Sample`, `SampleFrame`, `SampleBlock<N>`                                                           |
+| `dhvani/synth/waveform.hpp`       | `OscillatorState`, `WaveShape`, `tick()`, `fill_block()`                                            |
+| `dhvani/synth/envelope.hpp`       | `ADSRParams`, `EnvelopeState`, `trigger()`, `tick()`, `done()`                                      |
+| `dhvani/synth/filter.hpp`         | `BiquadCoeffs`, `BiquadState`, `make_biquad<Tag>()`, `process()`                                    |
+| `dhvani/synth/resonator.hpp`      | `KarplusStrong<N>`, `ModalResonator<Modes>`                                                         |
+| `dhvani/physical/material.hpp`    | `MaterialParams`, `PhysicalMaterial` concept, `MaterialPreset`, `presets::*`                        |
+| `dhvani/physical/impact.hpp`      | `ImpactVoice<Modes>`, `make_impact_resonator()`                                                     |
+| `dhvani/physical/fracture.hpp`    | `FractureVoice`                                                                                     |
+| `dhvani/physical/surface.hpp`     | `FrictionVoice`, `TearVoice`                                                                        |
+| `dhvani/physical/metal.hpp`       | `MetalType`, `make_metal_resonator()`                                                               |
+| `dhvani/graph/node.hpp`           | `AudioNode` concept, `NodeId`, `NodeConnection`                                                     |
+| `dhvani/graph/builtin_nodes.hpp`  | `OscillatorNode`, `GainNode`, `LowPassNode`, `MixerNode`, `EnvelopeNode`                            |
+| `dhvani/graph/graph.hpp`          | `SoundGraph`                                                                                        |
+| `dhvani/backend/backend.hpp`      | `AudioBackend` concept                                                                              |
+| `dhvani/backend/null_backend.hpp` | `NullBackend`                                                                                       |
+| `dhvani/backend/miniaudio.hpp`    | `MiniAudioBackend`                                                                                  |

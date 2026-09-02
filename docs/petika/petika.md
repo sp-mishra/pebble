@@ -1,6 +1,8 @@
 # Petika: Unified Engine-Agnostic Key-Value & Storage Engine Platform
 
-**Petika** (`include/petika/`) is Pebble's high-performance, crash-consistent, engine-agnostic storage and key-value platform in modern C++23. It decouples high-level application transactional storage APIs from low-level storage engines (SkipList, B+Tree, LSM-Tree, In-Memory Hash), backed by lock-free persistence workers and write-ahead logging (Nitya).
+**Petika** (`include/petika/`) is Pebble's high-performance, crash-consistent, engine-agnostic storage and key-value
+platform in modern C++23. It decouples high-level application transactional storage APIs from low-level storage engines
+(SkipList, B+Tree, LSM-Tree, In-Memory Hash), backed by lock-free persistence workers and write-ahead logging (Nitya).
 
 ---
 
@@ -36,23 +38,34 @@
 ## 2. Core Subsystems & Algorithmic Guarantees
 
 ### 2.1 Multi-Version Concurrency Control (MVCC) Engine
+
 `petika::engines::MVCCJournaledSkipEngine` implements snapshot isolation:
-- **Lock-Free Read Visibility**: Readers acquire a read timestamp $T_{\text{read}}$ and read the latest version $V \le T_{\text{read}}$ without acquiring locks or blocking concurrent writers.
-- **Write-Conflict Detection**: Optimistic commit validation aborts conflicting transactions attempting to modify the same key at timestamp $T_{\text{write}} > T_{\text{read}}$.
-- **Garbage Collection (GC)**: Old versions behind the global minimum active snapshot are reclaimed by background epoch reclamation.
+
+- **Lock-Free Read Visibility**: Readers acquire a read timestamp $T_{\text{read}}$ and read the latest
+  version $V \le T_{\text{read}}$ without acquiring locks or blocking concurrent writers.
+- **Write-Conflict Detection**: Optimistic commit validation aborts conflicting transactions attempting to modify the
+  same key at timestamp $T_{\text{write}} > T_{\text{read}}$.
+- **Garbage Collection (GC)**: Old versions behind the global minimum active snapshot are reclaimed by background epoch
+  reclamation.
 
 ### 2.2 Lock-Free Background Persistence (`petika::AsyncPersistenceWorker`)
+
 - **Header**: `#include <petika/async_persistence_worker.hpp>`
-- **Architecture**: Single-Producer Single-Consumer (SPSC) lock-free ring buffer offloading synchronous disk serialization from the main simulation thread.
-- **Wake latency**: `std::binary_semaphore` — background thread wakes in microseconds after `enqueue()` (no polling sleep).
-- **Serialization**: pluggable `SerializationPolicy` template param (default `GlazeJsonPolicy`); swap for binary/CBOR without changing call sites.
-- **Throughput**: Zero main-thread blocking latency; handles bursts of $>100,000\,\text{ops/sec}$ with background asynchronous OS `fsync` calls.
+- **Architecture**: Single-Producer Single-Consumer (SPSC) lock-free ring buffer offloading synchronous disk
+  serialization from the main simulation thread.
+- **Wake latency**: `std::binary_semaphore` — background thread wakes in microseconds after `enqueue()` (no polling
+  sleep).
+- **Serialization**: pluggable `SerializationPolicy` template param (default `GlazeJsonPolicy`); swap for binary/CBOR
+  without changing call sites.
+- **Throughput**: Zero main-thread blocking latency; handles bursts of $>100,000\,\text{ops/sec}$ with background
+  asynchronous OS `fsync` calls.
 
 ---
 
 ## 3. End-to-End API Guide
 
 ### 3.1 Synchronous Key-Value Store with Write-Ahead Logging
+
 ```cpp
 #include "petika/petika.hpp"
 #include <iostream>
@@ -88,6 +101,7 @@ int main() {
 ```
 
 ### 3.2 MVCC Snapshot Isolation Transactions
+
 ```cpp
 #include "petika/petika.hpp"
 
@@ -113,6 +127,7 @@ void transfer(uint64_t from, uint64_t to, float amount) {
 ```
 
 ### 3.3 Asynchronous Non-Blocking Persistence Worker
+
 ```cpp
 #include "petika/async_persistence_worker.hpp"
 #include <glaze/glaze.hpp>
@@ -155,21 +170,23 @@ int main() {
 | **Smriti**     | Memory Resource System    | Fast linear arena (`LinearArena`) and pools for node allocation             |
 | **Containers** | Data Structures & Caching | `kosha::adapter::PetikaAdapter` for durable cache backends                  |
 | **NADI**       | Telemetry & Observability | Pulse scopes for `trace_publish()`, `trace_flush()`, `trace_recovery()`     |
+
 ---
 
 ## 4. Default Production Engine: `MvccJournaledSkipEngine`
 
 `petika::StringSkipStore` and `petika::SkipStore` select
-`petika::MvccJournaledSkipEngine`, which composes Nitya durability with
-Anukrama version chains:
+`petika::MvccJournaledSkipEngine`, which composes Nitya durability with Anukrama version chains:
 
-- **Skip List Index**: $O(\log n)$ point lookups, $O(\log n + k)$ ordered range scans without page-split overhead.
-- **Stable snapshots**: each snapshot captures the last published Nitya LSN and reads the latest Anukrama version at or before that boundary.
-- **Optimistic writes**: a transaction captures an LSN boundary and rejects a same-key write changed after that boundary before appending its WAL batch.
+- **Skip List Index**: $O (\log n)$ point lookups, $O (\log n + k)$ ordered range scans without page-split overhead.
+- **Stable snapshots**: each snapshot captures the last published Nitya LSN and reads the latest Anukrama version at or
+  before that boundary.
+- **Optimistic writes**: a transaction captures an LSN boundary and rejects a same-key write changed after that boundary
+  before appending its WAL batch.
 - **Log authority**: the Nitya WAL is the durable source of truth; recovery replays batches in LSN order.
 
-`JournaledSkipEngine` remains available via `SingleVersionSkipStore` when an
-application deliberately chooses single-version, last-writer-wins semantics.
+`JournaledSkipEngine` remains available via `SingleVersionSkipStore` when an application deliberately chooses
+single-version, last-writer-wins semantics.
 
 ---
 
@@ -234,30 +251,30 @@ auto token = cache.get("session_id");
 
 `Petika<Engine, Serializer, Comparator, DurabilityPolicy, TelemetryPolicy, ConcurrencyPolicy, WriteBuffer, BloomFilter, SnapshotGCPolicy>`
 
-| Parameter | Default | Alternatives | Purpose |
-|---|---|---|---|
-| `Engine` | — (required) | `JournaledSkipEngine`, `MvccJournaledSkipEngine`, `BTreeEngine` | Storage engine (Engine↔Substrate: each satisfies the `StorageEngine`/`BatchEngine` concepts; MVCC keeps version chains, `BTreeEngine` keeps one live version over `BPlusMap`) |
-| `Serializer` | `StringSerializer` | `BinarySerializer`, `ViewSerializer` | Key/value encode/decode. `BinarySerializer` is **endianness-canonical** (little-endian on the wire, no-op byteswap on LE hosts) so a store written on one arch replays byte-identically on another |
-| `Comparator` | `LexicalComparator` | Custom (supply `operator()` + `three_way()`) | Key ordering & scan termination |
-| `DurabilityPolicy` | `nitya::wal<>` | Custom WAL with matching `append`/`sync`/`recover` API | Write-ahead log backend |
-| `TelemetryPolicy` | `nitya::nadi_telemetry` | `nitya::null_telemetry` | Tracing/profiling spans |
-| `ConcurrencyPolicy` | `std::shared_mutex` | `NullMutex` (single-threaded) | Reader/writer lock |
-| `WriteBuffer` | `ImmediateCommitPolicy` | `GroupCommitPolicy<N>` | WAL write coalescing. `ImmediateCommitPolicy` is a pass-through (every mutation appended at once); `GroupCommitPolicy<N>` stages up to `N` mutations then flushes them as a single `commit_batch` → one `wal_->append` envelope, amortising fsync/append cost |
-| `BloomFilter` | `NoBloomFilter` | `BloomFilterPolicy<Bits>` | Probabilistic miss-skip |
-| `SnapshotGCPolicy` | `NoGC` | `EpochBasedGC` | When to reclaim MVCC versions below the minimum live snapshot. `NoGC` never prunes; `EpochBasedGC` tracks a live-snapshot horizon and periodically drives the engine's `prune()`. No-op on single-version engines (`BTreeEngine`) which expose no `prune()` |
+| Parameter           | Default                 | Alternatives                                                    | Purpose                                                                                                                                                                                                                                                       |
+|---------------------|-------------------------|-----------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Engine`            | — (required)            | `JournaledSkipEngine`, `MvccJournaledSkipEngine`, `BTreeEngine` | Storage engine (Engine↔Substrate: each satisfies the `StorageEngine`/`BatchEngine` concepts; MVCC keeps version chains, `BTreeEngine` keeps one live version over `BPlusMap`)                                                                                 |
+| `Serializer`        | `StringSerializer`      | `BinarySerializer`, `ViewSerializer`                            | Key/value encode/decode. `BinarySerializer` is **endianness-canonical** (little-endian on the wire, no-op byteswap on LE hosts) so a store written on one arch replays byte-identically on another                                                            |
+| `Comparator`        | `LexicalComparator`     | Custom (supply `operator()` + `three_way()`)                    | Key ordering & scan termination                                                                                                                                                                                                                               |
+| `DurabilityPolicy`  | `nitya::wal<>`          | Custom WAL with matching `append`/`sync`/`recover` API          | Write-ahead log backend                                                                                                                                                                                                                                       |
+| `TelemetryPolicy`   | `nitya::nadi_telemetry` | `nitya::null_telemetry`                                         | Tracing/profiling spans                                                                                                                                                                                                                                       |
+| `ConcurrencyPolicy` | `std::shared_mutex`     | `NullMutex` (single-threaded)                                   | Reader/writer lock                                                                                                                                                                                                                                            |
+| `WriteBuffer`       | `ImmediateCommitPolicy` | `GroupCommitPolicy<N>`                                          | WAL write coalescing. `ImmediateCommitPolicy` is a pass-through (every mutation appended at once); `GroupCommitPolicy<N>` stages up to `N` mutations then flushes them as a single `commit_batch` → one `wal_->append` envelope, amortising fsync/append cost |
+| `BloomFilter`       | `NoBloomFilter`         | `BloomFilterPolicy<Bits>`                                       | Probabilistic miss-skip                                                                                                                                                                                                                                       |
+| `SnapshotGCPolicy`  | `NoGC`                  | `EpochBasedGC`                                                  | When to reclaim MVCC versions below the minimum live snapshot. `NoGC` never prunes; `EpochBasedGC` tracks a live-snapshot horizon and periodically drives the engine's `prune()`. No-op on single-version engines (`BTreeEngine`) which expose no `prune()`   |
 
 ### Pre-built Aliases
 
-| Alias | Engine | Mutex | Notes |
-|---|---|---|---|
-| `StringSkipStore` | `MvccJournaledSkipEngine<string,string>` | `std::shared_mutex` | Default multi-threaded string store |
-| `SkipStore<K,V>` | `MvccJournaledSkipEngine<K,V>` | `std::shared_mutex` | Typed MVCC store |
-| `MvccSkipStore<K,V>` | `MvccJournaledSkipEngine<K,V>` | `std::shared_mutex` | Explicit MVCC alias |
-| `SingleVersionSkipStore<K,V>` | `JournaledSkipEngine<K,V>` | `std::shared_mutex` | Single-version last-write-wins |
-| `SingleVersionStringSkipStore` | `JournaledSkipEngine<string,string>` | `std::shared_mutex` | Single-version string store |
-| `SingleThreadSkipStore<K,V>` | `MvccJournaledSkipEngine<K,V>` | `NullMutex` | Zero-overhead single-threaded store |
-| `BloomSkipStore<K,V,Bits>` | `MvccJournaledSkipEngine<K,V>` | `std::shared_mutex` | Bloom-filtered for miss-heavy reads |
-| `BTreeStore<K,V>` | `BTreeEngine<K,V>` | `std::shared_mutex` | B+Tree-backed store (`ImmediateCommitPolicy`); single live version per key, lock-free leaf-chain scans |
+| Alias                          | Engine                                   | Mutex               | Notes                                                                                                  |
+|--------------------------------|------------------------------------------|---------------------|--------------------------------------------------------------------------------------------------------|
+| `StringSkipStore`              | `MvccJournaledSkipEngine<string,string>` | `std::shared_mutex` | Default multi-threaded string store                                                                    |
+| `SkipStore<K,V>`               | `MvccJournaledSkipEngine<K,V>`           | `std::shared_mutex` | Typed MVCC store                                                                                       |
+| `MvccSkipStore<K,V>`           | `MvccJournaledSkipEngine<K,V>`           | `std::shared_mutex` | Explicit MVCC alias                                                                                    |
+| `SingleVersionSkipStore<K,V>`  | `JournaledSkipEngine<K,V>`               | `std::shared_mutex` | Single-version last-write-wins                                                                         |
+| `SingleVersionStringSkipStore` | `JournaledSkipEngine<string,string>`     | `std::shared_mutex` | Single-version string store                                                                            |
+| `SingleThreadSkipStore<K,V>`   | `MvccJournaledSkipEngine<K,V>`           | `NullMutex`         | Zero-overhead single-threaded store                                                                    |
+| `BloomSkipStore<K,V,Bits>`     | `MvccJournaledSkipEngine<K,V>`           | `std::shared_mutex` | Bloom-filtered for miss-heavy reads                                                                    |
+| `BTreeStore<K,V>`              | `BTreeEngine<K,V>`                       | `std::shared_mutex` | B+Tree-backed store (`ImmediateCommitPolicy`); single live version per key, lock-free leaf-chain scans |
 
 ### `scan_view()` — C++23 Range-Compatible Scan
 
@@ -274,11 +291,9 @@ auto keys = store.scan_view("a", "z")
 
 **Laziness.** Over `BTreeEngine`, `scan_view` is a genuine lazy `std::ranges::view`:
 the leaf chain is a lock-free forward cursor, so the underlying `std::generator`
-pulls one entry per iteration and stops at the consumed prefix — breaking early
-walks no further. MVCC engines hold a read-lock for the duration of a scan, so
-they fall back to an eager materialisation (selected via `if constexpr` on
-whether the engine exposes `scan_lazy`); the range interface is identical either
-way.
+pulls one entry per iteration and stops at the consumed prefix — breaking early walks no further. MVCC engines hold a
+read-lock for the duration of a scan, so they fall back to an eager materialisation (selected via `if constexpr` on
+whether the engine exposes `scan_lazy`); the range interface is identical either way.
 
 ### `SingleThreadSkipStore` — Zero-Cost Single-Threaded Use
 
@@ -294,25 +309,22 @@ for (const auto& entry : local_store.scan_view("a", "z")) {
 
 ### `AsyncPersistenceWorker` — Sub-Millisecond Wake Latency
 
-`AsyncPersistenceWorker` uses `std::binary_semaphore` to wake the background
-thread within microseconds of `enqueue()`. The 5ms polling sleep from earlier
-versions is gone. The `SerializationPolicy` template parameter (default:
-`GlazeJsonPolicy`) allows swapping JSON for binary/CBOR formats without
-changing call sites.
+`AsyncPersistenceWorker` uses `std::binary_semaphore` to wake the background thread within microseconds of `enqueue()`.
+The 5ms polling sleep from earlier versions is gone. The `SerializationPolicy` template parameter (default:
+`GlazeJsonPolicy`) allows swapping JSON for binary/CBOR formats without changing call sites.
 
 **Overflow handling.** A fourth template parameter `OverflowPolicy` (default
 `Reject`) decides what `enqueue()` does when the SPSC ring is full:
 
-| `OverflowPolicy` | Behaviour when full | Consumer path |
-|---|---|---|
-| `Reject` (default) | Drop the incoming item, return `false`. Zero overhead — matches legacy behaviour | Lock-free |
-| `Block` | Producer-side back-pressure: yield-spin until a slot frees, then push. Never drops | Lock-free |
-| `DropOldest` | Evict the oldest queued item to make room, return `true` | Eviction + worker-pop serialised under a mutex (the only policy where the producer pops, so it must not race the single consumer) |
+| `OverflowPolicy`   | Behaviour when full                                                                | Consumer path                                                                                                                     |
+|--------------------|------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| `Reject` (default) | Drop the incoming item, return `false`. Zero overhead — matches legacy behaviour   | Lock-free                                                                                                                         |
+| `Block`            | Producer-side back-pressure: yield-spin until a slot frees, then push. Never drops | Lock-free                                                                                                                         |
+| `DropOldest`       | Evict the oldest queued item to make room, return `true`                           | Eviction + worker-pop serialised under a mutex (the only policy where the producer pops, so it must not race the single consumer) |
 
-**Loss observability.** `set_error_callback(cb)` surfaces otherwise-silent data
-loss: `cb(WorkerError, std::string_view path)` fires on `OverflowDropped` (producer
-thread), and on `SerializeFailed` / `WriteFailed` (worker thread). Unset = legacy
-silent behaviour. Keep the callback cheap and thread-safe.
+**Loss observability.** `set_error_callback(cb)` surfaces otherwise-silent data loss:
+`cb(WorkerError, std::string_view path)` fires on `OverflowDropped` (producer thread), and on `SerializeFailed` /
+`WriteFailed` (worker thread). Unset = legacy silent behaviour. Keep the callback cheap and thread-safe.
 
 ```cpp
 // Custom binary policy + non-dropping back-pressure.

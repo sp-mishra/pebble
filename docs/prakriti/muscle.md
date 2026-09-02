@@ -21,11 +21,11 @@
 - `NonlinearTendon`, `LinearTendon`, `RigidTendon`
 - `NoFatigue`, `ThreeCompartmentFatigue`
 - Batch APIs for SoA sweeps:
-  - `HillTypeFiber::compute_force_batch(...)`
-  - `LinearFiber::compute_force_batch(...)`
-  - `NonlinearTendon::force_batch(...)`
-  - `LinearTendon::force_batch(...)`
-  - `RigidTendon::force_batch(...)`
+    - `HillTypeFiber::compute_force_batch(...)`
+    - `LinearFiber::compute_force_batch(...)`
+    - `NonlinearTendon::force_batch(...)`
+    - `LinearTendon::force_batch(...)`
+    - `RigidTendon::force_batch(...)`
 
 ## Minimal Usage
 
@@ -70,18 +70,21 @@ cmake --build build --target pebble_tests -j4
 ```
 
 Interpretation:
+
 - `serial_us`: scalar-like baseline (solver chunk size forced to a huge value, no practical task splitting).
 - `batch_us`: batched SoA path (contiguous spans through `compute_force_batch`/`force_batch`).
 - `pravaha_us`: optional parallel path when `PRAKRITI_HAS_MUSCLE_PRAVAHA` is enabled.
 
 Performance guidance:
+
 - For small muscle counts, serial or coarse chunks can be faster due to lower scheduling overhead.
 - For large muscle counts (thousands+), batched and Pravaha paths should reduce total solve time.
 - Keep `MuscleStore::reserve(...)` aligned with expected muscle count to avoid reallocation stalls.
 
 ## Notes
 
-- Hot-path projection math uses Pebble primitives (`ga::Vec2`, `ga::dot`, `ga::axpy`) rather than ad-hoc scalar/vector wrappers.
+- Hot-path projection math uses Pebble primitives (`ga::Vec2`, `ga::dot`, `ga::axpy`) rather than ad-hoc scalar/vector
+  wrappers.
 - `MuscleStore` is append-only for stable IDs consumed by Gati bridges.
 - Warm-start caching can be applied through `MuscleSolver::cache_lambdas(...)` with a Kosha cache type.
 - The solver is independent and can be composed in custom world pipelines without virtual dispatch.

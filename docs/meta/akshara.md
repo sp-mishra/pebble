@@ -30,15 +30,14 @@
 
 ## Overview
 
-Akshara ("अक्षर", Sanskrit for "character" or "letter") is the compile-time string foundation. It
-provides:
+Akshara ("अक्षर", Sanskrit for "character" or "letter") is the compile-time string foundation. It provides:
 
 - An NTTP-capable string type (`fixed_string<N>`) with full STL/ranges compliance
 - A full suite of compile-time string algorithms (search, split, replace, case conversion, padding)
 - A compile-time character set type (`ct_char_set`) backed by a two-word bitset for efficient constexpr evaluation
-- KMP string search with O(N+M) compile-time complexity
+- KMP string search with O (N+M) compile-time complexity
 - FNV-1a 64-bit hashing for compile-time dispatch
-- Type-level string interning for O(1) compile-time identity comparison
+- Type-level string interning for O (1) compile-time identity comparison
 - Compile-time path operations (`akshara::path`)
 
 Everything is `consteval` or `constexpr`; no runtime overhead, no heap, no virtual, no macros.
@@ -213,7 +212,7 @@ struct ct_string_builder {
 
 ## Section 5 — KMP Search
 
-O(N+M) compile-time substring search.
+O (N+M) compile-time substring search.
 
 ```cpp
 consteval std::size_t kmp_find(const fixed_string<N>& haystack, const fixed_string<M>& needle) noexcept;
@@ -436,15 +435,14 @@ static constexpr auto alpha_vowels = vowels & akshara::cs_alpha();
 
 ## Overview
 
-Akshara ("अक्षर", Sanskrit for "character" or "letter") is the compile-time string foundation. It
-provides:
+Akshara ("अक्षर", Sanskrit for "character" or "letter") is the compile-time string foundation. It provides:
 
 - An NTTP-capable string type (`fixed_string<N>`) for embedding string values as template parameters
 - A full suite of compile-time string algorithms (search, split, replace, case conversion, padding)
 - A compile-time character set type (`ct_char_set`) for predicate-driven parsing
-- KMP string search with O(N+M) compile-time complexity
+- KMP string search with O (N+M) compile-time complexity
 - FNV-1a 64-bit hashing for compile-time dispatch
-- Type-level string interning for O(1) compile-time identity comparison
+- Type-level string interning for O (1) compile-time identity comparison
 
 Everything is `consteval` or `constexpr`; no runtime overhead, no heap, no virtual, no macros.
 
@@ -691,7 +689,7 @@ static constexpr auto make_label = []() consteval {
 
 ## Section 5 — KMP Search
 
-Knuth–Morris–Pratt substring search. O(N+M) where N = haystack length, M = needle length. Builds the failure table
+Knuth–Morris–Pratt substring search. O (N+M) where N = haystack length, M = needle length. Builds the failure table
 inline to avoid the constraint that pointers to function parameters cannot be constant expressions.
 
 ```cpp
@@ -838,8 +836,8 @@ static constexpr auto padded = akshara::pad_right<8>(name, '-');
 
 ## Section 10 — String Interning
 
-Type-level string identity. Each distinct string value maps to a distinct C++ type, enabling O(1) identity comparison by
-comparing type identities.
+Type-level string identity. Each distinct string value maps to a distinct C++ type, enabling O (1) identity comparison
+by comparing type identities.
 
 ```cpp
 // intern_tag<S>: unique type per string value S
