@@ -620,27 +620,25 @@ namespace akruti::khanda {
     }
 
     // ── Voronoi cells on arbitrary bounding container ─────────────────────────────────────
-    [[nodiscard]] inline std::vector<Poly>
+    [[nodiscard]] inline containers::dynamic::SmallVector<Poly, 16 * sizeof(Poly)>
     voronoi_cells(std::span<const Vec> sites, const AABB<Scalar>& container, Scalar pad = Scalar(0.1)) {
         const Vec clo{container.lo}, chi{container.hi};
         const Poly boundary = rect_poly(clo - Vec{pad, pad}, chi + Vec{pad, pad});
-        std::vector<Vec> svec(sites.begin(), sites.end());
-        return voronoi_shatter(boundary, svec);
+        return voronoi_shatter(boundary, sites);
     }
 
 
     // ── The End-to-End Fracture Pipeline ──────────────────────────────────────────────────
-    template <TriangulatorBackend Tri = EarClipTriangulator>
-    [[nodiscard]] inline std::vector<Shard>
-    fracture_voronoi(const Poly& outer_in, std::span<const Poly> holes, std::span<const Vec> sites,
-                     const FractureConfig& cfg = {}, const Tri& triangulate = {}) {
-        std::vector<Shard> shards;
-        if (outer_in.size() < 3 || sites.empty()) return shards;
+    template <TriangulatorBackend Tri = EarClipTriangulator, typename OutContainer = std::vector<Shard>>
+    inline void
+    fracture_voronoi_into(const Poly& outer_in, std::span<const Poly> holes, std::span<const Vec> sites,
+                          OutContainer& shards, const FractureConfig& cfg = {}, const Tri& triangulate = {}) {
+        if (outer_in.size() < 3 || sites.empty()) return;
 
         Poly outer = outer_in;
         detail::ensure_ccw(outer);
         detail::cleanup_poly(outer, cfg.eps);
-        if (outer.size() < 3) return shards;
+        if (outer.size() < 3) return;
 
         const AABB<Scalar> bounds = detail::bounds_of(outer);
         const auto raw_cells = voronoi_cells(sites, bounds, Vec{bounds.extent()}.len() * Scalar(0.1));
@@ -684,8 +682,7 @@ namespace akruti::khanda {
                 s.area = mp.area;
                 s.centroid = mp.centroid;
                 s.inertia = mp.inertia;
-            }
-            else {
+            } else {
                 s.area = area;
                 s.centroid = sb.center();
             }
@@ -700,8 +697,17 @@ namespace akruti::khanda {
                 s.convex = bayazit_decomp(shard_outer);
                 break;
             }
+
             shards.push_back(std::move(s));
         }
+    }
+
+    template <TriangulatorBackend Tri = EarClipTriangulator>
+    [[nodiscard]] inline std::vector<Shard>
+    fracture_voronoi(const Poly& outer_in, std::span<const Poly> holes, std::span<const Vec> sites,
+                     const FractureConfig& cfg = {}, const Tri& triangulate = {}) {
+        std::vector<Shard> shards;
+        fracture_voronoi_into(outer_in, holes, sites, shards, cfg, triangulate);
         return shards;
     }
 

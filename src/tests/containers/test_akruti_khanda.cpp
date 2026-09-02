@@ -147,3 +147,16 @@ TEST_CASE (
     for (const auto& s : subshards) sum += s.area;
     REQUIRE(sum == Catch::Approx(parent.area).margin(1e-3));
 }
+
+TEST_CASE("akruti: khanda fracture_voronoi_into in-place sink", "[akruti][khanda]") {
+    Poly outer = unit_square();
+    std::vector<Vec> sites = {{0.25f, 0.25f}, {0.75f, 0.3f}, {0.4f, 0.8f}, {0.8f, 0.75f}};
+
+    std::vector<Shard> sink_shards;
+    fracture_voronoi_into(outer, std::span<const Poly>{}, std::span<const Vec>(sites), sink_shards);
+
+    REQUIRE(!sink_shards.empty());
+    double sum = 0;
+    for (const auto& s : sink_shards) sum += s.area;
+    REQUIRE(sum == Catch::Approx(1.0).margin(1e-3));
+}

@@ -10,9 +10,10 @@
 #include <utility>
 
 namespace akruti {
+    template <std::size_t SBO = 128>
     struct ShapeStore {
         ShapeType type{ShapeType::Circle};
-        alignas(64) std::byte storage[128]{};
+        alignas(64) std::byte storage[SBO]{};
 
         // Type-erased function pointers (vtable-free, static table cached)
         Scalar (*sdf_fn)(const void*, Vec) noexcept = nullptr;
@@ -119,5 +120,6 @@ namespace akruti {
         }
     };
 
-    static_assert(Shape<ShapeStore>, "ShapeStore must satisfy Shape concept");
+    static_assert(Shape<ShapeStore<128>>, "ShapeStore<128> must satisfy Shape concept");
+    static_assert(Shape<ShapeStore<>>, "ShapeStore<> must satisfy Shape concept");
 } // namespace akruti

@@ -95,10 +95,11 @@ namespace akruti {
     //    Each cell = boundary clipped by the bisector half-plane against every other seed.
     //    Returns fragment polygons (some may be empty if a seed is dominated). Areas tile the
     //    boundary (sum == boundary area up to clipping precision).
-    [[nodiscard]] inline std::vector<Poly> voronoi_shatter(const Poly& boundary,
-                                                           const std::vector<Vec2<Scalar>>& seeds) {
-        std::vector<Poly> cells;
-        cells.reserve(seeds.size());
+    template <typename OutContainer>
+    inline void voronoi_shatter_into(const Poly& boundary,
+                                     std::span<const Vec2<Scalar>> seeds,
+                                     OutContainer& cells) {
+        cells.reserve(cells.size() + seeds.size());
         for (std::size_t s = 0; s < seeds.size(); ++s) {
             Poly cell = boundary;
             const Vec2<Scalar> si = seeds[s];
@@ -112,6 +113,19 @@ namespace akruti {
             }
             cells.push_back(std::move(cell));
         }
+    }
+
+    [[nodiscard]] inline containers::dynamic::SmallVector<Poly, 16 * sizeof(Poly)>
+    voronoi_shatter(const Poly& boundary, std::span<const Vec2<Scalar>> seeds) {
+        containers::dynamic::SmallVector<Poly, 16 * sizeof(Poly)> cells;
+        voronoi_shatter_into(boundary, seeds, cells);
+        return cells;
+    }
+
+    [[nodiscard]] inline std::vector<Poly>
+    voronoi_shatter(const Poly& boundary, const std::vector<Vec2<Scalar>>& seeds) {
+        std::vector<Poly> cells;
+        voronoi_shatter_into(boundary, std::span<const Vec2<Scalar>>(seeds.data(), seeds.size()), cells);
         return cells;
     }
 

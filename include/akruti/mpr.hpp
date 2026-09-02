@@ -105,16 +105,6 @@ namespace akruti {
 
     // Distance Oracle implementation using MPR
     struct MprDistanceOracle {
-        [[nodiscard]] DistanceResult distance(ShapeType type_a, const void* shape_a,
-                                              ShapeType type_b, const void* shape_b) const noexcept {
-            // Fast path for shapes
-            DistanceResult res{};
-            // Query via GJK/MPR
-            // For general type-erased pointers, we can use the support function from ShapeStore if available,
-            // or matrix dispatch
-            return res;
-        }
-
         template <Shape A, Shape B>
         [[nodiscard]] DistanceResult operator()(const A& a, const B& b) const noexcept {
             const auto mpr = mpr_collide(a, b);
@@ -126,6 +116,45 @@ namespace akruti {
             res.closest_b = mpr.contact_point + mpr.normal * mpr.distance;
             res.iterations = mpr.iterations;
             return res;
+        }
+
+        [[nodiscard]] DistanceResult distance(ShapeType type_a, const void* shape_a,
+                                              ShapeType type_b, const void* shape_b) const noexcept {
+            if (!shape_a || !shape_b) return DistanceResult{};
+
+            auto dispatch_pair = [&]<typename A, typename B>(const void* sa, const void* sb) noexcept {
+                return (*this)(*static_cast<const A*>(sa), *static_cast<const B*>(sb));
+            };
+
+            auto dispatch_single = [&]<typename A>(const void* sa, ShapeType tb, const void* sb) noexcept {
+                switch (tb) {
+                case ShapeType::Circle: return dispatch_pair.template operator()<A, Circle>(sa, sb);
+                case ShapeType::Box: return dispatch_pair.template operator()<A, Box>(sa, sb);
+                case ShapeType::Capsule: return dispatch_pair.template operator()<A, Capsule>(sa, sb);
+                case ShapeType::OrientedBox: return dispatch_pair.template operator()<A, OrientedBox>(sa, sb);
+                case ShapeType::Triangle: return dispatch_pair.template operator()<A, Triangle>(sa, sb);
+                case ShapeType::RoundedBox: return dispatch_pair.template operator()<A, RoundedBox>(sa, sb);
+                case ShapeType::Sector: return dispatch_pair.template operator()<A, Sector>(sa, sb);
+                case ShapeType::Segment: return dispatch_pair.template operator()<A, Segment>(sa, sb);
+                case ShapeType::ConvexPoly: return dispatch_pair.template operator()<A, ConvexPoly<8>>(sa, sb);
+                case ShapeType::RoundedPoly: return dispatch_pair.template operator()<A, RoundedPoly<8>>(sa, sb);
+                default: return DistanceResult{};
+                }
+            };
+
+            switch (type_a) {
+            case ShapeType::Circle: return dispatch_single.template operator()<Circle>(shape_a, type_b, shape_b);
+            case ShapeType::Box: return dispatch_single.template operator()<Box>(shape_a, type_b, shape_b);
+            case ShapeType::Capsule: return dispatch_single.template operator()<Capsule>(shape_a, type_b, shape_b);
+            case ShapeType::OrientedBox: return dispatch_single.template operator()<OrientedBox>(shape_a, type_b, shape_b);
+            case ShapeType::Triangle: return dispatch_single.template operator()<Triangle>(shape_a, type_b, shape_b);
+            case ShapeType::RoundedBox: return dispatch_single.template operator()<RoundedBox>(shape_a, type_b, shape_b);
+            case ShapeType::Sector: return dispatch_single.template operator()<Sector>(shape_a, type_b, shape_b);
+            case ShapeType::Segment: return dispatch_single.template operator()<Segment>(shape_a, type_b, shape_b);
+            case ShapeType::ConvexPoly: return dispatch_single.template operator()<ConvexPoly<8>>(shape_a, type_b, shape_b);
+            case ShapeType::RoundedPoly: return dispatch_single.template operator()<RoundedPoly<8>>(shape_a, type_b, shape_b);
+            default: return DistanceResult{};
+            }
         }
     };
 } // namespace akruti

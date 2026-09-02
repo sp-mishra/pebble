@@ -12,11 +12,11 @@ namespace akruti {
         khanda::EarClipTriangulator ear_clip{};
         CdtTriangulator cdt{};
 
-        [[nodiscard]] std::vector<Triangle> operator()(const Poly& poly) const {
+        [[nodiscard]] containers::dynamic::SmallVector<Triangle, 256> operator()(const Poly& poly) const {
+            containers::dynamic::SmallVector<Triangle, 256> res;
             if (poly.size() < 12) {
-                std::vector<Vec> v(poly.begin(), poly.end());
-                auto [vertices, indices] = ear_clip(v, {});
-                std::vector<Triangle> res;
+                auto [vertices, indices] = ear_clip(poly, {});
+                res.reserve(indices.size() / 3);
                 for (std::size_t i = 0; i + 2 < indices.size(); i += 3) {
                     res.push_back(Triangle{
                         .a = vertices[indices[i]],
@@ -26,7 +26,24 @@ namespace akruti {
                 }
                 return res;
             }
-            return cdt(poly);
+            cdt.triangulate_into(std::span<const Vec2<Scalar>>(poly.data(), poly.size()), res);
+            return res;
+        }
+
+        template <typename OutContainer>
+        void triangulate_into(const Poly& poly, OutContainer& out) const {
+            if (poly.size() < 12) {
+                auto [vertices, indices] = ear_clip(poly, {});
+                for (std::size_t i = 0; i + 2 < indices.size(); i += 3) {
+                    out.push_back(Triangle{
+                        .a = vertices[indices[i]],
+                        .b = vertices[indices[i + 1]],
+                        .c = vertices[indices[i + 2]]
+                    });
+                }
+                return;
+            }
+            cdt.triangulate_into(std::span<const Vec2<Scalar>>(poly.data(), poly.size()), out);
         }
     };
 
@@ -37,8 +54,17 @@ namespace akruti {
         NaiveVoronoiBuilder naive{};
         FortuneVoronoiBuilder fortune{};
 
-        [[nodiscard]] std::vector<Poly> operator()(const Poly& boundary, const std::span<const Vec2<Scalar>> seeds) const {
+        [[nodiscard]] auto operator()(const Poly& boundary, const std::span<const Vec2<Scalar>> seeds) const {
             return seeds.size() < 20 ? naive(boundary, seeds) : fortune(boundary, seeds);
+        }
+
+        template <typename OutContainer>
+        void build_into(const Poly& boundary, const std::span<const Vec2<Scalar>> seeds, OutContainer& out) const {
+            if (seeds.size() < 20) {
+                naive.build_into(boundary, seeds, out);
+            } else {
+                fortune.build_into(boundary, seeds, out);
+            }
         }
     };
 

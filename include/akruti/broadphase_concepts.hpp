@@ -30,22 +30,26 @@ namespace akruti {
     };
 
     // ── Triangulator: polygon → triangles ──────────────────────────────────
+    // Supports zero-heap SmallVector<Triangle>, static_vector, and std::vector automatically
     template <class T, class PolyT = Poly>
     concept Triangulator = requires(T tri, const PolyT& polygon) {
-        { tri(polygon) } -> std::convertible_to<std::vector<Triangle>>;
+        { tri(polygon) } -> std::ranges::forward_range;
+        requires std::same_as<std::ranges::range_value_t<decltype(tri(polygon))>, Triangle>;
     };
 
     // ── VoronoiBuilder: seed points → cell polygons ────────────────────────
     template <class T, class PolyT = Poly>
     concept VoronoiBuilder = requires(T vb, const PolyT& boundary,
                                       std::span<const Vec2<Scalar>> seeds) {
-        { vb(boundary, seeds) } -> std::convertible_to<std::vector<PolyT>>;
+        { vb(boundary, seeds) } -> std::ranges::forward_range;
+        requires std::same_as<std::ranges::range_value_t<decltype(vb(boundary, seeds))>, PolyT>;
     };
 
     // ── ConvexDecomposer: polygon / triangles → convex parts ───────────────
     template <class T>
     concept ConvexDecomposer = requires(T cd, std::span<const Triangle> tris) {
-        { cd(tris) } -> std::convertible_to<std::vector<Poly>>;
+        { cd(tris) } -> std::ranges::forward_range;
+        requires std::same_as<std::ranges::range_value_t<decltype(cd(tris))>, Poly>;
     };
 
     // ── DistanceOracle: shape pair → separation distance ───────────────────

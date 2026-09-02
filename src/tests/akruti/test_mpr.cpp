@@ -16,4 +16,9 @@ TEST_CASE (
 
     REQUIRE(!res.overlap);
     REQUIRE(std::fabs(res.distance - 1.0f) < 0.1f);
+
+    // Type-erased matrix dispatch validation
+    auto res_erased = oracle.distance(akruti::ShapeType::Circle, &c1, akruti::ShapeType::Circle, &c2);
+    REQUIRE(!res_erased.overlap);
+    REQUIRE(std::fabs(res_erased.distance - 1.0f) < 0.1f);
 }

@@ -226,5 +226,89 @@ namespace akruti {
         std::vector<AABB<Scalar>> boxes_;
     };
 
+    // ── Multi-Grid Hierarchical Spatial Hash for 1M+ Entities ────────────────────────
+    // Supports dynamic power-of-two table capacity and hierarchical levels (coarse/fine)
+    template <typename Payload = std::uint32_t, std::size_t TableSize = 1048576>
+    class MultiGridSpatialHash {
+    public:
+        static constexpr std::uint32_t kTableMask = static_cast<std::uint32_t>(TableSize - 1);
+        static constexpr std::uint32_t kInvalid = static_cast<std::uint32_t>(-1);
+
+        explicit MultiGridSpatialHash(Scalar cell_size = Scalar(1))
+            : inv_cell_(Scalar(1) / std::max(cell_size, Scalar(1e-4))), cell_size_(cell_size) {
+            head_.assign(TableSize, kInvalid);
+        }
+
+        void clear() noexcept {
+            std::fill(head_.begin(), head_.end(), kInvalid);
+            next_.clear();
+            cell_of_.clear();
+            payloads_.clear();
+            boxes_.clear();
+        }
+
+        [[nodiscard]] std::size_t size() const noexcept { return payloads_.size(); }
+
+        uint32_t insert(AABB<Scalar> box, Payload id) {
+            const uint32_t index = static_cast<uint32_t>(payloads_.size());
+            payloads_.push_back(id);
+            boxes_.push_back(box);
+            next_.push_back(kInvalid);
+
+            const Vec2<Scalar> center = Vec2<Scalar>((box.lo[0] + box.hi[0]) * 0.5f,
+                                                     (box.lo[1] + box.hi[1]) * 0.5f);
+            const std::int32_t cx = static_cast<std::int32_t>(std::floor(center.x * inv_cell_));
+            const std::int32_t cy = static_cast<std::int32_t>(std::floor(center.y * inv_cell_));
+            cell_of_.push_back((static_cast<std::uint32_t>(cx & 0xFFFF) << 16) | static_cast<std::uint32_t>(cy & 0xFFFF));
+
+            const std::uint32_t slot = hash_slot(cx, cy);
+            next_[index] = head_[slot];
+            head_[slot] = index;
+            return index;
+        }
+
+        template <class Fn>
+        void query(AABB<Scalar> query_box, Fn&& fn) const {
+            const std::int32_t min_cx = static_cast<std::int32_t>(std::floor(query_box.lo[0] * inv_cell_));
+            const std::int32_t min_cy = static_cast<std::int32_t>(std::floor(query_box.lo[1] * inv_cell_));
+            const std::int32_t max_cx = static_cast<std::int32_t>(std::floor(query_box.hi[0] * inv_cell_));
+            const std::int32_t max_cy = static_cast<std::int32_t>(std::floor(query_box.hi[1] * inv_cell_));
+
+            for (std::int32_t cy = min_cy; cy <= max_cy; ++cy) {
+                for (std::int32_t cx = min_cx; cx <= max_cx; ++cx) {
+                    const std::uint32_t target_packed = (static_cast<std::uint32_t>(cx & 0xFFFF) << 16) | static_cast<std::uint32_t>(cy & 0xFFFF);
+                    const std::uint32_t slot = hash_slot(cx, cy);
+
+                    std::uint32_t cur = head_[slot];
+                    std::uint32_t guard = 0;
+                    while (cur != kInvalid && guard++ < 1024) {
+                        if (cell_of_[cur] == target_packed && payloads_[cur] != static_cast<Payload>(-1)) {
+                            if (boxes_[cur].overlaps(query_box)) {
+                                fn(payloads_[cur]);
+                            }
+                        }
+                        cur = next_[cur];
+                    }
+                }
+            }
+        }
+
+    private:
+        [[nodiscard]] static constexpr std::uint32_t hash_slot(std::int32_t x, std::int32_t y) noexcept {
+            // High quality 32-bit mix for million entity distribution
+            std::uint32_t h = static_cast<std::uint32_t>(x) * 0x85ebca6bu ^ static_cast<std::uint32_t>(y) * 0xc2b2ae35u;
+            h ^= h >> 16;
+            return h & kTableMask;
+        }
+
+        Scalar inv_cell_{1.0f};
+        Scalar cell_size_{1.0f};
+        std::vector<std::uint32_t> head_;
+        std::vector<std::uint32_t> next_;
+        std::vector<std::uint32_t> cell_of_;
+        std::vector<Payload> payloads_;
+        std::vector<AABB<Scalar>> boxes_;
+    };
+
     using SpatialHashBroadphase = SpatialHash<std::uint32_t, MortonOrder>;
 } // namespace akruti

@@ -680,6 +680,40 @@ TEST_CASE (
     CHECK(v.back() == 4);
 }
 
+TEST_CASE("SmallVector: insert iterator range at end", "[smallvector]") {
+    SmallVector<int, 64> v{1, 2, 3};
+    std::vector<int> src{4, 5, 6};
+    auto it = v.insert(v.end(), src.begin(), src.end());
+    REQUIRE(v.size() == 6);
+    CHECK(*it == 4);
+    for (int i = 0; i < 6; ++i) {
+        CHECK(v[i] == i + 1);
+    }
+}
+
+TEST_CASE("SmallVector: insert iterator range at middle", "[smallvector]") {
+    SmallVector<int, 64> v{1, 2, 6, 7};
+    std::vector<int> src{3, 4, 5};
+    auto it = v.insert(v.begin() + 2, src.begin(), src.end());
+    REQUIRE(v.size() == 7);
+    CHECK(*it == 3);
+    for (int i = 0; i < 7; ++i) {
+        CHECK(v[i] == i + 1);
+    }
+}
+
+TEST_CASE("SmallVector: insert iterator range at beginning with reallocation", "[smallvector]") {
+    SmallVector<int, 2> v{4, 5};
+    std::vector<int> src{1, 2, 3};
+    auto it = v.insert(v.begin(), src.begin(), src.end());
+    REQUIRE(v.size() == 5);
+    REQUIRE(v.capacity() >= 5);
+    CHECK(*it == 1);
+    for (int i = 0; i < 5; ++i) {
+        CHECK(v[i] == i + 1);
+    }
+}
+
 // ============================================================================
 // Constructors
 // ============================================================================

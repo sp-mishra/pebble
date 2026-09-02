@@ -50,6 +50,34 @@ namespace akruti::scene {
         return pairs;
     }
 
+    // Chunked streaming broadphase: streams results in fixed-capacity blocks (e.g. 64K pairs)
+    // Limits working set to < 1 MB (fitting in L3 cache) even for millions of shapes.
+    template <typename ChunkCallback>
+    inline void query_broadphase_pairs_chunked(const Scene& scene,
+                                               std::size_t chunk_capacity,
+                                               ChunkCallback&& on_chunk) {
+        containers::dynamic::SmallVector<PairId, 65536 * sizeof(PairId)> buffer;
+        buffer.reserve(chunk_capacity);
+
+        scene.for_each_leaf([&](std::uint32_t a) {
+            AABB<Scalar> box{};
+            scene.dispatch(a, [&](const auto& batch, std::uint32_t idx) { box = batch.box(idx); });
+            scene.tree().query(box, [&](std::uint32_t b) {
+                if (a < b) {
+                    buffer.push_back(PairId{a, b});
+                    if (buffer.size() >= chunk_capacity) {
+                        on_chunk(std::span<const PairId>(buffer.data(), buffer.size()));
+                        buffer.clear();
+                    }
+                }
+            });
+        });
+
+        if (!buffer.empty()) {
+            on_chunk(std::span<const PairId>(buffer.data(), buffer.size()));
+        }
+    }
+
     // ── (b) Bulk narrowphase ─────────────────────────────────────────────────────────────────
     // Parallel over independent pairs; each pair reconstructs both prims and runs serial GJK/EPA.
     [[nodiscard]] inline std::vector<Contact> bulk_narrowphase(Scene& scene,

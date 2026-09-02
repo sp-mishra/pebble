@@ -59,14 +59,6 @@ namespace gati {
             return h;
         }
 
-        BodyHandle add_rigid(const akruti::ShapeStore& shape, RigidBodyDesc desc = {}) {
-            const BodyHandle h = static_cast<BodyHandle>(bodies_.size());
-            bodies_.emplace_back(shape, desc);
-            const auto box = bodies_.back().aabb();
-            broadphase_.insert(box, h);
-            return h;
-        }
-
         template <class T>
         BodyHandle add_body(const T& shape, RigidBodyDesc desc = {}) {
             return add_rigid(shape, desc);

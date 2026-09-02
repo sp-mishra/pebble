@@ -37,6 +37,8 @@ Include: `#include <akruti/akruti.hpp>`
     - [Step 5: Dynamic Voronoi Fracture (
       *Khanda*) with Mass Properties](#step-5-dynamic-voronoi-fracture-khanda-with-mass-properties)
 9. [Pebble Subsystem Reuse](#9-pebble-subsystem-reuse)
+10. [Zero-Allocation Policy & Intelligent Container Adaptability](#10-zero-allocation-policy--intelligent-container-adaptability)
+11. [Million-Shape High-Throughput Architecture](#11-million-shape-high-throughput-architecture)
 
 ---
 
@@ -309,18 +311,6 @@ for (const auto& shard : shards) {
 
 ## 9. Pebble Subsystem Reuse
 
-| Subsystem      | Reused Module                    | Purpose in Akruti                                                     |
-|:---------------|:---------------------------------|:----------------------------------------------------------------------|
-| `pebble::math` | `math_vector.hpp`                | `vec2`, `mat2`, `aabb2`, `dot`, `cross`, `perp`, `normalize`.         |
-| `containers`   | `AABBTree.hpp`                   | Dynamic broadphase bounding volume hierarchy.                         |
-| `containers`   | `containers/tree/NAryTree.hpp`   | Authoring hierarchical layout tree representation (`LayoutTree`).     |
-| `containers`   | `containers/graph/LiteGraph.hpp` | Relative layout constraint DAG graph solver (`constraints_graph`).    |
-| `containers`   | `static_vector.hpp`              | Inlined polygon vertices (`ConvexPoly<N>`) with zero heap allocation. |
-| `mem`          | `LinearArena.hpp`                | Flat Arena CSG AST allocations and Voronoi clipping scratch memory.   |
-| `pravaha`      | `pravaha.hpp`                    | Chunked multi-threaded parallel execution of scene queries.           |
-
----
-
 ## 10. `akruti::layout` — 2D Layout Engine
 
 `akruti::layout` provides a CPU baseline 2D layout engine. It decouples high-level UI tree authoring from flat,
@@ -411,5 +401,34 @@ mod_style.flex_grow = 2.0f;
 engine.set_style(1, mod_style);
 engine.solve_incremental(viewport); // Fast path: only recomputes affected subtrees!
 ```
+
+---
+
+## 11. Zero-Allocation Policy & Intelligent Container Adaptability
+
+Akruti uses **intelligent container deduction** to ensure zero runtime heap allocations on hot simulation loops:
+
+1. **Automatic SBO Selection**:
+   - `CdtTriangulator` and `AutoTriangulator` return `SmallVector<Triangle, 256>` by default. Polygons with $\le 12$ vertices are triangulated 100% on the stack.
+   - Fixed-capacity input (`static_vector<Vec, N>`) deduces exact stack storage: `static_vector<Triangle, N-2>`.
+   - `FortuneVoronoiBuilder` and `NaiveVoronoiBuilder` return `SmallVector<Poly, 16 * sizeof(Poly)>`. Shard sets of $\le 16$ pieces execute without system heap calls.
+2. **Buffer Sinks for Hot Loops**:
+   - All triangulators and Voronoi builders provide in-place `triangulate_into(poly, out_container)` and `build_into(boundary, seeds, out_container)` methods, allowing games and physics engines to reuse allocated memory frame-over-frame with **0 reallocations**.
+
+---
+
+## 12. Million-Shape High-Throughput Architecture
+
+To scale simulation scenes to **1,000,000+ geometric shapes**:
+
+1. **Morton Z-Order Space-Filling Curve**:
+   - Centers of primitive batches are mapped to 32-bit Morton codes via `containers::spatial::morton_encode_2d`.
+   - Sorting batches along the Z-order curve produces near-perfect L1/L2 cache locality so spatially neighboring shapes reside in contiguous cache lines.
+2. **Chunked Streaming Broadphase**:
+   - `query_broadphase_pairs_chunked(scene, chunk_size, callback)` emits candidate collision pairs in bounded blocks (e.g. 64K pairs).
+   - This keeps the working memory footprint $< 1\text{ MB}$ (fitting entirely in CPU L3 cache), preventing memory bandwidth saturation even across $10^7$ potential overlaps.
+3. **Multi-Grid Hierarchical Spatial Hash**:
+   - `MultiGridSpatialHash` provides dynamic power-of-two table capacity ($2^{20} \approx 1,048,576$ buckets) and dual-level binning to prevent hash chain collision degradation.
+
 
 

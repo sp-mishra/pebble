@@ -24,7 +24,7 @@ namespace gati {
     };
 
     struct RigidBody {
-        akruti::ShapeStore shape{};
+        akruti::ShapeStore<> shape{};
         pebble::math::vec2 position{0.0f, 0.0f};
         pebble::math::vec2 velocity{0.0f, 0.0f};
         pebble::math::vec2 force{0.0f, 0.0f};
@@ -45,15 +45,6 @@ namespace gati {
         Scalar sleep_timer{0.0f};
 
         constexpr RigidBody() noexcept = default;
-
-        RigidBody(const akruti::ShapeStore& s, const RigidBodyDesc& desc = {}) noexcept
-            : shape(s), position(desc.position), velocity(desc.velocity),
-              angle(desc.angle), angular_velocity(desc.angular_velocity),
-              mass(desc.is_static ? 0.0f : desc.mass),
-              inv_mass(desc.is_static || desc.mass <= 0.0f ? 0.0f : 1.0f / desc.mass),
-              inertia(desc.is_static ? 0.0f : desc.inertia),
-              inv_inertia(desc.is_static || desc.inertia <= 0.0f ? 0.0f : 1.0f / desc.inertia),
-              restitution(desc.restitution), friction(desc.friction) {}
 
         template <akruti::Shape S>
         RigidBody(const S& s, const RigidBodyDesc& desc = {}) noexcept

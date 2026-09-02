@@ -551,6 +551,36 @@ namespace containers::dynamic {
             return p;
         }
 
+        template <std::input_iterator InputIt>
+        iterator insert(const_iterator pos, InputIt first, InputIt last) {
+            auto idx = static_cast<size_type>(pos - cbegin());
+            if (first == last) return data_ + idx;
+            if constexpr (std::forward_iterator<InputIt>) {
+                const auto count = static_cast<size_type>(std::distance(first, last));
+                reserve(size_ + count);
+                T* p = data_ + idx;
+                if (idx < size_) {
+                    for (size_type i = 0; i < size_ - idx; ++i) {
+                        AllocTraits::construct(alloc_, data_ + size_ + count - 1 - i, std::move(data_[size_ - 1 - i]));
+                        AllocTraits::destroy(alloc_, data_ + size_ - 1 - i);
+                    }
+                }
+                T* dst = data_ + idx;
+                for (auto it = first; it != last; ++it, ++dst) {
+                    AllocTraits::construct(alloc_, dst, *it);
+                }
+                size_ += count;
+                return data_ + idx;
+            } else {
+                size_type inserted = 0;
+                for (auto it = first; it != last; ++it) {
+                    insert(begin() + idx + inserted, *it);
+                    ++inserted;
+                }
+                return data_ + idx;
+            }
+        }
+
         void swap(SmallVector& o)
             noexcept(std::is_nothrow_move_constructible_v<T> &&
                 std::is_nothrow_swappable_v<Alloc>) {

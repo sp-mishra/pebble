@@ -112,3 +112,25 @@ TEST_CASE (
     REQUIRE(xa > 0.0f);
     REQUIRE(xa <= std::fabs(akruti::polygon_area(a)) + 1e-3f);
 }
+
+TEST_CASE("Akruti poly_ops: voronoi shatter and khanda fracture integration", "[akruti][poly_ops][khanda]") {
+    const Poly boundary = make_square(10.0f);
+    std::vector<Vec2<Scalar>> seeds = {
+        {-4.0f, -4.0f},
+        {4.0f, -4.0f},
+        {4.0f, 4.0f},
+        {-4.0f, 4.0f}
+    };
+
+    auto shards = akruti::voronoi_shatter(boundary, seeds);
+    REQUIRE(shards.size() == 4);
+
+    Scalar total_area = 0;
+    for (const auto& shard : shards) {
+        REQUIRE(shard.size() >= 3);
+        total_area += std::fabs(akruti::polygon_area(shard));
+    }
+
+    const Scalar bound_area = std::fabs(akruti::polygon_area(boundary));
+    REQUIRE(total_area == Catch::Approx(bound_area).margin(1e-2));
+}
