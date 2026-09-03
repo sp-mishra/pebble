@@ -262,13 +262,25 @@ namespace disjointset {
             return unite_by_id(*ra, *rb);
         }
 
+        template <typename Callback>
+            requires std::invocable<Callback, const event_type&>
+        std::expected<ElementId, DSError>
+        unite(const Elem& elem_a, const Elem& elem_b, Callback&& cb) {
+            auto ra = find(elem_a);
+            if (!ra) return std::unexpected(ra.error());
+            auto rb = find(elem_b);
+            if (!rb) return std::unexpected(rb.error());
+
+            return unite_by_id(*ra, *rb, std::forward<Callback>(cb));
+        }
+
         std::expected<ElementId, DSError>
         unite_by_id(const ElementId id_a, const ElementId id_b) {
             if (!valid_id(id_a) || !valid_id(id_b))
                 return std::unexpected(DSError::InvalidElement);
 
-            const std::size_t ra = find_root(id_a.value);
-            const std::size_t rb = find_root(id_b.value);
+            const std::size_t ra = find_root_mut(id_a.value);
+            const std::size_t rb = find_root_mut(id_b.value);
 
             if (ra == rb) return ElementId{ra}; // already same set
 
@@ -289,6 +301,40 @@ namespace disjointset {
                 for (auto& cb : callbacks_)
                     cb(ev);
             }
+
+            return ElementId{new_root};
+        }
+
+        template <typename Callback>
+            requires std::invocable<Callback, const event_type&>
+        std::expected<ElementId, DSError>
+        unite_by_id(const ElementId id_a, const ElementId id_b, Callback&& direct_cb) {
+            if (!valid_id(id_a) || !valid_id(id_b))
+                return std::unexpected(DSError::InvalidElement);
+
+            const std::size_t ra = find_root_mut(id_a.value);
+            const std::size_t rb = find_root_mut(id_b.value);
+
+            if (ra == rb) return ElementId{ra}; // already same set
+
+            // Push undo frame before modifying.
+            if (!undo_stack_.empty())
+                undo_stack_.back().push_back(make_undo_frame(ra, rb));
+
+            const std::size_t new_root = link(ra, rb);
+
+            event_type ev{
+                nodes_[ra].elem,
+                nodes_[rb].elem,
+                nodes_[new_root].elem,
+                nodes_[new_root].size,
+            };
+
+            direct_cb(ev);
+
+            // Also fire registered callbacks if any
+            for (auto& cb : callbacks_)
+                cb(ev);
 
             return ElementId{new_root};
         }
@@ -630,15 +676,19 @@ namespace disjointset {
 
         // ------------------------------------------------------------------ //
         // Path-compressed find (path halving, amortized O(α(n)))
-        // Const version uses const_cast internally — safe because parent
-        // updates are logically non-observable state (compression invariant).
+        // Const version performs a non-mutating traversal safe for concurrent reads.
         // ------------------------------------------------------------------ //
         [[nodiscard]] std::size_t find_root(std::size_t i) const noexcept {
-            auto& nodes = const_cast<std::vector<Node>&>(nodes_);
-            while (nodes[i].parent.value != i) {
-                // Path halving: point to grandparent.
-                const std::size_t gp = nodes[nodes[i].parent.value].parent.value;
-                nodes[i].parent = ElementId{gp};
+            while (nodes_[i].parent.value != i) {
+                i = nodes_[i].parent.value;
+            }
+            return i;
+        }
+
+        [[nodiscard]] std::size_t find_root_mut(std::size_t i) noexcept {
+            while (nodes_[i].parent.value != i) {
+                const std::size_t gp = nodes_[nodes_[i].parent.value].parent.value;
+                nodes_[i].parent = ElementId{gp};
                 i = gp;
             }
             return i;

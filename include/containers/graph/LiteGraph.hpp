@@ -17,6 +17,11 @@
 #include <expected>
 #include <stdexcept>
 #include <limits>
+#include <variant>
+#include "../dynamic/SmallVector.hpp"
+#include "../../mem/smriti.hpp"
+#include "../../mem/arena.hpp"
+#include "../../mem/mmap_domain.hpp"
 
 namespace litegraph {
     // Error handling with std::expected
@@ -139,13 +144,18 @@ namespace litegraph {
     template <
         Hashable NodeT = std::monostate,
         Hashable EdgeT = std::monostate,
-        DirectednessTag Directedness = Directed>
+        DirectednessTag Directedness = Directed,
+        std::size_t InlineAdjBytes = 4 * sizeof(EdgeId), // Defaults to 4 inline edges (32 bytes)
+        typename Alloc = std::allocator<char>>
         requires (std::move_constructible<NodeT> && std::move_constructible<EdgeT>)
     class Graph {
     public:
         using node_type = NodeT;
         using edge_type = EdgeT;
         using directed_tag = Directedness;
+        using allocator_type = Alloc;
+        using edge_alloc_t = typename std::allocator_traits<Alloc>::template rebind_alloc<EdgeId>;
+        using AdjacencyContainer = containers::dynamic::auto_vector_t<EdgeId, InlineAdjBytes, edge_alloc_t>;
         using IdMap = std::vector<std::optional<std::size_t>>;
 
         // Explicitly defaulted special member functions.
@@ -170,8 +180,12 @@ namespace litegraph {
         // Node/Edge internal structures
         struct Node {
             NodeT data;
-            std::vector<EdgeId> out_edges; // indices to edges vector
-            std::vector<EdgeId> in_edges; // only used for directed graphs
+            AdjacencyContainer out_edges; // indices to edges vector
+            [[no_unique_address]] std::conditional_t<
+                std::is_same_v<Directedness, Directed>,
+                AdjacencyContainer,
+                std::monostate
+            > in_edges; // only used for directed graphs
             bool active = true; // to support removals
             std::size_t active_out_degree = 0;
             std::size_t active_in_degree = 0;
@@ -182,6 +196,29 @@ namespace litegraph {
             EdgeT data;
             bool active = true;
         };
+
+    private:
+        std::vector<Node> nodes_;
+        std::vector<Edge> edges_;
+        std::size_t active_node_count_ = 0;
+        std::size_t active_edge_count_ = 0;
+
+    public:
+        // Basic validity check
+        [[nodiscard]] bool valid_node(NodeId nid) const noexcept {
+            return nid.value < nodes_.size() && nodes_[nid.value].active;
+        }
+
+        [[nodiscard]] bool valid_edge(EdgeId eid) const noexcept {
+            return eid.value < edges_.size() && edges_[eid.value].active;
+        }
+
+        // Size / capacity
+        [[nodiscard]] std::size_t node_count() const noexcept { return active_node_count_; }
+        [[nodiscard]] std::size_t edge_count() const noexcept { return active_edge_count_; }
+        [[nodiscard]] std::size_t node_capacity() const noexcept { return nodes_.size(); }
+        [[nodiscard]] std::size_t edge_capacity() const noexcept { return edges_.size(); }
+        [[nodiscard]] bool empty() const noexcept { return active_node_count_ == 0; }
 
         // Add node
         NodeId add_node(const NodeT& data = NodeT{}) {
@@ -311,19 +348,23 @@ namespace litegraph {
 
             // Update adjacency lists
             for (auto& node : nodes_) {
-                auto remap = [&](std::vector<EdgeId>& vec) {
-                    std::vector<EdgeId> new_vec;
-                    for (const EdgeId eid : vec)
-                        if (eid.value < edge_id_map.size() && edge_id_map[eid.value])
-                            new_vec.emplace_back(*edge_id_map[eid.value]);
-                    vec = std::move(new_vec);
+                auto remap = [&](auto& vec) {
+                    if constexpr (!std::is_same_v<std::decay_t<decltype(vec)>, std::monostate>) {
+                        std::erase_if(vec, [&](EdgeId eid) {
+                            return eid.value >= edge_id_map.size() || !edge_id_map[eid.value].has_value();
+                        });
+                        for (EdgeId& eid : vec) {
+                            eid = EdgeId{*edge_id_map[eid.value]};
+                        }
+                    }
                 };
                 remap(node.out_edges);
-                if constexpr (std::is_same_v<Directedness, Directed>)
-                    remap(node.in_edges);
+                remap(node.in_edges);
                 // Recalculate cached degree counters from the remapped adjacency lists
                 node.active_out_degree = node.out_edges.size();
-                node.active_in_degree = node.in_edges.size();
+                if constexpr (std::is_same_v<Directedness, Directed>) {
+                    node.active_in_degree = node.in_edges.size();
+                }
             }
 
             // Return the maps to the caller.
@@ -482,15 +523,38 @@ namespace litegraph {
         }
 
         // Callback-based hot-path traversal over active neighbors.
-        // Callback signature: fn(EdgeId eid, NodeId source, NodeId target, EdgeDataRef data)
+        // Supports both rich signature fn(EdgeId eid, NodeId source, NodeId target, EdgeDataRef data)
+        // and target-only signature fn(NodeId target).
         template <typename Fn>
         void for_each_neighbor(NodeId nid, Fn&& fn) {
-            for_each_out_edge(nid, std::forward<Fn>(fn));
+            if (!valid_node(nid)) return;
+            for (EdgeId eid : nodes_[nid.value].out_edges) {
+                if (!valid_edge(eid)) continue;
+                auto& edge = edges_[eid.value];
+                const NodeId target = edge.from.value == nid.value ? edge.to : edge.from;
+                if (!valid_node(target)) continue;
+                if constexpr (std::is_invocable_v<Fn, EdgeId, NodeId, NodeId, decltype(edge.data)&>) {
+                    fn(eid, nid, target, edge.data);
+                } else {
+                    fn(target);
+                }
+            }
         }
 
         template <typename Fn>
         void for_each_neighbor(NodeId nid, Fn&& fn) const {
-            for_each_out_edge(nid, std::forward<Fn>(fn));
+            if (!valid_node(nid)) return;
+            for (EdgeId eid : nodes_[nid.value].out_edges) {
+                if (!valid_edge(eid)) continue;
+                const auto& edge = edges_[eid.value];
+                const NodeId target = edge.from.value == nid.value ? edge.to : edge.from;
+                if (!valid_node(target)) continue;
+                if constexpr (std::is_invocable_v<Fn, EdgeId, NodeId, NodeId, const decltype(edge.data)&>) {
+                    fn(eid, nid, target, edge.data);
+                } else {
+                    fn(target);
+                }
+            }
         }
 
         // Safe materialising helpers — these copy the current active edge IDs into an
@@ -519,22 +583,6 @@ namespace litegraph {
             }
             return result;
         }
-
-        // Basic validity check
-        [[nodiscard]] bool valid_node(NodeId nid) const noexcept {
-            return nid.value < nodes_.size() && nodes_[nid.value].active;
-        }
-
-        [[nodiscard]] bool valid_edge(EdgeId eid) const noexcept {
-            return eid.value < edges_.size() && edges_[eid.value].active;
-        }
-
-        // Size / capacity
-        [[nodiscard]] std::size_t node_count() const noexcept { return active_node_count_; }
-        [[nodiscard]] std::size_t edge_count() const noexcept { return active_edge_count_; }
-        [[nodiscard]] std::size_t node_capacity() const noexcept { return nodes_.size(); }
-        [[nodiscard]] std::size_t edge_capacity() const noexcept { return edges_.size(); }
-        [[nodiscard]] bool empty() const noexcept { return active_node_count_ == 0; }
 
         // Access edge object by EdgeId (const and non-const)
         Edge& get_edge(EdgeId eid) {
@@ -642,15 +690,13 @@ namespace litegraph {
 
         // Memory-efficient batch operations
         template <std::ranges::input_range Range>
-        void batch_add_nodes(Range&& node_data_range)
-                 requires std::convertible_to < std::ranges::range_value_t < Range >, NodeT
-        >
- {
+            requires std::convertible_to<std::ranges::range_value_t<Range>, NodeT>
+        void batch_add_nodes(Range&& node_data_range) {
             const auto size_hint = std::ranges::size(node_data_range);
             nodes_.reserve(nodes_.size() + size_hint);
 
             for (auto&& data : node_data_range) {
-                nodes_.push_back({std::forward<decltype(data)>(data), {}, {}, true});
+                nodes_.push_back({std::forward<decltype(data)>(data), {}, {}, true, 0, 0});
                 active_node_count_++;
             }
         }
@@ -671,14 +717,12 @@ namespace litegraph {
 
         [[nodiscard]] GraphStats get_stats() const noexcept {
             // Accumulate heap bytes held by each node's adjacency vectors.
-            // out_edges is used by both directed and undirected graphs.
-            // in_edges is only populated for directed graphs (the vector exists
-            // in all instantiations but remains empty for undirected ones, so
-            // counting its capacity() is always safe and accurate).
             std::size_t adj_bytes = 0;
             for (const auto& n : nodes_) {
                 adj_bytes += n.out_edges.capacity() * sizeof(EdgeId);
-                adj_bytes += n.in_edges.capacity() * sizeof(EdgeId);
+                if constexpr (std::is_same_v<Directedness, Directed>) {
+                    adj_bytes += n.in_edges.capacity() * sizeof(EdgeId);
+                }
             }
 
             return {
@@ -697,7 +741,7 @@ namespace litegraph {
     private:
         template <typename DataT>
         NodeId add_node_impl(DataT&& data) {
-            Node node{std::forward<DataT>(data), {}, {}, true};
+            Node node{std::forward<DataT>(data), {}, {}, true, 0, 0};
             nodes_.push_back(std::move(node));
 
             const NodeId nid{nodes_.size() - 1};
@@ -720,9 +764,11 @@ namespace litegraph {
             std::size_t added_from_out = 0;
             std::size_t added_to_adj = 0;
 
-            auto rollback_tail = [](std::vector<EdgeId>& vec, std::size_t count) {
-                while (count-- > 0) {
-                    vec.pop_back();
+            auto rollback_tail = [](auto& vec, std::size_t count) {
+                if constexpr (!std::is_same_v<std::decay_t<decltype(vec)>, std::monostate>) {
+                    while (count-- > 0) {
+                        vec.pop_back();
+                    }
                 }
             };
 
@@ -765,11 +811,6 @@ namespace litegraph {
             }
             return eid;
         }
-
-        std::vector<Node> nodes_;
-        std::vector<Edge> edges_;
-        std::size_t active_node_count_ = 0;
-        std::size_t active_edge_count_ = 0;
     };
 
     // Type aliases for common graph instantiations
@@ -779,15 +820,36 @@ namespace litegraph {
     using UndirectedGraph = Graph<std::monostate, std::monostate, Undirected>;
     using WeightedUndirectedGraph = Graph<std::monostate, double, Undirected>;
 
+    // Smriti memory integration type aliases
+    template <Hashable N = std::monostate, Hashable E = std::monostate, DirectednessTag D = Directed>
+    using ArenaGraph = Graph<
+        N,
+        E,
+        D,
+        4 * sizeof(EdgeId),
+        smriti::SmritiAllocator<char, smriti::pools::LinearArena>
+    >;
+
+    using PersistentDomain = smriti::domains::MappedFileDomain;
+    using PersistentPool = smriti::pools::BumpPool<PersistentDomain>;
+    template <Hashable N = std::monostate, Hashable E = std::monostate, DirectednessTag D = Directed>
+    using MmapGraph = Graph<
+        N,
+        E,
+        D,
+        4 * sizeof(EdgeId),
+        smriti::SmritiAllocator<char, smriti::ManagedResource<PersistentDomain, PersistentPool>>
+    >;
+
     // Graph factory functions
-    template <typename NodeT = std::monostate, typename EdgeT = std::monostate>
-    auto make_directed_graph() -> Graph<NodeT, EdgeT, Directed> {
-        return Graph<NodeT, EdgeT, Directed>{};
+    template <typename N = std::monostate, typename E = std::monostate>
+    auto make_directed_graph() -> Graph<N, E, Directed> {
+        return Graph<N, E, Directed>{};
     }
 
-    template <typename NodeT = std::monostate, typename EdgeT = std::monostate>
-    auto make_undirected_graph() -> Graph<NodeT, EdgeT, Undirected> {
-        return Graph<NodeT, EdgeT, Undirected>{};
+    template <typename N = std::monostate, typename E = std::monostate>
+    auto make_undirected_graph() -> Graph<N, E, Undirected> {
+        return Graph<N, E, Undirected>{};
     }
 } // namespace litegraph
 

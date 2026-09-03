@@ -196,7 +196,9 @@ concept LiteGraphModel = requires(G g, NodeId nid, EdgeId eid, ...) {
 template<
     Hashable NodeT = std::monostate,
     Hashable EdgeT = std::monostate,
-    DirectednessTag Directedness = Directed
+    DirectednessTag Directedness = Directed,
+    std::size_t InlineAdjBytes = 4 * sizeof(EdgeId),
+    typename Alloc = std::allocator<char>
 >
     requires (std::move_constructible<NodeT> && std::move_constructible<EdgeT>)
 class Graph {
@@ -222,6 +224,13 @@ using WeightedGraph = Graph<std::monostate, double>;         // edges have weigh
 using LabeledGraph = Graph<std::string, std::string>;        // nodes and edges have labels
 using UndirectedGraph = Graph<std::monostate, std::monostate, Undirected>;
 using WeightedUndirectedGraph = Graph<std::monostate, double, Undirected>;
+
+// Smriti bump arena & memory-mapped persistent graph aliases
+template <Hashable NodeT = std::monostate, Hashable EdgeT = std::monostate, DirectednessTag D = Directed>
+using ArenaGraph = Graph<NodeT, EdgeT, D, 4 * sizeof(EdgeId), smriti::SmritiAllocator<char, smriti::pools::LinearArena>>;
+
+template <Hashable NodeT = std::monostate, Hashable EdgeT = std::monostate, DirectednessTag D = Directed>
+using MmapGraph = Graph<NodeT, EdgeT, D, 4 * sizeof(EdgeId), smriti::SmritiAllocator<char, smriti::ManagedResource<smriti::domains::MappedFileDomain, smriti::pools::BumpPool<smriti::domains::MappedFileDomain>>>>;
 ```
 
 ### 4.3 Factory Functions

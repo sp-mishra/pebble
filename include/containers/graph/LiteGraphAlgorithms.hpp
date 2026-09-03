@@ -433,87 +433,116 @@ namespace litegraph {
         return bfs(g, *compact_index);
     }
 
-    template <typename EdgeT, DirectednessTag Directedness>
-    CsrPageRankResult pagerank(const CsrGraph<EdgeT, Directedness>& g,
-                               const CsrPageRankOptions& options = {}) {
+    namespace policy {
+        struct SerialExec {
+            template <typename Idx, typename Fn>
+            static void for_each(Idx begin, Idx end, Fn&& fn) {
+                for (Idx i = begin; i < end; ++i) fn(i);
+            }
+
+            template <typename Idx, typename TransformFn, typename ReduceFn, typename T>
+            static T transform_reduce(Idx begin, Idx end, T init, TransformFn&& trans, ReduceFn&& red) {
+                for (Idx i = begin; i < end; ++i) init = red(init, trans(i));
+                return init;
+            }
+        };
+
+        struct ScalarVectorOps {
+            static void fill(std::span<double> v, double val) noexcept {
+                std::ranges::fill(v, val);
+            }
+            static void add_scaled(std::span<double> dst, std::span<const double> src, double scale) noexcept {
+                for (std::size_t i = 0; i < dst.size(); ++i) dst[i] += src[i] * scale;
+            }
+            [[nodiscard]] static double l1_delta(std::span<const double> a, std::span<const double> b) noexcept {
+                double sum = 0.0;
+                for (std::size_t i = 0; i < a.size(); ++i) sum += std::abs(a[i] - b[i]);
+                return sum;
+            }
+        };
+    } // namespace policy
+
+    template <
+        typename EdgeT,
+        DirectednessTag Directedness,
+        typename ExecPolicy = policy::SerialExec,
+        typename VectorOps = policy::ScalarVectorOps
+    >
+    CsrPageRankResult pagerank_engine(
+        const CsrGraph<EdgeT, Directedness>& g,
+        const CsrPageRankOptions& options = {},
+        ExecPolicy exec = {},
+        VectorOps vops = {}
+    ) {
         if (options.damping_factor < 0.0 || options.damping_factor > 1.0) {
             throw std::invalid_argument("PageRank damping_factor must be in [0, 1].");
         }
-
         const std::size_t n = g.node_count();
-        if (n == 0) {
-            return {};
-        }
+        if (n == 0) return {};
 
         const auto& offsets = g.offsets();
         const auto& targets = g.targets();
-
-        std::vector rank(n, 1.0 / static_cast<double>(n));
-        std::vector next_rank(n, 0.0);
+        std::vector<double> rank(n, 1.0 / static_cast<double>(n));
+        std::vector<double> next_rank(n, 0.0);
+        const double d = options.damping_factor;
+        const bool gather = g.has_incoming();
+        std::vector<double> contrib;
+        if (gather) contrib.assign(n, 0.0);
 
         CsrPageRankResult result;
-        result.ranks = rank;
-
-        // Gather formulation (pull): when the reverse CSR is present, each node reads
-        // its in-neighbours' contributions. This is the read-only, embarrassingly
-        // parallel-friendly dual of the scatter (push) update below.
-        const bool gather = g.has_incoming();
-
-        const double d = options.damping_factor;
         for (std::size_t iter = 0; iter < options.max_iterations; ++iter) {
-            double dangling_mass = 0.0;
-            for (std::size_t u = 0; u < n; ++u) {
-                if (offsets[u] == offsets[u + 1]) {
-                    dangling_mass += rank[u];
-                }
-            }
+            const double dangling_mass = exec.transform_reduce(
+                std::size_t{0}, n, 0.0,
+                [&](std::size_t u) noexcept {
+                    return (offsets[u] == offsets[u + 1]) ? rank[u] : 0.0;
+                },
+                std::plus<>{}
+            );
 
-            const double base = (1.0 - d) / static_cast<double>(n)
-                + d * dangling_mass / static_cast<double>(n);
+            const double base = (1.0 - d) / static_cast<double>(n) + d * dangling_mass / static_cast<double>(n);
 
             if (gather) {
                 const auto& in_offsets = g.in_offsets();
                 const auto& in_sources = g.in_sources();
-                for (std::size_t v = 0; v < n; ++v) {
+                exec.for_each(std::size_t{0}, n, [&](std::size_t u) noexcept {
+                    const std::size_t out_deg = offsets[u + 1] - offsets[u];
+                    contrib[u] = (out_deg == 0) ? 0.0 : (d * rank[u] / static_cast<double>(out_deg));
+                });
+                exec.for_each(std::size_t{0}, n, [&](std::size_t v) noexcept {
                     double acc = base;
                     for (std::size_t k = in_offsets[v]; k < in_offsets[v + 1]; ++k) {
-                        const std::size_t u = in_sources[k].value;
-                        const std::size_t out_degree = offsets[u + 1] - offsets[u];
-                        acc += d * rank[u] / static_cast<double>(out_degree);
+                        acc += contrib[in_sources[k].value];
                     }
                     next_rank[v] = acc;
-                }
-            }
-            else {
-                std::fill(next_rank.begin(), next_rank.end(), base);
-
+                });
+            } else {
+                vops.fill(next_rank, base);
                 for (std::size_t u = 0; u < n; ++u) {
-                    const std::size_t out_degree = offsets[u + 1] - offsets[u];
-                    if (out_degree == 0) continue;
-
-                    const double contrib = d * rank[u] / static_cast<double>(out_degree);
+                    const std::size_t out_deg = offsets[u + 1] - offsets[u];
+                    if (out_deg == 0) continue;
+                    const double c = d * rank[u] / static_cast<double>(out_deg);
                     for (std::size_t i = offsets[u]; i < offsets[u + 1]; ++i) {
-                        next_rank[targets[i].value] += contrib;
+                        next_rank[targets[i].value] += c;
                     }
                 }
             }
 
-            double delta = 0.0;
-            for (std::size_t i = 0; i < n; ++i) {
-                delta += std::abs(next_rank[i] - rank[i]);
-            }
-
+            const double delta = vops.l1_delta(next_rank, rank);
             rank.swap(next_rank);
             result.iterations = iter + 1;
-
             if (delta <= options.tolerance) {
                 result.converged = true;
                 break;
             }
         }
-
         result.ranks = std::move(rank);
         return result;
+    }
+
+    template <typename EdgeT, DirectednessTag Directedness>
+    CsrPageRankResult pagerank(const CsrGraph<EdgeT, Directedness>& g,
+                               const CsrPageRankOptions& options = {}) {
+        return pagerank_engine(g, options, policy::SerialExec{}, policy::ScalarVectorOps{});
     }
 
     // ----------- Breadth-First Search (BFS) -----------
@@ -885,28 +914,30 @@ namespace litegraph {
     }
 
 
-    // --- ADD THE ENTIRE VF2 IMPLEMENTATION BLOCK BELOW ---
-
     // ----------- VF2 Subgraph Isomorphism -----------
 
     namespace detail {
         // A helper class to manage the state of the VF2 algorithm.
         // This encapsulates the core mappings and terminal sets required for the matching process.
-        template <typename PatternGraph, typename TargetGraph>
+        template <
+            typename PatternGraph,
+            typename TargetGraph,
+            typename NodeComp = std::equal_to<>,
+            typename EdgeComp = std::equal_to<>
+        >
         class VF2State {
         public:
             // Type aliases for node and edge data
-            using PatternNode = PatternGraph::node_type;
-            using TargetNode = TargetGraph::node_type;
-            using PatternEdge = PatternGraph::edge_type;
-            using TargetEdge = TargetGraph::edge_type;
+            using PatternNode = typename PatternGraph::node_type;
+            using TargetNode = typename TargetGraph::node_type;
+            using PatternEdge = typename PatternGraph::edge_type;
+            using TargetEdge = typename TargetGraph::edge_type;
 
-            // Comparators provided by the user
-            using NodeComparator = std::function<bool(const PatternNode&, const TargetNode&)>;
-            using EdgeComparator = std::function<bool(const PatternEdge&, const TargetEdge&)>;
+            using NodeComparator = NodeComp;
+            using EdgeComparator = EdgeComp;
 
-            VF2State(const PatternGraph& p, const TargetGraph& t, NodeComparator nc, EdgeComparator ec)
-                : g1(p), g2(t), node_comp(std::move(nc)), edge_comp(std::move(ec)) {
+            VF2State(const PatternGraph& p, const TargetGraph& t, NodeComp nc = {}, EdgeComp ec = {})
+                : g1(p), g2(t), node_comp(nc), edge_comp(ec), candidate_levels(p.node_capacity()) {
                 // Initialize mappings and depth vectors
                 core_1.resize(g1.node_capacity(), std::nullopt);
                 core_2.resize(g2.node_capacity(), std::nullopt);
@@ -918,14 +949,6 @@ namespace litegraph {
                 mapping.resize(g1.node_capacity(), std::nullopt);
 
                 core_len = 0;
-
-                // Pre-calculate terminal sets for the initial state (all nodes are in T_in/T_out)
-                for (auto const& [nid, node] : g1.nodes()) {
-                    t1_len++;
-                }
-                for (auto const& [nid, node] : g2.nodes()) {
-                    t2_len++;
-                }
             }
 
             // The main recursive matching function.
@@ -944,8 +967,8 @@ namespace litegraph {
                     return;
                 }
 
-                while (candidate_levels.size() <= core_len) {
-                    candidate_levels.emplace_back();
+                if (core_len >= candidate_levels.size()) {
+                    candidate_levels.resize(core_len + 1);
                 }
 
                 auto& candidates = candidate_levels[core_len];
@@ -965,104 +988,122 @@ namespace litegraph {
 
         private:
             // Fills `pairs` (clearing it first) with candidate (pattern, target) node pairs.
-            // The caller owns the buffer and may reuse it across recursive calls to avoid
-            // repeated heap allocation.
             void generate_candidate_pairs(std::vector<std::pair<NodeId, NodeId>>& pairs) const {
                 pairs.clear();
 
-                // Prioritize nodes in the frontier (terminal set) for efficiency
-                for (size_t p_idx = 0; p_idx < g1.node_capacity(); ++p_idx) {
-                    if (depth_1[p_idx] > 0 && core_1[p_idx] == std::nullopt) {
-                        // p_id is in the frontier
-                        NodeId p_id{p_idx};
-                        for (size_t t_idx = 0; t_idx < g2.node_capacity(); ++t_idx) {
-                            if (depth_2[t_idx] > 0 && core_2[t_idx] == std::nullopt) {
-                                pairs.push_back({p_id, NodeId{t_idx}});
-                            }
-                        }
-                        return; // Return immediately with frontier pairs
+                // Find the first unmatched pattern node
+                NodeId p_unmatched = INVALID_NODE_ID;
+                for (size_t i = 0; i < g1.node_capacity(); ++i) {
+                    if (g1.valid_node(NodeId{i}) && !core_1[i]) {
+                        p_unmatched = NodeId{i};
+                        break;
                     }
                 }
 
-                // If frontier is empty, generate pairs from all unmapped nodes
-                for (size_t p_idx = 0; p_idx < g1.node_capacity(); ++p_idx) {
-                    if (core_1[p_idx] == std::nullopt) {
-                        NodeId p_id{p_idx};
-                        for (size_t t_idx = 0; t_idx < g2.node_capacity(); ++t_idx) {
-                            if (core_2[t_idx] == std::nullopt) {
-                                pairs.push_back({p_id, NodeId{t_idx}});
-                            }
+                if (!p_unmatched.is_valid()) return;
+
+                // Case 1: T1_out and T2_out are not empty
+                if (depth_1[p_unmatched.value] > 0) {
+                    for (size_t i = 0; i < g2.node_capacity(); ++i) {
+                        if (g2.valid_node(NodeId{i}) && !core_2[i] && depth_2[i] > 0) {
+                            pairs.emplace_back(p_unmatched, NodeId{i});
                         }
-                        return; // Return with first available unmapped node
+                    }
+                    return;
+                }
+
+                // Case 2: Neither set has terminal nodes, pick any unmatched node in G2
+                for (size_t i = 0; i < g2.node_capacity(); ++i) {
+                    if (g2.valid_node(NodeId{i}) && !core_2[i]) {
+                        pairs.emplace_back(p_unmatched, NodeId{i});
                     }
                 }
-                // pairs remains empty if no candidates found
             }
 
-            bool is_feasible(NodeId p_id, NodeId t_id) {
-                // Helper to get the other endpoint of an edge, crucial for undirected graphs.
-                auto get_other_node = [](NodeId current, const auto& edge) {
-                    return edge.from.value == current.value ? edge.to : edge.from;
-                };
-
+            // Checks the syntactic and semantic feasibility of adding (p_id, t_id) to the current mapping
+            bool is_feasible(NodeId p_id, NodeId t_id) const {
+                // 1. Semantic Feasibility (User-defined comparators)
                 if (!node_comp(g1.node_data(p_id), g2.node_data(t_id))) {
                     return false;
                 }
 
-                int term_p_in = 0, term_p_out = 0;
-                int term_t_in = 0, term_t_out = 0;
-
-                for (auto eid : g1.out_edges(p_id)) {
-                    const auto& edge1 = g1.get_edge(eid);
-
-                    if (const NodeId other1 = get_other_node(p_id, edge1); core_1[other1.value]) {
-                        auto [value] = *core_1[other1.value];
-                        bool found = false;
-                        for (auto e2id : g2.out_edges(t_id)) {
-                            if (const auto& edge2 = g2.get_edge(e2id); get_other_node(t_id, edge2).value == value) {
-                                if (!edge_comp(edge1.data, edge2.data)) return false;
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (!found) return false;
+                auto get_other_p = [&](NodeId cur, const auto& edge, bool is_outgoing) {
+                    if constexpr (std::is_same_v<typename PatternGraph::directed_tag, Directed>) {
+                        return is_outgoing ? edge.to : edge.from;
+                    } else {
+                        return edge.from.value == cur.value ? edge.to : edge.from;
                     }
-                    else {
-                        term_p_out++;
-                    }
-                }
+                };
 
-                if constexpr (std::is_same_v < typename PatternGraph::directed_tag, Directed >) {
-                    for (auto eid : g1.in_edges(p_id)) {
-                        const auto& edge1 = g1.get_edge(eid);
-                        if (const NodeId other1 = edge1.from; core_1[other1.value]) {
-                            auto [value] = *core_1[other1.value];
-                            bool found = false;
-                            for (auto e2id : g2.in_edges(t_id)) {
-                                if (const auto& edge2 = g2.get_edge(e2id); edge2.from.value == value) {
-                                    if (!edge_comp(edge1.data, edge2.data)) return false;
-                                    found = true;
-                                    break;
+                auto get_other_t = [&](NodeId cur, const auto& edge, bool is_outgoing) {
+                    if constexpr (std::is_same_v<typename TargetGraph::directed_tag, Directed>) {
+                        return is_outgoing ? edge.to : edge.from;
+                    } else {
+                        return edge.from.value == cur.value ? edge.to : edge.from;
+                    }
+                };
+
+                // Helper lambda to check edge consistency in one direction (outgoing or incoming)
+                auto check_edges = [&](auto p_edges, auto const& g1_graph, auto const& g2_graph,
+                                       const auto& p_core, const auto& t_core, bool is_outgoing) {
+                    for (auto p_eid : p_edges) {
+                        const auto& p_edge = g1_graph.get_edge(p_eid);
+                        NodeId p_other = get_other_p(p_id, p_edge, is_outgoing);
+
+                        // Case a: The other pattern node is already in the mapping
+                        if (p_core[p_other.value]) {
+                            NodeId t_other = *p_core[p_other.value];
+                            bool edge_found = false;
+
+                            auto check_target_edges = [&](auto t_edges) {
+                                for (auto t_eid : t_edges) {
+                                    const auto& t_edge = g2_graph.get_edge(t_eid);
+                                    if (get_other_t(t_id, t_edge, is_outgoing).value == t_other.value) {
+                                        if (edge_comp(p_edge.data, t_edge.data)) {
+                                            edge_found = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            };
+
+                            if (is_outgoing) {
+                                check_target_edges(g2_graph.out_edges(t_id));
+                            } else {
+                                if constexpr (std::is_same_v<typename TargetGraph::directed_tag, Directed>) {
+                                    check_target_edges(g2_graph.in_edges(t_id));
                                 }
                             }
-                            if (!found) return false;
-                        }
-                        else {
-                            term_p_in++;
+
+                            if (!edge_found) return false;
                         }
                     }
+                    return true;
+                };
+
+                // Check outgoing edges from p_id and incoming edges to p_id
+                if (!check_edges(g1.out_edges(p_id), g1, g2, core_1, core_2, true)) return false;
+
+                if constexpr (std::is_same_v<typename PatternGraph::directed_tag, Directed>) {
+                    if (!check_edges(g1.in_edges(p_id), g1, g2, core_1, core_2, false)) return false;
                 }
 
-                for (auto e2id : g2.out_edges(t_id)) {
-                    if (core_2[get_other_node(t_id, g2.get_edge(e2id)).value] == std::nullopt) term_t_out++;
-                }
-                if constexpr (std::is_same_v < typename TargetGraph::directed_tag, Directed >) {
-                    for (auto e2id : g2.in_edges(t_id)) {
-                        if (core_2[g2.get_edge(e2id).from.value] == std::nullopt) term_t_in++;
-                    }
+                // 2. Syntactic Feasibility: 1-Lookahead / Cutoff rules
+                int r_out = 0;
+                for (auto eid : g1.out_edges(p_id)) {
+                    NodeId other = get_other_p(p_id, g1.get_edge(eid), true);
+                    if (!core_1[other.value] && depth_1[other.value] > 0) r_out++;
                 }
 
-                return term_p_in <= term_t_in && term_p_out <= term_t_out;
+                int t_r_out = 0;
+                for (auto eid : g2.out_edges(t_id)) {
+                    NodeId other = get_other_t(t_id, g2.get_edge(eid), true);
+                    if (!core_2[other.value] && depth_2[other.value] > 0) t_r_out++;
+                }
+
+                if (r_out > t_r_out) return false;
+
+                return true;
             }
 
             // Updates the state to include the new mapping (p_id -> t_id)
@@ -1072,7 +1113,9 @@ namespace litegraph {
                 core_1[p_id.value] = t_id;
                 core_2[t_id.value] = p_id;
 
-                // Helper to get the other endpoint of an edge.
+                if (depth_1[p_id.value] == 0) depth_1[p_id.value] = core_len;
+                if (depth_2[t_id.value] == 0) depth_2[t_id.value] = core_len;
+
                 auto get_other_node = [](NodeId current, const auto& edge) {
                     return edge.from.value == current.value ? edge.to : edge.from;
                 };
@@ -1080,13 +1123,11 @@ namespace litegraph {
                 // Update depths for neighbors
                 auto update_depth = [&]<typename T0>(auto& depth_vec, T0& graph, NodeId u) {
                     for (auto eid : graph.out_edges(u)) {
-                        // FIX: Use the helper to find the actual neighbor node.
                         if (NodeId neighbor = get_other_node(u, graph.get_edge(eid)); depth_vec[neighbor.value] == 0)
                             depth_vec[neighbor.value] = core_len;
                     }
                     if constexpr (std::is_same_v<typename std::decay_t<T0>::directed_tag, Directed>) {
                         for (auto eid : graph.in_edges(u)) {
-                            // This part was correct, as it uses .from for in_edges.
                             if (depth_vec[graph.get_edge(eid).from.value] == 0)
                                 depth_vec[graph.get_edge(eid).from.value] = core_len;
                         }
@@ -1096,13 +1137,11 @@ namespace litegraph {
                 update_depth(depth_2, g2, t_id);
             }
 
-            // In LiteGraphAlgorithms.hpp, inside the detail::VF2State class
             void restore_state(NodeId p_id, NodeId t_id) {
                 mapping[p_id.value] = std::nullopt;
                 core_1[p_id.value] = std::nullopt;
                 core_2[t_id.value] = std::nullopt;
 
-                // Helper to get the other endpoint of an edge.
                 auto get_other_node = [](NodeId current, const auto& edge) {
                     return edge.from.value == current.value ? edge.to : edge.from;
                 };
@@ -1110,14 +1149,12 @@ namespace litegraph {
                 // Restore depths for neighbors
                 auto restore_depth = [&]<typename T0>(auto& depth_vec, T0& graph, NodeId u) {
                     for (auto eid : graph.out_edges(u)) {
-                        // FIX: Use the helper to find the actual neighbor node.
                         if (NodeId neighbor = get_other_node(u, graph.get_edge(eid));
                             depth_vec[neighbor.value] == core_len)
                             depth_vec[neighbor.value] = 0;
                     }
                     if constexpr (std::is_same_v<typename std::decay_t<T0>::directed_tag, Directed>) {
                         for (auto eid : graph.in_edges(u)) {
-                            // This part was correct.
                             if (depth_vec[graph.get_edge(eid).from.value] == core_len)
                                 depth_vec[graph.get_edge(eid).from.value] = 0;
                         }
@@ -1132,38 +1169,34 @@ namespace litegraph {
 
             const PatternGraph& g1;
             const TargetGraph& g2;
-            NodeComparator node_comp;
-            EdgeComparator edge_comp;
+            NodeComp node_comp;
+            EdgeComp edge_comp;
 
             // --- State variables ---
-            size_t core_len, t1_len = 0, t2_len = 0;
+            size_t core_len = 0, t1_len = 0, t2_len = 0;
             std::vector<std::optional<NodeId>> core_1;
             std::vector<std::optional<NodeId>> core_2;
             std::vector<int> depth_1;
             std::vector<int> depth_2;
             std::vector<std::optional<NodeId>> mapping;
-            std::deque<std::vector<std::pair<NodeId, NodeId>>> candidate_levels;
+            std::vector<std::vector<std::pair<NodeId, NodeId>>> candidate_levels;
         };
     } // namespace detail
 
     /**
      * @brief Finds all occurrences of a pattern graph within a target graph (subgraph isomorphism).
-     * * @tparam PatternGraph Type of the pattern graph.
-     * @tparam TargetGraph Type of the target graph.
-     * @param pattern The smaller graph to search for.
-     * @param target The larger graph to search within.
-     * @param node_comp A function `bool(const PatternNode&, const TargetNode&)` to check if two nodes are semantically equivalent.
-     * @param edge_comp A function `bool(const PatternEdge&, const TargetEdge&)` to check if two edges are semantically equivalent.
-     * @return A vector of maps, where each map represents a valid mapping from pattern node ID to target node ID.
      */
-    template <LiteGraphModel PatternGraph, LiteGraphModel TargetGraph>
+    template <
+        LiteGraphModel PatternGraph,
+        LiteGraphModel TargetGraph,
+        typename NodeComp = std::equal_to<>,
+        typename EdgeComp = std::equal_to<>
+    >
     auto vf2_subgraph_isomorphism(
         const PatternGraph& pattern,
         const TargetGraph& target,
-        typename detail::VF2State<PatternGraph, TargetGraph>::NodeComparator node_comp =
-            [](const auto&, const auto&) { return true; },
-        typename detail::VF2State<PatternGraph, TargetGraph>::EdgeComparator edge_comp =
-            [](const auto&, const auto&) { return true; }
+        NodeComp node_comp = {},
+        EdgeComp edge_comp = {}
     ) -> std::vector<std::unordered_map<std::size_t, std::size_t>> {
         // Basic pre-check: pattern cannot have more nodes or edges than the target.
         if (pattern.node_count() > target.node_count() || pattern.edge_count() > target.edge_count()) {
@@ -1177,7 +1210,7 @@ namespace litegraph {
         );
 
         std::vector<std::unordered_map<std::size_t, std::size_t>> results;
-        detail::VF2State<PatternGraph, TargetGraph> state(pattern, target, node_comp, edge_comp);
+        detail::VF2State<PatternGraph, TargetGraph, NodeComp, EdgeComp> state(pattern, target, node_comp, edge_comp);
 
         state.match(results);
 
@@ -2316,21 +2349,23 @@ namespace litegraph {
                 };
 
                 // 1) Reconcile g1 edges among mapped endpoints: substitute or delete (processed once)
-                std::set<std::pair<size_t, size_t>> processed_g1;
+                const std::size_t g2_cap = g2.node_capacity();
+                std::vector<std::uint8_t> processed_g1(g2_cap * g2_cap, 0);
                 for (const auto& [eid_val, e1] : g1.edges()) {
                     auto from2_opt = current.g1_to_g2_mapping[e1.from.value];
                     auto to2_opt = current.g1_to_g2_mapping[e1.to.value];
 
                     if (!from2_opt || !to2_opt) continue;
-                    if (from2_opt->value >= g2.node_capacity() || to2_opt->value >= g2.node_capacity()) continue;
+                    if (from2_opt->value >= g2_cap || to2_opt->value >= g2_cap) continue;
 
                     NodeId from2 = *from2_opt;
                     NodeId to2 = *to2_opt;
 
-                    auto key = norm_pair(from2.value, to2.value);
+                    auto [min_u, max_u] = norm_pair(from2.value, to2.value);
+                    const std::size_t flat_idx = min_u * g2_cap + max_u;
                     if constexpr (std::is_same_v<typename Graph1::directed_tag, Undirected>) {
-                        if (processed_g1.contains(key)) continue;
-                        processed_g1.insert(key);
+                        if (processed_g1[flat_idx]) continue;
+                        processed_g1[flat_idx] = 1;
                     }
 
                     auto e2_fwd = find_edge(g2, from2, to2);
@@ -2353,7 +2388,7 @@ namespace litegraph {
                 }
 
                 // 2) Reconcile g2 edges among mapped endpoints: insert if missing in g1 (processed once)
-                std::set<std::pair<size_t, size_t>> processed_g2;
+                std::vector<std::uint8_t> processed_g2(g2_cap * g2_cap, 0);
                 for (const auto& [eid_val, e2] : g2.edges()) {
                     auto from1_opt = g2_to_g1[e2.from.value];
                     auto to1_opt = g2_to_g1[e2.to.value];
@@ -2362,10 +2397,11 @@ namespace litegraph {
                     NodeId from1 = *from1_opt;
                     NodeId to1 = *to1_opt;
 
-                    auto key = norm_pair(e2.from.value, e2.to.value);
+                    auto [min_u, max_u] = norm_pair(e2.from.value, e2.to.value);
+                    const std::size_t flat_idx = min_u * g2_cap + max_u;
                     if constexpr (std::is_same_v<typename Graph2::directed_tag, Undirected>) {
-                        if (processed_g2.contains(key)) continue;
-                        processed_g2.insert(key);
+                        if (processed_g2[flat_idx]) continue;
+                        processed_g2[flat_idx] = 1;
                     }
 
                     auto e1_fwd = find_edge(g1, from1, to1);

@@ -34,82 +34,11 @@ namespace litegraph {
         ComputationFailed
     };
 
-    namespace detail {
-        // Modern C++23 DSU implementation for dominator computation
-        class DominatorDSU {
-        private:
-            std::vector<size_t> parent_;
-            std::vector<size_t> label_;
-            std::vector<size_t> size_;
-
-        public:
-            explicit constexpr DominatorDSU(const size_t n)
-                : parent_(n), label_(n), size_(n, 1) {
-                for (size_t i = 0; i < n; ++i) {
-                    parent_[i] = i;
-                    label_[i] = i;
-                }
-            }
-
-            constexpr void unite(const size_t i, const size_t j) noexcept {
-                size_t root_i = find(i);
-                if (size_t root_j = find(j); root_i != root_j) {
-                    if (size_[root_i] < size_[root_j]) [[likely]] {
-                        std::swap(root_i, root_j);
-                    }
-                    parent_[root_j] = root_i;
-                    size_[root_i] += size_[root_j];
-                }
-            }
-
-            constexpr size_t find(const size_t i) noexcept {
-                if (parent_[i] == i) [[likely]] return i;
-
-                const size_t root = find(parent_[i]);
-                // Path compression with label optimization
-                if (label_[parent_[i]] < label_[i]) [[unlikely]] {
-                    label_[i] = label_[parent_[i]];
-                }
-                parent_[i] = root;
-                return root;
-            }
-
-            constexpr size_t eval(const size_t i) noexcept {
-                find(i);
-                return label_[i];
-            }
-
-            [[nodiscard]] constexpr std::span<const size_t> parents() const noexcept {
-                return parent_;
-            }
-
-            [[nodiscard]] constexpr std::span<const size_t> labels() const noexcept {
-                return label_;
-            }
-        };
-
-        // Predecessor computation (with potential for future parallel optimization)
-        template <DirectedGraphForDominators GraphT>
-        auto compute_predecessors(const GraphT& g, std::span<const int> dfs_num) {
-            const auto node_cap = g.node_capacity();
-            std::vector<std::vector<NodeId>> pred(node_cap);
-
-            // Sequential implementation (can be parallelized in future)
-            for (const auto& [eid_val, edge] : g.edges()) {
-                if (dfs_num[edge.to.value] != -1) {
-                    pred[edge.to.value].push_back(edge.from);
-                }
-            }
-
-            return pred;
-        }
-    } // namespace detail
-
     /**
-     * @brief Modern C++23 implementation of Lengauer-Tarjan Dominator Tree algorithm.
+     * @brief Modern C++23 implementation of Cooper-Harvey-Kennedy Dominator Tree algorithm.
      *
      * This function computes dominator relationships efficiently using C++23 features,
-     * concepts for type safety, and improved algorithms while maintaining API compatibility.
+     * concepts for type safety, and iterative dataflow analysis while maintaining API compatibility.
      *
      * @tparam GraphT The graph type conforming to LiteGraphModel concept
      * @param g The directed graph to analyze
@@ -127,21 +56,36 @@ namespace litegraph {
 
         const auto node_cap = g.node_capacity();
 
-        // Reachability pass from entry.
+        // Reachability pass from entry using iterative explicit stack.
         std::vector<bool> reachable(node_cap, false);
         std::vector<NodeId> postorder;
         postorder.reserve(g.node_count());
 
-        std::function < void(NodeId) > dfs = [&](NodeId u) {
-            reachable[u.value] = true;
-            for (const auto v : g.neighbors(u)) {
+        std::vector<std::pair<NodeId, std::size_t>> dfs_stack;
+        dfs_stack.reserve(g.node_count());
+
+        reachable[start_node.value] = true;
+        dfs_stack.emplace_back(start_node, 0);
+
+        while (!dfs_stack.empty()) {
+            auto& [u, next_idx] = dfs_stack.back();
+            auto neighbors = g.out_edges(u);
+
+            bool advanced = false;
+            for (auto eid : neighbors) {
+                NodeId v = g.get_edge(eid).to;
                 if (!reachable[v.value]) {
-                    dfs(v);
+                    reachable[v.value] = true;
+                    dfs_stack.emplace_back(v, 0);
+                    advanced = true;
+                    break;
                 }
             }
-            postorder.push_back(u);
-        };
-        dfs(start_node);
+            if (!advanced) {
+                postorder.push_back(u);
+                dfs_stack.pop_back();
+            }
+        }
 
         std::vector rpo(postorder.rbegin(), postorder.rend());
         std::vector<int> rpo_index(node_cap, -1);
@@ -301,19 +245,19 @@ namespace litegraph {
 
             if (!dom_node) [[unlikely]] return result;
 
-            // Collect all descendants
-            std::function < void(const typename NAryTree<NodeT>::TreeNode *) > collect_descendants =
-                [&](const auto* node) {
-                    if (node != dom_node) {
-                        // Don't include the dominator itself
-                        result.push_back(node->data);
-                    }
-                    for (const auto* child : node->children) {
-                        collect_descendants(child);
-                    }
-                };
-
-            collect_descendants(dom_node);
+            // Collect all descendants iteratively
+            std::vector<const typename NAryTree<NodeT>::TreeNode*> stack;
+            for (const auto* child : dom_node->children) {
+                stack.push_back(child);
+            }
+            while (!stack.empty()) {
+                const auto* curr = stack.back();
+                stack.pop_back();
+                result.push_back(curr->data);
+                for (const auto* child : curr->children) {
+                    stack.push_back(child);
+                }
+            }
             return result;
         }
     } // namespace dominator_analysis

@@ -36,13 +36,14 @@ namespace litegraph::pravaha {
     /**
      * @brief Parallel level-by-level BFS traversal across LiteGraph models.
      * @tparam GraphT LiteGraph conforming to LiteGraphModel.
-     * @tparam Fn Visitor functor taking (NodeId, const node_type&).
+     * @tparam Fn Visitor functor taking (NodeId, const node_type&). Must be thread-safe for concurrent invocations across worker threads.
      * @param g The graph to traverse.
      * @param start The origin node ID.
-     * @param visit Visitor called for every reachable node.
+     * @param visit Visitor called for every reachable node concurrently.
      * @param runner Optional Pravaha runner. If default constructed, creates an ephemeral JThread pool.
      */
     template <LiteGraphModel GraphT, typename Fn>
+        requires std::invocable<Fn, NodeId, const typename GraphT::node_type&>
     void parallel_bfs(
         const GraphT& g,
         const NodeId start,
@@ -117,8 +118,55 @@ namespace litegraph::pravaha {
     }
 
     // =========================================================================
+    // =========================================================================
     // 2. Parallel CSR PageRank Algorithm
     // =========================================================================
+
+    namespace policy {
+        template <typename RunnerT>
+        struct PravahaExec {
+            RunnerT& runner;
+
+            template <typename Idx, typename Fn>
+            void for_each(Idx begin, Idx end, Fn&& fn) const {
+                const std::size_t total = static_cast<std::size_t>(end - begin);
+                if (total == 0) return;
+                const unsigned int threads = std::max(1u, std::thread::hardware_concurrency());
+                const std::size_t chunk_sz = std::max<std::size_t>(1, (total + threads - 1) / threads);
+                const auto chunks = ::pravaha::StaticChunkingPolicy::chunks(total, chunk_sz);
+
+                for (const auto& ch : chunks) {
+                    (void)runner.submit(::pravaha::task("pr_for_each", [&fn, b = begin + ch.begin, e = begin + ch.end]() {
+                        for (auto i = b; i < e; ++i) fn(i);
+                    }));
+                }
+                runner.backend_ref().drain();
+            }
+
+            template <typename Idx, typename TransformFn, typename ReduceFn, typename T>
+            T transform_reduce(Idx begin, Idx end, T init, TransformFn&& trans, ReduceFn&& red) const {
+                const std::size_t total = static_cast<std::size_t>(end - begin);
+                if (total == 0) return init;
+                const unsigned int threads = std::max(1u, std::thread::hardware_concurrency());
+                const std::size_t chunk_sz = std::max<std::size_t>(1, (total + threads - 1) / threads);
+                const auto chunks = ::pravaha::StaticChunkingPolicy::chunks(total, chunk_sz);
+
+                std::vector<T> partials(chunks.size(), init);
+                for (std::size_t c = 0; c < chunks.size(); ++c) {
+                    const auto& ch = chunks[c];
+                    auto* out = &partials[c];
+                    (void)runner.submit(::pravaha::task("pr_reduce", [&trans, &red, out, b = begin + ch.begin, e = begin + ch.end]() {
+                        T acc = *out;
+                        for (auto i = b; i < e; ++i) acc = red(acc, trans(i));
+                        *out = acc;
+                    }));
+                }
+                runner.backend_ref().drain();
+                for (const auto& part : partials) init = red(init, part);
+                return init;
+            }
+        };
+    } // namespace policy
 
     template <typename EdgeT, DirectednessTag Directedness>
     CsrPageRankResult parallel_pagerank(
@@ -126,162 +174,7 @@ namespace litegraph::pravaha {
         const CsrPageRankOptions& options,
         ::pravaha::Runner<::pravaha::JThreadBackend>& runner
     ) {
-        if (options.damping_factor < 0.0 || options.damping_factor > 1.0) {
-            throw std::invalid_argument("PageRank damping_factor must be in [0, 1].");
-        }
-
-        const std::size_t n = g.node_count();
-        if (n == 0) return {};
-
-        const auto& offsets = g.offsets();
-        const auto& targets = g.targets();
-
-        std::vector<double> rank(n, 1.0 / static_cast<double>(n));
-        std::vector<double> next_rank(n, 0.0);
-
-        CsrPageRankResult result;
-        result.ranks = rank;
-
-        const double d = options.damping_factor;
-        const unsigned int hw_threads = std::max(1u, std::thread::hardware_concurrency());
-        const std::size_t chunk_sz = std::max<std::size_t>(1, (n + hw_threads - 1) / hw_threads);
-        const auto chunks = ::pravaha::StaticChunkingPolicy::chunks(n, chunk_sz);
-
-        // Gather (pull) path: when the reverse CSR is present, each destination chunk
-        // owns its next_rank entries exclusively, so the distribution step needs no
-        // atomics. Falls back to the lock-free atomic scatter otherwise.
-        const bool gather = g.has_incoming();
-        std::vector<double> contrib;
-        if (gather) contrib.assign(n, 0.0);
-
-        for (std::size_t iter = 0; iter < options.max_iterations; ++iter) {
-            // 1. Parallel dangling mass reduction
-            std::vector<double> partial_dangling(chunks.size(), 0.0);
-            for (std::size_t c_idx = 0; c_idx < chunks.size(); ++c_idx) {
-                const auto& ch = chunks[c_idx];
-                auto* part = &partial_dangling[c_idx];
-                auto task_fn = [&offsets, &rank, part, begin = ch.begin, end = ch.end]() {
-                    double local_dangling = 0.0;
-                    for (std::size_t u = begin; u < end; ++u) {
-                        if (offsets[u] == offsets[u + 1]) {
-                            local_dangling += rank[u];
-                        }
-                    }
-                    *part = local_dangling;
-                };
-                (void)runner.submit(::pravaha::task("litegraph_pr_dangling", std::move(task_fn)));
-            }
-            runner.backend_ref().drain();
-
-            double dangling_mass = 0.0;
-            for (double val : partial_dangling) dangling_mass += val;
-
-            const double base_teleport = (1.0 - d) / static_cast<double>(n)
-                + (d * dangling_mass / static_cast<double>(n));
-
-            double total_delta = 0.0;
-
-            if (gather) {
-                const auto& in_offsets = g.in_offsets();
-                const auto& in_sources = g.in_sources();
-
-                // 2a. Precompute per-source contributions in parallel.
-                for (const auto& ch : chunks) {
-                    auto task_fn = [&offsets, &rank, &contrib, d, begin = ch.begin, end = ch.end]() {
-                        for (std::size_t u = begin; u < end; ++u) {
-                            const std::size_t out_degree = offsets[u + 1] - offsets[u];
-                            contrib[u] = out_degree == 0
-                                             ? 0.0
-                                             : d * rank[u] / static_cast<double>(out_degree);
-                        }
-                    };
-                    (void)runner.submit(::pravaha::task("litegraph_pr_contrib", std::move(task_fn)));
-                }
-                runner.backend_ref().drain();
-
-                // 2b. Parallel gather + per-chunk delta (destination-partitioned, no atomics).
-                std::vector<double> partial_deltas(chunks.size(), 0.0);
-                for (std::size_t c_idx = 0; c_idx < chunks.size(); ++c_idx) {
-                    const auto& ch = chunks[c_idx];
-                    auto* part_delta = &partial_deltas[c_idx];
-                    auto task_fn = [&in_offsets, &in_sources, &contrib, &rank, &next_rank,
-                            base_teleport, part_delta, begin = ch.begin, end = ch.end]() {
-                        double local_delta = 0.0;
-                        for (std::size_t v = begin; v < end; ++v) {
-                            double acc = base_teleport;
-                            for (std::size_t k = in_offsets[v]; k < in_offsets[v + 1]; ++k) {
-                                acc += contrib[in_sources[k].value];
-                            }
-                            next_rank[v] = acc;
-                            local_delta += std::abs(acc - rank[v]);
-                        }
-                        *part_delta = local_delta;
-                    };
-                    (void)runner.submit(::pravaha::task("litegraph_pr_gather", std::move(task_fn)));
-                }
-                runner.backend_ref().drain();
-
-                for (double dval : partial_deltas) total_delta += dval;
-            }
-            else {
-                // 2. Parallel rank distribution & delta calculation (atomic scatter).
-                std::vector<std::atomic<double>> next_rank_atomic(n);
-                for (std::size_t i = 0; i < n; ++i) {
-                    next_rank_atomic[i].store(base_teleport, std::memory_order_relaxed);
-                }
-
-                for (const auto& ch : chunks) {
-                    auto task_fn = [&offsets, &targets, &rank, &next_rank_atomic, d, begin = ch.begin, end = ch.end]() {
-                        for (std::size_t u = begin; u < end; ++u) {
-                            const std::size_t out_degree = offsets[u + 1] - offsets[u];
-                            if (out_degree == 0) continue;
-
-                            const double contrib = d * rank[u] / static_cast<double>(out_degree);
-                            for (std::size_t i = offsets[u]; i < offsets[u + 1]; ++i) {
-                                const std::size_t target = targets[i].value;
-                                // Lock-free atomic addition on next_rank
-                                double cur = next_rank_atomic[target].load(std::memory_order_relaxed);
-                                while (!next_rank_atomic[target].compare_exchange_weak(
-                                    cur, cur + contrib, std::memory_order_relaxed)) {}
-                            }
-                        }
-                    };
-                    (void)runner.submit(::pravaha::task("litegraph_pr_distribute", std::move(task_fn)));
-                }
-                runner.backend_ref().drain();
-
-                // 3. Parallel L1 delta computation
-                std::vector<double> partial_deltas(chunks.size(), 0.0);
-                for (std::size_t c_idx = 0; c_idx < chunks.size(); ++c_idx) {
-                    const auto& ch = chunks[c_idx];
-                    auto* part_delta = &partial_deltas[c_idx];
-                    auto task_fn = [&rank, &next_rank, &next_rank_atomic, part_delta, begin = ch.begin, end = ch.end
-                        ]() {
-                        double local_delta = 0.0;
-                        for (std::size_t i = begin; i < end; ++i) {
-                            next_rank[i] = next_rank_atomic[i].load(std::memory_order_relaxed);
-                            local_delta += std::abs(next_rank[i] - rank[i]);
-                        }
-                        *part_delta = local_delta;
-                    };
-                    (void)runner.submit(::pravaha::task("litegraph_pr_delta", std::move(task_fn)));
-                }
-                runner.backend_ref().drain();
-
-                for (double dval : partial_deltas) total_delta += dval;
-            }
-
-            rank.swap(next_rank);
-            result.iterations = iter + 1;
-
-            if (total_delta <= options.tolerance) {
-                result.converged = true;
-                break;
-            }
-        }
-
-        result.ranks = std::move(rank);
-        return result;
+        return pagerank_engine(g, options, policy::PravahaExec{runner}, litegraph::policy::ScalarVectorOps{});
     }
 
     template <typename EdgeT, DirectednessTag Directedness>

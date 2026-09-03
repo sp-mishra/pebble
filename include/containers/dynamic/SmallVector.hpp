@@ -68,6 +68,7 @@
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace containers::dynamic::detail {
     // Minimum element capacity computed from a byte budget.
@@ -558,7 +559,6 @@ namespace containers::dynamic {
             if constexpr (std::forward_iterator < InputIt >) {
                 const auto count = static_cast<size_type>(std::distance(first, last));
                 reserve(size_ + count);
-                data_ + idx;
                 if (idx < size_) {
                     for (size_type i = 0; i < size_ - idx; ++i) {
                         AllocTraits::construct(alloc_, data_ + size_ + count - 1 - i, std::move(data_[size_ - 1 - i]));
@@ -710,13 +710,35 @@ namespace containers::dynamic {
 
     template <typename T, std::size_t N, typename A, std::ranges::input_range R>
         requires (!std::same_as < std::remove_cvref_t < R >, SmallVector<T, N, A> > &&
-            std
-    ::equality_comparable_with<std::ranges::range_value_t < R>
-    ,
-    T
-    >
-    )
+            std::equality_comparable_with<std::ranges::range_value_t < R>, T>)
     [[nodiscard]] constexpr bool operator==(const R& lhs, const SmallVector<T, N, A>& rhs) {
         return std::equal(std::ranges::begin(lhs), std::ranges::end(lhs), rhs.begin(), rhs.end());
     }
+
+    template <typename T, std::size_t N, typename A, typename Pred>
+    constexpr typename SmallVector<T, N, A>::size_type erase_if(SmallVector<T, N, A>& c, Pred pred) {
+        auto it = std::remove_if(c.begin(), c.end(), pred);
+        auto r = std::distance(it, c.end());
+        c.erase(it, c.end());
+        return static_cast<typename SmallVector<T, N, A>::size_type>(r);
+    }
+
+    template <
+        typename T,
+        std::size_t InlineBytes = 64,
+        typename Alloc = std::allocator<T>
+    >
+    using auto_vector_t = std::conditional_t<
+        (InlineBytes < sizeof(T)),
+        std::vector<T, Alloc>,
+        SmallVector<T, InlineBytes, Alloc>
+    >;
 } // namespace containers::dynamic
+
+namespace std {
+    template <typename T, std::size_t N, typename A, typename Pred>
+    constexpr typename containers::dynamic::SmallVector<T, N, A>::size_type
+    erase_if(containers::dynamic::SmallVector<T, N, A>& c, Pred pred) {
+        return containers::dynamic::erase_if(c, pred);
+    }
+} // namespace std
