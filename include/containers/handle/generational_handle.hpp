@@ -56,6 +56,12 @@ namespace containers {
     inline constexpr generational_handle<Tag, Index> null_handle{};
 } // namespace containers
 
+namespace pebble::containers {
+    using ::containers::generational_handle;
+    template <class Tag, std::unsigned_integral Index = std::uint32_t>
+    inline constexpr generational_handle<Tag, Index> null_handle = ::containers::null_handle<Tag, Index>;
+} // namespace pebble::containers
+
 // =============================================================================
 // std::hash specialization — enables use as an unordered_map / unordered_set key
 // =============================================================================

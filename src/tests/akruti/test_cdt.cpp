@@ -22,10 +22,10 @@ TEST_CASE (
 
     // Test static_vector compile-time deduction
     containers::static_vector<akruti::Vec, 4> static_poly;
-    static_poly.push_back({0, 0});
-    static_poly.push_back({4, 0});
-    static_poly.push_back({4, 4});
-    static_poly.push_back({0, 4});
+    (void)static_poly.push_back({0, 0});
+    (void)static_poly.push_back({4, 0});
+    (void)static_poly.push_back({4, 4});
+    (void)static_poly.push_back({0, 4});
     auto static_tris = cdt.triangulate(static_poly);
     REQUIRE(static_tris.size() == 2);
 }

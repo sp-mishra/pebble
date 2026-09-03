@@ -550,7 +550,6 @@ namespace sparseset {
         return s;
     }
 
-    // Equality: same key membership, regardless of insertion order.
     template <SparseKey Key, typename Value, std::unsigned_integral IndexT,
                              typename DA, typename SA>
     [[nodiscard]] bool operator==(
@@ -560,3 +559,17 @@ namespace sparseset {
         return std::ranges::all_of(a, [&b](Key k) { return b.contains(k); });
     }
 } // namespace sparseset
+
+namespace containers {
+    using sparseset::SparseSet;
+    using sparseset::SparseKey;
+    using sparseset::SSError;
+    using sparseset::make_sparse_set;
+} // namespace containers
+
+namespace pebble::containers {
+    using sparseset::SparseSet;
+    using sparseset::SparseKey;
+    using sparseset::SSError;
+    using sparseset::make_sparse_set;
+} // namespace pebble::containers

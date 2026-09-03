@@ -491,4 +491,21 @@ TEST_CASE (
     CHECK_FALSE(found.back().has_value());
 }
 
+TEST_CASE (
+"containers::BPlusSet: from_sorted bulk construction"
+,
+"[containers][tree][bplus_set]"
+)
+ {
+    std::vector<int> sorted_keys = {1, 3, 5, 7, 9, 11, 13, 15, 17, 19};
+    auto set = BPlusSet<int>::from_sorted(sorted_keys.begin(), sorted_keys.end());
+
+    REQUIRE(set.size() == sorted_keys.size());
+    for (int k : sorted_keys) {
+        CHECK(set.contains(k));
+    }
+    CHECK_FALSE(set.contains(2));
+    CHECK_FALSE(set.contains(20));
+}
+
 

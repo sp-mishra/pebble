@@ -91,14 +91,15 @@ struct Monster {
 };
 
 int main() {
-    containers::slot_map<Monster, MonsterTag> monsters;
+    containers::slot_map<Monster, MonsterHandle> monsters;
+    monsters.reserve(1000); // Bulk reservation support
 
     // 1. Insert and obtain generational handle
-    MonsterHandle goblin = monsters.insert({"Goblin", 50});
-    MonsterHandle dragon = monsters.insert({"Dragon", 5000});
+    MonsterHandle goblin = monsters.insert(Monster{"Goblin", 50});
+    MonsterHandle dragon = monsters.insert(Monster{"Dragon", 5000});
 
     // 2. Safe O(1) Lookup
-    if (auto* m = monsters.get(goblin)) {
+    if (auto* m = monsters.find(goblin)) {
         std::cout << "Monster: " << m->name << ", HP: " << m->health << "\n";
     }
 
@@ -106,36 +107,54 @@ int main() {
     monsters.erase(goblin);
 
     // 4. Stale Handle Safety (Returns nullptr)
-    if (monsters.get(goblin) == nullptr) {
+    if (monsters.find(goblin) == nullptr) {
         std::cout << "Goblin handle successfully invalidated! No use-after-free.\n";
     }
 
-    // 5. Contiguous Dense Iteration across all live monsters
-    for (const Monster& m : monsters.dense()) {
-        std::cout << "Live Monster: " << m.name << "\n";
+    // 5. Dense Iteration across all live monsters
+    for (auto ref : monsters) {
+        std::cout << "Live Monster: " << ref.value.name << "\n";
     }
 }
 ```
 
-### 3.2 `descriptor_registry` Named Symbol Routing
+### 3.2 `descriptor_registry` Named & Stable ID Symbol Routing
+
+`descriptor_registry` leverages a dual index (`SparseSet` for $O(1)$ cache-dense numeric lookups + hash table for string lookups):
 
 ```cpp
 #include "containers/descriptor_registry.hpp"
 #include <iostream>
 
-struct TextureTag {};
-using TextureHandle = containers::generational_handle<TextureTag>;
+enum class TextureCategory : std::uint32_t { Terrain, Character };
+
+struct TextureDesc {
+    static constexpr std::uint32_t stable_id = 10;
+    static constexpr std::uint64_t name_hash = containers::desc_name_hash("tex_grass");
+    static constexpr TextureCategory category = TextureCategory::Terrain;
+
+    std::string path;
+};
 
 int main() {
-    containers::descriptor_registry<std::string, TextureTag> textures;
+    containers::descriptor_registry<TextureDesc> textures(1024); // Reserve universe capacity
 
-    // Register textures by string name
-    TextureHandle h_grass = textures.register_named("tex_grass", "/assets/grass.png");
-    TextureHandle h_stone = textures.register_named("tex_stone", "/assets/stone.png");
+    // Register descriptor
+    TextureDesc grass{.path = "/assets/grass.png"};
+    containers::descriptor_handle h_grass = textures.register_desc(grass);
 
-    // Lookup handle by name with FNV-1a hash
-    if (auto h = textures.find_handle("tex_grass")) {
-        std::cout << "Resolved Grass Path: " << *textures.get(*h) << "\n";
+    // Lookup by stable ID via O(1) branch-free SparseSet
+    if (const TextureDesc* d = textures.find(10)) {
+        std::cout << "Resolved Grass Path by ID: " << d->path << "\n";
     }
+
+    // Lookup by name hash
+    if (const TextureDesc* d = textures.find_by_name(containers::desc_name_hash("tex_grass"))) {
+        std::cout << "Resolved Grass Path by Name: " << d->path << "\n";
+    }
+
+    // Query all by category
+    auto terrain_list = textures.by_category(TextureCategory::Terrain);
+    std::cout << "Found " << terrain_list.size() << " terrain textures.\n";
 }
 ```

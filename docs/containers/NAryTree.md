@@ -1669,8 +1669,36 @@ cmake -DCMAKE_CXX_STANDARD=23 -DCMAKE_CXX_FLAGS="-fexperimental-library" ..
 
 ---
 
+## 15. `ScalableNAryTree` — High-Scale Flat LCRS SoA Tree
+
+For extreme multi-million-scale scenarios ($10\text{M}+$ nodes) where traditional pointer-chased recursive trees induce cache misses and allocator overhead, Pebble provides `pebble::containers::ScalableNAryTree<T, Allocator>` in `include/containers/tree/NAryTree.hpp`.
+
+### Key Capabilities
+
+1. **Flat Left-Child Right-Sibling (LCRS) Array SoA**: Decouples tree topology (`NodeHeader` vectors) from node payload data (`data_` vector).
+2. **True $O(1)$ Child Appends**: `NodeHeader` maintains `last_child` index for instant tail insertion without linear traversal over siblings.
+3. **Zero-Heap Traversal Stack**: `remove_subtree` and `for_each_dfs` use Small-Buffer Optimized `SmallVector<NodeId, 64>` stacks, completely eliminating call-stack recursion and heap allocations.
+4. **Smriti Arena Support**: Parameterized with `Allocator = std::allocator<T>`, accepting `smriti::SmritiAllocator` for zero-cost bump/arena allocation.
+
+```cpp
+#include "containers/tree/NAryTree.hpp"
+
+pebble::containers::ScalableNAryTree<int> tree;
+tree.reserve(1000000);
+
+auto root = tree.insert_root(1);
+auto c1 = tree.append_child(root, 10); // O(1)
+auto c2 = tree.append_child(root, 20); // O(1)
+
+tree.for_each_dfs([](const int& val, const auto& header) {
+    // Process nodes with zero heap allocation
+});
+```
+
+---
+
 ## License and Attribution
 
-This tree container is part of the `turbo_twig` library and follows the same license.
+This tree container is part of the Pebble library.
 
 

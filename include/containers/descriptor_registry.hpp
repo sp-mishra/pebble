@@ -20,10 +20,12 @@
 // =============================================================================
 
 #include "containers/associative/slot_map.hpp"
+#include "containers/associative/SparseSet.hpp"
 #include "containers/handle/generational_handle.hpp"
 
 #include <concepts>
 #include <string_view>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -70,6 +72,9 @@ namespace containers {
 
         descriptor_registry() = default;
 
+        explicit descriptor_registry(std::size_t universe_capacity)
+            : id_to_handle_(universe_capacity) {}
+
         // -------------------------------------------------------------------------
         // register_desc — insert a descriptor; returns its stable handle.
         // Duplicate stable_id overwrites the existing entry and reindexes.
@@ -79,20 +84,19 @@ namespace containers {
             const std::uint64_t nh = d.name_hash;
             const auto cat = d.category;
 
-            // Overwrite if already present under this stable_id
-            if (const auto it = id_to_handle_.find(id); it != id_to_handle_.end()) {
-                const descriptor_handle existing = it->second;
+            // Check if already present via O(1) branch-free SparseSet
+            if (id_to_handle_.contains(id)) {
+                const descriptor_handle existing = id_to_handle_.get(id)->get();
                 if (Desc* ptr = store_.find(existing)) *ptr = std::move(d);
                 name_to_handle_[nh] = existing;
                 return existing;
             }
 
-            // Insert fresh
             const descriptor_handle h = store_.insert(std::move(d));
-            id_to_handle_[id] = h;
+            id_to_handle_.insert_or_update(id, h);
             name_to_handle_[nh] = h;
 
-            // Category index: grow sparse set if needed
+            // Category index: grow bucket vector if needed
             const std::size_t cat_idx = cat_to_index(cat);
             if (cat_idx >= cat_buckets_.size()) {
                 cat_buckets_.resize(cat_idx + 1);
@@ -106,21 +110,27 @@ namespace containers {
         // find by stable_id
         // -------------------------------------------------------------------------
         [[nodiscard]] const Desc* find(const std::uint32_t id) const noexcept {
-            const auto it = id_to_handle_.find(id);
-            if (it == id_to_handle_.end()) return nullptr;
-            return store_.find(it->second);
+            auto res = id_to_handle_.get(id);
+            if (!res) return nullptr;
+            return store_.find(res->get());
         }
 
         [[nodiscard]] Desc* find(const std::uint32_t id) noexcept {
-            const auto it = id_to_handle_.find(id);
-            if (it == id_to_handle_.end()) return nullptr;
-            return store_.find(it->second);
+            auto res = id_to_handle_.get(id);
+            if (!res) return nullptr;
+            return store_.find(res->get());
         }
 
         // -------------------------------------------------------------------------
         // find by name_hash
         // -------------------------------------------------------------------------
         [[nodiscard]] const Desc* find_by_name(const std::uint64_t name_hash) const noexcept {
+            const auto it = name_to_handle_.find(name_hash);
+            if (it == name_to_handle_.end()) return nullptr;
+            return store_.find(it->second);
+        }
+
+        [[nodiscard]] Desc* find_by_name(const std::uint64_t name_hash) noexcept {
             const auto it = name_to_handle_.find(name_hash);
             if (it == name_to_handle_.end()) return nullptr;
             return store_.find(it->second);
@@ -158,6 +168,10 @@ namespace containers {
         [[nodiscard]] std::size_t size() const noexcept { return store_.size(); }
         [[nodiscard]] bool empty() const noexcept { return store_.empty(); }
 
+        void reserve(std::size_t cap) {
+            id_to_handle_.reserve(cap);
+        }
+
     private:
         static std::size_t cat_to_index(category_type c) noexcept {
             if constexpr (std::is_enum_v<category_type>)
@@ -168,9 +182,8 @@ namespace containers {
         }
 
         containers::slot_map<Desc, descriptor_handle> store_;
-        std::unordered_map<std::uint32_t, descriptor_handle> id_to_handle_;
+        pebble::containers::SparseSet<std::uint32_t, descriptor_handle> id_to_handle_;
         std::unordered_map<std::uint64_t, descriptor_handle> name_to_handle_;
-        // Bucket per category value (sparse vector of handle lists)
         std::vector<std::vector<descriptor_handle>> cat_buckets_;
     };
 
@@ -187,3 +200,12 @@ namespace containers {
         return h;
     }
 } // namespace containers
+
+namespace pebble::containers {
+    using ::containers::RegistrableDescriptor;
+    using ::containers::descriptor_registry_tag;
+    using ::containers::descriptor_handle;
+    using ::containers::descriptor_registry;
+    using ::containers::desc_name_hash;
+    using ::containers::kDescRegistryExtensionBase;
+} // namespace pebble::containers

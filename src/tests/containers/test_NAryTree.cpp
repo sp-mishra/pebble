@@ -661,11 +661,11 @@ TEST_CASE (
 
 
 
-"[NArayTree] breadth-first iterator copy semantics (shared queue observation)"
+"[NArayTree] breadth-first iterator copy semantics (independent queue copy)"
 )
  {
-    // Demonstrate the current copy semantics: copying an iterator clones the current_node pointer
-    // but shares the underlying queue. Advancing the original affects the queue used by the copy.
+    // Standard forward iterator multipass guarantee: copying an iterator copies
+    // the traversal state so advancing one iterator does not corrupt the other.
     IntTree tree;
     auto* root = tree.insert(nullptr, 1);
     auto* c1 = tree.insert(root, 2);
@@ -673,18 +673,16 @@ TEST_CASE (
     tree.insert(c1, 4);
 
     auto it = tree.breadth_begin();
-    auto it_copy = it; // copy shares internal queue pointer
+    auto it_copy = it; // independent copy of traversal state
 
     // Advance the original once
     ++it;
     REQUIRE(it->data == 2);
-    // copy still holds previous current_node value until incremented
     REQUIRE(it_copy->data == 1);
 
-    // Now advancing the copy will operate on the (already advanced) shared queue
+    // Advancing the copy operates on its own traversal queue
     ++it_copy;
-    // because the queue was popped by ++it, the next value seen by the copy is not 2 but 3
-    REQUIRE(it_copy->data == 3);
+    REQUIRE(it_copy->data == 2);
 }
 
 // --- New tests for missing coverage ---
@@ -944,4 +942,56 @@ TEST_CASE (
     size_t count = 0;
     tree.traverse_depth_first([&count](const IntTree::TreeNode*) { ++count; });
     REQUIRE(count == 0);
+}
+
+TEST_CASE (
+"[NAryTree] Breadth-first iterator value copy test"
+)
+{
+    IntTree tree(1);
+    auto* root = tree.get_root();
+    tree.insert(root, 2);
+    tree.insert(root, 3);
+
+    auto it1 = tree.breadth_begin();
+    auto it2 = it1; // Copy iterator
+    REQUIRE(it1 == it2);
+    REQUIRE((*it1).data == 1);
+    REQUIRE((*it2).data == 1);
+
+    ++it1;
+    REQUIRE((*it1).data == 2);
+    REQUIRE((*it2).data == 1); // it2 unchanged
+}
+
+TEST_CASE (
+"[ScalableNAryTree] Basic LCRS build, DFS, and remove"
+)
+{
+    using namespace pebble::containers;
+    ScalableNAryTree<int> tree;
+    REQUIRE(tree.empty());
+    REQUIRE(tree.size() == 0);
+
+    auto r = tree.insert_root(10);
+    auto c1 = tree.append_child(r, 20);
+    auto c2 = tree.append_child(r, 30);
+    auto c1_1 = tree.append_child(c1, 40);
+
+    REQUIRE(tree.size() == 4);
+    REQUIRE(tree.get(r) == 10);
+    REQUIRE(tree.get(c1) == 20);
+    REQUIRE(tree.get(c2) == 30);
+    REQUIRE(tree.get(c1_1) == 40);
+
+    std::vector<int> visited;
+    tree.for_each_dfs([&](const int val, const auto&) {
+        visited.push_back(val);
+    });
+
+    REQUIRE(visited.size() == 4);
+    CHECK(visited[0] == 10);
+
+    tree.remove_subtree(c1);
+    REQUIRE(tree.size() == 2);
 }

@@ -44,12 +44,14 @@ namespace containers {
     // =========================================================================
 
     template <class T,
-              class Handle = generational_handle<T>>
+              class Handle = generational_handle<T>,
+              class Allocator = std::allocator<T>>
     class slot_map {
     public:
         using handle_type = Handle;
         using index_type = Handle::index_type;
         using value_type = T;
+        using allocator_type = Allocator;
 
     private:
         struct slot {
@@ -57,11 +59,32 @@ namespace containers {
             index_type generation = 0;
         };
 
+        using SlotAlloc = typename std::allocator_traits<Allocator>::template rebind_alloc<slot>;
+        using FreeListAlloc = typename std::allocator_traits<Allocator>::template rebind_alloc<index_type>;
+
         // std::deque: stable addresses on push_back; never copies live elements.
-        std::deque<slot> slots_;
-        std::vector<index_type> free_list_;
+        std::deque<slot, SlotAlloc> slots_;
+        std::vector<index_type, FreeListAlloc> free_list_;
 
     public:
+        slot_map() = default;
+        explicit slot_map(const Allocator& alloc)
+            : slots_(SlotAlloc(alloc)), free_list_(FreeListAlloc(alloc)) {}
+
+        slot_map(const slot_map&) = default;
+        slot_map& operator=(const slot_map&) = default;
+        slot_map(slot_map&&) noexcept = default;
+        slot_map& operator=(slot_map&&) noexcept = default;
+
+        void clear() {
+            slots_.clear();
+            free_list_.clear();
+        }
+
+        void reserve(std::size_t cap) {
+            free_list_.reserve(cap);
+        }
+
         // Insert a value; returns a valid handle.  Reuses a free slot when
         // available (bumps the stored generation for the new occupant).
         template <class U>
@@ -134,7 +157,7 @@ namespace containers {
             std::size_t pos = 0; // 0-based index into slots_
 
             // Advance past dead slots.
-            void advance() {
+            void advance() noexcept {
                 while (pos < map->slots_.size() && !map->slots_[pos].value)
                     ++pos;
             }
@@ -152,10 +175,16 @@ namespace containers {
                 };
             }
 
-            iterator& operator++() {
+            iterator& operator++() noexcept {
                 ++pos;
                 advance();
                 return *this;
+            }
+
+            iterator operator++(int) noexcept {
+                auto tmp = *this;
+                ++*this;
+                return tmp;
             }
 
             [[nodiscard]] bool operator==(const iterator& o) const noexcept {
@@ -171,7 +200,7 @@ namespace containers {
             const slot_map* map = nullptr;
             std::size_t pos = 0;
 
-            void advance() {
+            void advance() noexcept {
                 while (pos < map->slots_.size() && !map->slots_[pos].value)
                     ++pos;
             }
@@ -189,10 +218,16 @@ namespace containers {
                 };
             }
 
-            const_iterator& operator++() {
+            const_iterator& operator++() noexcept {
                 ++pos;
                 advance();
                 return *this;
+            }
+
+            const_iterator operator++(int) noexcept {
+                auto tmp = *this;
+                ++*this;
+                return tmp;
             }
 
             [[nodiscard]] bool operator==(const const_iterator& o) const noexcept {
@@ -204,25 +239,29 @@ namespace containers {
             }
         };
 
-        [[nodiscard]] iterator begin() {
+        [[nodiscard]] iterator begin() noexcept {
             iterator it{.map = this, .pos = 0};
             it.advance();
             return it;
         }
 
-        [[nodiscard]] iterator end() { return iterator{.map = this, .pos = slots_.size()}; }
+        [[nodiscard]] iterator end() noexcept { return iterator{.map = this, .pos = slots_.size()}; }
 
-        [[nodiscard]] const_iterator begin() const {
+        [[nodiscard]] const_iterator begin() const noexcept {
             const_iterator it{.map = this, .pos = 0};
             it.advance();
             return it;
         }
 
-        [[nodiscard]] const_iterator end() const {
+        [[nodiscard]] const_iterator end() const noexcept {
             return const_iterator{.map = this, .pos = slots_.size()};
         }
 
-        [[nodiscard]] const_iterator cbegin() const { return begin(); }
-        [[nodiscard]] const_iterator cend() const { return end(); }
+        [[nodiscard]] const_iterator cbegin() const noexcept { return begin(); }
+        [[nodiscard]] const_iterator cend() const noexcept { return end(); }
     };
 } // namespace containers
+
+namespace pebble::containers {
+    using ::containers::slot_map;
+} // namespace pebble::containers

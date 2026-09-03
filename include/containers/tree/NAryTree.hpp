@@ -1,5 +1,4 @@
-#ifndef N_ARY_TREE_H
-#define N_ARY_TREE_H
+#pragma once
 
 #include <memory>
 #include <vector>
@@ -17,15 +16,23 @@
 #include <mutex>
 #include <shared_mutex>
 #include <iostream>
+#include <limits>
+#include <span>
 
-// Google Highway for portable SIMD operations
+#include "containers/dynamic/SmallVector.hpp"
+#include "mem/smriti.hpp"
+
+#if __has_include(<hwy/highway.h>)
 #include <hwy/highway.h>
 #include <hwy/aligned_allocator.h>
+#define PEBBLE_HAS_HIGHWAY 1
+#endif
 
 // ============================================================================
 // SIMD Operations using Google Highway for tree operations
 // ============================================================================
 namespace tree_simd {
+#if defined(PEBBLE_HAS_HIGHWAY)
     // SIMD-accelerated search for node ID in an array
     // Returns index of first match or -1 if not found
     inline int find_node_id_simd(const uint64_t* ids, size_t count, uint64_t target) {
@@ -42,10 +49,8 @@ namespace tree_simd {
             const auto data = hn::LoadU(d, ids + i);
             const auto mask = hn::Eq(data, target_vec);
             if (!hn::AllFalse(d, mask)) {
-                // Found match, scan for exact position
-                for (size_t j = i; j < i + N && j < count; ++j) {
-                    if (ids[j] == target) return static_cast<int>(j);
-                }
+                const size_t lane = hn::FindFirstTrue(d, mask);
+                return static_cast<int>(i + lane);
             }
         }
 
@@ -104,10 +109,34 @@ namespace tree_simd {
 
         return result;
     }
+#else
+    inline int find_node_id_simd(const uint64_t* ids, size_t count, uint64_t target) {
+        for (size_t i = 0; i < count; ++i) {
+            if (ids[i] == target) return static_cast<int>(i);
+        }
+        return -1;
+    }
+
+    inline uint64_t sum_simd(const uint64_t* data, size_t count) {
+        uint64_t result = 0;
+        for (size_t i = 0; i < count; ++i) {
+            result += data[i];
+        }
+        return result;
+    }
+
+    inline uint64_t max_simd(const uint64_t* data, size_t count) {
+        if (count == 0) return 0;
+        uint64_t result = data[0];
+        for (size_t i = 1; i < count; ++i) {
+            result = std::max(result, data[i]);
+        }
+        return result;
+    }
+#endif
 
     // Convenience wrappers that accept size_t and cast internally
     inline int find_node_id(const size_t* ids, size_t count, size_t target) {
-        // On most 64-bit platforms, size_t == uint64_t
         static_assert(sizeof(size_t) == sizeof(uint64_t), "size_t must be 64-bit");
         return find_node_id_simd(reinterpret_cast<const uint64_t*>(ids), count, static_cast<uint64_t>(target));
     }
@@ -122,91 +151,6 @@ namespace tree_simd {
         return static_cast<size_t>(max_simd(reinterpret_cast<const uint64_t*>(data), count));
     }
 } // namespace tree_simd
-
-// ============================================================================
-// Memory pool for optimized node allocation with cache-line alignment
-// ============================================================================
-template <typename T>
-class NodeMemoryPool {
-    static constexpr size_t INITIAL_POOL_SIZE = 1024;
-    static constexpr size_t ALIGNMENT = alignof(T);
-
-    struct Block {
-        std::unique_ptr<std::byte[]> memory;
-        size_t size;
-        size_t used;
-
-        explicit Block(size_t s) : memory(std::make_unique<std::byte[]>(s)), size(s), used(0) {}
-    };
-
-    std::vector<Block> blocks_;
-    std::vector<void*> free_list_;
-    size_t block_size_ = INITIAL_POOL_SIZE * sizeof(T);
-
-    void* allocate_from_block(Block& block, size_t size, size_t align) {
-        size_t aligned_used = (block.used + align - 1) & ~(align - 1);
-        if (aligned_used + size <= block.size) {
-            void* ptr = block.memory.get() + aligned_used;
-            block.used = aligned_used + size;
-            return ptr;
-        }
-        return nullptr;
-    }
-
-    void add_new_block() {
-        blocks_.emplace_back(std::max(block_size_, sizeof(T) * 64));
-        block_size_ *= 2; // Exponential growth
-    }
-
-public:
-    void* allocate(size_t size, size_t align = ALIGNMENT) {
-        // Try free list first
-        if (!free_list_.empty()) {
-            void* ptr = free_list_.back();
-            free_list_.pop_back();
-            return ptr;
-        }
-
-        // Try current blocks
-        for (auto& block : blocks_) {
-            if (void* ptr = allocate_from_block(block, size, align)) {
-                return ptr;
-            }
-        }
-
-        // Need new block
-        add_new_block();
-        return allocate_from_block(blocks_.back(), size, align);
-    }
-
-    void deallocate(void* ptr) {
-        if (ptr) {
-            free_list_.push_back(ptr);
-        }
-    }
-
-    void clear() {
-        blocks_.clear();
-        free_list_.clear();
-        block_size_ = INITIAL_POOL_SIZE * sizeof(T);
-    }
-
-    [[nodiscard]] size_t total_allocated() const {
-        size_t total = 0;
-        for (const auto& block : blocks_) {
-            total += block.size;
-        }
-        return total;
-    }
-
-    [[nodiscard]] size_t total_used() const {
-        size_t total = 0;
-        for (const auto& block : blocks_) {
-            total += block.used;
-        }
-        return total;
-    }
-};
 
 // An empty struct to use as the default for optional metadata.
 struct EmptyMetadata {
@@ -523,9 +467,8 @@ public:
 
         explicit breadth_first_iterator(pointer root_ptr = nullptr) : current_node(nullptr) {
             if (root_ptr) {
-                q = std::make_shared<std::queue<TreeNode*>>();
-                q->push(root_ptr);
-                current_node = q->front();
+                q_.push(root_ptr);
+                current_node = q_.front();
             }
         }
 
@@ -533,22 +476,22 @@ public:
         pointer operator->() const { return current_node; }
 
         breadth_first_iterator& operator++() {
-            if (!q || q->empty()) {
+            if (q_.empty()) {
                 current_node = nullptr;
-                q.reset();
                 return *this;
             }
 
-            TreeNode* node = q->front();
-            q->pop();
+            TreeNode* node = q_.front();
+            q_.pop();
             for (const auto& child : node->children) {
-                q->push(child.get());
+                q_.push(child.get());
             }
 
-            if (!q->empty()) current_node = q->front();
+            if (!q_.empty()) {
+                current_node = q_.front();
+            }
             else {
                 current_node = nullptr;
-                q.reset();
             }
             return *this;
         }
@@ -569,7 +512,7 @@ public:
 
     private:
         pointer current_node = nullptr;
-        std::shared_ptr<std::queue<TreeNode*>> q;
+        std::queue<TreeNode*> q_;
     };
 
     class const_breadth_first_iterator {
@@ -582,9 +525,8 @@ public:
 
         explicit const_breadth_first_iterator(pointer root_ptr = nullptr) : current_node(nullptr) {
             if (root_ptr) {
-                q = std::make_shared<std::queue<const TreeNode*>>();
-                q->push(root_ptr);
-                current_node = q->front();
+                q_.push(root_ptr);
+                current_node = q_.front();
             }
         }
 
@@ -592,22 +534,22 @@ public:
         pointer operator->() const { return current_node; }
 
         const_breadth_first_iterator& operator++() {
-            if (!q || q->empty()) {
+            if (q_.empty()) {
                 current_node = nullptr;
-                q.reset();
                 return *this;
             }
 
-            const TreeNode* node = q->front();
-            q->pop();
+            const TreeNode* node = q_.front();
+            q_.pop();
             for (const auto& child : node->children) {
-                q->push(child.get());
+                q_.push(child.get());
             }
 
-            if (!q->empty()) current_node = q->front();
+            if (!q_.empty()) {
+                current_node = q_.front();
+            }
             else {
                 current_node = nullptr;
-                q.reset();
             }
             return *this;
         }
@@ -628,7 +570,7 @@ public:
 
     private:
         pointer current_node = nullptr;
-        std::shared_ptr<std::queue<const TreeNode*>> q;
+        std::queue<const TreeNode*> q_;
     };
 
     // Standard begin/end iterate over pre-order by default
@@ -896,6 +838,15 @@ public:
         TreeNode* parent = node_to_remove->parent;
         if (!parent) return false;
         auto& siblings = parent->children;
+        const size_t idx = node_to_remove->sibling_index;
+        if (idx < siblings.size() && siblings[idx].get() == node_to_remove) {
+            size_t removed = count_subtree(node_to_remove);
+            siblings.erase(siblings.begin() + idx);
+            for (size_t i = idx; i < siblings.size(); ++i)
+                siblings[i]->sibling_index = i;
+            node_count_ -= removed;
+            return true;
+        }
         auto it = std::find_if(siblings.begin(), siblings.end(), [node_to_remove](const auto& child_ptr) {
             return child_ptr.get() == node_to_remove;
         });
@@ -924,23 +875,12 @@ public:
     template <typename Predicate>
     TreeNode* find_if(Predicate predicate) const { return find_if_recursive(root.get(), predicate); }
 
-    // Non-const version (already present)
-    template <typename Predicate>
-    std::vector<TreeNode*> find_all_if(Predicate predicate) {
-        std::vector<TreeNode*> results;
-        for (auto& node : *this) {
-            if (predicate(node)) {
-                results.push_back(&node);
-            }
-        }
-        return results;
-    }
-
-    // Const version (fixes your error)
-    template <typename Predicate>
-    std::vector<const TreeNode*> find_all_if(Predicate predicate) const {
-        std::vector<const TreeNode*> results;
-        for (const auto& node : *this) {
+    // Unified find_all_if with C++23 explicit object parameter (deducing this)
+    template <typename Self, typename Predicate>
+    auto find_all_if(this Self&& self, Predicate predicate) {
+        using ResultNodePtr = std::conditional_t<std::is_const_v<std::remove_reference_t<Self>>, const TreeNode*, TreeNode*>;
+        std::vector<ResultNodePtr> results;
+        for (auto&& node : self) {
             if (predicate(node)) {
                 results.push_back(&node);
             }
@@ -1042,16 +982,7 @@ public:
         }
         // Path down from common ancestor to 'to'
         for (size_t i = common; i < to_path.size(); ++i) {
-            auto parent = (i == 0) ? nullptr : to_path[i - 1];
-            if (parent) {
-                auto& children = parent->children;
-                for (size_t j = 0; j < children.size(); ++j) {
-                    if (children[j].get() == to_path[i]) {
-                        result.push_back(j);
-                        break;
-                    }
-                }
-            }
+            result.push_back(to_path[i]->sibling_index);
         }
         return result;
     }
@@ -1087,18 +1018,31 @@ public:
         // Remove from parent
         if (node->parent) {
             auto& siblings = node->parent->children;
-            auto it = std::find_if(siblings.begin(), siblings.end(),
-                                   [node](const auto& child) { return child.get() == node; });
-            if (it != siblings.end()) {
+            const size_t idx = node->sibling_index;
+            if (idx < siblings.size() && siblings[idx].get() == node) {
                 size_t split_count = count_subtree(node);
-                size_t erased_idx = static_cast<size_t>(std::distance(siblings.begin(), it));
-                result.root = std::move(*it);
+                result.root = std::move(siblings[idx]);
                 result.root->parent = nullptr;
-                siblings.erase(it);
-                for (size_t i = erased_idx; i < siblings.size(); ++i)
+                siblings.erase(siblings.begin() + idx);
+                for (size_t i = idx; i < siblings.size(); ++i)
                     siblings[i]->sibling_index = i;
                 node_count_ -= split_count;
                 result.node_count_ = split_count;
+            }
+            else {
+                auto it = std::find_if(siblings.begin(), siblings.end(),
+                                       [node](const auto& child) { return child.get() == node; });
+                if (it != siblings.end()) {
+                    size_t split_count = count_subtree(node);
+                    size_t erased_idx = static_cast<size_t>(std::distance(siblings.begin(), it));
+                    result.root = std::move(*it);
+                    result.root->parent = nullptr;
+                    siblings.erase(it);
+                    for (size_t i = erased_idx; i < siblings.size(); ++i)
+                        siblings[i]->sibling_index = i;
+                    node_count_ -= split_count;
+                    result.node_count_ = split_count;
+                }
             }
         }
         return result;
@@ -1150,7 +1094,7 @@ public:
     }
 
     void print_tree(std::ostream& os = std::cout) const {
-        os << to_string() << std::endl;
+        os << to_string() << '\n';
     }
 
     // Enhanced serialization with versioning
@@ -1467,4 +1411,187 @@ public:
     }
 };
 
-#endif // N_ARY_TREE_H
+// ============================================================================
+// ScalableNAryTree — Flat LCRS Structure-of-Arrays High-Scale Tree (10M+ nodes)
+// ============================================================================
+namespace pebble::containers {
+
+    using ::NAryTree;
+    using ::ThreadSafeNAryTree;
+
+    template <
+        typename T,
+        typename Allocator = std::allocator<T>
+    >
+    class ScalableNAryTree {
+    public:
+        using NodeId = std::uint32_t;
+        static constexpr NodeId kNullNode = std::numeric_limits<NodeId>::max();
+
+        struct alignas(16) NodeHeader {
+            NodeId first_child{kNullNode};
+            NodeId last_child{kNullNode}; // O(1) append support
+            NodeId next_sibling{kNullNode};
+            NodeId prev_sibling{kNullNode};
+            NodeId parent{kNullNode};
+
+            [[nodiscard]] constexpr bool is_leaf() const noexcept {
+                return first_child == kNullNode;
+            }
+        };
+
+    private:
+        using HeaderAlloc = typename std::allocator_traits<Allocator>::template rebind_alloc<NodeHeader>;
+        using DataAlloc = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+
+        std::vector<NodeHeader, HeaderAlloc> headers_;
+        std::vector<T, DataAlloc> data_;
+        NodeId root_{kNullNode};
+        NodeId free_head_{kNullNode};
+        std::size_t size_{0};
+
+    public:
+        explicit ScalableNAryTree(const Allocator& alloc = Allocator())
+            : headers_(alloc), data_(alloc) {}
+
+        void reserve(std::size_t capacity) {
+            headers_.reserve(capacity);
+            data_.reserve(capacity);
+        }
+
+        NodeId insert_root(T val) {
+            clear();
+            root_ = allocate_slot(std::move(val));
+            return root_;
+        }
+
+        // True O(1) child append at any fanout scale
+        NodeId append_child(NodeId parent_id, T val) {
+            const NodeId child_id = allocate_slot(std::move(val));
+            headers_[child_id].parent = parent_id;
+
+            auto& p = headers_[parent_id];
+            if (p.first_child == kNullNode) {
+                p.first_child = child_id;
+                p.last_child = child_id;
+            } else {
+                const NodeId prev_last = p.last_child;
+                headers_[prev_last].next_sibling = child_id;
+                headers_[child_id].prev_sibling = prev_last;
+                p.last_child = child_id;
+            }
+            return child_id;
+        }
+
+        void remove_subtree(NodeId node_id) {
+            if (node_id == kNullNode) return;
+
+            const NodeId p = headers_[node_id].parent;
+            const NodeId prev = headers_[node_id].prev_sibling;
+            const NodeId next = headers_[node_id].next_sibling;
+
+            if (p != kNullNode) {
+                if (headers_[p].first_child == node_id) {
+                    headers_[p].first_child = next;
+                }
+                if (headers_[p].last_child == node_id) {
+                    headers_[p].last_child = prev;
+                }
+            }
+
+            if (prev != kNullNode) {
+                headers_[prev].next_sibling = next;
+            }
+            if (next != kNullNode) {
+                headers_[next].prev_sibling = prev;
+            }
+
+            if (node_id == root_) {
+                root_ = kNullNode;
+            }
+
+            // Zero call-stack growth via SBO SmallVector
+            pebble::containers::SmallVector<NodeId, 64> stack;
+            stack.push_back(node_id);
+
+            while (!stack.empty()) {
+                const NodeId curr = stack.back();
+                stack.pop_back();
+
+                NodeId child = headers_[curr].first_child;
+                while (child != kNullNode) {
+                    stack.push_back(child);
+                    child = headers_[child].next_sibling;
+                }
+
+                free_slot(curr);
+            }
+        }
+
+        template <typename Visitor>
+        void for_each_dfs(Visitor&& vis) const {
+            if (root_ == kNullNode) return;
+
+            pebble::containers::SmallVector<NodeId, 64> stack;
+            stack.push_back(root_);
+
+            while (!stack.empty()) {
+                const NodeId curr = stack.back();
+                stack.pop_back();
+
+                vis(data_[curr], headers_[curr]);
+
+                NodeId child = headers_[curr].first_child;
+                pebble::containers::SmallVector<NodeId, 32> reverse_buffer;
+                while (child != kNullNode) {
+                    reverse_buffer.push_back(child);
+                    child = headers_[child].next_sibling;
+                }
+                for (auto it = reverse_buffer.rbegin(); it != reverse_buffer.rend(); ++it) {
+                    stack.push_back(*it);
+                }
+            }
+        }
+
+        [[nodiscard]] std::size_t size() const noexcept { return size_; }
+        [[nodiscard]] bool empty() const noexcept { return size_ == 0; }
+        [[nodiscard]] const T& get(NodeId id) const noexcept { return data_[id]; }
+        [[nodiscard]] T& get(NodeId id) noexcept { return data_[id]; }
+
+        void clear() noexcept {
+            headers_.clear();
+            data_.clear();
+            root_ = kNullNode;
+            free_head_ = kNullNode;
+            size_ = 0;
+        }
+
+    private:
+        NodeId allocate_slot(T val) {
+            ++size_;
+            if (free_head_ != kNullNode) {
+                const NodeId id = free_head_;
+                free_head_ = headers_[id].next_sibling;
+                headers_[id] = NodeHeader{};
+                data_[id] = std::move(val);
+                return id;
+            }
+
+            const NodeId id = static_cast<NodeId>(headers_.size());
+            headers_.emplace_back();
+            data_.emplace_back(std::move(val));
+            return id;
+        }
+
+        void free_slot(NodeId id) noexcept {
+            headers_[id].next_sibling = free_head_;
+            headers_[id].first_child = kNullNode;
+            headers_[id].last_child = kNullNode;
+            headers_[id].parent = kNullNode;
+            headers_[id].prev_sibling = kNullNode;
+            free_head_ = id;
+            --size_;
+        }
+    };
+
+} // namespace pebble::containers

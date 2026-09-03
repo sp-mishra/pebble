@@ -9,6 +9,7 @@
 #include <unordered_set>
 
 #include "containers/associative/slot_map.hpp"
+#include "mem/smriti.hpp"
 
 namespace {
     struct item_tag {};
@@ -203,4 +204,33 @@ TEST_CASE (
     m.erase(h);
     m.erase(h); // double-erase — no crash, stale handle
     REQUIRE(m.size() == 0);
+}
+
+// ---------------------------------------------------------------------------
+// SmritiAllocator integration with custom BumpPool
+// ---------------------------------------------------------------------------
+TEST_CASE (
+"slot_map with SmritiAllocator"
+,
+"[containers][slot_map][smriti]"
+)
+ {
+    using Domain = smriti::domains::SystemRAMDomain;
+    using Pool = smriti::pools::BumpPool<Domain>;
+    Pool pool(65536);
+
+    using Alloc = smriti::SmritiAllocator<int, Pool>;
+    Alloc alloc(pool);
+
+    containers::slot_map<int, ItemHandle, Alloc> m(alloc);
+    auto h1 = m.insert(100);
+    auto h2 = m.insert(200);
+
+    REQUIRE(m.size() == 2);
+    REQUIRE(*m.find(h1) == 100);
+    REQUIRE(*m.find(h2) == 200);
+
+    m.erase(h1);
+    REQUIRE(m.size() == 1);
+    REQUIRE(m.find(h1) == nullptr);
 }

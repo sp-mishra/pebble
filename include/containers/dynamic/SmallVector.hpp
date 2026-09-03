@@ -735,6 +735,20 @@ namespace containers::dynamic {
     >;
 } // namespace containers::dynamic
 
+namespace containers {
+    using dynamic::SmallVector;
+    using dynamic::auto_vector_t;
+} // namespace containers
+
+namespace pebble::containers {
+    using ::containers::dynamic::SmallVector;
+    using ::containers::dynamic::auto_vector_t;
+
+    namespace dynamic {
+        using namespace ::containers::dynamic;
+    }
+} // namespace pebble::containers
+
 namespace std {
     template <typename T, std::size_t N, typename A, typename Pred>
     constexpr typename containers::dynamic::SmallVector<T, N, A>::size_type

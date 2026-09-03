@@ -1704,12 +1704,50 @@ namespace pebble::containers {
         template <std::forward_iterator ForwardIt>
         [[nodiscard]] static BPlusSet from_sorted(ForwardIt first, ForwardIt last, const Compare& comp = Compare(),
                                                   const Allocator& alloc = Allocator()) {
-            std::vector<std::pair<const Key, std::monostate>> pairs;
-            for (; first != last; ++first) {
-                pairs.emplace_back(*first, std::monostate{});
-            }
+            struct LazyPairIterator {
+                using iterator_category = std::forward_iterator_tag;
+                using value_type = std::pair<const Key&, std::monostate>;
+                using difference_type = std::ptrdiff_t;
+                using pointer = void;
+                using reference = value_type;
+
+                ForwardIt it;
+
+                reference operator*() const {
+                    return {*it, std::monostate{}};
+                }
+
+                struct ArrowProxy {
+                    value_type pair;
+                    const value_type* operator->() const noexcept { return &pair; }
+                };
+
+                ArrowProxy operator->() const {
+                    return ArrowProxy{{*it, std::monostate{}}};
+                }
+
+                LazyPairIterator& operator++() {
+                    ++it;
+                    return *this;
+                }
+
+                LazyPairIterator operator++(int) {
+                    LazyPairIterator tmp = *this;
+                    ++it;
+                    return tmp;
+                }
+
+                bool operator==(const LazyPairIterator& other) const {
+                    return it == other.it;
+                }
+
+                bool operator!=(const LazyPairIterator& other) const {
+                    return it != other.it;
+                }
+            };
+
             BPlusSet set(comp, alloc);
-            set.tree_ = TreeType::from_sorted(pairs.begin(), pairs.end(), comp, alloc);
+            set.tree_ = TreeType::from_sorted(LazyPairIterator{first}, LazyPairIterator{last}, comp, alloc);
             return set;
         }
 

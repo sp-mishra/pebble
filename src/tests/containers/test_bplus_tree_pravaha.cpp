@@ -90,3 +90,29 @@ TEST_CASE (
     CHECK(results[4] == "val_499");
     CHECK(results[5] == std::nullopt);
 }
+
+TEST_CASE (
+"BPlusTree Pravaha Add-on: Scale Parallel Scan and Reduce"
+,
+"[bplus_tree][pravaha][scale]"
+)
+ {
+    BPlusMap<int, int> tree;
+    constexpr int N = 2000;
+    for (int i = 0; i < N; ++i) {
+        tree.insert_or_assign(i, i * 2);
+    }
+
+    std::atomic<long long> scan_sum{0};
+    parallel_scan_scale(tree, 0, N - 1, [&](int, int v) {
+        scan_sum.fetch_add(v, std::memory_order_relaxed);
+    });
+
+    long long red_sum = parallel_reduce_scale(
+        tree, 0, N - 1, 0LL,
+        [](long long a, long long b) { return a + b; },
+        [](int, int v) { return static_cast<long long>(v); }
+    );
+
+    CHECK(scan_sum.load() == red_sum);
+}

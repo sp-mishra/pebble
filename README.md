@@ -64,9 +64,9 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 * **DominatorTree** (`include/containers/graph/DominatorTree.hpp`) — Lengauer-Tarjan and Cooper-Harvey-Kennedy immediate dominator solvers over `LiteGraphModel`.
 * **egraph** (`include/containers/graph/egraph.hpp`) — Equality saturation engine: union-find (path-splitting) + Kosha hash-cons + egg-style rebuild + saturation and best-cost extraction.
   * Documentation: [`docs/containers/egraph.md`](docs/containers/egraph.md)
-* **NAryTree** (`include/containers/tree/NAryTree.hpp`) — Owning n-ary tree with SIMD batch traversals.
+* **NAryTree & ScalableNAryTree** (`include/containers/tree/NAryTree.hpp`) — Owning n-ary tree with SIMD batch traversals and high-scale flat LCRS array Structure-of-Arrays architecture (`ScalableNAryTree`) with zero-heap SBO DFS and Smriti arena compatibility.
   * Documentation: [`docs/containers/NAryTree.md`](docs/containers/NAryTree.md)
-* **AABBTree** (`include/containers/tree/AABBTree.hpp`) — Bounding-volume hierarchy with SAH-lite sibling-merge insertion and refit rebalancing.
+* **AABBTree & ScalableAABBTree** (`include/containers/tree/AABBTree.hpp`) — Dynamic bounding-volume hierarchy with SAH-lite sibling-merge insertion, AVL tree height balancing rotations, IEEE 754 branchless raycasts, and zero-heap SmallVector traversal stacks.
 * **QuadTree & Barnes-Hut N-Body Solver** (`include/containers/spatial/quadtree.hpp`, `include/containers/spatial/barnes_hut.hpp`) — Flat-array cache-coherent 2D QuadTree with Morton Z-order space-filling curve sorting and generic $O(N \log N)$ Barnes-Hut hierarchical multipole gravitational field solver with Pravaha parallelization and Highway SIMD sweeps.
   * Documentation: [`docs/spatial/barnes_hut.md`](docs/spatial/barnes_hut.md)
 * **BPlusTree** (`include/containers/tree/bplus_tree.hpp`) — High-performance, policy-based cache-aligned B+ tree (`BPlusMap`, `BPlusSet`) with Highway SIMD membership search, auto-tuned fanout, $O(N)$ bottom-up bulk loading, Smriti arena compatibility, and $O(\log_B N + K)$ range scanning.

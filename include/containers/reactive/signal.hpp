@@ -261,3 +261,7 @@ namespace containers::reactive {
     template <typename F>
     Computed(F) -> Computed<F>;
 } // namespace containers::reactive
+
+namespace pebble::containers::reactive {
+    using namespace ::containers::reactive;
+} // namespace pebble::containers::reactive
