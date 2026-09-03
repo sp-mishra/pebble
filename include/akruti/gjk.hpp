@@ -4,7 +4,6 @@
 //   data-dependent narrowphase. No virtual, no macros.
 #include "shape.hpp"
 #include "containers/static/static_vector.hpp"
-#include <cmath>
 #include <cstddef>
 
 namespace akruti {
@@ -35,7 +34,7 @@ namespace akruti {
 
     namespace detail {
         // Vector perpendicular to ab pointing toward ao (2D cross(ab, ao) cross ab)
-        inline Vec triple_perp(Vec ab, Vec ao) noexcept {
+        inline Vec triple_perp(Vec ab, const Vec ao) noexcept {
             const Scalar z = akruti::cross(ab, ao);
             return Vec{-z * ab.y(), z * ab.x()};
         }
@@ -51,19 +50,19 @@ namespace akruti {
         V d{1, 0};
 
         // Warm-start from cached direction or prior simplex if available
-        if (cache && cache->valid && akruti::length_sq(cache->separating_axis) > Scalar(1e-8)) {
+        if (cache && cache->valid && akruti::length_sq(cache->separating_axis) > static_cast<Scalar>(1e-8)) {
             d = cache->separating_axis;
             (void)simplex.push_back(support_diff(a, b, d));
             d = -simplex[0];
         } else {
             d = b.support(V{1, 0}) - a.support(V{-1, 0});
-            if (akruti::length_sq(d) < Scalar(1e-12)) d = V{1, 0};
+            if (akruti::length_sq(d) < static_cast<Scalar>(1e-12)) d = V{1, 0};
             (void)simplex.push_back(support_diff(a, b, d));
             d = -simplex[0]; // Point toward origin
         }
 
         for (int iter = 0; iter < 32; ++iter) {
-            if (akruti::length_sq(d) < Scalar(1e-12)) {
+            if (akruti::length_sq(d) < static_cast<Scalar>(1e-12)) {
                 if (out_simplex) { *out_simplex = simplex; }
                 if (cache) { cache->simplex = simplex; cache->separating_axis = d; cache->valid = true; }
                 return true;
@@ -82,7 +81,7 @@ namespace akruti {
                 const V ab = b_pt - a_pt;
                 const V ao = -a_pt;
                 d = detail::triple_perp(ab, ao);
-                if (akruti::length_sq(d) < Scalar(1e-12)) d = akruti::perp(ab);
+                if (akruti::length_sq(d) < static_cast<Scalar>(1e-12)) d = akruti::perp(ab);
             }
             else { // Triangle: A (newest = simplex[2]), B (simplex[1]), C (simplex[0])
                 const V a_pt = simplex[2];
@@ -132,11 +131,11 @@ namespace akruti {
 
         // Polytope as a growable vertex ring in CCW order
         containers::static_vector<V, 64> poly;
-        for (std::size_t i = 0; i < simp.size(); ++i) (void)poly.push_back(simp[i]);
+        for (auto i : simp) (void)poly.push_back(i);
 
         for (int iter = 0; iter < 48; ++iter) {
             // Find the closest edge of the CCW polytope to the origin.
-            Scalar best_dist = Scalar(1e18);
+            auto best_dist = static_cast<Scalar>(1e18);
             std::size_t best_i = 0;
             V best_normal{};
             const std::size_t n = poly.size();
@@ -146,8 +145,8 @@ namespace akruti {
                 const V e = poly[j] - poly[i];
                 // In CCW order, the outward right-hand normal is (e.y(), -e.x())
                 V nrm{e.y(), -e.x()};
-                Scalar len_n = akruti::length(nrm);
-                if (len_n < Scalar(1e-12)) continue;
+                const Scalar len_n = akruti::length(nrm);
+                if (len_n < static_cast<Scalar>(1e-12)) continue;
                 nrm = nrm / len_n;
 
                 Scalar dist = akruti::dot(nrm, poly[i]);
@@ -162,13 +161,13 @@ namespace akruti {
                 }
             }
 
-            if (best_dist >= Scalar(1e17)) break;
+            if (best_dist >= static_cast<Scalar>(1e17)) break;
 
             const V p = support_diff(a, b, best_normal);
 
-            if (const Scalar d = akruti::dot(p, best_normal); d - best_dist < Scalar(1e-4) || poly.size() >= 63) {
+            if (const Scalar d = akruti::dot(p, best_normal); d - best_dist < static_cast<Scalar>(1e-4) || poly.size() >= 63) {
                 // best_normal points outward from Minkowski difference (A - B), which means from A toward B.
-                return Contact{true, best_dist, best_normal};
+                return Contact{.hit = true, .depth = best_dist, .normal = best_normal};
             }
 
             // Insert new support point between best_i and (best_i+1)%n maintaining CCW order in-place.
@@ -179,7 +178,7 @@ namespace akruti {
             }
             poly[insert_idx] = p;
         }
-        return Contact{false, 0, {}};
+        return Contact{.hit = false, .depth = 0, .normal = {}};
     }
 
     // GJK distance: closest separation between two convex shapes (0 if overlapping). Also reports
@@ -198,10 +197,9 @@ namespace akruti {
         (void)s.push_back(support_diff(a, b, d));
         d = -s[0];
         for (int iter = 0; iter < 32; ++iter) {
-            if (akruti::length_sq(d) < Scalar(1e-18)) return Separation{0, {}}; // origin on boundary => touching
+            if (akruti::length_sq(d) < static_cast<Scalar>(1e-18)) return Separation{.distance = 0, .dir = {}}; // origin on boundary => touching
             const V p = support_diff(a, b, d);
-            const V nd = akruti::normalize(d);
-            if (akruti::dot(p, nd) - akruti::dot(s[0], nd) < Scalar(1e-6) && s.size() >= 1) {
+            if (const V nd = akruti::normalize(d); akruti::dot(p, nd) - akruti::dot(s[0], nd) < static_cast<Scalar>(1e-6) && !s.empty()) {
                 // No progress toward origin: closest feature found.
                 break;
             }
@@ -211,10 +209,10 @@ namespace akruti {
                 const V a0 = s[1], b0 = s[0];
                 const V ab = b0 - a0, ao = -a0;
                 const Scalar ab_len_sq = akruti::length_sq(ab);
-                const Scalar t = std::clamp(akruti::dot(ao, ab) / std::max(ab_len_sq, Scalar(1e-12)), Scalar(0), Scalar(1));
+                const Scalar t = std::clamp(akruti::dot(ao, ab) / std::max(ab_len_sq, static_cast<Scalar>(1e-12)), static_cast<Scalar>(0), static_cast<Scalar>(1));
                 const V closest = a0 + ab * t;
                 d = -closest;
-                if (akruti::length_sq(closest) < Scalar(1e-18)) return Separation{0, {}}; // origin inside => overlap
+                if (akruti::length_sq(closest) < static_cast<Scalar>(1e-18)) return Separation{.distance = 0, .dir = {}}; // origin inside => overlap
             }
             else { // triangle: check if origin enclosed => overlap
                 const V a2 = s[2], b2 = s[1], c2 = s[0];
@@ -234,7 +232,7 @@ namespace akruti {
                     d = acp0;
                 }
                 else {
-                    return Separation{0, {}}; // origin enclosed => overlapping
+                    return Separation{.distance = 0, .dir = {}}; // origin enclosed => overlapping
                 }
             }
         }
@@ -245,11 +243,11 @@ namespace akruti {
             const V a0 = s[s.size() - 1], b0 = s[0];
             const V ab = b0 - a0, ao = -a0;
             const Scalar ab_len_sq = akruti::length_sq(ab);
-            const Scalar t = std::clamp(akruti::dot(ao, ab) / std::max(ab_len_sq, Scalar(1e-12)), Scalar(0), Scalar(1));
+            const Scalar t = std::clamp(akruti::dot(ao, ab) / std::max(ab_len_sq, static_cast<Scalar>(1e-12)), static_cast<Scalar>(0), static_cast<Scalar>(1));
             closest = a0 + ab * t;
         }
         const Scalar dist = akruti::length(closest);
-        if (dist < Scalar(1e-9)) return Separation{0, {}};
-        return Separation{dist, akruti::normalize(closest * Scalar(-1))}; // dir A->B points opposite closest
+        if (dist < static_cast<Scalar>(1e-9)) return Separation{.distance = 0, .dir = {}};
+        return Separation{dist, akruti::normalize(closest * static_cast<Scalar>(-1))}; // dir A->B points opposite closest
     }
 } // namespace akruti

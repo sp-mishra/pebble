@@ -383,23 +383,23 @@ namespace akruti {
 
         [[nodiscard]] Scalar eval(const std::uint32_t root, Vec p) const noexcept {
             if (root >= nodes_.size()) return 1e18f;
-            const auto& n = nodes_[root];
-            if (n.is_leaf) {
-                return std::visit([&](const auto& s) { return s.sdf(p); }, n.leaf);
+            const auto& [op, is_leaf, leaf, left, right, param] = nodes_[root];
+            if (is_leaf) {
+                return std::visit([&](const auto& s) { return s.sdf(p); }, leaf);
             }
-            switch (n.op) {
-            case CsgOp::Union: return std::min(eval(n.left, p), eval(n.right, p));
-            case CsgOp::Subtract: return std::max(eval(n.left, p), -eval(n.right, p));
-            case CsgOp::Intersect: return std::max(eval(n.left, p), eval(n.right, p));
-            case CsgOp::Offset: return eval(n.left, p) - n.param;
-            case CsgOp::Shell: return std::fabs(eval(n.left, p)) - n.param;
+            switch (op) {
+            case CsgOp::Union: return std::min(eval(left, p), eval(right, p));
+            case CsgOp::Subtract: return std::max(eval(left, p), -eval(right, p));
+            case CsgOp::Intersect: return std::max(eval(left, p), eval(right, p));
+            case CsgOp::Offset: return eval(left, p) - param;
+            case CsgOp::Shell: return std::fabs(eval(left, p)) - param;
             case CsgOp::Morph: {
-                const Scalar da = eval(n.left, p), db = eval(n.right, p);
-                return da * (1.0f - n.param) + db * n.param;
+                const Scalar da = eval(left, p), db = eval(right, p);
+                return da * (1.0f - param) + db * param;
             }
             case CsgOp::ChamferUnion: {
-                const Scalar da = eval(n.left, p), db = eval(n.right, p);
-                return std::min({da, db, (da + db - n.param) * 0.70710678f});
+                const Scalar da = eval(left, p), db = eval(right, p);
+                return std::min({da, db, (da + db - param) * 0.70710678f});
             }
             default: return 1e18f;
             }

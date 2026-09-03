@@ -11,7 +11,7 @@
 namespace akruti {
     // Right turn test: >0 CCW (left), <0 CW (right), 0 collinear.
     namespace detail {
-        [[nodiscard]] inline Scalar hull_turn(Vec2<Scalar> o, Vec2<Scalar> a, Vec2<Scalar> b) noexcept {
+        [[nodiscard]] inline Scalar hull_turn(const Vec2<Scalar> o, const Vec2<Scalar> a, const Vec2<Scalar> b) noexcept {
             return cross(a - o, b - o);
         }
     } // namespace detail
@@ -34,7 +34,7 @@ namespace akruti {
         // Lower hull.
         for (std::size_t i = 0; i < n; ++i) {
             while (ch.size() >= 2 &&
-                detail::hull_turn(ch[ch.size() - 2], ch[ch.size() - 1], pts[i]) <= Scalar(0))
+                detail::hull_turn(ch[ch.size() - 2], ch[ch.size() - 1], pts[i]) <= static_cast<Scalar>(0))
                 ch.pop_back();
             (void)ch.push_back(pts[i]);
         }
@@ -42,7 +42,7 @@ namespace akruti {
         const std::size_t lower = ch.size() + 1;
         for (std::size_t i = n; i-- > 0;) {
             while (ch.size() >= lower &&
-                detail::hull_turn(ch[ch.size() - 2], ch[ch.size() - 1], pts[i]) <= Scalar(0))
+                detail::hull_turn(ch[ch.size() - 2], ch[ch.size() - 1], pts[i]) <= static_cast<Scalar>(0))
                 ch.pop_back();
             (void)ch.push_back(pts[i]);
         }

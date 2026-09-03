@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <limits>
 #include <random>
 #include <span>
 #include <vector>
@@ -20,8 +19,6 @@
 #include "math.hpp"
 #include "primitives.hpp"
 #include "fracture.hpp"
-#include "scene/parallel.hpp"
-#include "mem/smriti.hpp"
 
 namespace akruti::khanda {
     using akruti::Poly;
@@ -42,23 +39,22 @@ namespace akruti::khanda {
         }
 
         inline void ensure_ccw(Poly& p) {
-            if (p.size() >= 3 && polygon_area(p) < Scalar(0)) std::reverse(p.begin(), p.end());
+            if (p.size() >= 3 && polygon_area(p) < static_cast<Scalar>(0)) std::ranges::reverse(p);
         }
 
         inline void ensure_cw(Poly& p) {
-            if (p.size() >= 3 && polygon_area(p) > Scalar(0)) std::reverse(p.begin(), p.end());
+            if (p.size() >= 3 && polygon_area(p) > static_cast<Scalar>(0)) std::ranges::reverse(p);
         }
 
         // Drop non-finite points, consecutive/closing duplicates, then near-collinear vertices.
-        inline void cleanup_poly(Poly& poly, Scalar eps) {
+        inline void cleanup_poly(Poly& poly, const Scalar eps) {
             if (poly.empty()) return;
             const Scalar eps2 = eps * eps;
-            auto near = [&](Vec a, Vec b) { return akruti::length_sq(a - b) <= eps2; };
+            auto near = [&](const Vec a, const Vec b) { return akruti::length_sq(a - b) <= eps2; };
 
             Poly out;
             out.reserve(poly.size());
-            for (std::size_t i = 0; i < poly.size(); ++i) {
-                const Vec p = poly[i];
+            for (auto p : poly) {
                 if (!finite(p)) continue;
                 if (!out.empty() && near(out.back(), p)) continue;
                 out.push_back(p);
@@ -74,8 +70,7 @@ namespace akruti::khanda {
                     const Vec cur = out[i];
                     const Vec next = out[(i + 1) % n];
                     const Vec e1 = akruti::normalize(cur - prev);
-                    const Vec e2 = akruti::normalize(next - cur);
-                    if (std::fabs(akruti::cross(e1, e2)) <= eps) continue; // collinear interior vertex
+                    if (const Vec e2 = akruti::normalize(next - cur); std::fabs(akruti::cross(e1, e2)) <= eps) continue; // collinear interior vertex
                     tmp.push_back(cur);
                 }
                 if (tmp.size() >= 3) out = std::move(tmp);
@@ -91,7 +86,7 @@ namespace akruti::khanda {
         }
 
         // Point in triangle (closed, CCW winding).
-        [[nodiscard]] inline bool point_in_triangle(Vec p, Vec a, Vec b, Vec c, Scalar eps = Scalar(1e-6)) noexcept {
+        [[nodiscard]] inline bool point_in_triangle(const Vec p, const Vec a, const Vec b, const Vec c, const Scalar eps = static_cast<Scalar>(1e-6)) noexcept {
             const Scalar o1 = orient(a, b, p);
             const Scalar o2 = orient(b, c, p);
             const Scalar o3 = orient(c, a, p);
@@ -100,12 +95,11 @@ namespace akruti::khanda {
 
         // Segment-segment proper intersection.
         [[nodiscard]] inline bool
-        segments_intersect(Vec a1, Vec a2, Vec b1, Vec b2, Scalar eps = Scalar(1e-6)) noexcept {
+        segments_intersect(const Vec a1, const Vec a2, const Vec b1, const Vec b2, const Scalar eps = 1e-6) noexcept {
             const Scalar d1 = orient(b1, b2, a1);
             const Scalar d2 = orient(b1, b2, a2);
             const Scalar d3 = orient(a1, a2, b1);
-            const Scalar d4 = orient(a1, a2, b2);
-            if (((d1 > eps && d2 < -eps) || (d1 < -eps && d2 > eps)) &&
+            if (const Scalar d4 = orient(a1, a2, b2); ((d1 > eps && d2 < -eps) || (d1 < -eps && d2 > eps)) &&
                 ((d3 > eps && d4 < -eps) || (d3 < -eps && d4 > eps)))
                 return true;
             return false;
@@ -128,9 +122,9 @@ namespace akruti::khanda {
     enum class DecompositionMode : std::uint8_t { None, TriangleMerge, Bayazit };
 
     struct FractureConfig {
-        Scalar min_shard_area{Scalar(1e-4)};
-        Scalar max_aspect_ratio{Scalar(50)}; // filter slivers (bbox major/minor)
-        Scalar eps{Scalar(1e-4)}; // geometric tolerance
+        Scalar min_shard_area{static_cast<Scalar>(1e-4)};
+        Scalar max_aspect_ratio{static_cast<Scalar>(50)}; // filter slivers (bbox major/minor)
+        Scalar eps{static_cast<Scalar>(1e-4)}; // geometric tolerance
         DecompositionMode decompose{DecompositionMode::TriangleMerge};
         bool compute_mass_props{true};
         bool use_parallel{false}; // enable Pravaha thread fan-out
@@ -151,17 +145,17 @@ namespace akruti::khanda {
         Scalar falloff{1}; // relative max densification factor (>=1)
         Scalar radius{1}; // influence radius
 
-        [[nodiscard]] Scalar local_radius(Vec p, Scalar base_r) const noexcept {
+        [[nodiscard]] Scalar local_radius(const Vec p, const Scalar base_r) const noexcept {
             const Scalar d = akruti::length(p - center);
-            if (d >= radius || radius <= Scalar(1e-6)) return base_r;
+            if (d >= radius || radius <= static_cast<Scalar>(1e-6)) return base_r;
             const Scalar t = d / radius; // 0 at center, 1 at edge
-            const Scalar factor = Scalar(1) / (Scalar(1) + (falloff - Scalar(1)) * (Scalar(1) - t));
-            return std::max(base_r * factor, base_r * Scalar(0.1));
+            const Scalar factor = static_cast<Scalar>(1) / (static_cast<Scalar>(1) + (falloff - static_cast<Scalar>(1)) * (static_cast<Scalar>(1) - t));
+            return std::max(base_r * factor, base_r * static_cast<Scalar>(0.1));
         }
     };
 
     struct PoissonConfig {
-        Scalar min_dist{Scalar(0.1)};
+        Scalar min_dist{static_cast<Scalar>(0.1)};
         int k_candidates{30};
         std::uint32_t seed{1337};
     };
@@ -174,18 +168,18 @@ namespace akruti::khanda {
 
     // ── Ear-clipping triangulator (default) ────────────────────────────────────────────────
     struct EarClipTriangulator {
-        [[nodiscard]] Triangulation operator()(const Poly& outer_in, std::span<const Poly> holes) const {
+        [[nodiscard]] Triangulation operator()(const Poly& outer_in, const std::span<const Poly> holes) const {
             Triangulation out;
             if (outer_in.size() < 3) return out;
 
             Poly outer = outer_in;
             detail::ensure_ccw(outer);
-            detail::cleanup_poly(outer, Scalar(1e-5));
+            detail::cleanup_poly(outer, static_cast<Scalar>(1e-5));
             if (outer.size() < 3) return out;
 
             if (!holes.empty()) {
                 outer = bridge_holes(outer, holes);
-                detail::cleanup_poly(outer, Scalar(1e-5));
+                detail::cleanup_poly(outer, static_cast<Scalar>(1e-5));
                 if (outer.size() < 3) return out;
             }
 
@@ -199,15 +193,14 @@ namespace akruti::khanda {
                 next[i] = (i + 1) % n;
             }
 
-            auto is_ear = [&](std::size_t i) -> bool {
+            auto is_ear = [&](const std::size_t i) -> bool {
                 const Vec a = out.vertices[prev[i]];
                 const Vec b = out.vertices[i];
                 const Vec c = out.vertices[next[i]];
-                if (detail::orient(a, b, c) <= Scalar(1e-7)) return false;
+                if (detail::orient(a, b, c) <= static_cast<Scalar>(1e-7)) return false;
 
                 for (std::size_t j = next[next[i]]; j != prev[i]; j = next[j]) {
-                    const Vec p = out.vertices[j];
-                    if (detail::point_in_triangle(p, a, b, c)) return false;
+                    if (const Vec p = out.vertices[j]; detail::point_in_triangle(p, a, b, c)) return false;
                 }
                 return true;
             };
@@ -235,10 +228,10 @@ namespace akruti::khanda {
             }
 
             if (remaining > 2) {
-                std::size_t root = curr;
+                const std::size_t root = curr;
                 std::size_t a = next[root];
                 for (std::size_t k = 0; k < remaining - 2; ++k) {
-                    std::size_t b = next[a];
+                    const std::size_t b = next[a];
                     out.indices.push_back(static_cast<std::uint32_t>(root));
                     out.indices.push_back(static_cast<std::uint32_t>(a));
                     out.indices.push_back(static_cast<std::uint32_t>(b));
@@ -249,16 +242,16 @@ namespace akruti::khanda {
         }
 
     private:
-        [[nodiscard]] static Poly bridge_holes(const Poly& outer_in, std::span<const Poly> holes_in) {
+        [[nodiscard]] static Poly bridge_holes(const Poly& outer_in, const std::span<const Poly> holes_in) {
             Poly ring = outer_in;
             std::vector<Poly> holes;
             holes.reserve(holes_in.size());
             for (auto h : holes_in) {
                 detail::ensure_cw(h);
-                detail::cleanup_poly(h, Scalar(1e-5));
+                detail::cleanup_poly(h, static_cast<Scalar>(1e-5));
                 if (h.size() >= 3) holes.push_back(std::move(h));
             }
-            std::sort(holes.begin(), holes.end(), [](const Poly& a, const Poly& b) {
+            std::ranges::sort(holes, [](const Poly& a, const Poly& b) {
                 auto maxx = [](const Poly& p) {
                     Scalar m = -1e18f;
                     for (auto v : p) m = std::max(m, x(v));
@@ -282,9 +275,8 @@ namespace akruti::khanda {
                 const std::size_t rn = ring.size();
                 for (std::size_t i = 0; i < rn; ++i) {
                     const Vec rp = ring[i];
-                    if (x(rp) < x(hp) - Scalar(1e-5)) continue;
-                    const Scalar d2 = akruti::length_sq(rp - hp);
-                    if (d2 < best_dist2) {
+                    if (x(rp) < x(hp) - static_cast<Scalar>(1e-5)) continue;
+                    if (const Scalar d2 = akruti::length_sq(rp - hp); d2 < best_dist2) {
                         bool blocked = false;
                         for (std::size_t j = 0; j < rn && !blocked; ++j) {
                             if (j == i || (j + 1) % rn == i) continue;
@@ -296,10 +288,9 @@ namespace akruti::khanda {
                         }
                     }
                 }
-                if (best_dist2 >= Scalar(1e17)) {
+                if (best_dist2 >= static_cast<Scalar>(1e17)) {
                     for (std::size_t i = 0; i < rn; ++i) {
-                        const Scalar d2 = akruti::length_sq(ring[i] - hp);
-                        if (d2 < best_dist2) {
+                        if (const Scalar d2 = akruti::length_sq(ring[i] - hp); d2 < best_dist2) {
                             best_dist2 = d2;
                             best_r = i;
                         }
@@ -334,15 +325,15 @@ namespace akruti::khanda {
             const Vec b = tri.vertices[tri.indices[k + 1]];
             const Vec c = tri.vertices[tri.indices[k + 2]];
 
-            const double tri_area = 0.5 * double(detail::orient(a, b, c));
+            const double tri_area = 0.5 * static_cast<double>(detail::orient(a, b, c));
             if (std::fabs(tri_area) <= 1e-12) continue;
 
             total_area += tri_area;
-            cx += (double(x(a)) + double(x(b)) + double(x(c))) * (tri_area / 3.0);
-            cy += (double(y(a)) + double(y(b)) + double(y(c))) * (tri_area / 3.0);
+            cx += (static_cast<double>(x(a)) + static_cast<double>(x(b)) + static_cast<double>(x(c))) * (tri_area / 3.0);
+            cy += (static_cast<double>(y(a)) + static_cast<double>(y(b)) + static_cast<double>(y(c))) * (tri_area / 3.0);
 
             // dot2: scalar inner product for akruti::Vec (double precision for inertia accumulation)
-            auto dot2 = [](Vec u, Vec v) noexcept { return double(akruti::dot(u, v)); };
+            auto dot2 = [](const Vec u, const Vec v) noexcept { return static_cast<double>(akruti::dot(u, v)); };
             const double sum_dots = dot2(a, a) + dot2(b, b) + dot2(c, c) +
                 dot2(a, b) + dot2(b, c) + dot2(c, a);
             I_origin += (tri_area / 6.0) * sum_dots;
@@ -350,25 +341,24 @@ namespace akruti::khanda {
 
         if (std::fabs(total_area) <= 1e-12) return mp;
 
-        mp.area = Scalar(std::fabs(total_area));
-        mp.centroid = Vec{Scalar(cx / total_area), Scalar(cy / total_area)};
+        mp.area = static_cast<Scalar>(std::fabs(total_area));
+        mp.centroid = Vec{static_cast<Scalar>(cx / total_area), static_cast<Scalar>(cy / total_area)};
 
-        const double d2 = double(x(mp.centroid)) * double(x(mp.centroid)) +
-            double(y(mp.centroid)) * double(y(mp.centroid));
+        const double d2 = static_cast<double>(x(mp.centroid)) * static_cast<double>(x(mp.centroid)) +
+            static_cast<double>(y(mp.centroid)) * static_cast<double>(y(mp.centroid));
         const double I_c = I_origin - total_area * d2;
-        mp.inertia = Scalar(std::max(0.0, I_c));
+        mp.inertia = static_cast<Scalar>(std::max(0.0, I_c));
         return mp;
     }
 
     // ── Convexity test ────────────────────────────────────────────────────────────────────
-    [[nodiscard]] inline bool is_convex_ccw(const Poly& p, Scalar eps = Scalar(1e-5)) noexcept {
+    [[nodiscard]] inline bool is_convex_ccw(const Poly& p, const Scalar eps = static_cast<Scalar>(1e-5)) noexcept {
         const std::size_t n = p.size();
         if (n < 3) return false;
         for (std::size_t i = 0; i < n; ++i) {
             const Vec a = p[i];
             const Vec b = p[(i + 1) % n];
-            const Vec c = p[(i + 2) % n];
-            if (detail::orient(a, b, c) < -eps) return false;
+            if (const Vec c = p[(i + 2) % n]; detail::orient(a, b, c) < -eps) return false;
         }
         return true;
     }
@@ -393,14 +383,14 @@ namespace akruti::khanda {
             return merge_polys(std::move(current));
         }
 
-        [[nodiscard]] std::vector<Poly> operator()(std::span<const Triangle> tris) const {
+        [[nodiscard]] std::vector<Poly> operator()(const std::span<const Triangle> tris) const {
             std::vector<Poly> current;
             current.reserve(tris.size());
-            for (const auto& tri : tris) {
+            for (const auto& [a, b, c] : tris) {
                 Poly t;
-                t.push_back(tri.a);
-                t.push_back(tri.b);
-                t.push_back(tri.c);
+                t.push_back(a);
+                t.push_back(b);
+                t.push_back(c);
                 detail::ensure_ccw(t);
                 current.push_back(std::move(t));
             }
@@ -411,7 +401,7 @@ namespace akruti::khanda {
         [[nodiscard]] std::vector<Poly> merge_polys(std::vector<Poly> current) const {
             auto try_merge = [](const Poly& a, const Poly& b, Poly& out) -> bool {
                 const std::size_t na = a.size(), nb = b.size();
-                auto near = [](Vec p, Vec q) { return akruti::length_sq(p - q) <= Scalar(1e-8); };
+                auto near = [](const Vec p, const Vec q) { return akruti::length_sq(p - q) <= static_cast<Scalar>(1e-8); };
                 for (std::size_t ia = 0; ia < na; ++ia) {
                     const Vec u = a[ia], v = a[(ia + 1) % na];
                     for (std::size_t ib = 0; ib < nb; ++ib) {
@@ -425,7 +415,7 @@ namespace akruti::khanda {
                                         candidate.push_back(b[(ib + 1 + m) % nb]);
                                 }
                             }
-                            detail::cleanup_poly(candidate, Scalar(1e-5));
+                            detail::cleanup_poly(candidate, static_cast<Scalar>(1e-5));
                             if (candidate.size() >= 3 && is_convex_ccw(candidate)) {
                                 out = std::move(candidate);
                                 return true;
@@ -442,8 +432,7 @@ namespace akruti::khanda {
                 merged = false;
                 for (std::size_t i = 0; i < current.size() && !merged; ++i) {
                     for (std::size_t j = i + 1; j < current.size(); ++j) {
-                        Poly merged_poly;
-                        if (try_merge(current[i], current[j], merged_poly)) {
+                        if (Poly merged_poly; try_merge(current[i], current[j], merged_poly)) {
                             current[i] = std::move(merged_poly);
                             current.erase(current.begin() + static_cast<std::ptrdiff_t>(j));
                             merged = true;
@@ -462,7 +451,7 @@ namespace akruti::khanda {
             std::vector<Poly> out;
             Poly p = poly_in;
             detail::ensure_ccw(p);
-            detail::cleanup_poly(p, Scalar(1e-5));
+            detail::cleanup_poly(p, static_cast<Scalar>(1e-5));
             if (p.size() < 3) return out;
             decompose_recursive(p, out);
             return out;
@@ -479,7 +468,7 @@ namespace akruti::khanda {
             const std::size_t n = p.size();
             std::size_t reflex = n;
             for (std::size_t i = 0; i < n; ++i) {
-                if (detail::orient(p[(i + n - 1) % n], p[i], p[(i + 1) % n]) < -Scalar(1e-5)) {
+                if (detail::orient(p[(i + n - 1) % n], p[i], p[(i + 1) % n]) < -static_cast<Scalar>(1e-5)) {
                     reflex = i;
                     break;
                 }
@@ -502,8 +491,7 @@ namespace akruti::khanda {
                     if (detail::segments_intersect(r, q, p[k], p[(k + 1) % n])) blocked = true;
                 }
                 if (!blocked) {
-                    const Scalar score = akruti::length_sq(r - q);
-                    if (score < best_score) {
+                    if (const Scalar score = akruti::length_sq(r - q); score < best_score) {
                         best_score = score;
                         best_j = j;
                     }
@@ -518,8 +506,8 @@ namespace akruti::khanda {
             for (std::size_t i = b; i < n; ++i) p2.push_back(p[i]);
             for (std::size_t i = 0; i <= a; ++i) p2.push_back(p[i]);
 
-            detail::cleanup_poly(p1, Scalar(1e-5));
-            detail::cleanup_poly(p2, Scalar(1e-5));
+            detail::cleanup_poly(p1, static_cast<Scalar>(1e-5));
+            detail::cleanup_poly(p2, static_cast<Scalar>(1e-5));
 
             if (p1.size() >= 3 && p1.size() < n) decompose_recursive(p1, out);
             else if (p1.size() >= 3) out.push_back(std::move(p1));
@@ -534,10 +522,10 @@ namespace akruti::khanda {
     poisson_disk_sites(const Box2& bounds, const PoissonConfig& cfg = {},
                        const ImpactField* impact = nullptr) {
         std::vector<Vec> samples;
-        const Scalar base_r = std::max(cfg.min_dist, Scalar(1e-3));
+        const Scalar base_r = std::max(cfg.min_dist, static_cast<Scalar>(1e-3));
         // When impact is present, local radius can shrink by up to impact->falloff (factor up to 0.1)
         const Scalar min_r = impact ? std::max(base_r * 0.1f, base_r / std::max(1.0f, impact->falloff)) : base_r;
-        const Scalar cell_size = std::max(min_r / std::sqrt(Scalar(2)), Scalar(1e-4));
+        const Scalar cell_size = std::max(min_r / std::sqrt(static_cast<Scalar>(2)), static_cast<Scalar>(1e-4));
         const Vec extent = bounds.extent();
         const int grid_w = std::max(1, static_cast<int>(std::ceil(x(extent) / cell_size)));
         const int grid_h = std::max(1, static_cast<int>(std::ceil(y(extent) / cell_size)));
@@ -555,7 +543,7 @@ namespace akruti::khanda {
             return {gx, gy};
         };
 
-        auto fits = [&](Vec p, Scalar r) -> bool {
+        auto fits = [&](const Vec p, const Scalar r) -> bool {
             if (!bounds.contains(p)) return false;
             const auto [gx, gy] = grid_idx(p);
             const int r_cells = std::max(1, static_cast<int>(std::ceil(r / cell_size)));
@@ -564,11 +552,9 @@ namespace akruti::khanda {
 
             for (int cy_it = min_y; cy_it <= max_y; ++cy_it) {
                 for (int cx_it = min_x; cx_it <= max_x; ++cx_it) {
-                    const int s_idx = grid[static_cast<std::size_t>(cy_it) * grid_w + cx_it];
-                    if (s_idx >= 0) {
+                    if (const int s_idx = grid[static_cast<std::size_t>(cy_it) * grid_w + cx_it]; s_idx >= 0) {
                         const Vec other = samples[static_cast<std::size_t>(s_idx)];
-                        const Scalar req_r = impact ? impact->local_radius((p + other) * Scalar(0.5), base_r) : base_r;
-                        if (akruti::length_sq(p - other) < req_r * req_r) return false;
+                        if (const Scalar req_r = impact ? impact->local_radius((p + other) * static_cast<Scalar>(0.5), base_r) : base_r; akruti::length_sq(p - other) < req_r * req_r) return false;
                     }
                 }
             }
@@ -577,8 +563,7 @@ namespace akruti::khanda {
 
         Vec seed = bounds.center();
         if (impact && bounds.contains(impact->center)) seed = impact->center;
-        const Scalar seed_r = impact ? impact->local_radius(seed, base_r) : base_r;
-        if (fits(seed, seed_r)) {
+        if (const Scalar seed_r = impact ? impact->local_radius(seed, base_r) : base_r; fits(seed, seed_r)) {
             samples.push_back(seed);
             const auto [gx, gy] = grid_idx(seed);
             grid[static_cast<std::size_t>(gy) * grid_w + gx] = 0;
@@ -586,22 +571,21 @@ namespace akruti::khanda {
         }
 
         while (!active.empty()) {
-            const std::size_t r_idx = static_cast<std::size_t>(urand(rng) * static_cast<Scalar>(active.size()));
+            const auto r_idx = static_cast<std::size_t>(urand(rng) * static_cast<Scalar>(active.size()));
             const std::size_t p_idx = active[r_idx];
             const Vec center = samples[p_idx];
             const Scalar local_r = impact ? impact->local_radius(center, base_r) : base_r;
 
             bool found = false;
             for (int k = 0; k < cfg.k_candidates; ++k) {
-                const Scalar theta = urand(rng) * Scalar(2 * 3.141592653589793);
-                const Scalar radius = local_r * (Scalar(1) + urand(rng));
+                const Scalar theta = urand(rng) * static_cast<Scalar>(2 * 3.141592653589793);
+                const Scalar radius = local_r * (static_cast<Scalar>(1) + urand(rng));
                 const Vec candidate{
                     x(center) + radius * std::cos(theta),
                     y(center) + radius * std::sin(theta)
                 };
-                const Scalar cand_r = impact ? impact->local_radius(candidate, base_r) : base_r;
 
-                if (fits(candidate, cand_r)) {
+                if (const Scalar cand_r = impact ? impact->local_radius(candidate, base_r) : base_r; fits(candidate, cand_r)) {
                     const std::size_t new_idx = samples.size();
                     samples.push_back(candidate);
                     const auto [gx, gy] = grid_idx(candidate);
@@ -621,7 +605,7 @@ namespace akruti::khanda {
 
     // ── Voronoi cells on arbitrary bounding container ─────────────────────────────────────
     [[nodiscard]] inline containers::dynamic::SmallVector<Poly, 16 * sizeof(Poly)>
-    voronoi_cells(std::span<const Vec> sites, const Box2& container, Scalar pad = Scalar(0.1)) {
+    voronoi_cells(const std::span<const Vec> sites, const Box2& container, const Scalar pad = static_cast<Scalar>(0.1)) {
         const Vec clo{container.lo}, chi{container.hi};
         const Poly boundary = rect_poly(clo - Vec{pad, pad}, chi + Vec{pad, pad});
         return voronoi_shatter(boundary, sites);
@@ -641,12 +625,10 @@ namespace akruti::khanda {
         if (outer.size() < 3) return;
 
         const Box2 bounds = detail::bounds_of(outer);
-        const auto raw_cells = voronoi_cells(sites, bounds, akruti::length(Vec{bounds.extent()}) * Scalar(0.1));
 
-        TriangleMergeDecomposer merge_decomp;
-        BayazitDecomposer bayazit_decomp;
-
-        for (const auto& cell : raw_cells) {
+        for (const auto raw_cells = voronoi_cells(sites, bounds, akruti::length(Vec{bounds.extent()}) * static_cast<Scalar>(0.1)); const auto& cell : raw_cells) {
+            TriangleMergeDecomposer merge_decomp;
+            BayazitDecomposer bayazit_decomp;
             if (cell.size() < 3) continue;
 
             Poly shard_outer = clip_polygon(outer, cell);
@@ -660,15 +642,14 @@ namespace akruti::khanda {
             const Box2 sb = detail::bounds_of(shard_outer);
             const Vec ext = sb.extent();
             const Scalar max_dim = std::max(x(ext), y(ext));
-            const Scalar min_dim = std::max(std::min(x(ext), y(ext)), Scalar(1e-6));
-            if (max_dim / min_dim > cfg.max_aspect_ratio) continue;
+            if (const Scalar min_dim = std::max(std::min(x(ext), y(ext)), static_cast<Scalar>(1e-6)); max_dim / min_dim > cfg.max_aspect_ratio) continue;
 
             std::vector<Poly> shard_holes;
             for (const auto& h : holes) {
                 Poly h_clip = clip_polygon(h, cell);
                 detail::ensure_cw(h_clip);
                 detail::cleanup_poly(h_clip, cfg.eps);
-                if (h_clip.size() >= 3 && std::fabs(polygon_area(h_clip)) >= cfg.min_shard_area * Scalar(0.1)) {
+                if (h_clip.size() >= 3 && std::fabs(polygon_area(h_clip)) >= cfg.min_shard_area * static_cast<Scalar>(0.1)) {
                     shard_holes.push_back(std::move(h_clip));
                 }
             }
@@ -678,10 +659,10 @@ namespace akruti::khanda {
             s.mesh = triangulate(shard_outer, shard_holes);
 
             if (cfg.compute_mass_props) {
-                const MassProps mp = shard_mass_props(s.mesh);
-                s.area = mp.area;
-                s.centroid = mp.centroid;
-                s.inertia = mp.inertia;
+                const auto [area, centroid, inertia] = shard_mass_props(s.mesh);
+                s.area = area;
+                s.centroid = centroid;
+                s.inertia = inertia;
             }
             else {
                 s.area = area;
@@ -714,14 +695,14 @@ namespace akruti::khanda {
 
     template <TriangulatorBackend Tri = EarClipTriangulator>
     [[nodiscard]] inline std::vector<Shard>
-    fracture_voronoi(const Poly& outer, std::span<const Vec> sites,
+    fracture_voronoi(const Poly& outer, const std::span<const Vec> sites,
                      const FractureConfig& cfg = {}, const Tri& triangulate = {}) {
         return fracture_voronoi<Tri>(outer, std::span<const Poly>{}, sites, cfg, triangulate);
     }
 
     template <TriangulatorBackend Tri = EarClipTriangulator>
     [[nodiscard]] inline std::vector<Shard>
-    fracture_voronoi_poisson(const Poly& outer, std::span<const Poly> holes,
+    fracture_voronoi_poisson(const Poly& outer, const std::span<const Poly> holes,
                              const PoissonConfig& pcfg, const ImpactField* impact = nullptr,
                              const FractureConfig& fcfg = {}, const Tri& triangulate = {}) {
         const Box2 b = detail::bounds_of(outer);
@@ -731,7 +712,7 @@ namespace akruti::khanda {
 
     template <TriangulatorBackend Tri = EarClipTriangulator>
     [[nodiscard]] inline std::vector<Shard>
-    refracture(const Shard& parent, std::span<const Vec> subsites,
+    refracture(const Shard& parent, const std::span<const Vec> subsites,
                const FractureConfig& cfg = {}, const Tri& triangulate = {}) {
         return fracture_voronoi<Tri>(parent.outline, std::span<const Poly>{}, subsites, cfg, triangulate);
     }

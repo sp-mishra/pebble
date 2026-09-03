@@ -5,7 +5,6 @@
 #include <containers/numeric/math_vector.hpp>
 #include <containers/matrix/static.hpp>
 #include <cmath>
-#include <algorithm>
 #include <type_traits>
 
 namespace akruti {

@@ -36,8 +36,8 @@ namespace akruti {
     };
 
     // ── Builders ───────────────────────────────────────────────────────────────────────
-    [[nodiscard]] inline Joint make_distance(std::uint32_t a, std::uint32_t b, Vec2<Scalar> la,
-                                             Vec2<Scalar> lb, Scalar rest, Scalar compliance = 0) noexcept {
+    [[nodiscard]] inline Joint make_distance(const std::uint32_t a, const std::uint32_t b, const Vec2<Scalar> la,
+                                             const Vec2<Scalar> lb, const Scalar rest, const Scalar compliance = 0) noexcept {
         Joint j;
         j.type = JointType::Distance;
         j.body_a = a;
@@ -49,8 +49,8 @@ namespace akruti {
         return j;
     }
 
-    [[nodiscard]] inline Joint make_revolute(std::uint32_t a, std::uint32_t b, Vec2<Scalar> la,
-                                             Vec2<Scalar> lb, Scalar compliance = 0) noexcept {
+    [[nodiscard]] inline Joint make_revolute(const std::uint32_t a, const std::uint32_t b, const Vec2<Scalar> la,
+                                             const Vec2<Scalar> lb, const Scalar compliance = 0) noexcept {
         Joint j;
         j.type = JointType::Revolute;
         j.body_a = a;
@@ -61,9 +61,9 @@ namespace akruti {
         return j;
     }
 
-    [[nodiscard]] inline Joint make_prismatic(std::uint32_t a, std::uint32_t b, Vec la,
-                                              Vec lb, Vec axis,
-                                              Scalar lo, Scalar hi, Scalar compliance = 0) noexcept {
+    [[nodiscard]] inline Joint make_prismatic(const std::uint32_t a, const std::uint32_t b, const Vec la,
+                                              const Vec lb, const Vec axis,
+                                              const Scalar lo, const Scalar hi, const Scalar compliance = 0) noexcept {
         Joint j;
         j.type = JointType::Prismatic;
         j.body_a = a;
@@ -77,8 +77,8 @@ namespace akruti {
         return j;
     }
 
-    [[nodiscard]] inline Joint make_weld(std::uint32_t a, std::uint32_t b, Vec2<Scalar> la,
-                                         Vec2<Scalar> lb, Scalar compliance = 0) noexcept {
+    [[nodiscard]] inline Joint make_weld(const std::uint32_t a, const std::uint32_t b, const Vec2<Scalar> la,
+                                         const Vec2<Scalar> lb, const Scalar compliance = 0) noexcept {
         Joint j;
         j.type = JointType::Weld;
         j.body_a = a;
@@ -89,8 +89,8 @@ namespace akruti {
         return j;
     }
 
-    [[nodiscard]] inline Joint make_motor(std::uint32_t a, std::uint32_t b, Scalar target,
-                                          Scalar lo, Scalar hi, Scalar compliance = 0) noexcept {
+    [[nodiscard]] inline Joint make_motor(const std::uint32_t a, const std::uint32_t b, const Scalar target,
+                                          const Scalar lo, const Scalar hi, const Scalar compliance = 0) noexcept {
         Joint j;
         j.type = JointType::Motor;
         j.body_a = a;
@@ -103,8 +103,8 @@ namespace akruti {
     }
 
     // Transform a local anchor to world given a rigid frame (rotation + translation).
-    [[nodiscard]] inline Vec2<Scalar> anchor_world(const Mat2<Scalar>& rot, Vec2<Scalar> translate,
-                                                   Vec2<Scalar> local) noexcept {
+    [[nodiscard]] inline Vec2<Scalar> anchor_world(const Mat2<Scalar>& rot, const Vec2<Scalar> translate,
+                                                   const Vec2<Scalar> local) noexcept {
         return rot * local + translate;
     }
 } // namespace akruti

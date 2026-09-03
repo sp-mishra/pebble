@@ -98,7 +98,7 @@ namespace akruti {
     //    boundary (sum == boundary area up to clipping precision).
     template <typename OutContainer>
     inline void voronoi_shatter_into(const Poly& boundary,
-                                     std::span<const Vec> seeds,
+                                     const std::span<const Vec> seeds,
                                      OutContainer& cells) {
         cells.reserve(cells.size() + seeds.size());
         for (std::size_t s = 0; s < seeds.size(); ++s) {
@@ -117,7 +117,7 @@ namespace akruti {
     }
 
     [[nodiscard]] inline containers::dynamic::SmallVector<Poly, 16 * sizeof(Poly)>
-    voronoi_shatter(const Poly& boundary, std::span<const Vec> seeds) {
+    voronoi_shatter(const Poly& boundary, const std::span<const Vec> seeds) {
         containers::dynamic::SmallVector<Poly, 16 * sizeof(Poly)> cells;
         voronoi_shatter_into(boundary, seeds, cells);
         return cells;

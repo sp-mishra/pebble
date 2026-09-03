@@ -1,5 +1,6 @@
 #include <catch_amalgamated.hpp>
 #include "akruti/layout.hpp"
+#include "mem/arena.hpp"
 
 using namespace akruti::layout;
 

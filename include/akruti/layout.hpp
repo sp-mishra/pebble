@@ -7,7 +7,6 @@
 // - Subsystems: Flexbox main/cross sizing, padding/margins, aspect ratio lock,
 //   constraint DAG graph, spatial hashing, phase-aware dirty tracking, text measurement.
 
-#include <cstdint>
 #include <cstddef>
 #include <ranges>
 #include <vector>
@@ -15,25 +14,19 @@
 #include <deque>
 #include <limits>
 #include <algorithm>
-#include <cassert>
 #include <optional>
 #include <unordered_set>
 #include <unordered_map>
 #include <chrono>
 #include <thread>
-#include <mutex>
 #include <fstream>
 #include <cmath>
 #include <string>
-#include <cstdio>
 
 #include "akruti/math.hpp"
-#include "akruti/simd.hpp"
 #include "containers/tree/NAryTree.hpp"
 #include "containers/graph/LiteGraph.hpp"
 #include "containers/dynamic/SmallVector.hpp"
-#include "mem/smriti.hpp"
-#include "mem/arena.hpp"
 #include "pravaha/pravaha.hpp"
 
 namespace akruti::layout {
@@ -123,52 +116,51 @@ namespace akruti::layout {
         std::unordered_map<CellKey, std::vector<std::uint32_t>, CellKeyHash> grid_;
 
     public:
-        explicit SpatialHash(float cell_size = 100.0f) : cell_size_(cell_size) {}
+        explicit SpatialHash(const float cell_size = 100.0f) : cell_size_(cell_size) {}
 
         void clear() { grid_.clear(); }
 
-        void insert(std::uint32_t node_id, const Rect2D& rect) {
-            const CellKey min_cell = get_cell(rect.x, rect.y);
-            const CellKey max_cell = get_cell(rect.x + rect.w, rect.y + rect.h);
+        void insert(const std::uint32_t node_id, const Rect2D& rect) {
+            const auto [min_x, min_y] = get_cell(rect.x, rect.y);
+            const auto [max_x, max_y] = get_cell(rect.x + rect.w, rect.y + rect.h);
 
-            for (int32_t cy = min_cell.y; cy <= max_cell.y; ++cy) {
-                for (int32_t cx = min_cell.x; cx <= max_cell.x; ++cx) {
-                    grid_[CellKey{cx, cy}].push_back(node_id);
+            for (int32_t cy = min_y; cy <= max_y; ++cy) {
+                for (int32_t cx = min_x; cx <= max_x; ++cx) {
+                    grid_[CellKey{.x = cx, .y = cy}].push_back(node_id);
                 }
             }
         }
 
-        [[nodiscard]] std::vector<std::uint32_t> query(float x, float y) const {
+        [[nodiscard]] std::vector<std::uint32_t> query(const float x, const float y) const {
             const CellKey cell = get_cell(x, y);
-            auto it = grid_.find(cell);
+            const auto it = grid_.find(cell);
             return (it != grid_.end()) ? it->second : std::vector<std::uint32_t>{};
         }
 
         [[nodiscard]] containers::dynamic::SmallVector<std::uint32_t, 64 * sizeof(std::uint32_t)> query_rect(
             const Rect2D& rect) const {
             containers::dynamic::SmallVector<std::uint32_t, 64 * sizeof(std::uint32_t)> result;
-            const CellKey min_cell = get_cell(rect.x, rect.y);
-            const CellKey max_cell = get_cell(rect.x + rect.w, rect.y + rect.h);
+            const auto [min_x, min_y] = get_cell(rect.x, rect.y);
+            const auto [max_x, max_y] = get_cell(rect.x + rect.w, rect.y + rect.h);
 
-            for (int32_t cy = min_cell.y; cy <= max_cell.y; ++cy) {
-                for (int32_t cx = min_cell.x; cx <= max_cell.x; ++cx) {
-                    auto it = grid_.find(CellKey{cx, cy});
-                    if (it != grid_.end()) {
+            for (int32_t cy = max_y; cy <= max_y; ++cy) {
+                for (int32_t cx = min_x; cx <= max_x; ++cx) {
+                    if (auto it = grid_.find(CellKey{.x = cx, .y = cy}); it != grid_.end()) {
                         result.insert(result.end(), it->second.begin(), it->second.end());
                     }
                 }
             }
 
-            std::sort(result.begin(), result.end());
-            result.erase(std::unique(result.begin(), result.end()), result.end());
+            std::ranges::sort(result);
+            result.erase(std::ranges::unique(result).begin(), result.end());
             return result;
         }
 
     private:
-        [[nodiscard]] CellKey get_cell(float x, float y) const {
+        [[nodiscard]] CellKey get_cell(const float x, const float y) const {
             return CellKey{
-                static_cast<int32_t>(std::floor(x / cell_size_)),
-                static_cast<int32_t>(std::floor(y / cell_size_))
+                .x = static_cast<int32_t>(std::floor(x / cell_size_)),
+                .y = static_cast<int32_t>(std::floor(y / cell_size_))
             };
         }
     };
@@ -207,10 +199,10 @@ namespace akruti::layout {
     template <ITextMetrics T>
     TextMeasure make_text_measure(T& metrics) noexcept {
         return TextMeasure{
-            +[](const char* text, float max_width, void* ud) -> Size2D {
+            .measure = +[](const char* text, float max_width, void* ud) -> Size2D {
                 return static_cast<T*>(ud)->measure(text, max_width);
             },
-            static_cast<void*>(&metrics)
+            .user_data = static_cast<void*>(&metrics)
         };
     }
 
@@ -233,19 +225,19 @@ namespace akruti::layout {
         float aux0 = 0.0f;
         float aux1 = 0.0f;
 
-        static SizeSpec Auto() noexcept { return SizeSpec{Kind::Auto, 0.0f}; }
-        static SizeSpec Px(const float v) noexcept { return SizeSpec{Kind::Px, v}; }
-        static SizeSpec Percent(const float v) noexcept { return SizeSpec{Kind::Percent, v}; }
+        static SizeSpec Auto() noexcept { return SizeSpec{.kind = Kind::Auto, .value = 0.0f}; }
+        static SizeSpec Px(const float v) noexcept { return SizeSpec{.kind = Kind::Px, .value = v}; }
+        static SizeSpec Percent(const float v) noexcept { return SizeSpec{.kind = Kind::Percent, .value = v}; }
 
         // value = fractional weight (like flex_grow); translated to flex_grow at bake.
-        static SizeSpec Fr(const float weight) noexcept { return SizeSpec{Kind::Fr, weight}; }
+        static SizeSpec Fr(const float weight) noexcept { return SizeSpec{.kind = Kind::Fr, .value = weight}; }
         // Intrinsic content size clamped to [min_px, max_px]; max_px <= 0 => unbounded.
         static SizeSpec Content(const float min_px = 0.0f, const float max_px = 0.0f) noexcept {
-            return SizeSpec{Kind::Content, min_px, max_px, 0.0f};
+            return SizeSpec{.kind = Kind::Content, .value = min_px, .aux0 = max_px, .aux1 = 0.0f};
         }
 
         // Derive this axis from the resolved cross axis using ratio = this / other.
-        static SizeSpec Aspect(const float ratio) noexcept { return SizeSpec{Kind::Aspect, ratio}; }
+        static SizeSpec Aspect(const float ratio) noexcept { return SizeSpec{.kind = Kind::Aspect, .value = ratio}; }
 
         [[nodiscard]] bool is_fr() const noexcept { return kind == Kind::Fr; }
         [[nodiscard]] bool is_content() const noexcept { return kind == Kind::Content; }
@@ -336,7 +328,7 @@ namespace akruti::layout {
         // Virtualization properties
         bool virtualization_enabled = false;
         Vec2 scroll_offset{0.0f, 0.0f};
-        Size2D viewport_size{0.0f, 0.0f};
+        Size2D viewport_size{.w = 0.0f, .h = 0.0f};
 
         // Overflow handling
         Overflow overflow_x = Overflow::Visible;
@@ -418,8 +410,8 @@ namespace akruti::layout {
     }
 
     static Bounds2D intersect_bounds(const Bounds2D& a, const Bounds2D& b) noexcept {
-        float lo_x = std::max(a.lo[0], b.lo[0]);
-        float lo_y = std::max(a.lo[1], b.lo[1]);
+        const float lo_x = std::max(a.lo[0], b.lo[0]);
+        const float lo_y = std::max(a.lo[1], b.lo[1]);
         float hi_x = std::min(a.hi[0], b.hi[0]);
         float hi_y = std::min(a.hi[1], b.hi[1]);
         if (hi_x < lo_x) { hi_x = lo_x; }
@@ -525,9 +517,8 @@ namespace akruti::layout {
         if (!(st.aspect_ratio > 0.0f)) return content;
 
         const bool width_fixed = (st.width.kind == SizeSpec::Kind::Px);
-        const bool height_fixed = (st.height.kind == SizeSpec::Kind::Px);
 
-        if (width_fixed && !height_fixed) {
+        if (const bool height_fixed = (st.height.kind == SizeSpec::Kind::Px); width_fixed && !height_fixed) {
             const float w = std::max(0.0f, st.width.value);
             content.h = (st.aspect_ratio > 0.0f) ? (w / st.aspect_ratio) : content.h;
         }
@@ -682,7 +673,7 @@ namespace akruti::layout {
         std::vector<const char*> text;
         std::vector<std::uint32_t> text_id;
 
-        TextMeasure text_measure_callback{nullptr, nullptr};
+        TextMeasure text_measure_callback{.measure = nullptr, .user_data = nullptr};
         bool enable_text_measure_debug = false;
 
         struct TextMeasureKey {
@@ -948,8 +939,8 @@ namespace akruti::layout {
             reserve_and_resize(count);
 
             std::uint32_t next_index = 0;
-            auto bake_recursive = [&](auto& self, std::uint32_t parent_idx,
-                                      const typename LayoutTree::TreeNode* n) -> std::uint32_t {
+            auto bake_recursive = [&](auto& self, const std::uint32_t parent_idx,
+                                      const LayoutTree::TreeNode* n) -> std::uint32_t {
                 const std::uint32_t curr = next_index++;
                 parent[curr] = parent_idx;
                 user_tag[curr] = n->data.user_tag;
@@ -969,8 +960,7 @@ namespace akruti::layout {
                 return curr;
             };
 
-            const auto* root = tree.get_root();
-            if (root) {
+            if (const auto* root = tree.get_root()) {
                 bake_recursive(bake_recursive, kInvalid, root);
             }
 
@@ -987,30 +977,30 @@ namespace akruti::layout {
         }
 
         void solve(const Bounds2D& viewport) {
-            auto start_time = std::chrono::high_resolution_clock::now();
+            const auto start_time = std::chrono::high_resolution_clock::now();
             if (enable_perf_tracking) perf_stats.reset();
 
             if (size() == 0) return;
 
-            Rect2D root_r = bounds_to_rect(viewport);
+            const Rect2D root_r = bounds_to_rect(viewport);
 
             // Phase 1: Measure pass (bottom-up)
-            auto m_start = std::chrono::high_resolution_clock::now();
+            const auto m_start = std::chrono::high_resolution_clock::now();
             measure_pass();
             if (enable_perf_tracking) perf_stats.measure_time = std::chrono::high_resolution_clock::now() - m_start;
 
             // Phase 2: Place pass (top-down)
-            auto p_start = std::chrono::high_resolution_clock::now();
+            const auto p_start = std::chrono::high_resolution_clock::now();
             place_pass(root_r);
             if (enable_perf_tracking) perf_stats.place_time = std::chrono::high_resolution_clock::now() - p_start;
 
             // Phase 3: Constraints pass
-            auto c_start = std::chrono::high_resolution_clock::now();
+            const auto c_start = std::chrono::high_resolution_clock::now();
             constraints_pass();
             if (enable_perf_tracking) perf_stats.constraints_time = std::chrono::high_resolution_clock::now() - c_start;
 
             // Phase 4: Clip pass (top-down)
-            auto cl_start = std::chrono::high_resolution_clock::now();
+            const auto cl_start = std::chrono::high_resolution_clock::now();
             clip_pass(viewport);
             if (enable_perf_tracking) perf_stats.clip_time = std::chrono::high_resolution_clock::now() - cl_start;
 
@@ -1051,28 +1041,28 @@ namespace akruti::layout {
                 return;
             }
 
-            auto start_time = std::chrono::high_resolution_clock::now();
+            const auto start_time = std::chrono::high_resolution_clock::now();
             if (enable_perf_tracking) perf_stats.reset();
 
-            Rect2D root_r = bounds_to_rect(viewport);
+            const Rect2D root_r = bounds_to_rect(viewport);
 
             // Phase 1: Incremental Measure Pass (only measure dirty nodes bottom-up)
-            auto m_start = std::chrono::high_resolution_clock::now();
+            const auto m_start = std::chrono::high_resolution_clock::now();
             measure_pass_incremental();
             if (enable_perf_tracking) perf_stats.measure_time = std::chrono::high_resolution_clock::now() - m_start;
 
             // Phase 2: Place pass (top-down, only updating paths through dirty nodes)
-            auto p_start = std::chrono::high_resolution_clock::now();
+            const auto p_start = std::chrono::high_resolution_clock::now();
             place_pass(root_r);
             if (enable_perf_tracking) perf_stats.place_time = std::chrono::high_resolution_clock::now() - p_start;
 
             // Phase 3: Constraints pass
-            auto c_start = std::chrono::high_resolution_clock::now();
+            const auto c_start = std::chrono::high_resolution_clock::now();
             constraints_pass();
             if (enable_perf_tracking) perf_stats.constraints_time = std::chrono::high_resolution_clock::now() - c_start;
 
             // Phase 4: Clip pass
-            auto cl_start = std::chrono::high_resolution_clock::now();
+            const auto cl_start = std::chrono::high_resolution_clock::now();
             clip_pass(viewport);
             if (enable_perf_tracking) perf_stats.clip_time = std::chrono::high_resolution_clock::now() - cl_start;
 
@@ -1114,7 +1104,7 @@ namespace akruti::layout {
             }
         }
 
-        bool restore_snapshot(size_t index) {
+        bool restore_snapshot(const size_t index) {
             if (index >= snapshot_history_.size()) return false;
 
             const auto& snapshot = snapshot_history_[index];
@@ -1128,15 +1118,11 @@ namespace akruti::layout {
             return true;
         }
 
-        [[nodiscard]] std::optional<std::uint32_t> hit_test(float x, float y) const {
+        [[nodiscard]] std::optional<std::uint32_t> hit_test(const float x, const float y) const {
             if (enable_spatial_hash) {
-                auto candidates = spatial_hash.query(x, y);
-                for (auto it = candidates.rbegin(); it != candidates.rend(); ++it) {
-                    const std::uint32_t i = *it;
-                    const Rect2D& r = rect[i];
-                    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
-                        const Bounds2D& c = clip[i];
-                        if (x >= c.lo[0] && x <= c.hi[0] && y >= c.lo[1] && y <= c.hi[1]) {
+                for (auto candidates = spatial_hash.query(x, y); unsigned int i : std::views::reverse(candidates)) {
+                    if (const auto& [r_x, r_y, w, h] = rect[i]; x >= r_x && x <= r_x + w && y >= r_y && y <= r_y + h) {
+                        if (const Bounds2D& c = clip[i]; x >= c.lo[0] && x <= c.hi[0] && y >= c.lo[1] && y <= c.hi[1]) {
                             return i;
                         }
                     }
@@ -1145,10 +1131,8 @@ namespace akruti::layout {
             }
 
             for (std::int64_t i = static_cast<std::int64_t>(size()) - 1; i >= 0; --i) {
-                const Rect2D& r = rect[static_cast<std::size_t>(i)];
-                if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
-                    const Bounds2D& c = clip[static_cast<std::size_t>(i)];
-                    if (x >= c.lo[0] && x <= c.hi[0] && y >= c.lo[1] && y <= c.hi[1]) {
+                if (const auto& [r_x, r_y, r_w, r_h] = rect[static_cast<std::size_t>(i)]; x >= r_x && x <= r_x + r_w && y >= r_y && y <= r_y + r_h) {
+                    if (const Bounds2D& c = clip[static_cast<std::size_t>(i)]; x >= c.lo[0] && x <= c.hi[0] && y >= c.lo[1] && y <= c.hi[1]) {
                         return static_cast<std::uint32_t>(i);
                     }
                 }
@@ -1159,7 +1143,7 @@ namespace akruti::layout {
         // Fill `out` with the hit node then its ancestor chain (leaf -> root), writing at
         // most out.size() entries. Returns the number written. Zero heap: walks the baked
         // parent[] array. `hit_test` itself is unchanged.
-        std::size_t hit_test_chain(float x, float y, std::span<std::uint32_t> out) const {
+        [[nodiscard]] std::size_t hit_test_chain(const float x, const float y, std::span<std::uint32_t> out) const {
             const auto hit = hit_test(x, y);
             if (!hit) return 0;
             std::size_t n = 0;
@@ -1184,7 +1168,7 @@ namespace akruti::layout {
         }
 
     private:
-        void reserve_and_resize(std::size_t count) {
+        void reserve_and_resize(const std::size_t count) {
             parent.resize(count, kInvalid);
             first_child.resize(count, kInvalid);
             child_count.resize(count, 0);
@@ -1249,8 +1233,7 @@ namespace akruti::layout {
                 subtree_end[i] = static_cast<std::uint32_t>(i + 1);
             }
             for (std::int64_t i = static_cast<std::int64_t>(count) - 1; i >= 0; --i) {
-                const std::uint32_t p = parent[static_cast<std::size_t>(i)];
-                if (p != kInvalid) {
+                if (const std::uint32_t p = parent[static_cast<std::size_t>(i)]; p != kInvalid) {
                     subtree_end[p] = std::max(subtree_end[p], subtree_end[static_cast<std::size_t>(i)]);
                 }
             }
@@ -1279,10 +1262,10 @@ namespace akruti::layout {
             state.dirty = &dirty;
         }
 
-        void measure_node(std::uint32_t u) {
+        void measure_node(const std::uint32_t u) {
             if (enable_perf_tracking) perf_stats.nodes_measured++;
 
-            Size2D content{0.0f, 0.0f};
+            Size2D content{.w = 0.0f, .h = 0.0f};
 
             if (text[u] != nullptr && text_measure_callback.measure != nullptr) {
                 const float max_w = (width[u].kind == SizeSpec::Kind::Px) ? width[u].value : 0.0f;
@@ -1330,9 +1313,9 @@ namespace akruti::layout {
             st.aspect_lock = (aspect_lock[u] != 0);
 
             Size2D final_size = content;
-            const Edges& pad = padding[u];
-            final_size.w += pad.l + pad.r;
-            final_size.h += pad.t + pad.b;
+            const auto& [pad_l, pad_t, pad_r, pad_b] = padding[u];
+            final_size.w += pad_l + pad_r;
+            final_size.h += pad_t + pad_b;
 
             if (st.width.kind == SizeSpec::Kind::Px) final_size.w = st.width.value;
             if (st.height.kind == SizeSpec::Kind::Px) final_size.h = st.height.value;
@@ -1358,8 +1341,7 @@ namespace akruti::layout {
 
         static float clamp_content_unit(const float intrinsic, const SizeSpec& s) noexcept {
             float v = intrinsic;
-            const float lo = std::max(0.0f, s.value);
-            if (v < lo) v = lo;
+            if (const float lo = std::max(0.0f, s.value); v < lo) v = lo;
             if (s.aux0 > 0.0f && v > s.aux0) v = s.aux0;
             return v;
         }
@@ -1384,8 +1366,7 @@ namespace akruti::layout {
         void measure_pass_incremental() {
             const std::size_t count = size();
             for (std::int64_t i = static_cast<std::int64_t>(count) - 1; i >= 0; --i) {
-                const std::uint32_t u = static_cast<std::uint32_t>(i);
-                if (dirty[u] & (DIRTY_MEASURE | DIRTY_GEOMETRY)) {
+                if (const auto u = static_cast<std::uint32_t>(i); dirty[u] & (DIRTY_MEASURE | DIRTY_GEOMETRY)) {
                     measure_node(u);
                 }
             }
@@ -1655,13 +1636,13 @@ namespace akruti::layout {
             float r, g, b, a;
         };
 
-        Color rect_outline{0.0f, 0.8f, 1.0f, 0.8f};
-        Color clip_outline{1.0f, 0.2f, 0.2f, 0.8f};
-        Color dirty_highlight{1.0f, 0.9f, 0.0f, 0.9f};
-        Color constraint_line{0.2f, 1.0f, 0.3f, 0.7f};
-        Color text_color{1.0f, 1.0f, 1.0f, 0.9f};
-        Color flex_grow_color{0.3f, 0.8f, 1.0f, 0.6f};
-        Color flex_shrink_color{1.0f, 0.5f, 0.2f, 0.6f};
+        Color rect_outline{.r = 0.0f, .g = 0.8f, .b = 1.0f, .a = 0.8f};
+        Color clip_outline{.r = 1.0f, .g = 0.2f, .b = 0.2f, .a = 0.8f};
+        Color dirty_highlight{.r = 1.0f, .g = 0.9f, .b = 0.0f, .a = 0.9f};
+        Color constraint_line{.r = 0.2f, .g = 1.0f, .b = 0.3f, .a = 0.7f};
+        Color text_color{.r = 1.0f, .g = 1.0f, .b = 1.0f, .a = 0.9f};
+        Color flex_grow_color{.r = 0.3f, .g = 0.8f, .b = 1.0f, .a = 0.6f};
+        Color flex_shrink_color{.r = 1.0f, .g = 0.5f, .b = 0.2f, .a = 0.6f};
 
         float rect_outline_width = 1.0f;
         float clip_outline_width = 1.0f;
@@ -1695,8 +1676,7 @@ namespace akruti::layout {
 
     private:
         void draw_rect_outlines(const Engine& engine, DebugRenderer& renderer) const {
-            for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(engine.rect.size()); ++i) {
-                const Rect2D& r = engine.rect[i];
+            for (auto r : engine.rect) {
                 if (r.w <= 0 || r.h <= 0) continue;
                 renderer.draw_rect_outline(r,
                                            config.rect_outline.r, config.rect_outline.g,
@@ -1706,8 +1686,7 @@ namespace akruti::layout {
         }
 
         void draw_clip_bounds(const Engine& engine, DebugRenderer& renderer) const {
-            for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(engine.clip.size()); ++i) {
-                const Bounds2D& b = engine.clip[i];
+            for (auto b : engine.clip) {
                 Rect2D r = bounds_to_rect(b);
                 if (r.w <= 0 || r.h <= 0) continue;
                 renderer.draw_rect_outline(r,
@@ -1720,8 +1699,7 @@ namespace akruti::layout {
         void draw_dirty_nodes(const Engine& engine, DebugRenderer& renderer) const {
             for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(engine.rect.size()); ++i) {
                 if (i >= engine.dirty.size()) continue;
-                const std::uint8_t dirty_flags = engine.dirty[i];
-                if (dirty_flags == Engine::DIRTY_NONE) continue;
+                if (const std::uint8_t dirty_flags = engine.dirty[i]; dirty_flags == Engine::DIRTY_NONE) continue;
                 const Rect2D& r = engine.rect[i];
                 if (r.w <= 0 || r.h <= 0) continue;
                 renderer.draw_rect_outline(r,
@@ -1734,13 +1712,13 @@ namespace akruti::layout {
         void draw_constraint_edges(const Engine& engine, DebugRenderer& renderer) const {
             for (const auto& c : engine.constraints) {
                 if (c.target >= engine.rect.size() || c.source >= engine.rect.size() || c.source == kInvalid) continue;
-                const Rect2D& target_rect = engine.rect[c.target];
-                const Rect2D& source_rect = engine.rect[c.source];
+                const auto& [target_area_x, target_area_y, target_area_w, target_area_h] = engine.rect[c.target];
+                const auto& [source_area_x, source_area_y, source_area_w, source_area_h] = engine.rect[c.source];
 
-                const float sx = source_rect.x + source_rect.w * 0.5f;
-                const float sy = source_rect.y + source_rect.h * 0.5f;
-                const float tx = target_rect.x + target_rect.w * 0.5f;
-                const float ty = target_rect.y + target_rect.h * 0.5f;
+                const float sx = source_area_x + source_area_w * 0.5f;
+                const float sy = source_area_y + source_area_h * 0.5f;
+                const float tx = target_area_x + target_area_w * 0.5f;
+                const float ty = target_area_y + target_area_h * 0.5f;
 
                 renderer.draw_line(sx, sy, tx, ty,
                                    config.constraint_line.r, config.constraint_line.g,
@@ -1752,11 +1730,11 @@ namespace akruti::layout {
         void draw_text_info(const Engine& engine, DebugRenderer& renderer) const {
             char buffer[256];
             for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(engine.rect.size()); ++i) {
-                const Rect2D& r = engine.rect[i];
-                if (r.w <= 0 || r.h <= 0) continue;
+                const auto& [r_x, r_y, r_w, r_h] = engine.rect[i];
+                if (r_w <= 0 || r_h <= 0) continue;
                 if (config.show_node_ids) {
                     std::snprintf(buffer, sizeof(buffer), "#%u", i);
-                    renderer.draw_text(r.x + 2.0f, r.y + 2.0f,
+                    renderer.draw_text(r_x + 2.0f, r_y + 2.0f,
                                        buffer,
                                        config.text_color.r, config.text_color.g,
                                        config.text_color.b, config.text_color.a,

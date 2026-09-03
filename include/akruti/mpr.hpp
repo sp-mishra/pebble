@@ -4,8 +4,6 @@
 #include "shape.hpp"
 #include "broadphase_concepts.hpp"
 #include "gjk.hpp"
-#include <cmath>
-#include <algorithm>
 
 namespace akruti {
     struct MprResult {
@@ -18,16 +16,16 @@ namespace akruti {
     };
 
     template <Shape A, Shape B>
-    [[nodiscard]] inline MprResult mpr_collide(const A& a, const B& b) noexcept {
+    [[nodiscard]] MprResult mpr_collide(const A& a, const B& b) noexcept {
         // 1. Center of Minkowski difference (v0)
         // Approximate centers from AABB
         const Vec c_a = a.aabb().center();
         const Vec c_b = b.aabb().center();
         const Vec v0 = c_a - c_b;
 
-        if (akruti::length_sq(v0) < Scalar(1e-12)) {
+        if (length_sq(v0) < static_cast<Scalar>(1e-12)) {
             // Degenerate center: fallback to support diff
-            return MprResult{true, 0.0f, 0.0f, Vec{1, 0}, c_a, 1};
+            return MprResult{.hit = true, .distance = 0.0f, .depth = 0.0f, .normal = Vec{1, 0}, .contact_point = c_a, .iterations = 1};
         }
 
         // 2. Candidate direction toward origin from v0
@@ -36,14 +34,13 @@ namespace akruti {
 
         // If support along d1 doesn't cross origin: shapes are separated along d1
         const Vec nd1 = akruti::normalize(d1);
-        const Scalar proj = akruti::dot(v1, nd1);
-        if (proj <= 0.0f) {
+        if (const Scalar proj = akruti::dot(v1, nd1); proj <= 0.0f) {
             const Scalar dist = -proj;
-            return MprResult{false, dist, 0.0f, nd1, a.support(d1), 1};
+            return MprResult{.hit = false, .distance = dist, .depth = 0.0f, .normal = nd1, .contact_point = a.support(d1), .iterations = 1};
         }
 
         // 3. Find v2 to form candidate 2D portal (v0, v1, v2)
-        Vec n = Vec{-(v1.y() - v0.y()), v1.x() - v0.x()}; // normal to segment v0-v1
+        auto n = Vec{-(v1.y() - v0.y()), v1.x() - v0.x()}; // normal to segment v0-v1
         if (akruti::dot(n, -v0) < 0.0f) n = -n;
 
         Vec v2 = support_diff(a, b, n);
@@ -60,7 +57,7 @@ namespace akruti {
             const Scalar det = e1.x() * e2.y() - e1.y() * e2.x();
 
             // Normal to portal edge v1-v2 facing away from v0
-            Vec portal_n = Vec{v2.y() - v1.y(), -(v2.x() - v1.x())};
+            auto portal_n = Vec{v2.y() - v1.y(), -(v2.x() - v1.x())};
             if (akruti::dot(portal_n, v0 - v1) > 0.0f) portal_n = -portal_n;
             if (akruti::length_sq(portal_n) > 1e-12f) portal_n = akruti::normalize(portal_n);
             else portal_n = nd1;
@@ -69,9 +66,8 @@ namespace akruti {
             const Scalar d = akruti::dot(portal_n, v1);
 
             const Vec v3 = support_diff(a, b, portal_n);
-            const Scalar d_new = akruti::dot(portal_n, v3);
 
-            if (d_new - d < Scalar(1e-4) || iter == 15) {
+            if (const Scalar d_new = akruti::dot(portal_n, v3); d_new - d < static_cast<Scalar>(1e-4) || iter == 15) {
                 // Portal converged
                 if (d < 0.0f) {
                     // Origin is outside portal: separating distance
@@ -118,44 +114,44 @@ namespace akruti {
             return res;
         }
 
-        [[nodiscard]] DistanceResult distance(ShapeType type_a, const void* shape_a,
-                                              ShapeType type_b, const void* shape_b) const noexcept {
+        [[nodiscard]] DistanceResult distance(const ShapeType type_a, const void* shape_a,
+                                              const ShapeType type_b, const void* shape_b) const noexcept {
             if (!shape_a || !shape_b) return DistanceResult{};
 
             auto dispatch_pair = [&]<typename A, typename B>(const void* sa, const void* sb) noexcept {
                 return (*this)(*static_cast<const A*>(sa), *static_cast<const B*>(sb));
             };
 
-            auto dispatch_single = [&]<typename A>(const void* sa, ShapeType tb, const void* sb) noexcept {
+            auto dispatch_single = [&]<typename A>(const void* sa, const ShapeType tb, const void* sb) noexcept {
                 switch (tb) {
-                case ShapeType::Circle: return dispatch_pair.template operator()<A, Circle>(sa, sb);
-                case ShapeType::Box: return dispatch_pair.template operator()<A, Box>(sa, sb);
-                case ShapeType::Capsule: return dispatch_pair.template operator()<A, Capsule>(sa, sb);
-                case ShapeType::OrientedBox: return dispatch_pair.template operator()<A, OrientedBox>(sa, sb);
-                case ShapeType::Triangle: return dispatch_pair.template operator()<A, Triangle>(sa, sb);
-                case ShapeType::RoundedBox: return dispatch_pair.template operator()<A, RoundedBox>(sa, sb);
-                case ShapeType::Sector: return dispatch_pair.template operator()<A, Sector>(sa, sb);
-                case ShapeType::Segment: return dispatch_pair.template operator()<A, Segment>(sa, sb);
-                case ShapeType::ConvexPoly: return dispatch_pair.template operator()<A, ConvexPoly<8>>(sa, sb);
-                case ShapeType::RoundedPoly: return dispatch_pair.template operator()<A, RoundedPoly<8>>(sa, sb);
+                case ShapeType::Circle: return dispatch_pair.operator()<A, Circle>(sa, sb);
+                case ShapeType::Box: return dispatch_pair.operator()<A, Box>(sa, sb);
+                case ShapeType::Capsule: return dispatch_pair.operator()<A, Capsule>(sa, sb);
+                case ShapeType::OrientedBox: return dispatch_pair.operator()<A, OrientedBox>(sa, sb);
+                case ShapeType::Triangle: return dispatch_pair.operator()<A, Triangle>(sa, sb);
+                case ShapeType::RoundedBox: return dispatch_pair.operator()<A, RoundedBox>(sa, sb);
+                case ShapeType::Sector: return dispatch_pair.operator()<A, Sector>(sa, sb);
+                case ShapeType::Segment: return dispatch_pair.operator()<A, Segment>(sa, sb);
+                case ShapeType::ConvexPoly: return dispatch_pair.operator()<A, ConvexPoly<8>>(sa, sb);
+                case ShapeType::RoundedPoly: return dispatch_pair.operator()<A, RoundedPoly<8>>(sa, sb);
                 default: return DistanceResult{};
                 }
             };
 
             switch (type_a) {
-            case ShapeType::Circle: return dispatch_single.template operator()<Circle>(shape_a, type_b, shape_b);
-            case ShapeType::Box: return dispatch_single.template operator()<Box>(shape_a, type_b, shape_b);
-            case ShapeType::Capsule: return dispatch_single.template operator()<Capsule>(shape_a, type_b, shape_b);
-            case ShapeType::OrientedBox: return dispatch_single.template operator()<OrientedBox>(
+            case ShapeType::Circle: return dispatch_single.operator()<Circle>(shape_a, type_b, shape_b);
+            case ShapeType::Box: return dispatch_single.operator()<Box>(shape_a, type_b, shape_b);
+            case ShapeType::Capsule: return dispatch_single.operator()<Capsule>(shape_a, type_b, shape_b);
+            case ShapeType::OrientedBox: return dispatch_single.operator()<OrientedBox>(
                     shape_a, type_b, shape_b);
-            case ShapeType::Triangle: return dispatch_single.template operator()<Triangle>(shape_a, type_b, shape_b);
-            case ShapeType::RoundedBox: return dispatch_single.template operator()<
+            case ShapeType::Triangle: return dispatch_single.operator()<Triangle>(shape_a, type_b, shape_b);
+            case ShapeType::RoundedBox: return dispatch_single.operator()<
                     RoundedBox>(shape_a, type_b, shape_b);
-            case ShapeType::Sector: return dispatch_single.template operator()<Sector>(shape_a, type_b, shape_b);
-            case ShapeType::Segment: return dispatch_single.template operator()<Segment>(shape_a, type_b, shape_b);
-            case ShapeType::ConvexPoly: return dispatch_single.template operator()<ConvexPoly<8>>(
+            case ShapeType::Sector: return dispatch_single.operator()<Sector>(shape_a, type_b, shape_b);
+            case ShapeType::Segment: return dispatch_single.operator()<Segment>(shape_a, type_b, shape_b);
+            case ShapeType::ConvexPoly: return dispatch_single.operator()<ConvexPoly<8>>(
                     shape_a, type_b, shape_b);
-            case ShapeType::RoundedPoly: return dispatch_single.template operator()<RoundedPoly<8>>(
+            case ShapeType::RoundedPoly: return dispatch_single.operator()<RoundedPoly<8>>(
                     shape_a, type_b, shape_b);
             default: return DistanceResult{};
             }

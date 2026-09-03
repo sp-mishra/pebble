@@ -15,10 +15,10 @@ TEST_CASE (
 "[math][catmull_rom]"
 )
  {
-    const float p0 = 0.0f, p1 = 1.0f, p2 = 3.0f, p3 = 2.0f;
-    const pebble::math::vec2 v0{p0, 10.0f}, v1{p1, 20.0f}, v2{p2, 30.0f}, v3{p3, 40.0f};
+     constexpr float p0 = 0.0f, p1 = 1.0f, p2 = 3.0f, p3 = 2.0f;
+     constexpr pebble::math::vec2 v0{p0, 10.0f}, v1{p1, 20.0f}, v2{p2, 30.0f}, v3{p3, 40.0f};
 
-    for (float u : {0.0f, 0.25f, 0.5f, 0.75f, 1.0f}) {
+    for (const float u : {0.0f, 0.25f, 0.5f, 0.75f, 1.0f}) {
         const float s = pebble::math::catmull_rom(p0, p1, p2, p3, u);
         const auto  v = pebble::math::catmull_rom(v0, v1, v2, v3, u);
         REQUIRE(v[0] == Catch::Approx(s).margin(1e-5)); // x-channel == scalar basis
@@ -32,10 +32,10 @@ TEST_CASE (
 )
  {
     akruti::CatmullRomSpline spline;
-    spline.points.push_back(akruti::Vec2<akruti::Scalar>{0.0f, 0.0f});
-    spline.points.push_back(akruti::Vec2<akruti::Scalar>{10.0f, 0.0f});
-    spline.points.push_back(akruti::Vec2<akruti::Scalar>{20.0f, 10.0f});
-    spline.points.push_back(akruti::Vec2<akruti::Scalar>{30.0f, 0.0f});
+    (void)spline.points.push_back(akruti::Vec2<akruti::Scalar>{0.0f, 0.0f});
+    (void)spline.points.push_back(akruti::Vec2<akruti::Scalar>{10.0f, 0.0f});
+    (void)spline.points.push_back(akruti::Vec2<akruti::Scalar>{20.0f, 10.0f});
+    (void)spline.points.push_back(akruti::Vec2<akruti::Scalar>{30.0f, 0.0f});
 
     // t=0.5 lands mid-way; with 3 segments the middle segment uses all 4 control points.
     const auto got = spline.evaluate(0.5f);
@@ -65,7 +65,7 @@ TEST_CASE (
 
     // Sample mid the [1,2] segment (t=1.5 => u=0.5), which has both neighbours => full Catmull-Rom.
     const gati::Scalar got = curve.sample(1.5f);
-    const gati::Scalar expect = pebble::math::catmull_rom(0.0f, 1.0f, 3.0f, 2.0f, 0.5f);
+    constexpr gati::Scalar expect = pebble::math::catmull_rom(0.0f, 1.0f, 3.0f, 2.0f, 0.5f);
 
     REQUIRE(got == Catch::Approx(expect).margin(1e-5));
 }
