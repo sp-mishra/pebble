@@ -39,7 +39,7 @@ TEST_CASE (
     const auto b = particles.add({.position = {0.40f, 0.0f}, .mass = 1.0f});
 
     prakriti::MuscleStore<> store;
-    store.add({
+    (void)store.add({
         .origin = a,
         .insertion = b,
         .rest_length = 0.25f,

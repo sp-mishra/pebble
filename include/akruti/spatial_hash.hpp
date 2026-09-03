@@ -1,7 +1,6 @@
 #pragma once
 // akruti/spatial_hash.hpp — Generic dynamic-resolution Spatial Hash with Morton Z-order and 3x3 neighbor queries.
 #include "math.hpp"
-#include "broadphase_concepts.hpp"
 #include <span>
 #include <vector>
 #include <cmath>
@@ -20,14 +19,15 @@ namespace akruti {
         static constexpr std::uint32_t kTableMask = kTableSize - 1;
         static constexpr std::uint32_t kInvalid = static_cast<std::uint32_t>(-1);
 
-        explicit SpatialHash(Scalar cell_size = Scalar(1))
-            : inv_cell_(Scalar(1) / std::max(cell_size, Scalar(1e-4))), cell_size_(cell_size) {
+        explicit SpatialHash(const Scalar cell_size = static_cast<Scalar>(1))
+            : inv_cell_(static_cast<Scalar>(1) / std::max(cell_size, static_cast<Scalar>(1e-4))),
+              cell_size_(cell_size) {
             head_.assign(kTableSize, kInvalid);
         }
 
-        void set_cell_size(Scalar s) noexcept {
-            cell_size_ = std::max(s, Scalar(1e-4));
-            inv_cell_ = Scalar(1) / cell_size_;
+        void set_cell_size(const Scalar s) noexcept {
+            cell_size_ = std::max(s, static_cast<Scalar>(1e-4));
+            inv_cell_ = static_cast<Scalar>(1) / cell_size_;
         }
 
         [[nodiscard]] Scalar cell_size() const noexcept { return cell_size_; }
@@ -46,13 +46,13 @@ namespace akruti {
 
         // Insert entity Box2 and payload ID
         uint32_t insert(Box2 box, Payload id) {
-            const uint32_t index = static_cast<uint32_t>(payloads_.size());
+            const auto index = static_cast<uint32_t>(payloads_.size());
             payloads_.push_back(id);
             boxes_.push_back(box);
             next_.push_back(kInvalid);
 
-            const Vec center = Vec((x(box.lo) + x(box.hi)) * 0.5f,
-                                   (y(box.lo) + y(box.hi)) * 0.5f);
+            const auto center = Vec((x(box.lo) + x(box.hi)) * 0.5f,
+                                    (y(box.lo) + y(box.hi)) * 0.5f);
             const auto [cx, cy] = cell_coord(x(center), y(center));
             cell_of_.push_back(pack_coords(cx, cy));
 
@@ -73,7 +73,7 @@ namespace akruti {
             }
         }
 
-        bool update(uint32_t id, Box2 box) {
+        bool update(uint32_t id, const Box2 box) {
             for (std::size_t i = 0; i < payloads_.size(); ++i) {
                 if (payloads_[i] == id) {
                     boxes_[i] = box;
@@ -84,7 +84,7 @@ namespace akruti {
         }
 
         // Full batch rebuild from spans with automatic dynamic cell sizing if requested
-        void rebuild(std::span<const Box2> boxes, std::span<const Payload> ids, bool auto_cell_size = false) {
+        void rebuild(std::span<const Box2> boxes, std::span<const Payload> ids, const bool auto_cell_size = false) {
             const std::size_t n = std::min(boxes.size(), ids.size());
             if (auto_cell_size && n > 0) {
                 // Compute median radius
@@ -94,20 +94,20 @@ namespace akruti {
                     const Scalar dy = (y(boxes[i].hi) - y(boxes[i].lo)) * 0.5f;
                     radii[i] = std::max(dx, dy);
                 }
-                std::nth_element(radii.begin(), radii.begin() + n / 2, radii.end());
+                std::ranges::nth_element(radii, radii.begin() + n / 2);
                 const Scalar median_r = radii[n / 2];
-                set_cell_size(std::max(Scalar(1), median_r * Scalar(2)));
+                set_cell_size(std::max(static_cast<Scalar>(1), median_r * static_cast<Scalar>(2)));
             }
 
             payloads_.assign(ids.begin(), ids.begin() + n);
             boxes_.assign(boxes.begin(), boxes.begin() + n);
             cell_of_.resize(n);
             next_.resize(n);
-            std::fill(head_.begin(), head_.end(), kInvalid);
+            std::ranges::fill(head_, kInvalid);
 
             for (std::size_t i = 0; i < n; ++i) {
-                const Vec center = Vec((x(boxes[i].lo) + x(boxes[i].hi)) * 0.5f,
-                                       (y(boxes[i].lo) + y(boxes[i].hi)) * 0.5f);
+                const auto center = Vec((x(boxes[i].lo) + x(boxes[i].hi)) * 0.5f,
+                                        (y(boxes[i].lo) + y(boxes[i].hi)) * 0.5f);
                 const auto [cx, cy] = cell_coord(x(center), y(center));
                 cell_of_[i] = pack_coords(cx, cy);
 
@@ -142,7 +142,7 @@ namespace akruti {
         }
 
         template <class Fn>
-        void raycast(Vec origin, Vec dir, Scalar max_t, Fn&& fn) const {
+        void raycast(Vec origin, Vec dir, const Scalar max_t, Fn&& fn) const {
             // DDA or bounding box query
             Box2 ray_box{
                 Vec{
@@ -158,7 +158,7 @@ namespace akruti {
         }
 
         template <class Fn>
-        void for_each_neighbor(Scalar px, Scalar py, Scalar radius, Fn&& fn) const {
+        void for_each_neighbor(const Scalar px, const Scalar py, const Scalar radius, Fn&& fn) const {
             if (!std::isfinite(px) || !std::isfinite(py)) return;
             const auto [cx, cy] = cell_coord(px, py);
             const Scalar r2 = radius * radius;
@@ -186,11 +186,11 @@ namespace akruti {
             std::int32_t x, y;
         };
 
-        [[nodiscard]] CellCoord cell_coord(Scalar px, Scalar py) const noexcept {
-            if (!std::isfinite(px) || !std::isfinite(py)) return {0, 0};
+        [[nodiscard]] CellCoord cell_coord(const Scalar px, const Scalar py) const noexcept {
+            if (!std::isfinite(px) || !std::isfinite(py)) return {.x = 0, .y = 0};
             return {
-                static_cast<std::int32_t>(std::floor(px * inv_cell_)),
-                static_cast<std::int32_t>(std::floor(py * inv_cell_))
+                .x = static_cast<std::int32_t>(std::floor(px * inv_cell_)),
+                .y = static_cast<std::int32_t>(std::floor(py * inv_cell_))
             };
         }
 
@@ -204,15 +204,15 @@ namespace akruti {
             return x;
         }
 
-        [[nodiscard]] static constexpr std::uint32_t morton2d(std::uint32_t x, std::uint32_t y) noexcept {
+        [[nodiscard]] static constexpr std::uint32_t morton2d(const std::uint32_t x, const std::uint32_t y) noexcept {
             return (part1by1(y) << 1) | part1by1(x);
         }
 
-        [[nodiscard]] static constexpr std::uint32_t pack_coords(std::int32_t x, std::int32_t y) noexcept {
+        [[nodiscard]] static constexpr std::uint32_t pack_coords(const std::int32_t x, const std::int32_t y) noexcept {
             return (static_cast<std::uint32_t>(x & 0xFFFF) << 16) | static_cast<std::uint32_t>(y & 0xFFFF);
         }
 
-        [[nodiscard]] static constexpr std::uint32_t hash_coords(std::int32_t x, std::int32_t y) noexcept {
+        [[nodiscard]] static constexpr std::uint32_t hash_coords(const std::int32_t x, const std::int32_t y) noexcept {
             const std::uint32_t m = morton2d(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
             return (m ^ (m >> 12)) & kTableMask;
         }
@@ -234,13 +234,14 @@ namespace akruti {
         static constexpr std::uint32_t kTableMask = static_cast<std::uint32_t>(TableSize - 1);
         static constexpr std::uint32_t kInvalid = static_cast<std::uint32_t>(-1);
 
-        explicit MultiGridSpatialHash(Scalar cell_size = Scalar(1))
-            : inv_cell_(Scalar(1) / std::max(cell_size, Scalar(1e-4))), cell_size_(cell_size) {
+        explicit MultiGridSpatialHash(const Scalar cell_size = static_cast<Scalar>(1))
+            : inv_cell_(static_cast<Scalar>(1) / std::max(cell_size, static_cast<Scalar>(1e-4))),
+              cell_size_(cell_size) {
             head_.assign(TableSize, kInvalid);
         }
 
         void clear() noexcept {
-            std::fill(head_.begin(), head_.end(), kInvalid);
+            std::ranges::fill(head_, kInvalid);
             next_.clear();
             cell_of_.clear();
             payloads_.clear();
@@ -250,15 +251,15 @@ namespace akruti {
         [[nodiscard]] std::size_t size() const noexcept { return payloads_.size(); }
 
         uint32_t insert(Box2 box, Payload id) {
-            const uint32_t index = static_cast<uint32_t>(payloads_.size());
+            const auto index = static_cast<uint32_t>(payloads_.size());
             payloads_.push_back(id);
             boxes_.push_back(box);
             next_.push_back(kInvalid);
 
-            const Vec center = Vec((x(box.lo) + x(box.hi)) * 0.5f,
-                                   (y(box.lo) + y(box.hi)) * 0.5f);
-            const std::int32_t cx = static_cast<std::int32_t>(std::floor(x(center) * inv_cell_));
-            const std::int32_t cy = static_cast<std::int32_t>(std::floor(y(center) * inv_cell_));
+            const auto center = Vec((x(box.lo) + x(box.hi)) * 0.5f,
+                                    (y(box.lo) + y(box.hi)) * 0.5f);
+            const auto cx = static_cast<std::int32_t>(std::floor(x(center) * inv_cell_));
+            const auto cy = static_cast<std::int32_t>(std::floor(y(center) * inv_cell_));
             cell_of_.push_back(
                 (static_cast<std::uint32_t>(cx & 0xFFFF) << 16) | static_cast<std::uint32_t>(cy & 0xFFFF));
 
@@ -270,10 +271,10 @@ namespace akruti {
 
         template <class Fn>
         void query(Box2 query_box, Fn&& fn) const {
-            const std::int32_t min_cx = static_cast<std::int32_t>(std::floor(x(query_box.lo) * inv_cell_));
-            const std::int32_t min_cy = static_cast<std::int32_t>(std::floor(y(query_box.lo) * inv_cell_));
-            const std::int32_t max_cx = static_cast<std::int32_t>(std::floor(x(query_box.hi) * inv_cell_));
-            const std::int32_t max_cy = static_cast<std::int32_t>(std::floor(y(query_box.hi) * inv_cell_));
+            const auto min_cx = static_cast<std::int32_t>(std::floor(x(query_box.lo) * inv_cell_));
+            const auto min_cy = static_cast<std::int32_t>(std::floor(y(query_box.lo) * inv_cell_));
+            const auto max_cx = static_cast<std::int32_t>(std::floor(x(query_box.hi) * inv_cell_));
+            const auto max_cy = static_cast<std::int32_t>(std::floor(y(query_box.hi) * inv_cell_));
 
             for (std::int32_t cy = min_cy; cy <= max_cy; ++cy) {
                 for (std::int32_t cx = min_cx; cx <= max_cx; ++cx) {
@@ -296,7 +297,7 @@ namespace akruti {
         }
 
     private:
-        [[nodiscard]] static constexpr std::uint32_t hash_slot(std::int32_t x, std::int32_t y) noexcept {
+        [[nodiscard]] static constexpr std::uint32_t hash_slot(const std::int32_t x, const std::int32_t y) noexcept {
             // High quality 32-bit mix for million entity distribution
             std::uint32_t h = static_cast<std::uint32_t>(x) * 0x85ebca6bu ^ static_cast<std::uint32_t>(y) * 0xc2b2ae35u;
             h ^= h >> 16;

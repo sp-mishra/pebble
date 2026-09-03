@@ -25,7 +25,7 @@ namespace {
             }
 
             for (std::uint32_t i = 0; i < count; ++i) {
-                store.add({
+                (void)store.add({
                     .origin = i,
                     .insertion = i + 1,
                     .rest_length = 0.16f,
@@ -41,8 +41,8 @@ namespace {
 
     [[nodiscard]] std::uint64_t run_steps(prakriti::MuscleSolver<>& solver,
                                           MuscleBenchFixture& f,
-                                          int steps,
-                                          float dt) {
+                                          const int steps,
+                                          const float dt) {
         const auto t0 = std::chrono::steady_clock::now();
         const float inv_dt2 = 1.0f / (dt * dt);
         for (int i = 0; i < steps; ++i) {
@@ -54,7 +54,7 @@ namespace {
     }
 
     [[nodiscard]] bool finite_lambda(const prakriti::MuscleStore<>& store) {
-        for (float v : store.lambda_accum) {
+        for (const float v : store.lambda_accum) {
             if (!std::isfinite(v)) return false;
         }
         return true;

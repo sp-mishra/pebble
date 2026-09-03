@@ -9,7 +9,6 @@
 #include <atomic>
 #include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <expected>
 #include <functional>
 #include <memory>
@@ -111,7 +110,7 @@ namespace anukrama {
         template <class... Args>
         [[nodiscard]] Node* allocate(Args&&... args) { return new Node(std::forward<Args>(args)...); }
 
-        void deallocate(Node* node) noexcept { delete node; }
+        void deallocate(const Node* node) noexcept { delete node; }
         void reset() noexcept {}
     };
 
@@ -309,7 +308,10 @@ namespace anukrama {
 
     public:
         void insert(const timestamp value) { active_.insert(value); }
-        void erase(const timestamp value) { if (auto it = active_.find(value); it != active_.end()) active_.erase(it); }
+
+        void erase(const timestamp value) {
+            if (const auto it = active_.find(value); it != active_.end()) active_.erase(it);
+        }
 
         [[nodiscard]] std::optional<timestamp> min() const {
             return active_.empty() ? std::nullopt : std::optional{*active_.begin()};
@@ -342,7 +344,7 @@ namespace anukrama {
             std::optional<Value> value{};
             node_ptr previous{};
 
-            version_node(timestamp version, std::optional<Value> payload)
+            version_node(const timestamp version, std::optional<Value> payload)
                 : stamp{version}, value{std::move(payload)} {}
         };
 
@@ -520,7 +522,7 @@ namespace anukrama {
 
         private:
             friend class store;
-            snapshot(const store& owner, timestamp boundary) noexcept : owner_{&owner}, boundary_{boundary} {}
+            snapshot(const store& owner, const timestamp boundary) noexcept : owner_{&owner}, boundary_{boundary} {}
 
             void reset() noexcept {
                 if (!owner_) return;

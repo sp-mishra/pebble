@@ -15,7 +15,6 @@
 #include "containers/static/static_vector.hpp"
 #include <algorithm>
 #include <cmath>
-#include <numbers>
 
 namespace akruti {
     // ── Cubic Bézier Curve ──────────────────────────────────────────────────────
@@ -24,43 +23,45 @@ namespace akruti {
         Vec2<Scalar> p1{};
         Vec2<Scalar> p2{};
         Vec2<Scalar> p3{};
-        Scalar radius = Scalar(0.5); // Stroke thickness radius for SDF/CSG
+        Scalar radius = 0.5; // Stroke thickness radius for SDF/CSG
 
-        [[nodiscard]] Vec2<Scalar> evaluate(Scalar t) const noexcept {
-            const Scalar u = Scalar(1.0) - t;
+        [[nodiscard]] Vec2<Scalar> evaluate(const Scalar t) const noexcept {
+            const Scalar u = static_cast<Scalar>(1.0) - t;
             const Scalar tt = t * t;
             const Scalar uu = u * u;
             const Scalar uuu = uu * u;
             const Scalar ttt = tt * t;
 
             return p0 * uuu +
-                p1 * (Scalar(3.0) * uu * t) +
-                p2 * (Scalar(3.0) * u * tt) +
+                p1 * (static_cast<Scalar>(3.0) * uu * t) +
+                p2 * (static_cast<Scalar>(3.0) * u * tt) +
                 p3 * ttt;
         }
 
-        [[nodiscard]] Vec2<Scalar> tangent(Scalar t) const noexcept {
-            const Scalar u = Scalar(1.0) - t;
-            const Vec2<Scalar> d = (p1 - p0) * (Scalar(3.0) * u * u) +
-                (p2 - p1) * (Scalar(6.0) * u * t) +
-                (p3 - p2) * (Scalar(3.0) * t * t);
-            const Scalar len = akruti::length(d);
-            return (len > Scalar(1e-6)) ? d * (Scalar(1.0) / len) : Vec2<Scalar>(Scalar(1.0), Scalar(0.0));
+        [[nodiscard]] Vec2<Scalar> tangent(const Scalar t) const noexcept {
+            const Scalar u = static_cast<Scalar>(1.0) - t;
+            const Vec2<Scalar> d = (p1 - p0) * (static_cast<Scalar>(3.0) * u * u) +
+                (p2 - p1) * (static_cast<Scalar>(6.0) * u * t) +
+                (p3 - p2) * (static_cast<Scalar>(3.0) * t * t);
+            const Scalar len = length(d);
+            return (len > static_cast<Scalar>(1e-6))
+                       ? d * (static_cast<Scalar>(1.0) / len)
+                       : Vec2<Scalar>(static_cast<Scalar>(1.0), static_cast<Scalar>(0.0));
         }
 
-        [[nodiscard]] Vec2<Scalar> normal(Scalar t) const noexcept {
+        [[nodiscard]] Vec2<Scalar> normal(const Scalar t) const noexcept {
             const auto tan = tangent(t);
-            return akruti::perp(tan);
+            return perp(tan);
         }
 
         // Arc-length approximation via Gaussian quadrature / multi-segment sampling
-        [[nodiscard]] Scalar arc_length(std::size_t samples = 16) const noexcept {
-            Scalar length_val = Scalar(0.0);
+        [[nodiscard]] Scalar arc_length(const std::size_t samples = 16) const noexcept {
+            Scalar length_val = 0.0;
             Vec2<Scalar> prev = p0;
-            const Scalar step = Scalar(1.0) / static_cast<Scalar>(samples);
+            const Scalar step = static_cast<Scalar>(1.0) / static_cast<Scalar>(samples);
             for (std::size_t i = 1; i <= samples; ++i) {
                 Vec2<Scalar> curr = evaluate(static_cast<Scalar>(i) * step);
-                length_val += akruti::distance(curr, prev);
+                length_val += distance(curr, prev);
                 prev = curr;
             }
             return length_val;
@@ -69,24 +70,25 @@ namespace akruti {
         // ── Akruti Shape Contract ───────────────────────────────────────────────
 
         // Distance to cubic curve via adaptive subdivision + Halley/Newton polynomial refinement
-        [[nodiscard]] Scalar sdf(Vec2<Scalar> p) const noexcept {
-            Scalar min_dist_sq = Scalar(1e18);
-            Scalar best_t = Scalar(0.0);
+        [[nodiscard]] Scalar sdf(const Vec2<Scalar> p) const noexcept {
+            Scalar min_dist_sq = 1e18;
+            Scalar best_t = 0.0;
             constexpr std::size_t kSubdivs = 8;
             Vec2<Scalar> prev = p0;
-            const Scalar step = Scalar(1.0) / static_cast<Scalar>(kSubdivs);
+            constexpr Scalar step = static_cast<Scalar>(1.0) / static_cast<Scalar>(kSubdivs);
 
             for (std::size_t i = 1; i <= kSubdivs; ++i) {
                 const Scalar t_val = static_cast<Scalar>(i) * step;
                 Vec2<Scalar> curr = evaluate(t_val);
                 const Vec2<Scalar> ab = curr - prev;
                 const Vec2<Scalar> ap = p - prev;
-                const Scalar ab_len_sq = akruti::length_sq(ab);
-                Scalar t_seg = (ab_len_sq > Scalar(1e-6)) ? akruti::dot(ap, ab) / ab_len_sq : Scalar(0.0);
-                t_seg = std::clamp(t_seg, Scalar(0.0), Scalar(1.0));
+                const Scalar ab_len_sq = length_sq(ab);
+                Scalar t_seg = (ab_len_sq > static_cast<Scalar>(1e-6))
+                                   ? akruti::dot(ap, ab) / ab_len_sq
+                                   : static_cast<Scalar>(0.0);
+                t_seg = std::clamp(t_seg, static_cast<Scalar>(0.0), static_cast<Scalar>(1.0));
                 const Vec2<Scalar> proj = prev + ab * t_seg;
-                const Scalar d2 = akruti::distance_sq(p, proj);
-                if (d2 < min_dist_sq) {
+                if (const Scalar d2 = distance_sq(p, proj); d2 < min_dist_sq) {
                     min_dist_sq = d2;
                     best_t = (static_cast<Scalar>(i - 1) + t_seg) * step;
                 }
@@ -94,35 +96,35 @@ namespace akruti {
             }
 
             // Analytical Halley/Newton root refinement on (B(t) - P) · B'(t) = 0
-            Scalar t = std::clamp(best_t, Scalar(0.0), Scalar(1.0));
+            Scalar t = std::clamp(best_t, static_cast<Scalar>(0.0), static_cast<Scalar>(1.0));
             for (int k = 0; k < 3; ++k) {
                 const Vec2<Scalar> bt = evaluate(t);
                 const Vec2<Scalar> dbt = tangent_unnormalized(t);
                 const Vec2<Scalar> diff = bt - p;
                 const Scalar f = akruti::dot(diff, dbt);
                 const Vec2<Scalar> d2bt = second_derivative(t);
-                const Scalar f_prime = akruti::length_sq(dbt) + akruti::dot(diff, d2bt);
-                if (std::fabs(f_prime) < Scalar(1e-8)) break;
+                const Scalar f_prime = length_sq(dbt) + akruti::dot(diff, d2bt);
+                if (std::fabs(f_prime) < static_cast<Scalar>(1e-8)) break;
                 const Scalar dt = f / f_prime;
-                t = std::clamp(t - dt, Scalar(0.0), Scalar(1.0));
-                if (std::fabs(dt) < Scalar(1e-6)) break;
+                t = std::clamp(t - dt, static_cast<Scalar>(0.0), static_cast<Scalar>(1.0));
+                if (std::fabs(dt) < static_cast<Scalar>(1e-6)) break;
             }
 
             const Vec2<Scalar> exact_pt = evaluate(t);
-            return akruti::distance(p, exact_pt) - radius;
+            return distance(p, exact_pt) - radius;
         }
 
-        [[nodiscard]] Vec2<Scalar> tangent_unnormalized(Scalar t) const noexcept {
-            const Scalar u = Scalar(1.0) - t;
-            return (p1 - p0) * (Scalar(3.0) * u * u) +
-                   (p2 - p1) * (Scalar(6.0) * u * t) +
-                   (p3 - p2) * (Scalar(3.0) * t * t);
+        [[nodiscard]] Vec2<Scalar> tangent_unnormalized(const Scalar t) const noexcept {
+            const Scalar u = static_cast<Scalar>(1.0) - t;
+            return (p1 - p0) * (static_cast<Scalar>(3.0) * u * u) +
+                (p2 - p1) * (static_cast<Scalar>(6.0) * u * t) +
+                (p3 - p2) * (static_cast<Scalar>(3.0) * t * t);
         }
 
-        [[nodiscard]] Vec2<Scalar> second_derivative(Scalar t) const noexcept {
-            const Scalar u = Scalar(1.0) - t;
-            return (p2 - p1 * Scalar(2.0) + p0) * (Scalar(6.0) * u) +
-                   (p3 - p2 * Scalar(2.0) + p1) * (Scalar(6.0) * t);
+        [[nodiscard]] Vec2<Scalar> second_derivative(const Scalar t) const noexcept {
+            const Scalar u = static_cast<Scalar>(1.0) - t;
+            return (p2 - p1 * static_cast<Scalar>(2.0) + p0) * (static_cast<Scalar>(6.0) * u) +
+                (p3 - p2 * static_cast<Scalar>(2.0) + p1) * (static_cast<Scalar>(6.0) * t);
         }
 
         [[nodiscard]] Box2 aabb() const noexcept {
@@ -133,7 +135,7 @@ namespace akruti {
             return Box2{Vec2<Scalar>{min_x, min_y}, Vec2<Scalar>{max_x, max_y}};
         }
 
-        [[nodiscard]] Vec2<Scalar> support(Vec2<Scalar> d) const noexcept {
+        [[nodiscard]] Vec2<Scalar> support(const Vec2<Scalar> d) const noexcept {
             const Scalar d0 = akruti::dot(p0, d);
             const Scalar d1 = akruti::dot(p1, d);
             const Scalar d2 = akruti::dot(p2, d);
@@ -151,25 +153,24 @@ namespace akruti {
             }
             if (d3 > max_dot) { best = p3; }
 
-            const Scalar d_len = akruti::length(d);
-            if (d_len > Scalar(1e-6)) {
+            if (const Scalar d_len = length(d); d_len > static_cast<Scalar>(1e-6)) {
                 best = best + d * (radius / d_len);
             }
             return best;
         }
 
         [[nodiscard]] constexpr Vec2<Scalar> centroid() const noexcept {
-            return (p0 + p1 + p2 + p3) * Scalar(0.25);
+            return (p0 + p1 + p2 + p3) * static_cast<Scalar>(0.25);
         }
     };
 
     // ── Catmull-Rom Multi-Segment Spline ────────────────────────────────────────
     struct CatmullRomSpline {
         containers::static_vector<Vec2<Scalar>, 32> points;
-        Scalar radius = Scalar(0.5);
+        Scalar radius = 0.5;
         bool closed = false;
 
-        [[nodiscard]] Vec2<Scalar> evaluate(Scalar t) const noexcept {
+        [[nodiscard]] Vec2<Scalar> evaluate(const Scalar t) const noexcept {
             if (points.empty()) return Vec2<Scalar>{};
             if (points.size() == 1) return points[0];
 
@@ -179,12 +180,12 @@ namespace akruti {
             if (seg_idx >= num_segments) seg_idx = num_segments - 1;
             const Scalar local_t = scaled_t - static_cast<Scalar>(seg_idx);
 
-            const auto get_point = [&](int idx) -> Vec2<Scalar> {
+            const auto get_point = [&](const int idx) -> Vec2<Scalar> {
                 if (closed) {
-                    int n = static_cast<int>(points.size());
+                    const int n = static_cast<int>(points.size());
                     return points[static_cast<std::size_t>((idx % n + n) % n)];
                 }
-                int clamped = std::clamp(idx, 0, static_cast<int>(points.size() - 1));
+                const int clamped = std::clamp(idx, 0, static_cast<int>(points.size() - 1));
                 return points[static_cast<std::size_t>(clamped)];
             };
 
@@ -197,23 +198,25 @@ namespace akruti {
             return pebble::math::catmull_rom(p0, p1, p2, p3, local_t);
         }
 
-        [[nodiscard]] Vec2<Scalar> tangent(Scalar t) const noexcept {
-            constexpr Scalar dt = Scalar(1e-3);
-            const auto p_next = evaluate(std::min(Scalar(1.0), t + dt));
-            const auto p_prev = evaluate(std::max(Scalar(0.0), t - dt));
+        [[nodiscard]] Vec2<Scalar> tangent(const Scalar t) const noexcept {
+            constexpr Scalar dt = 1e-3;
+            const auto p_next = evaluate(std::min(static_cast<Scalar>(1.0), t + dt));
+            const auto p_prev = evaluate(std::max(static_cast<Scalar>(0.0), t - dt));
             const auto diff = p_next - p_prev;
-            const Scalar len = akruti::length(diff);
-            return (len > Scalar(1e-6)) ? diff * (Scalar(1.0) / len) : Vec2<Scalar>(Scalar(1.0), Scalar(0.0));
+            const Scalar len = length(diff);
+            return (len > static_cast<Scalar>(1e-6))
+                       ? diff * (static_cast<Scalar>(1.0) / len)
+                       : Vec2<Scalar>(static_cast<Scalar>(1.0), static_cast<Scalar>(0.0));
         }
 
-        [[nodiscard]] Scalar arc_length(std::size_t samples = 32) const noexcept {
-            if (points.size() < 2) return Scalar(0.0);
-            Scalar len = Scalar(0.0);
-            Vec2<Scalar> prev = evaluate(Scalar(0.0));
-            const Scalar step = Scalar(1.0) / static_cast<Scalar>(samples);
+        [[nodiscard]] Scalar arc_length(const std::size_t samples = 32) const noexcept {
+            if (points.size() < 2) return 0.0;
+            Scalar len = 0.0;
+            Vec2<Scalar> prev = evaluate(0.0);
+            const Scalar step = static_cast<Scalar>(1.0) / static_cast<Scalar>(samples);
             for (std::size_t i = 1; i <= samples; ++i) {
                 Vec2<Scalar> curr = evaluate(static_cast<Scalar>(i) * step);
-                len += akruti::distance(curr, prev);
+                len += distance(curr, prev);
                 prev = curr;
             }
             return len;
@@ -221,22 +224,24 @@ namespace akruti {
 
         // ── Akruti Shape Contract ───────────────────────────────────────────────
 
-        [[nodiscard]] Scalar sdf(Vec2<Scalar> p) const noexcept {
-            if (points.empty()) return Scalar(1e18);
-            Scalar min_dist_sq = Scalar(1e18);
+        [[nodiscard]] Scalar sdf(const Vec2<Scalar> p) const noexcept {
+            if (points.empty()) return 1e18;
+            Scalar min_dist_sq = 1e18;
             constexpr std::size_t kSamples = 32;
-            Vec2<Scalar> prev = evaluate(Scalar(0.0));
-            const Scalar step = Scalar(1.0) / static_cast<Scalar>(kSamples);
+            Vec2<Scalar> prev = evaluate(0.0);
+            constexpr Scalar step = static_cast<Scalar>(1.0) / static_cast<Scalar>(kSamples);
 
             for (std::size_t i = 1; i <= kSamples; ++i) {
                 Vec2<Scalar> curr = evaluate(static_cast<Scalar>(i) * step);
                 const Vec2<Scalar> ab = curr - prev;
                 const Vec2<Scalar> ap = p - prev;
-                const Scalar ab_len_sq = akruti::length_sq(ab);
-                Scalar t_seg = (ab_len_sq > Scalar(1e-6)) ? akruti::dot(ap, ab) / ab_len_sq : Scalar(0.0);
-                t_seg = std::clamp(t_seg, Scalar(0.0), Scalar(1.0));
+                const Scalar ab_len_sq = length_sq(ab);
+                Scalar t_seg = (ab_len_sq > static_cast<Scalar>(1e-6))
+                                   ? akruti::dot(ap, ab) / ab_len_sq
+                                   : static_cast<Scalar>(0.0);
+                t_seg = std::clamp(t_seg, static_cast<Scalar>(0.0), static_cast<Scalar>(1.0));
                 const Vec2<Scalar> proj = prev + ab * t_seg;
-                min_dist_sq = std::min(min_dist_sq, akruti::distance_sq(p, proj));
+                min_dist_sq = std::min(min_dist_sq, distance_sq(p, proj));
                 prev = curr;
             }
 
@@ -259,19 +264,17 @@ namespace akruti {
             };
         }
 
-        [[nodiscard]] Vec2<Scalar> support(Vec2<Scalar> d) const noexcept {
+        [[nodiscard]] Vec2<Scalar> support(const Vec2<Scalar> d) const noexcept {
             if (points.empty()) return Vec2<Scalar>{};
             Vec2<Scalar> best = points[0];
             Scalar max_dot = akruti::dot(points[0], d);
             for (const auto& pt : points) {
-                const Scalar d_dot = akruti::dot(pt, d);
-                if (d_dot > max_dot) {
+                if (const Scalar d_dot = akruti::dot(pt, d); d_dot > max_dot) {
                     max_dot = d_dot;
                     best = pt;
                 }
             }
-            const Scalar d_len = akruti::length(d);
-            if (d_len > Scalar(1e-6)) {
+            if (const Scalar d_len = length(d); d_len > static_cast<Scalar>(1e-6)) {
                 best = best + d * (radius / d_len);
             }
             return best;
@@ -281,7 +284,7 @@ namespace akruti {
             if (points.empty()) return Vec2<Scalar>{};
             Vec2<Scalar> sum{};
             for (const auto& v : points) sum = sum + v;
-            return sum * (Scalar(1) / Scalar(points.size()));
+            return sum * (static_cast<Scalar>(1) / static_cast<Scalar>(points.size()));
         }
     };
 

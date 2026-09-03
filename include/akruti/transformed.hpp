@@ -11,9 +11,9 @@ namespace akruti {
         Vec position{0, 0};
         Scalar angle{0}; // radians. 0 for axis-aligned (zero trig fast path)
 
-        [[nodiscard]] constexpr Scalar sdf(Vec p) const noexcept {
+        [[nodiscard]] constexpr Scalar sdf(const Vec p) const noexcept {
             const Vec rel = p - position;
-            if (std::fabs(angle) < Scalar(1e-7)) {
+            if (std::fabs(angle) < static_cast<Scalar>(1e-7)) {
                 return shape.sdf(rel);
             }
             const Scalar c = std::cos(-angle);
@@ -24,7 +24,7 @@ namespace akruti {
 
         [[nodiscard]] constexpr AABB aabb() const noexcept {
             const AABB local = shape.aabb();
-            if (std::fabs(angle) < Scalar(1e-7)) {
+            if (std::fabs(angle) < static_cast<Scalar>(1e-7)) {
                 return AABB{
                     pebble::math::vec2(local.lo.x() + position.x(), local.lo.y() + position.y()),
                     pebble::math::vec2(local.hi.x() + position.x(), local.hi.y() + position.y())
@@ -32,10 +32,10 @@ namespace akruti {
             }
             const Scalar c = std::abs(std::cos(angle));
             const Scalar s = std::abs(std::sin(angle));
-            const Vec half = Vec((local.hi.x() - local.lo.x()) * 0.5f,
-                                 (local.hi.y() - local.lo.y()) * 0.5f);
-            const Vec center = Vec((local.lo.x() + local.hi.x()) * 0.5f,
-                                   (local.lo.y() + local.hi.y()) * 0.5f);
+            const auto half = Vec((local.hi.x() - local.lo.x()) * 0.5f,
+                                  (local.hi.y() - local.lo.y()) * 0.5f);
+            const auto center = Vec((local.lo.x() + local.hi.x()) * 0.5f,
+                                    (local.lo.y() + local.hi.y()) * 0.5f);
 
             const Vec rotated_half{
                 c * half.x() + s * half.y(),
@@ -55,7 +55,7 @@ namespace akruti {
         }
 
         [[nodiscard]] constexpr Vec support(Vec d) const noexcept {
-            if (std::fabs(angle) < Scalar(1e-7)) {
+            if (std::fabs(angle) < static_cast<Scalar>(1e-7)) {
                 return shape.support(d) + position;
             }
             // Rotate direction into local frame: d_local = R(-angle) * d
@@ -74,7 +74,7 @@ namespace akruti {
 
         [[nodiscard]] Vec centroid() const noexcept {
             const Vec local = shape.centroid();
-            if (std::fabs(angle) < Scalar(1e-7)) {
+            if (std::fabs(angle) < static_cast<Scalar>(1e-7)) {
                 return local + position;
             }
             const Scalar c = std::cos(angle);
