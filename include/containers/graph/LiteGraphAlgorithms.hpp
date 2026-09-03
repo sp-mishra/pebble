@@ -267,7 +267,7 @@ namespace litegraph {
         const std::size_t arc_count = csr.offsets_.back();
         csr.targets_.resize(arc_count);
         csr.edge_ids_.resize(arc_count);
-        if constexpr (std::is_arithmetic_v < EdgeT >) {
+        if constexpr (std::is_arithmetic_v<EdgeT>) {
             csr.edge_weights_enabled_ = true;
             csr.edge_weights_.resize(arc_count);
         }
@@ -287,7 +287,7 @@ namespace litegraph {
                 const std::size_t pos = cursor[c]++;
                 csr.targets_[pos] = NodeId{*compact_target};
                 csr.edge_ids_[pos] = eid;
-                if constexpr (std::is_arithmetic_v < EdgeT >) {
+                if constexpr (std::is_arithmetic_v<EdgeT>) {
                     csr.edge_weights_[pos] = static_cast<double>(data);
                 }
                 else {
@@ -451,9 +451,11 @@ namespace litegraph {
             static void fill(std::span<double> v, double val) noexcept {
                 std::ranges::fill(v, val);
             }
+
             static void add_scaled(std::span<double> dst, std::span<const double> src, double scale) noexcept {
                 for (std::size_t i = 0; i < dst.size(); ++i) dst[i] += src[i] * scale;
             }
+
             [[nodiscard]] static double l1_delta(std::span<const double> a, std::span<const double> b) noexcept {
                 double sum = 0.0;
                 for (std::size_t i = 0; i < a.size(); ++i) sum += std::abs(a[i] - b[i]);
@@ -466,8 +468,7 @@ namespace litegraph {
         typename EdgeT,
         DirectednessTag Directedness,
         typename ExecPolicy = policy::SerialExec,
-        typename VectorOps = policy::ScalarVectorOps
-    >
+        typename VectorOps = policy::ScalarVectorOps>
     CsrPageRankResult pagerank_engine(
         const CsrGraph<EdgeT, Directedness>& g,
         const CsrPageRankOptions& options = {},
@@ -515,7 +516,8 @@ namespace litegraph {
                     }
                     next_rank[v] = acc;
                 });
-            } else {
+            }
+            else {
                 vops.fill(next_rank, base);
                 for (std::size_t u = 0; u < n; ++u) {
                     const std::size_t out_deg = offsets[u + 1] - offsets[u];
@@ -670,10 +672,10 @@ namespace litegraph {
     };
 
     template <LiteGraphModel GraphT,
-              class Cost,
-              class WeightFn,
-              class Combine = std::plus<Cost>,
-              class Less = std::less<>>
+        class Cost,
+        class WeightFn,
+        class Combine = std::plus<Cost>,
+        class Less = std::less<>>
         requires std::invocable<WeightFn, const typename GraphT::edge_type&>
     DijkstraPathResult<Cost>
     dijkstra_path(const GraphT& g, NodeId source, WeightFn weight_fn,
@@ -738,8 +740,8 @@ namespace litegraph {
      * @return A pair containing a vector of distances (g-costs) from the source and a vector of predecessors to reconstruct the path.
      */
     template <LiteGraphModel GraphT,
-              std::invocable<const typename GraphT::edge_type&> WeightFn,
-              std::invocable<NodeId> HeuristicFn>
+        std::invocable<const typename GraphT::edge_type&> WeightFn,
+        std::invocable<NodeId> HeuristicFn>
     auto a_star_search(
         const GraphT& g,
         NodeId source,
@@ -923,8 +925,7 @@ namespace litegraph {
             typename PatternGraph,
             typename TargetGraph,
             typename NodeComp = std::equal_to<>,
-            typename EdgeComp = std::equal_to<>
-        >
+            typename EdgeComp = std::equal_to<>>
         class VF2State {
         public:
             // Type aliases for node and edge data
@@ -1030,7 +1031,8 @@ namespace litegraph {
                 auto get_other_p = [&](NodeId cur, const auto& edge, bool is_outgoing) {
                     if constexpr (std::is_same_v<typename PatternGraph::directed_tag, Directed>) {
                         return is_outgoing ? edge.to : edge.from;
-                    } else {
+                    }
+                    else {
                         return edge.from.value == cur.value ? edge.to : edge.from;
                     }
                 };
@@ -1038,7 +1040,8 @@ namespace litegraph {
                 auto get_other_t = [&](NodeId cur, const auto& edge, bool is_outgoing) {
                     if constexpr (std::is_same_v<typename TargetGraph::directed_tag, Directed>) {
                         return is_outgoing ? edge.to : edge.from;
-                    } else {
+                    }
+                    else {
                         return edge.from.value == cur.value ? edge.to : edge.from;
                     }
                 };
@@ -1069,7 +1072,8 @@ namespace litegraph {
 
                             if (is_outgoing) {
                                 check_target_edges(g2_graph.out_edges(t_id));
-                            } else {
+                            }
+                            else {
                                 if constexpr (std::is_same_v<typename TargetGraph::directed_tag, Directed>) {
                                     check_target_edges(g2_graph.in_edges(t_id));
                                 }
@@ -1190,8 +1194,7 @@ namespace litegraph {
         LiteGraphModel PatternGraph,
         LiteGraphModel TargetGraph,
         typename NodeComp = std::equal_to<>,
-        typename EdgeComp = std::equal_to<>
-    >
+        typename EdgeComp = std::equal_to<>>
     auto vf2_subgraph_isomorphism(
         const PatternGraph& pattern,
         const TargetGraph& target,
@@ -2263,12 +2266,12 @@ namespace litegraph {
 
     // Both graph parameters are already constrained with LiteGraphModel.
     template <LiteGraphModel Graph1, LiteGraphModel Graph2,
-              std::invocable<const typename Graph1::node_type&, const typename Graph2::node_type&> NodeSubstFn,
-              std::invocable<const typename Graph2::node_type&> NodeInsFn,
-              std::invocable<const typename Graph1::node_type&> NodeDelFn,
-              std::invocable<const typename Graph1::edge_type&, const typename Graph2::edge_type&> EdgeSubstFn,
-              std::invocable<const typename Graph2::edge_type&> EdgeInsFn,
-              std::invocable<const typename Graph1::edge_type&> EdgeDelFn>
+        std::invocable<const typename Graph1::node_type&, const typename Graph2::node_type&> NodeSubstFn,
+        std::invocable<const typename Graph2::node_type&> NodeInsFn,
+        std::invocable<const typename Graph1::node_type&> NodeDelFn,
+        std::invocable<const typename Graph1::edge_type&, const typename Graph2::edge_type&> EdgeSubstFn,
+        std::invocable<const typename Graph2::edge_type&> EdgeInsFn,
+        std::invocable<const typename Graph1::edge_type&> EdgeDelFn>
     double graph_edit_distance(
         const Graph1& g1,
         const Graph2& g2,
@@ -2312,6 +2315,9 @@ namespace litegraph {
         start_node.estimated_total_cost = heuristic(start_node);
         open_set.push(start_node);
 
+        std::vector<std::uint8_t> processed_g1(std::max<std::size_t>(1, g1.edge_capacity()), 0);
+        std::vector<std::uint8_t> processed_g2(std::max<std::size_t>(1, g2.edge_capacity()), 0);
+
         while (!open_set.empty()) {
             SearchNode current = open_set.top();
             open_set.pop();
@@ -2343,15 +2349,15 @@ namespace litegraph {
                     }
                 }
 
-                // Normalize undirected edge keys
-                auto norm_pair = [](const size_t a, const size_t b) {
-                    return std::make_pair(std::min(a, b), std::max(a, b));
-                };
-
                 // 1) Reconcile g1 edges among mapped endpoints: substitute or delete (processed once)
                 const std::size_t g2_cap = g2.node_capacity();
-                std::vector<std::uint8_t> processed_g1(g2_cap * g2_cap, 0);
+                std::ranges::fill(processed_g1, static_cast<std::uint8_t>(0));
                 for (const auto& [eid_val, e1] : g1.edges()) {
+                    if (eid_val < processed_g1.size()) {
+                        if (processed_g1[eid_val]) continue;
+                        processed_g1[eid_val] = 1;
+                    }
+
                     auto from2_opt = current.g1_to_g2_mapping[e1.from.value];
                     auto to2_opt = current.g1_to_g2_mapping[e1.to.value];
 
@@ -2360,13 +2366,6 @@ namespace litegraph {
 
                     NodeId from2 = *from2_opt;
                     NodeId to2 = *to2_opt;
-
-                    auto [min_u, max_u] = norm_pair(from2.value, to2.value);
-                    const std::size_t flat_idx = min_u * g2_cap + max_u;
-                    if constexpr (std::is_same_v<typename Graph1::directed_tag, Undirected>) {
-                        if (processed_g1[flat_idx]) continue;
-                        processed_g1[flat_idx] = 1;
-                    }
 
                     auto e2_fwd = find_edge(g2, from2, to2);
                     auto e2_bwd = find_edge(g2, to2, from2);
@@ -2388,21 +2387,19 @@ namespace litegraph {
                 }
 
                 // 2) Reconcile g2 edges among mapped endpoints: insert if missing in g1 (processed once)
-                std::vector<std::uint8_t> processed_g2(g2_cap * g2_cap, 0);
+                std::ranges::fill(processed_g2, static_cast<std::uint8_t>(0));
                 for (const auto& [eid_val, e2] : g2.edges()) {
+                    if (eid_val < processed_g2.size()) {
+                        if (processed_g2[eid_val]) continue;
+                        processed_g2[eid_val] = 1;
+                    }
+
                     auto from1_opt = g2_to_g1[e2.from.value];
                     auto to1_opt = g2_to_g1[e2.to.value];
                     if (!from1_opt || !to1_opt) continue;
 
                     NodeId from1 = *from1_opt;
                     NodeId to1 = *to1_opt;
-
-                    auto [min_u, max_u] = norm_pair(e2.from.value, e2.to.value);
-                    const std::size_t flat_idx = min_u * g2_cap + max_u;
-                    if constexpr (std::is_same_v<typename Graph2::directed_tag, Undirected>) {
-                        if (processed_g2[flat_idx]) continue;
-                        processed_g2[flat_idx] = 1;
-                    }
 
                     auto e1_fwd = find_edge(g1, from1, to1);
                     auto e1_bwd = find_edge(g1, to1, from1);
@@ -2709,7 +2706,7 @@ namespace litegraph {
 
         // Parallel shortest path computation using std::expected for error handling
         template <LiteGraphModel GraphT, typename ExecPolicy,
-                  std::invocable<const typename GraphT::edge_type&> WeightFn>
+            std::invocable<const typename GraphT::edge_type&> WeightFn>
             requires std::is_execution_policy_v<std::remove_cvref_t<ExecPolicy>>
         std::expected<std::pair<std::vector<double>, std::vector<std::optional<NodeId>>>, GraphError>
         parallel_dijkstra(ExecPolicy&& policy, const GraphT& g, NodeId source, WeightFn&& weight_fn) {
@@ -2907,4 +2904,3 @@ namespace litegraph {
         }
     } // namespace parallel
 } // namespace litegraph
-

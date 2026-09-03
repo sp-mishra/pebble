@@ -69,10 +69,10 @@ namespace litegraph {
 
         while (!dfs_stack.empty()) {
             auto& [u, next_idx] = dfs_stack.back();
-            auto neighbors = g.out_edges(u);
 
             bool advanced = false;
-            for (auto eid : neighbors) {
+            for (auto eid : g.out_edges(u) | std::views::drop(next_idx)) {
+                ++next_idx;
                 NodeId v = g.get_edge(eid).to;
                 if (!reachable[v.value]) {
                     reachable[v.value] = true;
@@ -597,4 +597,3 @@ namespace litegraph {
         return headers;
     }
 } // namespace litegraph
-

@@ -254,24 +254,28 @@ namespace disjointset {
         // Returns the root ElementId of the merged set, or an error.
         std::expected<ElementId, DSError>
         unite(const Elem& elem_a, const Elem& elem_b) {
-            auto ra = find(elem_a);
-            if (!ra) return std::unexpected(ra.error());
-            auto rb = find(elem_b);
-            if (!rb) return std::unexpected(rb.error());
+            auto ita = elem_to_id_.find(elem_a);
+            if (ita == elem_to_id_.end())
+                return std::unexpected(DSError::ElementNotFound);
+            auto itb = elem_to_id_.find(elem_b);
+            if (itb == elem_to_id_.end())
+                return std::unexpected(DSError::ElementNotFound);
 
-            return unite_by_id(*ra, *rb);
+            return unite_by_id(ita->second, itb->second);
         }
 
         template <typename Callback>
             requires std::invocable<Callback, const event_type&>
         std::expected<ElementId, DSError>
         unite(const Elem& elem_a, const Elem& elem_b, Callback&& cb) {
-            auto ra = find(elem_a);
-            if (!ra) return std::unexpected(ra.error());
-            auto rb = find(elem_b);
-            if (!rb) return std::unexpected(rb.error());
+            auto ita = elem_to_id_.find(elem_a);
+            if (ita == elem_to_id_.end())
+                return std::unexpected(DSError::ElementNotFound);
+            auto itb = elem_to_id_.find(elem_b);
+            if (itb == elem_to_id_.end())
+                return std::unexpected(DSError::ElementNotFound);
 
-            return unite_by_id(*ra, *rb, std::forward<Callback>(cb));
+            return unite_by_id(ita->second, itb->second, std::forward<Callback>(cb));
         }
 
         std::expected<ElementId, DSError>
@@ -554,13 +558,12 @@ namespace disjointset {
         // Union a range of elements into a single equivalence class.
         // Returns the final root, or the first error encountered.
         template <std::ranges::input_range R>
-            requires std::same_as < std::ranges::range_value_t < R >
+            requires std::same_as<std::ranges::range_value_t<R>
 
 
-
-        ,
-        Elem
-        >
+                                  ,
+                                  Elem
+            >
         [[nodiscard]] std::expected<ElementId, DSError> unite_all(R&& range) {
             auto it = std::ranges::begin(range);
             auto end = std::ranges::end(range);
@@ -581,13 +584,12 @@ namespace disjointset {
 
         // Insert a range of elements without connecting them.
         template <std::ranges::input_range R>
-            requires std::same_as < std::ranges::range_value_t < R >
+            requires std::same_as<std::ranges::range_value_t<R>
 
 
-
-        ,
-        Elem
-        >
+                                  ,
+                                  Elem
+            >
         void insert_all(R&& range) {
             for (const auto& elem : range)
                 insert_or_get(elem);
@@ -686,6 +688,10 @@ namespace disjointset {
         }
 
         [[nodiscard]] std::size_t find_root_mut(std::size_t i) noexcept {
+            if (!undo_stack_.empty()) {
+                // Path compression forbidden during snapshotting: breaks undo frames!
+                return find_root(i);
+            }
             while (nodes_[i].parent.value != i) {
                 const std::size_t gp = nodes_[nodes_[i].parent.value].parent.value;
                 nodes_[i].parent = ElementId{gp};
@@ -796,9 +802,9 @@ namespace disjointset {
 
     // Build a DisjointSet from a range, inserting every element independently.
     template <std::ranges::input_range R,
-              typename ElemMeta = std::monostate,
-              typename SetMeta = std::monostate,
-              typename Strategy = KeepRootMeta>
+        typename ElemMeta = std::monostate,
+        typename SetMeta = std::monostate,
+        typename Strategy = KeepRootMeta>
         requires DSElement<std::ranges::range_value_t<R>>
     [[nodiscard]] auto make_disjoint_set(R&& range,
                                          Strategy strategy = Strategy{}) {
@@ -851,4 +857,3 @@ struct std::hash<disjointset::ElementId> {
         return std::hash<std::size_t>{}(id.value);
     }
 };
-

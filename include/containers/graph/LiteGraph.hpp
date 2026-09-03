@@ -179,16 +179,16 @@ namespace litegraph {
 
         // Node/Edge internal structures
         struct Node {
-            NodeT data;
-            AdjacencyContainer out_edges; // indices to edges vector
+            NodeT data{};
+            AdjacencyContainer out_edges{}; // indices to edges vector
             [[no_unique_address]] std::conditional_t<
                 std::is_same_v<Directedness, Directed>,
                 AdjacencyContainer,
                 std::monostate
-            > in_edges; // only used for directed graphs
-            bool active = true; // to support removals
-            std::size_t active_out_degree = 0;
-            std::size_t active_in_degree = 0;
+            > in_edges{}; // only used for directed graphs
+            bool active{true}; // to support removals
+            std::size_t active_out_degree{0};
+            std::size_t active_in_degree{0};
         };
 
         struct Edge {
@@ -535,7 +535,8 @@ namespace litegraph {
                 if (!valid_node(target)) continue;
                 if constexpr (std::is_invocable_v<Fn, EdgeId, NodeId, NodeId, decltype(edge.data)&>) {
                     fn(eid, nid, target, edge.data);
-                } else {
+                }
+                else {
                     fn(target);
                 }
             }
@@ -551,7 +552,8 @@ namespace litegraph {
                 if (!valid_node(target)) continue;
                 if constexpr (std::is_invocable_v<Fn, EdgeId, NodeId, NodeId, const decltype(edge.data)&>) {
                     fn(eid, nid, target, edge.data);
-                } else {
+                }
+                else {
                     fn(target);
                 }
             }
@@ -696,7 +698,9 @@ namespace litegraph {
             nodes_.reserve(nodes_.size() + size_hint);
 
             for (auto&& data : node_data_range) {
-                nodes_.push_back({std::forward<decltype(data)>(data), {}, {}, true, 0, 0});
+                Node node;
+                node.data = std::forward<decltype(data)>(data);
+                nodes_.push_back(std::move(node));
                 active_node_count_++;
             }
         }
@@ -741,7 +745,8 @@ namespace litegraph {
     private:
         template <typename DataT>
         NodeId add_node_impl(DataT&& data) {
-            Node node{std::forward<DataT>(data), {}, {}, true, 0, 0};
+            Node node;
+            node.data = std::forward<DataT>(data);
             nodes_.push_back(std::move(node));
 
             const NodeId nid{nodes_.size() - 1};
@@ -765,7 +770,7 @@ namespace litegraph {
             std::size_t added_to_adj = 0;
 
             auto rollback_tail = [](auto& vec, std::size_t count) {
-                if constexpr (!std::is_same_v<std::decay_t<decltype(vec)>, std::monostate>) {
+                if constexpr (requires { vec.pop_back(); }) {
                     while (count-- > 0) {
                         vec.pop_back();
                     }
@@ -869,4 +874,3 @@ namespace std {
         }
     };
 } // namespace std
-

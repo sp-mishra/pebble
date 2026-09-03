@@ -186,9 +186,10 @@ double) d;
 #endif
         }
     } // namespace experimental
+} // namespace litegraph::highway
 
 #ifdef LITEGRAPH_ENABLE_HIGHWAY
-namespace policy {
+namespace litegraph::policy {
     struct HighwayVectorOps {
         static void fill(std::span<double> v, const double value) noexcept {
             const HWY_FULL(double) d;
@@ -227,16 +228,17 @@ namespace policy {
             return sum;
         }
     };
-} // namespace policy
+} // namespace litegraph::policy
 #endif
 
+namespace litegraph::highway {
     // Optional boundary: callers can include this header and opt-in to Highway
     // without changing the core serial algorithm API.
     template <typename EdgeT, DirectednessTag Directedness>
     CsrPageRankResult pagerank(const CsrGraph<EdgeT, Directedness>& g,
                                const CsrPageRankOptions& options = {}) {
 #ifdef LITEGRAPH_ENABLE_HIGHWAY
-        return pagerank_engine(g, options, litegraph::policy::SerialExec{}, policy::HighwayVectorOps{});
+        return pagerank_engine(g, options, litegraph::policy::SerialExec{}, litegraph::policy::HighwayVectorOps{});
 #else
         // Fallback returns same CsrPageRankResult type.
         return litegraph::pagerank(g, options);
@@ -245,4 +247,3 @@ namespace policy {
 } // namespace litegraph::highway
 
 #endif // LITEGRAPH_HIGHWAY_HPP
-

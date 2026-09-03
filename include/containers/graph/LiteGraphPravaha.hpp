@@ -69,8 +69,8 @@ namespace litegraph::pravaha {
             const std::size_t frontier_size = current_frontier.size();
             const std::size_t chunk_sz = std::max<std::size_t>(1, (frontier_size + hw_threads - 1) / hw_threads);
             const auto chunks = ::pravaha::StaticChunkingPolicy::chunks(frontier_size, chunk_sz);
-
             for (const auto& ch : chunks) {
+                if (ch.begin == ch.end) continue;
                 auto task_fn = [&current_frontier, &g, &visit, begin = ch.begin, end = ch.end]() {
                     for (std::size_t i = begin; i < end; ++i) {
                         const NodeId u = current_frontier[i];
@@ -86,6 +86,7 @@ namespace litegraph::pravaha {
 
             for (std::size_t c_idx = 0; c_idx < chunks.size(); ++c_idx) {
                 const auto& ch = chunks[c_idx];
+                if (ch.begin == ch.end) continue;
                 auto* local_frontier = &local_next_frontiers[c_idx];
 
                 auto task_fn = [&current_frontier, &g, &visited, local_frontier, begin = ch.begin, end = ch.end]() {
@@ -136,9 +137,11 @@ namespace litegraph::pravaha {
                 const auto chunks = ::pravaha::StaticChunkingPolicy::chunks(total, chunk_sz);
 
                 for (const auto& ch : chunks) {
-                    (void)runner.submit(::pravaha::task("pr_for_each", [&fn, b = begin + ch.begin, e = begin + ch.end]() {
-                        for (auto i = b; i < e; ++i) fn(i);
-                    }));
+                    if (ch.begin == ch.end) continue;
+                    (void)runner.submit(::pravaha::task("pr_for_each",
+                                                        [&fn, b = begin + ch.begin, e = begin + ch.end]() {
+                                                            for (auto i = b; i < e; ++i) fn(i);
+                                                        }));
                 }
                 runner.backend_ref().drain();
             }
@@ -154,12 +157,15 @@ namespace litegraph::pravaha {
                 std::vector<T> partials(chunks.size(), init);
                 for (std::size_t c = 0; c < chunks.size(); ++c) {
                     const auto& ch = chunks[c];
+                    if (ch.begin == ch.end) continue;
                     auto* out = &partials[c];
-                    (void)runner.submit(::pravaha::task("pr_reduce", [&trans, &red, out, b = begin + ch.begin, e = begin + ch.end]() {
-                        T acc = *out;
-                        for (auto i = b; i < e; ++i) acc = red(acc, trans(i));
-                        *out = acc;
-                    }));
+                    (void)runner.submit(::pravaha::task("pr_reduce",
+                                                        [&trans, &red, out, b = begin + ch.begin, e = begin + ch.end
+                                                        ]() {
+                                                            T acc = *out;
+                                                            for (auto i = b; i < e; ++i) acc = red(acc, trans(i));
+                                                            *out = acc;
+                                                        }));
                 }
                 runner.backend_ref().drain();
                 for (const auto& part : partials) init = red(init, part);
@@ -218,6 +224,7 @@ namespace litegraph::pravaha {
         const auto chunks = ::pravaha::StaticChunkingPolicy::chunks(num_sources, chunk_sz);
 
         for (const auto& ch : chunks) {
+            if (ch.begin == ch.end) continue;
             auto task_fn = [&g, &sources, &results, &weight_fn, begin = ch.begin, end = ch.end]() {
                 for (std::size_t s_idx = begin; s_idx < end; ++s_idx) {
                     results[s_idx] = litegraph::dijkstra(g, sources[s_idx], weight_fn);
@@ -285,6 +292,7 @@ namespace litegraph::pravaha {
 
         for (std::size_t c_idx = 0; c_idx < chunks.size(); ++c_idx) {
             const auto& ch = chunks[c_idx];
+            if (ch.begin == ch.end) continue;
             auto* local_cent = &thread_centralities[c_idx];
 
             auto task_fn = [&g, &active_node_indices, local_cent, node_cap, begin = ch.begin, end = ch.end]() {
