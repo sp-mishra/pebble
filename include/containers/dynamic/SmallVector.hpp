@@ -555,10 +555,10 @@ namespace containers::dynamic {
         iterator insert(const_iterator pos, InputIt first, InputIt last) {
             auto idx = static_cast<size_type>(pos - cbegin());
             if (first == last) return data_ + idx;
-            if constexpr (std::forward_iterator<InputIt>) {
+            if constexpr (std::forward_iterator < InputIt >) {
                 const auto count = static_cast<size_type>(std::distance(first, last));
                 reserve(size_ + count);
-                T* p = data_ + idx;
+                data_ + idx;
                 if (idx < size_) {
                     for (size_type i = 0; i < size_ - idx; ++i) {
                         AllocTraits::construct(alloc_, data_ + size_ + count - 1 - i, std::move(data_[size_ - 1 - i]));
@@ -571,7 +571,8 @@ namespace containers::dynamic {
                 }
                 size_ += count;
                 return data_ + idx;
-            } else {
+            }
+            else {
                 size_type inserted = 0;
                 for (auto it = first; it != last; ++it) {
                     insert(begin() + idx + inserted, *it);

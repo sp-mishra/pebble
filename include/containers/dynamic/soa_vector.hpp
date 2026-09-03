@@ -22,8 +22,6 @@
 #include <tuple>
 #include <span>
 #include <cstddef>
-#include <cstdint>
-#include <concepts>
 #include <utility>
 #include <memory>
 #include <new>
@@ -127,7 +125,7 @@ namespace containers::dynamic {
 
         BasicSoAVector() = default;
 
-        explicit BasicSoAVector(std::size_t reserve_capacity) {
+        explicit BasicSoAVector(const std::size_t reserve_capacity) {
             reserve(reserve_capacity);
         }
 
@@ -145,21 +143,21 @@ namespace containers::dynamic {
         // Resize all columns to n, filling new slots with provided values.
         void resize(std::size_t n, Components... fill_values) {
             resize_impl(n, std::make_tuple(std::move(fill_values)...),
-                        std::index_sequence_for < Components...>{});
+                        std::index_sequence_for<Components...>{});
         }
 
         // Resize to n, default-constructing new elements.
         void resize(std::size_t n) {
             resize_impl(n, std::make_tuple(Components{}...),
-                        std::index_sequence_for < Components...>{});
+                        std::index_sequence_for<Components...>{});
         }
 
         [[nodiscard]] std::size_t size() const noexcept {
-            return std::get < 0 > (columns_).size();
+            return std::get<0>(columns_).size();
         }
 
         [[nodiscard]] bool empty() const noexcept {
-            return std::get < 0 > (columns_).empty();
+            return std::get<0>(columns_).empty();
         }
 
         void clear() noexcept {
@@ -170,7 +168,7 @@ namespace containers::dynamic {
 
         void push_back(Components... values) {
             push_back_impl(std::make_tuple(std::move(values)...),
-                           std::index_sequence_for < Components...>{});
+                           std::index_sequence_for<Components...>{});
         }
 
         void pop_back() noexcept {
@@ -196,7 +194,7 @@ namespace containers::dynamic {
             const std::size_t m = other.size();
             if (m == 0) return;
             reserve(size() + m);
-            append_range_impl(other, std::index_sequence_for < Components...>{});
+            append_range_impl(other, std::index_sequence_for<Components...>{});
         }
 
         // Erase all elements for which pred(Components...) returns true.
@@ -206,7 +204,7 @@ namespace containers::dynamic {
             std::size_t removed = 0;
             std::size_t i = 0;
             while (i < size()) {
-                if (invoke_pred_at(pred, i, std::index_sequence_for < Components...>{})) {
+                if (invoke_pred_at(pred, i, std::index_sequence_for<Components...>{})) {
                     swap_pop_back(i);
                     ++removed;
                     // Don't advance i: the swapped-in element needs checking.
@@ -223,39 +221,39 @@ namespace containers::dynamic {
         // Contiguous column span — zero-copy SIMD processing.
         template <std::size_t Index>
         [[nodiscard]] auto get_column() noexcept {
-            return std::span(std::get < Index > (columns_));
+            return std::span(std::get<Index>(columns_));
         }
 
         template <std::size_t Index>
         [[nodiscard]] auto get_column() const noexcept {
-            return std::span(std::get < Index > (columns_));
+            return std::span(std::get<Index>(columns_));
         }
 
         // Direct pointer for raw vectorised loops (guaranteed contiguous).
         template <std::size_t Index>
         [[nodiscard]] auto* data() noexcept {
-            return std::get < Index > (columns_).data();
+            return std::get<Index>(columns_).data();
         }
 
         template <std::size_t Index>
         [[nodiscard]] const auto* data() const noexcept {
-            return std::get < Index > (columns_).data();
+            return std::get<Index>(columns_).data();
         }
 
         // Element-wise indexed access (single component).
         template <std::size_t Index>
         [[nodiscard]] decltype(auto) get(std::size_t i) noexcept {
-            return std::get < Index > (columns_)[i];
+            return std::get<Index>(columns_)[i];
         }
 
         template <std::size_t Index>
         [[nodiscard]] decltype(auto) get(std::size_t i) const noexcept {
-            return std::get < Index > (columns_)[i];
+            return std::get<Index>(columns_)[i];
         }
 
         // Row as tuple — for generic algorithms. O(kComponentCount), no heap.
         [[nodiscard]] std::tuple<Components...> row(std::size_t i) const {
-            return row_impl(i, std::index_sequence_for < Components...>{});
+            return row_impl(i, std::index_sequence_for<Components...>{});
         }
 
         // ── Generalised SIMD Kernel Dispatch ─────────────────────────────────────
@@ -344,38 +342,38 @@ namespace containers::dynamic {
 
         template <typename Tuple, std::size_t... Is>
         void push_back_impl(Tuple&& t, std::index_sequence<Is...>) {
-            ((void)std::get < Is > (columns_).push_back(std::get < Is > (std::forward<Tuple>(t))),  ...);
+            ((void)std::get<Is>(columns_).push_back(std::get<Is>(std::forward<Tuple>(t))), ...);
         }
 
         template <typename Tuple, std::size_t... Is>
         void resize_impl(std::size_t n, Tuple fill, std::index_sequence<Is...>) {
-            ([n, &fill](auto& col) {
-                using ElemT = typename std::decay_t<decltype(col)>::value_type;
-                if constexpr (requires(decltype(col)& c, std::size_t sz, ElemT v) { c.resize(sz, v); }) {
-                    col.resize(n, std::get < Is > (fill));
+            ([n, &fill]<typename T0>(T0& col) {
+                using ElemT = std::decay_t<T0>::value_type;
+                if constexpr (requires(T0& c, std::size_t sz, ElemT v) { c.resize(sz, v); }) {
+                    col.resize(n, std::get<Is>(fill));
                 }
-            }(std::get < Is > (columns_)), ...);
+            }(std::get<Is>(columns_)), ...);
         }
 
         template <typename OtherPolicy, std::size_t... Is>
         void append_range_impl(const BasicSoAVector<OtherPolicy, Components...>& other,
                                std::index_sequence<Is...>) {
             const std::size_t m = other.size();
-            ([m, &other](auto& col, auto idx_const) {
-                constexpr std::size_t I = decltype(idx_const)::value;
+            ([m, &other]<typename T0>(auto& col, T0 idx_const) {
+                constexpr std::size_t I = T0::value;
                 const auto src = other.template get_column<I>();
                 col.insert(col.end(), src.begin(), src.end());
-            }(std::get < Is > (columns_), std::integral_constant<std::size_t, Is>{}), ...);
+            }(std::get<Is>(columns_), std::integral_constant<std::size_t, Is>{}), ...);
         }
 
         template <typename Pred, std::size_t... Is>
         bool invoke_pred_at(Pred&& pred, std::size_t i, std::index_sequence<Is...>) {
-            return pred(std::get < Is > (columns_)[i]...);
+            return pred(std::get<Is>(columns_)[i]...);
         }
 
         template <std::size_t... Is>
         std::tuple<Components...> row_impl(std::size_t i, std::index_sequence<Is...>) const {
-            return {std::get < Is > (columns_)[i]...};
+            return {std::get<Is>(columns_)[i]...};
         }
 
         std::tuple<typename StoragePolicy::template ColumnType<Components>...> columns_;
