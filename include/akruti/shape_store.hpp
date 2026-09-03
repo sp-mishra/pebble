@@ -7,7 +7,6 @@
 #include <new>
 #include <type_traits>
 #include <cstddef>
-#include <utility>
 
 namespace akruti {
     template <std::size_t SBO = 128>
@@ -26,7 +25,7 @@ namespace akruti {
         }
 
         template <Shape S>
-        ShapeStore(const S& shape) noexcept {
+        explicit ShapeStore(const S& shape) noexcept {
             set(shape);
         }
 
@@ -35,34 +34,34 @@ namespace akruti {
             static_assert(sizeof(S) <= sizeof(storage), "Shape exceeds ShapeStore SBO size of 128 bytes");
             static_assert(alignof(S) <= alignof(std::max_align_t), "Shape alignment requirement too large");
 
-            if constexpr (std::is_same_v < S, Circle >) {
+            if constexpr (std::is_same_v<S, Circle>) {
                 type = ShapeType::Circle;
             }
-            else if constexpr (std::is_same_v < S, Box >) {
+            else if constexpr (std::is_same_v<S, Box>) {
                 type = ShapeType::Box;
             }
-            else if constexpr (std::is_same_v < S, Capsule >) {
+            else if constexpr (std::is_same_v<S, Capsule>) {
                 type = ShapeType::Capsule;
             }
-            else if constexpr (std::is_same_v < S, OrientedBox >) {
+            else if constexpr (std::is_same_v<S, OrientedBox>) {
                 type = ShapeType::OrientedBox;
             }
-            else if constexpr (std::is_same_v < S, Triangle >) {
+            else if constexpr (std::is_same_v<S, Triangle>) {
                 type = ShapeType::Triangle;
             }
-            else if constexpr (std::is_same_v < S, RoundedBox >) {
+            else if constexpr (std::is_same_v<S, RoundedBox>) {
                 type = ShapeType::RoundedBox;
             }
-            else if constexpr (std::is_same_v < S, Sector >) {
+            else if constexpr (std::is_same_v<S, Sector>) {
                 type = ShapeType::Sector;
             }
-            else if constexpr (std::is_same_v < S, Segment >) {
+            else if constexpr (std::is_same_v<S, Segment>) {
                 type = ShapeType::Segment;
             }
-            else if constexpr (std::is_same_v < S, ConvexPoly<8> >) {
+            else if constexpr (std::is_same_v<S, ConvexPoly<8>>) {
                 type = ShapeType::ConvexPoly;
             }
-            else if constexpr (std::is_same_v < S, RoundedPoly<8> >) {
+            else if constexpr (std::is_same_v<S, RoundedPoly<8>>) {
                 type = ShapeType::RoundedPoly;
             }
             else {
@@ -85,15 +84,15 @@ namespace akruti {
             };
         }
 
-        [[nodiscard]] Scalar sdf(Vec p) const noexcept {
-            return sdf_fn ? sdf_fn(storage, p) : Scalar(1e9);
+        [[nodiscard]] Scalar sdf(const Vec p) const noexcept {
+            return sdf_fn ? sdf_fn(storage, p) : static_cast<Scalar>(1e9);
         }
 
         [[nodiscard]] Box2 aabb() const noexcept {
             return aabb_fn ? aabb_fn(storage) : Box2{};
         }
 
-        [[nodiscard]] Vec support(Vec d) const noexcept {
+        [[nodiscard]] Vec support(const Vec d) const noexcept {
             return support_fn ? support_fn(storage, d) : Vec{};
         }
 

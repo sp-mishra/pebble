@@ -16,6 +16,7 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <ranges>
 
 namespace akruti {
     // Join style for polygon offset corners.
@@ -24,7 +25,7 @@ namespace akruti {
     namespace poly_detail {
         // Ensure CCW winding (area > 0). Returns a copy with corrected orientation.
         [[nodiscard]] inline Poly as_ccw(const Poly& p) {
-            if (polygon_area(p) < Scalar(0)) {
+            if (polygon_area(p) < static_cast<Scalar>(0)) {
                 Poly r;
                 r.reserve(p.size());
                 for (std::size_t i = p.size(); i-- > 0;) r.push_back(p[i]);
@@ -40,11 +41,9 @@ namespace akruti {
             bool inside = false;
             for (std::size_t i = 0, j = n - 1; i < n; j = i++) {
                 const Vec& a = poly[i];
-                const Vec& b = poly[j];
-                const bool straddles = (a.y() > q.y()) != (b.y() > q.y());
-                if (straddles) {
-                    const Scalar xcross = (b.x() - a.x()) * (q.y() - a.y()) / (b.y() - a.y()) + a.x();
-                    if (q.x() < xcross) inside = !inside;
+                if (const Vec& b = poly[j]; (a.y() > q.y()) != (b.y() > q.y())) {
+                    if (const Scalar xcross = (b.x() - a.x()) * (q.y() - a.y()) / (b.y() - a.y()) + a.x(); q.x() <
+                        xcross) inside = !inside;
                 }
             }
             return inside;
@@ -56,11 +55,11 @@ namespace akruti {
                                                     Scalar& t_ab) noexcept {
             const Vec r = b - a;
             const Vec s = d - c;
-            const Scalar denom = akruti::cross(r, s);
-            if (std::fabs(denom) < Scalar(1e-12)) return false; // parallel
-            const Scalar t = akruti::cross(c - a, s) / denom;
-            const Scalar u = akruti::cross(c - a, r) / denom;
-            if (t < Scalar(0) || t > Scalar(1) || u < Scalar(0) || u > Scalar(1)) return false;
+            const Scalar denom = cross(r, s);
+            if (std::fabs(denom) < static_cast<Scalar>(1e-12)) return false; // parallel
+            const Scalar t = cross(c - a, s) / denom;
+            if (const Scalar u = cross(c - a, r) / denom; t < static_cast<Scalar>(0) || t > static_cast<Scalar>(1) || u
+                < static_cast<Scalar>(0) || u > static_cast<Scalar>(1)) return false;
             t_ab = t;
             return true;
         }
@@ -69,12 +68,12 @@ namespace akruti {
     // ── True polygon offset (inflate delta>0, deflate delta<0) with join resolution. ──────
     // Displaces each edge outward along its outward normal by |delta| and rejoins corners per
     // JoinStyle. CCW input → positive delta inflates. Degenerate results (< 3 verts) return empty.
-    [[nodiscard]] inline Poly offset_polygon(const Poly& poly_in, Scalar delta,
-                                             JoinStyle join = JoinStyle::Miter,
-                                             Scalar miter_limit = Scalar(4)) {
+    [[nodiscard]] inline Poly offset_polygon(const Poly& poly_in, const Scalar delta,
+                                             const JoinStyle join = JoinStyle::Miter,
+                                             const Scalar miter_limit = static_cast<Scalar>(4)) {
         const Poly poly = poly_detail::as_ccw(poly_in);
         const std::size_t n = poly.size();
-        if (n < 3 || std::fabs(delta) < Scalar(1e-9)) return poly;
+        if (n < 3 || std::fabs(delta) < static_cast<Scalar>(1e-9)) return poly;
 
         // Outward normal of a CCW polygon edge (a->b) is (dy, -dx) normalized.
         auto edge_normal = [](const Vec& a, const Vec& b) -> Vec {
@@ -99,13 +98,12 @@ namespace akruti {
 
             // Miter apex along the averaged normal, scaled to reach the edge lines.
             Vec bis = (n0 + n1);
-            const Scalar bis_len2 = akruti::length_sq(bis);
-            const bool convex = akruti::cross(cur - prev, next - cur) > Scalar(0);
+            const Scalar bis_len2 = length_sq(bis);
+            const bool convex = cross(cur - prev, next - cur) > static_cast<Scalar>(0);
 
-            if (join == JoinStyle::Miter && bis_len2 > Scalar(1e-12)) {
+            if (join == JoinStyle::Miter && bis_len2 > static_cast<Scalar>(1e-12)) {
                 bis = akruti::normalize(bis);
-                const Scalar cos_half = akruti::dot(bis, n0); // = cos(theta/2)
-                if (cos_half > Scalar(1) / miter_limit) {
+                if (const Scalar cos_half = akruti::dot(bis, n0); cos_half > static_cast<Scalar>(1) / miter_limit) {
                     out.push_back(cur + bis * (delta / cos_half));
                     continue;
                 }
@@ -114,8 +112,8 @@ namespace akruti {
             if (join == JoinStyle::Round && convex) {
                 // Emit p0, an arc midpoint, then p1.
                 out.push_back(p0);
-                Vec mid = (n0 + n1);
-                if (akruti::length_sq(mid) > Scalar(1e-12)) out.push_back(cur + akruti::normalize(mid) * delta);
+                if (Vec mid = (n0 + n1); length_sq(mid) > static_cast<Scalar>(1e-12)) out.push_back(
+                    cur + akruti::normalize(mid) * delta);
                 out.push_back(p1);
                 continue;
             }
@@ -132,8 +130,8 @@ namespace akruti {
     // polygon. Handles overlap; for disjoint inputs returns the larger contour (callers treat
     // multi-contour union at a higher level), for nested inputs returns the outer contour.
     [[nodiscard]] inline Poly union_polygon(const Poly& a_in, const Poly& b_in) {
-        const Poly a = poly_detail::as_ccw(a_in);
-        const Poly b = poly_detail::as_ccw(b_in);
+        Poly a = poly_detail::as_ccw(a_in);
+        Poly b = poly_detail::as_ccw(b_in);
         if (a.size() < 3) return b;
         if (b.size() < 3) return a;
 
@@ -160,8 +158,7 @@ namespace akruti {
                 const Vec& a0 = s[i];
                 const Vec& a1 = s[(i + 1) % ns];
                 for (std::size_t j = 0; j < nc; ++j) {
-                    Scalar t;
-                    if (poly_detail::segment_intersect(a0, a1, c[j], c[(j + 1) % nc], t))
+                    if (Scalar t; poly_detail::segment_intersect(a0, a1, c[j], c[(j + 1) % nc], t))
                         merged.push_back(a0 + (a1 - a0) * t);
                 }
             }
@@ -173,8 +170,8 @@ namespace akruti {
         // Order boundary CCW about centroid (result is a simple contour for the merged region).
         Vec c{0, 0};
         for (const auto& p : merged) c = c + p;
-        c = c * (Scalar(1) / static_cast<Scalar>(merged.size()));
-        std::sort(merged.begin(), merged.end(), [&](const Vec& u, const Vec& v) {
+        c = c * (static_cast<Scalar>(1) / static_cast<Scalar>(merged.size()));
+        std::ranges::sort(merged, [&](const Vec& u, const Vec& v) {
             return std::atan2(u[1] - c[1], u[0] - c[0]) < std::atan2(v[1] - c[1], v[0] - c[0]);
         });
         return merged;
@@ -185,7 +182,7 @@ namespace akruti {
     // the clip contour when clip is convex; otherwise falls back to keeping subject vertices outside
     // clip plus boundary crossings. Result is a single contour.
     [[nodiscard]] inline Poly subtract_polygon(const Poly& subject_in, const Poly& clip_in) {
-        const Poly subject = poly_detail::as_ccw(subject_in);
+        Poly subject = poly_detail::as_ccw(subject_in);
         const Poly clip = poly_detail::as_ccw(clip_in);
         if (subject.size() < 3) return {};
         if (clip.size() < 3) return subject;
@@ -211,12 +208,11 @@ namespace akruti {
             // Insert crossings on this edge in parametric order.
             std::vector<std::pair<Scalar, Vec>> xs;
             for (std::size_t j = 0; j < nc; ++j) {
-                Scalar t;
-                if (poly_detail::segment_intersect(s0, s1, clip[j], clip[(j + 1) % nc], t))
+                if (Scalar t; poly_detail::segment_intersect(s0, s1, clip[j], clip[(j + 1) % nc], t))
                     xs.emplace_back(t, s0 + (s1 - s0) * t);
             }
-            std::sort(xs.begin(), xs.end(), [](const auto& u, const auto& v) { return u.first < v.first; });
-            for (auto& [t, pt] : xs) out.push_back(pt);
+            std::ranges::sort(xs, [](const auto& u, const auto& v) { return u.first < v.first; });
+            for (auto& pt : xs | std::views::values) out.push_back(pt);
         }
         return out.size() >= 3 ? out : subject;
     }
