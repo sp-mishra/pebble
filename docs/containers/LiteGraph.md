@@ -1316,6 +1316,37 @@ auto centrality = litegraph::pravaha::parallel_betweenness_centrality(g);
 
 ---
 
+## 16. Observability & Telemetry (`LiteGraphNadi.hpp`)
+
+`LiteGraph` features zero-overhead lifecycle observability via an opt-in non-intrusive adaptor header `LiteGraphNadi.hpp`.
+
+### 16.1 Design & Philosophy
+- **Strict Decoupling**: Core data structures (`LiteGraph.hpp`, `LiteGraphAlgorithms.hpp`) have zero dependencies on `observability/nadi.hpp`.
+- **Zero Overhead**: Default algorithm invocations use `NullObserver`, which inlines to 0 machine instructions.
+- **Coarse-Grained Monitoring**: Emits pulses on macro phase transitions (e.g. algorithm start, end, and iteration intervals), keeping fine-grained inner loops at native SIMD/memory bandwidth speed.
+
+### 16.2 Usage Example
+
+```cpp
+#include "containers/graph/LiteGraphAlgorithms.hpp"
+#include "containers/graph/LiteGraphNadi.hpp"
+#include "observability/sinks/ring_buffer_sink.hpp"
+
+using RingSink = utils::nadi::RingBufferSink<128, 256>;
+using NadiObs = litegraph::observability::NadiGraphObserver<RingSink>;
+
+auto csr = litegraph::freeze_to_csr(g);
+auto result = litegraph::pagerank_engine(
+    csr,
+    {.damping_factor = 0.85, .max_iterations = 20},
+    litegraph::policy::SerialExec{},
+    litegraph::policy::ScalarVectorOps{},
+    NadiObs{} // Emits phase lifecycle and iteration telemetry
+);
+```
+
+---
+
 ## Appendix: Quick Reference
 
 | Feature                     | Function                                   | Signature                                                                         |
@@ -1356,6 +1387,7 @@ auto centrality = litegraph::pravaha::parallel_betweenness_centrality(g);
 | **Kruskal MST**             | `kruskal_mst`                              | `std::vector<EdgeId> kruskal_mst(const GraphT &g, weight_fn)`                     |
 | **Prim MST**                | `prim_mst`                                 | `std::vector<EdgeId> prim_mst(const GraphT &g, weight_fn, start)`                 |
 | **GED**                     | `graph_edit_distance`                      | `double graph_edit_distance(g1, g2, cost_fns...)`                                 |
+| **Nadi Observability**      | `observability::NadiGraphObserver`         | `NadiGraphObserver<SinkPolicy, ClockPolicy>`                                      |
 | **Freeze to CSR**           | `freeze_to_csr`                            | `CsrGraph<...> freeze_to_csr(const Graph<...> &g)`                                |
 | **Display (DOT)**           | `to_dot`                                   | `void to_dot(const Graph<...> &g, std::ostream &os)`                              |
 | **Display (ASCII)**         | `to_ascii`                                 | `void to_ascii(const Graph<...> &g, std::ostream &os, formatters...)`             |

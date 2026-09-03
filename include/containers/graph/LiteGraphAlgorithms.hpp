@@ -464,22 +464,41 @@ namespace litegraph {
         };
     } // namespace policy
 
+    // Concept for coarse-grained algorithm phase observers
+    template <typename O>
+    concept GraphObserver = requires(O o, std::string_view phase, std::size_t count) {
+        { o.on_phase_start(phase) };
+        { o.on_phase_end(phase) };
+        { o.on_iteration(count) };
+    };
+
+    // Zero-overhead default observer (fully elided by compiler)
+    struct NullObserver {
+        static constexpr void on_phase_start(std::string_view) noexcept {}
+        static constexpr void on_phase_end(std::string_view) noexcept {}
+        static constexpr void on_iteration(std::size_t) noexcept {}
+    };
+
     template <
         typename EdgeT,
         DirectednessTag Directedness,
         typename ExecPolicy = policy::SerialExec,
-        typename VectorOps = policy::ScalarVectorOps>
+        typename VectorOps = policy::ScalarVectorOps,
+        GraphObserver Observer = NullObserver>
     CsrPageRankResult pagerank_engine(
         const CsrGraph<EdgeT, Directedness>& g,
         const CsrPageRankOptions& options = {},
-        ExecPolicy exec = {},
-        VectorOps vops = {}
+        ExecPolicy&& exec = {},
+        VectorOps&& vops = {},
+        Observer&& observer = {}
     ) {
         if (options.damping_factor < 0.0 || options.damping_factor > 1.0) {
             throw std::invalid_argument("PageRank damping_factor must be in [0, 1].");
         }
         const std::size_t n = g.node_count();
         if (n == 0) return {};
+
+        observer.on_phase_start("pagerank");
 
         const auto& offsets = g.offsets();
         const auto& targets = g.targets();
@@ -492,6 +511,8 @@ namespace litegraph {
 
         CsrPageRankResult result;
         for (std::size_t iter = 0; iter < options.max_iterations; ++iter) {
+            observer.on_iteration(iter);
+
             const double dangling_mass = exec.transform_reduce(
                 std::size_t{0}, n, 0.0,
                 [&](std::size_t u) noexcept {
@@ -538,6 +559,7 @@ namespace litegraph {
             }
         }
         result.ranks = std::move(rank);
+        observer.on_phase_end("pagerank");
         return result;
     }
 

@@ -3,6 +3,8 @@
 #include "containers/graph/LiteGraph.hpp"
 #include "containers/graph/LiteGraphAlgorithms.hpp"
 #include "containers/graph/LiteGraphHighway.hpp"
+#include "containers/graph/LiteGraphNadi.hpp"
+#include "observability/sinks/ring_buffer_sink.hpp"
 
 using namespace litegraph;
 
@@ -3844,3 +3846,71 @@ TEST_CASE (
     REQUIRE(r.dist[n2.value] == std::numeric_limits<std::uint32_t>::max());
     REQUIRE(r.reconstruct(n0, n2).empty());
 }
+
+TEST_CASE (
+    "[LiteGraph][Nadi] NullObserver and NadiGraphObserver integration",
+    "[LiteGraph][Nadi]"
+) {
+    Graph<int, int, Directed> g;
+    const auto n0 = g.add_node(1);
+    const auto n1 = g.add_node(2);
+    const auto n2 = g.add_node(3);
+    g.add_edge(n0, n1, 1);
+    g.add_edge(n1, n2, 1);
+    g.add_edge(n2, n0, 1);
+
+    auto csr = freeze_to_csr(g);
+
+    // 1. Default NullObserver execution
+    auto res_default = pagerank_engine(
+        csr,
+        CsrPageRankOptions{.max_iterations = 10, .tolerance = 1e-6},
+        litegraph::policy::SerialExec{},
+        litegraph::policy::ScalarVectorOps{},
+        NullObserver{}
+    );
+    REQUIRE(res_default.converged);
+    REQUIRE(res_default.iterations > 0);
+
+    // 2. Custom custom counting observer
+    struct TestObserver {
+        int phase_start_count = 0;
+        int phase_end_count = 0;
+        int iteration_count = 0;
+
+        void on_phase_start(std::string_view phase) noexcept {
+            if (phase == "pagerank") ++phase_start_count;
+        }
+        void on_phase_end(std::string_view phase) noexcept {
+            if (phase == "pagerank") ++phase_end_count;
+        }
+        void on_iteration(std::size_t) noexcept {
+            ++iteration_count;
+        }
+    };
+
+    TestObserver test_obs;
+    auto res_custom = pagerank_engine(
+        csr,
+        CsrPageRankOptions{.max_iterations = 10, .tolerance = 1e-6},
+        litegraph::policy::SerialExec{},
+        litegraph::policy::ScalarVectorOps{},
+        test_obs
+    );
+    REQUIRE(res_custom.converged);
+
+    // 3. NadiGraphObserver with RingBufferSink
+    using TestRingSink = utils::nadi::RingBufferSink<64, 128>;
+    using NadiObserver = litegraph::observability::NadiGraphObserver<TestRingSink>;
+
+    NadiObserver nadi_obs;
+    auto res_nadi = pagerank_engine(
+        csr,
+        CsrPageRankOptions{.max_iterations = 5, .tolerance = 1e-6},
+        litegraph::policy::SerialExec{},
+        litegraph::policy::ScalarVectorOps{},
+        nadi_obs
+    );
+    REQUIRE(!res_nadi.ranks.empty());
+}
+
