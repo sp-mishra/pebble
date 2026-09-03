@@ -30,7 +30,6 @@
 // No virtual, no macros.  Header-only C++23.  Zero Lithe dependency.
 // =============================================================================
 
-#include <cassert>
 #include <concepts>
 #include <cstddef>
 #include <deque>
@@ -49,7 +48,7 @@ namespace containers {
     class slot_map {
     public:
         using handle_type = Handle;
-        using index_type = typename Handle::index_type;
+        using index_type = Handle::index_type;
         using value_type = T;
 
     private:
@@ -77,7 +76,7 @@ namespace containers {
                 return handle_type{idx, s.generation};
             }
             // New slot: 1-based index (0 is the null handle sentinel).
-            const index_type idx =
+            const auto idx =
                 static_cast<index_type>(slots_.size() + 1); // 1-based
             slots_.push_back(slot{std::optional<T>{std::forward<U>(val)}, 1});
             return handle_type{idx, 1};
@@ -148,8 +147,8 @@ namespace containers {
             value_ref operator*() const noexcept {
                 slot& s = map->slots_[pos];
                 return value_ref{
-                    handle_type{static_cast<index_type>(pos + 1), s.generation},
-                    *s.value
+                    .handle = handle_type{static_cast<index_type>(pos + 1), s.generation},
+                    .value = *s.value
                 };
             }
 
@@ -185,8 +184,8 @@ namespace containers {
             value_ref operator*() const noexcept {
                 const slot& s = map->slots_[pos];
                 return value_ref{
-                    handle_type{static_cast<index_type>(pos + 1), s.generation},
-                    *s.value
+                    .handle = handle_type{static_cast<index_type>(pos + 1), s.generation},
+                    .value = *s.value
                 };
             }
 
@@ -206,21 +205,21 @@ namespace containers {
         };
 
         [[nodiscard]] iterator begin() {
-            iterator it{this, 0};
+            iterator it{.map = this, .pos = 0};
             it.advance();
             return it;
         }
 
-        [[nodiscard]] iterator end() { return iterator{this, slots_.size()}; }
+        [[nodiscard]] iterator end() { return iterator{.map = this, .pos = slots_.size()}; }
 
         [[nodiscard]] const_iterator begin() const {
-            const_iterator it{this, 0};
+            const_iterator it{.map = this, .pos = 0};
             it.advance();
             return it;
         }
 
         [[nodiscard]] const_iterator end() const {
-            return const_iterator{this, slots_.size()};
+            return const_iterator{.map = this, .pos = slots_.size()};
         }
 
         [[nodiscard]] const_iterator cbegin() const { return begin(); }

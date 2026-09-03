@@ -136,7 +136,7 @@ namespace containers::associative {
                 if (l >= n) break;
                 const index_type r = right(i);
                 // pick the larger child (r wins ties only when strictly above l)
-                index_type child = (r < n && cmp_(heap_[r], heap_[l])) ? r : l;
+                const index_type child = (r < n && cmp_(heap_[r], heap_[l])) ? r : l;
                 if (!cmp_(heap_[child], v)) break; // v already >= best child
                 heap_[i] = heap_[child];
                 pos_[heap_[i]] = i;

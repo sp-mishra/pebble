@@ -102,7 +102,7 @@ namespace sparseset {
         using value_type = Value;
         using index_type = IndexT;
         using size_type = std::size_t;
-        static constexpr IndexT kInvalid = std::numeric_limits < IndexT > ::max();
+        static constexpr IndexT kInvalid = std::numeric_limits<IndexT>::max();
 
         static constexpr bool has_value = !std::is_same_v<Value, std::monostate>;
 
@@ -172,12 +172,12 @@ namespace sparseset {
                 return std::unexpected(SSError::KeyOutOfRange);
             if (sparse_[idx] != kInvalid)
                 return std::unexpected(SSError::KeyAlreadyExists);
-            if (dense_.size() >= static_cast<size_type>(std::numeric_limits < IndexT > ::max()))
+            if (dense_.size() >= static_cast<size_type>(std::numeric_limits<IndexT>::max()))
                 return std::unexpected(SSError::KeyOutOfRange);
 
             const auto pos = static_cast<IndexT>(dense_.size());
             sparse_[idx] = pos;
-            dense_.push_back(Entry{k, v});
+            dense_.push_back(Entry{.key = k, .val = v});
             return pos;
         }
 
@@ -189,12 +189,12 @@ namespace sparseset {
                 return std::unexpected(SSError::KeyOutOfRange);
             if (sparse_[idx] != kInvalid)
                 return std::unexpected(SSError::KeyAlreadyExists);
-            if (dense_.size() >= static_cast<size_type>(std::numeric_limits < IndexT > ::max()))
+            if (dense_.size() >= static_cast<size_type>(std::numeric_limits<IndexT>::max()))
                 return std::unexpected(SSError::KeyOutOfRange);
 
             const auto pos = static_cast<IndexT>(dense_.size());
             sparse_[idx] = pos;
-            dense_.push_back(Entry{k, std::move(v)});
+            dense_.push_back(Entry{.key = k, .val = std::move(v)});
             return pos;
         }
 
@@ -211,7 +211,7 @@ namespace sparseset {
             }
             const auto pos = static_cast<IndexT>(dense_.size());
             sparse_[idx] = pos;
-            dense_.push_back(Entry{k, v});
+            dense_.push_back(Entry{.key = k, .val = v});
             return pos;
         }
 
@@ -227,7 +227,7 @@ namespace sparseset {
             }
             const auto pos = static_cast<IndexT>(dense_.size());
             sparse_[idx] = pos;
-            dense_.push_back(Entry{k, std::move(v)});
+            dense_.push_back(Entry{.key = k, .val = std::move(v)});
             return pos;
         }
 
@@ -428,13 +428,12 @@ namespace sparseset {
         // Insert all keys from a range. Skips duplicates (no error). Auto-reserves.
         // Note: for map usage, existing values are NOT overwritten (uses insert).
         template <std::ranges::input_range R>
-            requires std::convertible_to < std::ranges::range_value_t < R >
+            requires std::convertible_to<std::ranges::range_value_t<R>
 
 
-
-        ,
-        Key
-        >
+                                         ,
+                                         Key
+            >
         void insert_range(R&& rng) {
             for (Key k : rng) {
                 const size_type idx = detail::to_index(k);
@@ -446,13 +445,12 @@ namespace sparseset {
 
         // Remove all keys from a range. Skips absent keys silently.
         template <std::ranges::input_range R>
-            requires std::convertible_to < std::ranges::range_value_t < R >
+            requires std::convertible_to<std::ranges::range_value_t<R>
 
 
-
-        ,
-        Key
-        >
+                                         ,
+                                         Key
+            >
         void remove_range(R&& rng) {
             for (Key k : rng) {
                 [[maybe_unused]] auto _ = remove(k);
@@ -461,26 +459,24 @@ namespace sparseset {
 
         // True iff every key in rng is present.
         template <std::ranges::input_range R>
-            requires std::convertible_to < std::ranges::range_value_t < R >
+            requires std::convertible_to<std::ranges::range_value_t<R>
 
 
-
-        ,
-        Key
-        >
+                                         ,
+                                         Key
+            >
         [[nodiscard]] bool contains_all(R&& rng) const {
             return std::ranges::all_of(rng, [this](Key k) { return contains(k); });
         }
 
         // True iff at least one key in rng is present.
         template <std::ranges::input_range R>
-            requires std::convertible_to < std::ranges::range_value_t < R >
+            requires std::convertible_to<std::ranges::range_value_t<R>
 
 
-
-        ,
-        Key
-        >
+                                         ,
+                                         Key
+            >
         [[nodiscard]] bool contains_any(R&& rng) const {
             return std::ranges::any_of(rng, [this](Key k) { return contains(k); });
         }
@@ -541,13 +537,12 @@ namespace sparseset {
     template <SparseKey Key,
         typename Value = std::monostate,
         std::ranges::input_range R>
-        requires std::convertible_to < std::ranges::range_value_t < R >
+        requires std::convertible_to<std::ranges::range_value_t<R>
 
 
-
-    ,
-    Key
-    >
+                                     ,
+                                     Key
+        >
     [[nodiscard]] auto make_sparse_set(std::size_t universe_capacity, R&& rng) {
         SparseSet<Key, Value> s(universe_capacity);
         for (Key k : rng)

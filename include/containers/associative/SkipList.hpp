@@ -22,14 +22,11 @@
 #include <array>
 #include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
-#include <limits>
 #include <memory>
 #include <memory_resource>
-#include <new>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
@@ -97,8 +94,8 @@ namespace containers {
         using allocator_type = Allocator;
         using reference = value_type&;
         using const_reference = const value_type&;
-        using pointer = typename std::allocator_traits<allocator_type>::pointer;
-        using const_pointer = typename std::allocator_traits<allocator_type>::const_pointer;
+        using pointer = std::allocator_traits<allocator_type>::pointer;
+        using const_pointer = std::allocator_traits<allocator_type>::const_pointer;
 
         static_assert(MaxLevel > 0 && MaxLevel <= 64,
                       "SkipList MaxLevel must be in [1, 64]");
@@ -124,7 +121,7 @@ namespace containers {
         struct NodeBase {
             std::uint8_t level{1};
 
-            constexpr explicit NodeBase(std::size_t lvl = 1) noexcept
+            constexpr explicit NodeBase(const std::size_t lvl = 1) noexcept
                 : level(static_cast<std::uint8_t>(lvl)) {}
 
             NodeBase(const NodeBase&) = delete;
@@ -156,15 +153,15 @@ namespace containers {
         // -----------------------------------------------------------------------
         // Static layout helpers
         // -----------------------------------------------------------------------
-        [[nodiscard]] static constexpr std::size_t align_up(std::size_t n, std::size_t a) noexcept {
+        [[nodiscard]] static constexpr std::size_t align_up(const std::size_t n, const std::size_t a) noexcept {
             return (n + a - 1) & ~(a - 1);
         }
 
-        [[nodiscard]] static constexpr std::size_t value_offset_for_level(std::size_t lvl) noexcept {
+        [[nodiscard]] static constexpr std::size_t value_offset_for_level(const std::size_t lvl) noexcept {
             return align_up(sizeof(NodeBase) + lvl * sizeof(NodeBase*), alignof(value_type));
         }
 
-        [[nodiscard]] static constexpr std::size_t total_allocation_size(std::size_t lvl) noexcept {
+        [[nodiscard]] static constexpr std::size_t total_allocation_size(const std::size_t lvl) noexcept {
             return value_offset_for_level(lvl) + sizeof(value_type);
         }
 
@@ -198,7 +195,7 @@ namespace containers {
         // -----------------------------------------------------------------------
         // Rebound byte allocator for variable-sized raw allocations
         // -----------------------------------------------------------------------
-        using byte_allocator_type = typename std::allocator_traits<allocator_type>::template rebind_alloc<std::byte>;
+        using byte_allocator_type = std::allocator_traits<allocator_type>::template rebind_alloc<std::byte>;
         using byte_allocator_traits = std::allocator_traits<byte_allocator_type>;
 
     public:
@@ -777,7 +774,7 @@ namespace containers {
             std::destroy_at(get_value_ptr(node));
             std::destroy_at(node);
 
-            std::byte* raw_mem = reinterpret_cast<std::byte*>(node);
+            auto* raw_mem = reinterpret_cast<std::byte*>(node);
             byte_allocator_traits::deallocate(alloc_, raw_mem, bytes);
         }
 
