@@ -50,8 +50,8 @@ namespace kosha::adapter {
     struct NityaStringSerializer {
         static std::string serialize_key(const std::string& k) { return k; }
         static std::string serialize_value(const std::string& v) { return v; }
-        static std::string deserialize_key(std::string_view sv) { return std::string(sv); }
-        static std::string deserialize_value(std::string_view sv) { return std::string(sv); }
+        static std::string deserialize_key(const std::string_view sv) { return std::string(sv); }
+        static std::string deserialize_value(const std::string_view sv) { return std::string(sv); }
     };
 
     // ============================================================================
@@ -66,8 +66,8 @@ namespace kosha::adapter {
                                     typename CacheType::value_type>
     class NityaAdapter {
     public:
-        using key_type = typename CacheType::key_type;
-        using value_type = typename CacheType::value_type;
+        using key_type = CacheType::key_type;
+        using value_type = CacheType::value_type;
         using Error = NityaAdapterError;
 
         enum class OpType : std::uint8_t {
@@ -93,8 +93,8 @@ namespace kosha::adapter {
 
         // Write-through: record encoded as binary Op and appended to Nitya WAL first.
         std::expected<void, Error> put(key_type key, value_type value) {
-            std::string k_str = Serializer::serialize_key(key);
-            std::string v_str = Serializer::serialize_value(value);
+            const std::string k_str = Serializer::serialize_key(key);
+            const std::string v_str = Serializer::serialize_value(value);
 
             auto encoded = encode_entry(OpType::Put, k_str, v_str);
             auto append_res = wal_->append(std::span{encoded.data(), encoded.size()});
@@ -117,8 +117,7 @@ namespace kosha::adapter {
             std::string target_k = Serializer::serialize_key(key);
             std::optional<value_type> found_val;
 
-            auto stream = wal_->recover(0);
-            for (const auto& rec : stream) {
+            for (auto stream = wal_->recover(0); const auto& rec : stream) {
                 auto parsed = decode_entry(rec.payload);
                 if (!parsed) continue;
 
@@ -148,7 +147,7 @@ namespace kosha::adapter {
         std::expected<void, Error> erase(const key_type& key) {
             cache_.erase(key);
 
-            std::string k_str = Serializer::serialize_key(key);
+            const std::string k_str = Serializer::serialize_key(key);
             auto encoded = encode_entry(OpType::Erase, k_str, "");
             auto append_res = wal_->append(std::span{encoded.data(), encoded.size()});
             if (!append_res) return std::unexpected(Error::BackendError);
@@ -178,10 +177,9 @@ namespace kosha::adapter {
         }
 
         // Warms in-memory cache by scanning all historical records in Nitya WAL.
-        std::size_t load_all(std::size_t max_keys = std::numeric_limits<std::size_t>::max()) {
+        std::size_t load_all(const std::size_t max_keys = std::numeric_limits<std::size_t>::max()) {
             std::size_t loaded = 0;
-            auto stream = wal_->recover(0);
-            for (const auto& rec : stream) {
+            for (auto stream = wal_->recover(0); const auto& rec : stream) {
                 auto parsed = decode_entry(rec.payload);
                 if (!parsed) continue;
 
@@ -215,10 +213,10 @@ namespace kosha::adapter {
         CacheType cache_;
         std::unique_ptr<WalEngine> wal_;
 
-        static std::vector<std::byte> encode_entry(OpType op, std::string_view k, std::string_view v) {
-            std::uint32_t k_len = static_cast<std::uint32_t>(k.size());
-            std::uint32_t v_len = static_cast<std::uint32_t>(v.size());
-            std::size_t total = sizeof(std::uint8_t) + sizeof(std::uint32_t) + k_len + sizeof(std::uint32_t) + v_len;
+        static std::vector<std::byte> encode_entry(OpType op, const std::string_view k, const std::string_view v) {
+            const auto k_len = static_cast<std::uint32_t>(k.size());
+            const auto v_len = static_cast<std::uint32_t>(v.size());
+            const std::size_t total = sizeof(std::uint8_t) + sizeof(std::uint32_t) + k_len + sizeof(std::uint32_t) + v_len;
 
             std::vector<std::byte> buf(total);
             std::byte* ptr = buf.data();
@@ -244,11 +242,11 @@ namespace kosha::adapter {
         }
 
         static std::optional<std::tuple<OpType, std::string_view, std::string_view>>
-        decode_entry(std::span<const std::byte> payload) {
+        decode_entry(const std::span<const std::byte> payload) {
             if (payload.size() < sizeof(std::uint8_t) + 2 * sizeof(std::uint32_t)) return std::nullopt;
 
             const std::byte* ptr = payload.data();
-            OpType op = static_cast<OpType>(*reinterpret_cast<const std::uint8_t*>(ptr));
+            auto op = static_cast<OpType>(*reinterpret_cast<const std::uint8_t*>(ptr));
             ptr += sizeof(std::uint8_t);
 
             std::uint32_t k_len = 0;

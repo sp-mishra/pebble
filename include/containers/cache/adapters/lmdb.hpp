@@ -10,8 +10,6 @@
 #include <lmdb.h>
 
 #include <cstddef>
-#include <cstdint>
-#include <cstring>
 #include <expected>
 #include <filesystem>
 #include <limits>
@@ -50,8 +48,8 @@ namespace kosha::adapter {
     struct LMDBStringSerializer {
         static std::string serialize_key(const std::string& k) { return k; }
         static std::string serialize_value(const std::string& v) { return v; }
-        static std::string deserialize_key(std::string_view sv) { return std::string(sv); }
-        static std::string deserialize_value(std::string_view sv) { return std::string(sv); }
+        static std::string deserialize_key(const std::string_view sv) { return std::string(sv); }
+        static std::string deserialize_value(const std::string_view sv) { return std::string(sv); }
     };
 
     // ============================================================================
@@ -75,8 +73,8 @@ namespace kosha::adapter {
                                    typename CacheType::value_type>
     class LMDBAdapter {
     public:
-        using key_type = typename CacheType::key_type;
-        using value_type = typename CacheType::value_type;
+        using key_type = CacheType::key_type;
+        using value_type = CacheType::value_type;
         using Error = LMDBError;
 
         // Opens (or creates) an LMDB environment at env_path. Takes ownership of cache.

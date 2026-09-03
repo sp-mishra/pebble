@@ -288,7 +288,7 @@ namespace kosha::core {
             freq_[k] = nf;
             buckets_[nf].push_front(k);
             pos_[k] = buckets_[nf].begin();
-            if (f == min_freq_ && buckets_.find(f) == buckets_.end())
+            if (f == min_freq_ && !buckets_.contains(f))
                 min_freq_ = nf;
         }
     };
@@ -499,8 +499,7 @@ namespace kosha::core {
         // Enforce |B1|+|B2| ≤ cap_.
         void trim_ghosts() {
             while (b1_.size() + b2_.size() > cap_) {
-                const auto p_floor = p_;
-                if ((!b1_.empty() && b1_.size() > (cap_ > p_floor ? cap_ - p_floor : 0)) || !b1_.empty()) {
+                if (const auto p_floor = p_; (!b1_.empty() && b1_.size() > (cap_ > p_floor ? cap_ - p_floor : 0)) || !b1_.empty()) {
                     idx_.erase(b1_.back());
                     b1_.pop_back();
                 }
