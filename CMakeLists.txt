@@ -112,6 +112,8 @@ set(PEBBLE_DEP_FOLDERS
     mlx       "mlx"
     sokol     "sokol"
     notcurses "notcurses"
+    sqlite    "sqlite"
+    libduckdb "libduckdb"
 )
 
 set(MISSING_DEPS "")
@@ -231,6 +233,53 @@ if (EXISTS "${CMAKE_SOURCE_DIR}/dependencies/liblmdb/mdb.c")
     add_library(lmdb STATIC ${LMDB_SOURCE})
     target_include_directories(lmdb PUBLIC "${CMAKE_SOURCE_DIR}/dependencies/liblmdb")
     target_link_libraries(lmdb PUBLIC Threads::Threads)
+endif()
+
+# SQLite library integration
+option(BUILD_SQLITE "Build with SQLite library support" ON)
+set(HAS_SQLITE FALSE)
+if(BUILD_SQLITE)
+    set(SQLITE_DIR "${CMAKE_SOURCE_DIR}/dependencies/sqlite")
+    if (EXISTS "${SQLITE_DIR}/CMakeLists.txt")
+        add_subdirectory(${SQLITE_DIR} sqlite_build)
+        set(HAS_SQLITE TRUE)
+        add_compile_definitions(HAS_SQLITE=1)
+        message(STATUS "[pebble] SQLite: Building library from dependencies/sqlite")
+    elseif (EXISTS "${SQLITE_DIR}/sqlite3.c")
+        add_library(sqlite3 STATIC "${SQLITE_DIR}/sqlite3.c")
+        target_include_directories(sqlite3 PUBLIC "${SQLITE_DIR}")
+        find_package(Threads REQUIRED)
+        target_link_libraries(sqlite3 PRIVATE Threads::Threads)
+        add_library(sqlite::sqlite ALIAS sqlite3)
+        add_library(sqlite3::sqlite3 ALIAS sqlite3)
+        set(HAS_SQLITE TRUE)
+        add_compile_definitions(HAS_SQLITE=1)
+        message(STATUS "[pebble] SQLite: Building library directly from dependencies/sqlite/sqlite3.c")
+    endif()
+endif()
+
+# DuckDB library integration
+option(BUILD_DUCKDB "Build with DuckDB library support" ON)
+set(HAS_DUCKDB FALSE)
+if(BUILD_DUCKDB)
+    set(DUCKDB_DIR "${CMAKE_SOURCE_DIR}/dependencies/libduckdb")
+    if (EXISTS "${DUCKDB_DIR}/CMakeLists.txt")
+        add_subdirectory(${DUCKDB_DIR} duckdb_build)
+        set(HAS_DUCKDB TRUE)
+        add_compile_definitions(HAS_DUCKDB=1)
+        message(STATUS "[pebble] DuckDB: Building library from dependencies/libduckdb (isolated to C++17)")
+    elseif (EXISTS "${DUCKDB_DIR}/duckdb.cpp")
+        add_library(duckdb STATIC "${DUCKDB_DIR}/duckdb.cpp")
+        set_target_properties(duckdb PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+        target_include_directories(duckdb PUBLIC "${DUCKDB_DIR}")
+        find_package(Threads REQUIRED)
+        target_link_libraries(duckdb PRIVATE Threads::Threads)
+        add_library(duckdb::duckdb ALIAS duckdb)
+        add_library(libduckdb::libduckdb ALIAS duckdb)
+        set(HAS_DUCKDB TRUE)
+        add_compile_definitions(HAS_DUCKDB=1)
+        message(STATUS "[pebble] DuckDB: Building library directly from dependencies/libduckdb/duckdb.cpp (isolated to C++17)")
+    endif()
 endif()
 
 # ===================== Z3 SMT Solver (optimized static library) =========================
