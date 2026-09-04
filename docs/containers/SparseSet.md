@@ -411,3 +411,22 @@ for (auto [key, val] : scores.all_pairs()) {
     val *= 2.0f;
 }
 ```
+
+---
+
+## 15. Memory Footprint: `FlatSparsePolicy` vs `PagedSparsePolicy`
+
+Pebble's `SparseSet` architecture supports two distinct sparse indexing policies:
+1. **`FlatSparsePolicy`** (`FlatSparseSet`):
+   - Direct contiguous `std::vector<IndexT>` array.
+   - Ideal for bounded key universes ($N \le 10^5$) with high key density.
+   - Memory Consumption:
+     $$\text{RAM}_{\text{Flat}} = \text{UniverseCap} \times 4\text{ bytes}$$
+
+2. **`PagedSparsePolicy`** (`PagedSparseSet`):
+   - Two-level page directory using `std::unique_ptr<std::array<IndexT, 1024>>`.
+   - Pages are allocated lazily only when a key within that 1024-entry block is inserted.
+   - Ideal for sparse key universes ($N \ge 10^6$) where only a small subset of IDs is active at any time.
+   - Memory Consumption:
+     $$\text{RAM}_{\text{Paged}} = \left(\frac{\text{ActivePages}}{1}\right) \times 4096\text{ bytes} + \left(\frac{\text{UniverseCap}}{1024}\right) \times 8\text{ bytes}$$
+

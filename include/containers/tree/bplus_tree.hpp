@@ -15,7 +15,6 @@
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
-#include <cstdint>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
@@ -27,12 +26,10 @@
 #include <span>
 #include <vector>
 
-#include "meta/meta.hpp"
 #include "mem/smriti.hpp"
 
 #if __has_include(<hwy/highway.h>)
 #include <hwy/highway.h>
-#define PEBBLE_HAS_HIGHWAY 1
 #endif
 
 namespace pebble::containers {
@@ -110,7 +107,7 @@ namespace pebble::containers {
             std::same_as<Key, std::uint64_t> || std::same_as<Key, std::int64_t>;
 
         template <typename Key>
-        [[nodiscard]] inline std::size_t linear_search_simd(const Key* keys, std::size_t count,
+        [[nodiscard]] inline std::size_t linear_search_simd(const Key* keys, const std::size_t count,
                                                             const Key& target) noexcept {
 #if defined(PEBBLE_HAS_HIGHWAY)
             if constexpr (std::same_as<Key, std::uint64_t> || std::same_as<Key, std::int64_t>) {
@@ -123,8 +120,7 @@ namespace pebble::containers {
                     std::size_t i = 0;
                     for (; i + N <= count; i += N) {
                         const auto data = hn::LoadU(d, keys + i);
-                        const auto mask = hn::Eq(data, target_vec);
-                        if (!hn::AllFalse(d, mask)) {
+                        if (const auto mask = hn::Eq(data, target_vec); !hn::AllFalse(d, mask)) {
                             for (std::size_t j = i; j < i + N; ++j) {
                                 if (keys[j] == target) return j;
                             }
@@ -140,15 +136,13 @@ namespace pebble::containers {
                 Key, float>) {
                 namespace hn = hwy::HWY_NAMESPACE;
                 const hn::ScalableTag<Key> d;
-                const std::size_t N = hn::Lanes(d);
 
-                if (count >= N) {
+                if (const std::size_t N = hn::Lanes(d); count >= N) {
                     const auto target_vec = hn::Set(d, target);
                     std::size_t i = 0;
                     for (; i + N <= count; i += N) {
                         const auto data = hn::LoadU(d, keys + i);
-                        const auto mask = hn::Eq(data, target_vec);
-                        if (!hn::AllFalse(d, mask)) {
+                        if (const auto mask = hn::Eq(data, target_vec); !hn::AllFalse(d, mask)) {
                             for (std::size_t j = i; j < i + N; ++j) {
                                 if (keys[j] == target) return j;
                             }
@@ -199,8 +193,8 @@ namespace pebble::containers {
         LeafNode* next_free{nullptr}; // Intrusive freelist link
 
         // Structure-of-Arrays (SoA) layout: Keys stored contiguously, Values stored contiguously
-        alignas(alignof(Key)) std::byte key_storage[LeafCap * sizeof(Key)];
-        alignas(alignof(Value)) std::byte val_storage[LeafCap * sizeof(Value)];
+        alignas(alignof(Key)) std::byte key_storage[LeafCap * sizeof(Key)]{};
+        alignas(alignof(Value)) std::byte val_storage[LeafCap * sizeof(Value)]{};
 
         [[nodiscard]] Key* keys() noexcept {
             return reinterpret_cast<Key*>(key_storage);
@@ -256,11 +250,11 @@ namespace pebble::containers {
 
     template <typename Key, std::size_t InnerCap, typename Allocator>
     struct alignas(detail::kCacheLineSize) InnerNode {
-        NodeHeader header{NodeType::Inner, 0, 0};
+        NodeHeader header{.type = NodeType::Inner, .count = 0, .flags = 0};
         InnerNode* next_free{nullptr}; // Intrusive freelist link
 
         // Storage for router keys (InnerCap) and child node pointers (InnerCap + 1)
-        alignas(alignof(Key)) std::byte key_storage[InnerCap * sizeof(Key)];
+        alignas(alignof(Key)) std::byte key_storage[InnerCap * sizeof(Key)]{};
         void* children[InnerCap + 1]{nullptr};
 
         [[nodiscard]] Key* keys() noexcept {
@@ -336,7 +330,7 @@ namespace pebble::containers {
     public:
         constexpr BPlusTreeIterator() noexcept = default;
 
-        constexpr BPlusTreeIterator(LeafNodePtr node, std::size_t idx) noexcept
+        constexpr BPlusTreeIterator(LeafNodePtr node, const std::size_t idx) noexcept
             : node_(node), index_(idx) {}
 
         template <bool OtherConst>
@@ -445,8 +439,8 @@ namespace pebble::containers {
         using InnerAllocTraits = std::allocator_traits<typename std::allocator_traits<Allocator>::template rebind_alloc<
             InnerType>>;
 
-        using LeafAlloc = typename std::allocator_traits<Allocator>::template rebind_alloc<LeafType>;
-        using InnerAlloc = typename std::allocator_traits<Allocator>::template rebind_alloc<InnerType>;
+        using LeafAlloc = std::allocator_traits<Allocator>::template rebind_alloc<LeafType>;
+        using InnerAlloc = std::allocator_traits<Allocator>::template rebind_alloc<InnerType>;
 
         [[no_unique_address]] Compare comp_{};
         [[no_unique_address]] LeafAlloc leaf_alloc_{};
@@ -602,7 +596,7 @@ namespace pebble::containers {
             free_inner_count_ = 0;
         }
 
-        void destroy_subtree(void* node_ptr, bool is_leaf) noexcept {
+        void destroy_subtree(void* node_ptr, const bool is_leaf) noexcept {
             if (!node_ptr) return;
             if (is_leaf) {
                 deallocate_leaf(static_cast<LeafType*>(node_ptr));
@@ -698,7 +692,7 @@ namespace pebble::containers {
         // Recursive insert helper (SoA layout)
         template <typename K, typename V>
         std::pair<iterator, std::optional<SplitResult>> insert_recursive(
-            void* current, bool is_leaf, K&& key, V&& val, bool overwrite) {
+            void* current, const bool is_leaf, K&& key, V&& val, bool overwrite) {
             if (is_leaf) {
                 auto* leaf = static_cast<LeafType*>(current);
                 const std::size_t idx = leaf_lower_bound(leaf, key);
@@ -768,7 +762,8 @@ namespace pebble::containers {
 
         // Deletion underflow and merge/borrow handlers
         template <typename K>
-        bool erase_recursive(void* current, bool is_leaf, const K& key, InnerType* parent, std::size_t parent_idx) {
+        bool erase_recursive(void* current, const bool is_leaf, const K& key, InnerType* parent,
+                             std::size_t parent_idx) {
             if (is_leaf) {
                 auto* leaf = static_cast<LeafType*>(current);
                 const std::size_t idx = leaf_lower_bound(leaf, key);
@@ -804,8 +799,8 @@ namespace pebble::containers {
             void* child_node = inner->children[child_idx];
             bool child_is_leaf = static_cast<NodeHeader*>(child_node)->is_leaf();
 
-            bool removed = erase_recursive(child_node, child_is_leaf, key, inner, child_idx);
-            if (!removed) return false;
+            if (const bool removed = erase_recursive(child_node, child_is_leaf, key, inner, child_idx); !removed) return
+                false;
 
             if (parent && inner->header.count < (InnerCapacity / 2)) {
                 rebalance_inner(inner, parent, parent_idx);
@@ -815,8 +810,8 @@ namespace pebble::containers {
 
         void rebalance_leaf(LeafType* leaf, InnerType* parent, std::size_t parent_idx) {
             if (parent_idx > 0) {
-                auto* left = static_cast<LeafType*>(parent->children[parent_idx - 1]);
-                if (left->header.count > (LeafCapacity / 2)) {
+                if (auto* left = static_cast<LeafType*>(parent->children[parent_idx - 1]); left->header.count > (
+                    LeafCapacity / 2)) {
                     auto* leaf_keys = leaf->keys();
                     auto* leaf_vals = leaf->values();
                     auto* left_keys = left->keys();
@@ -843,8 +838,8 @@ namespace pebble::containers {
             }
 
             if (parent_idx < parent->header.count) {
-                auto* right = static_cast<LeafType*>(parent->children[parent_idx + 1]);
-                if (right->header.count > (LeafCapacity / 2)) {
+                if (auto* right = static_cast<LeafType*>(parent->children[parent_idx + 1]); right->header.count > (
+                    LeafCapacity / 2)) {
                     auto* leaf_keys = leaf->keys();
                     auto* leaf_vals = leaf->values();
                     auto* right_keys = right->keys();
@@ -942,8 +937,8 @@ namespace pebble::containers {
 
         void rebalance_inner(InnerType* inner, InnerType* parent, std::size_t parent_idx) {
             if (parent_idx > 0) {
-                auto* left = static_cast<InnerType*>(parent->children[parent_idx - 1]);
-                if (left->header.count > (InnerCapacity / 2)) {
+                if (auto* left = static_cast<InnerType*>(parent->children[parent_idx - 1]); left->header.count > (
+                    InnerCapacity / 2)) {
                     auto* inner_keys = inner->keys();
                     auto* left_keys = left->keys();
 
@@ -967,8 +962,8 @@ namespace pebble::containers {
             }
 
             if (parent_idx < parent->header.count) {
-                auto* right = static_cast<InnerType*>(parent->children[parent_idx + 1]);
-                if (right->header.count > (InnerCapacity / 2)) {
+                if (auto* right = static_cast<InnerType*>(parent->children[parent_idx + 1]); right->header.count > (
+                    InnerCapacity / 2)) {
                     auto* inner_keys = inner->keys();
                     auto* right_keys = right->keys();
 
@@ -1362,9 +1357,7 @@ namespace pebble::containers {
             erase_recursive(root_, root_is_leaf, key, nullptr, 0);
 
             if (root_ && !static_cast<NodeHeader*>(root_)->is_leaf()) {
-                auto* inner_root = static_cast<InnerType*>(root_);
-                if (inner_root->header.count == 0) {
-                    void* old_root = root_;
+                if (auto* inner_root = static_cast<InnerType*>(root_); inner_root->header.count == 0) {
                     root_ = inner_root->children[0];
                     deallocate_inner(inner_root);
                     --depth_;
@@ -1636,8 +1629,7 @@ namespace pebble::containers {
         using allocator_type = Allocator;
 
         class const_iterator {
-        private:
-            typename TreeType::const_iterator it_;
+            TreeType::const_iterator it_;
             friend class BPlusSet;
 
         public:
@@ -1648,7 +1640,8 @@ namespace pebble::containers {
             using reference = const Key&;
 
             constexpr const_iterator() noexcept = default;
-            constexpr explicit const_iterator(typename TreeType::const_iterator it) noexcept : it_(it) {}
+            constexpr explicit const_iterator(TreeType::const_iterator it) noexcept : it_(it) {}
+            constexpr explicit const_iterator(TreeType::iterator it) noexcept : it_(it) {}
 
             [[nodiscard]] constexpr const Key& operator*() const noexcept { return it_->first; }
             [[nodiscard]] constexpr const Key* operator->() const noexcept { return &it_->first; }

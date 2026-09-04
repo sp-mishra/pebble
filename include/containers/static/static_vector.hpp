@@ -2,12 +2,10 @@
 
 #include <cstddef>
 #include <memory>
-#include <new>
 #include <type_traits>
 #include <utility>
 
 namespace containers {
-
     template <class T, std::size_t N>
     class static_vector {
     public:
@@ -100,7 +98,8 @@ namespace containers {
             }
             if consteval {
                 data()[size_] = v;
-            } else {
+            }
+            else {
                 std::construct_at(data() + size_, v);
             }
             ++size_;
@@ -114,7 +113,8 @@ namespace containers {
             }
             if consteval {
                 data()[size_] = std::move(v);
-            } else {
+            }
+            else {
                 std::construct_at(data() + size_, std::move(v));
             }
             ++size_;
@@ -129,7 +129,8 @@ namespace containers {
             }
             if consteval {
                 data()[size_] = T(std::forward<Args>(args)...);
-            } else {
+            }
+            else {
                 std::construct_at(data() + size_, std::forward<Args>(args)...);
             }
             ++size_;
@@ -139,14 +140,14 @@ namespace containers {
         constexpr void pop_back() noexcept {
             if (size_ > 0) {
                 --size_;
-                if (!std::is_constant_evaluated()) {
+                if !consteval {
                     std::destroy_at(data() + size_);
                 }
             }
         }
 
         constexpr void clear() noexcept {
-            if (!std::is_constant_evaluated()) {
+            if !consteval {
                 for (size_type i = 0; i < size_; ++i) {
                     std::destroy_at(data() + i);
                 }
@@ -166,7 +167,8 @@ namespace containers {
         [[nodiscard]] constexpr T* data() noexcept {
             if consteval {
                 return storage_.elements;
-            } else {
+            }
+            else {
                 return reinterpret_cast<T*>(storage_.raw);
             }
         }
@@ -174,7 +176,8 @@ namespace containers {
         [[nodiscard]] constexpr const T* data() const noexcept {
             if consteval {
                 return storage_.elements;
-            } else {
+            }
+            else {
                 return reinterpret_cast<const T*>(storage_.raw);
             }
         }
@@ -194,28 +197,34 @@ namespace containers {
             T elements[N];
 
             constexpr Storage() noexcept : elements{} {}
+
             constexpr ~Storage() noexcept
                 requires (!std::is_trivially_destructible_v<T>) {}
+
             constexpr ~Storage() noexcept
                 requires std::is_trivially_destructible_v<T> = default;
 
             constexpr Storage(const Storage&) noexcept
                 requires std::is_trivially_copy_constructible_v<T> = default;
-            constexpr Storage(const Storage& other) noexcept
+
+            constexpr Storage(const Storage& /*other*/) noexcept
                 requires (!std::is_trivially_copy_constructible_v<T>) : elements{} {}
 
             constexpr Storage(Storage&&) noexcept
                 requires std::is_trivially_move_constructible_v<T> = default;
-            constexpr Storage(Storage&& other) noexcept
+
+            constexpr Storage(Storage&& /*other*/) noexcept
                 requires (!std::is_trivially_move_constructible_v<T>) : elements{} {}
 
             constexpr Storage& operator=(const Storage&) noexcept
                 requires std::is_trivially_copy_assignable_v<T> = default;
+
             constexpr Storage& operator=(const Storage&) noexcept
                 requires (!std::is_trivially_copy_assignable_v<T>) { return *this; }
 
             constexpr Storage& operator=(Storage&&) noexcept
                 requires std::is_trivially_move_assignable_v<T> = default;
+
             constexpr Storage& operator=(Storage&&) noexcept
                 requires (!std::is_trivially_move_assignable_v<T>) { return *this; }
         } storage_;
@@ -223,7 +232,6 @@ namespace containers {
         size_type size_ = 0;
         bool overflow_ = false;
     };
-
 } // namespace containers
 
 namespace pebble::containers {

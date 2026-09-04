@@ -183,32 +183,56 @@ namespace containers::reactive {
         void unsubscribe(ObserverId id) noexcept {
             for (std::size_t i = 0; i < observers_.size(); ++i) {
                 if (observers_[i].id == id) {
-                    observers_[i] = std::move(observers_[observers_.size() - 1]);
-                    observers_.pop_back();
+                    if (notify_depth_ > 0) {
+                        observers_[i].id = kInvalidObserver;
+                        observers_[i].cb = Callback{};
+                    } else {
+                        observers_.erase(observers_.begin() + static_cast<std::ptrdiff_t>(i));
+                    }
                     return;
                 }
             }
         }
 
-        [[nodiscard]] std::size_t observer_count() const noexcept { return observers_.size(); }
+        [[nodiscard]] std::size_t observer_count() const noexcept {
+            std::size_t count = 0;
+            for (const auto& entry : observers_) {
+                if (entry.id != kInvalidObserver) ++count;
+            }
+            return count;
+        }
 
         // Fire all observers without changing the value (useful after mutate paths
         // that bypass set()).
         void notify() {
-            for (std::size_t i = 0; i < observers_.size(); ++i) {
-                observers_[i].cb();
+            ++notify_depth_;
+            const std::size_t count = observers_.size();
+            for (std::size_t i = 0; i < count; ++i) {
+                if (observers_[i].id != kInvalidObserver && observers_[i].cb) {
+                    observers_[i].cb();
+                }
+            }
+            --notify_depth_;
+
+            if (notify_depth_ == 0) {
+                for (std::size_t i = observers_.size(); i > 0; --i) {
+                    if (observers_[i - 1].id == kInvalidObserver) {
+                        observers_.erase(observers_.begin() + static_cast<std::ptrdiff_t>(i - 1));
+                    }
+                }
             }
         }
 
     private:
         struct Entry {
-            ObserverId id;
+            ObserverId id{kInvalidObserver};
             Callback cb;
         };
 
         T value_{};
         containers::dynamic::SmallVector<Entry, ObserverInlineBytes> observers_{};
         ObserverId next_id_ = 0;
+        std::size_t notify_depth_ = 0;
     };
 
     // ----------------------------------------------------------------------------

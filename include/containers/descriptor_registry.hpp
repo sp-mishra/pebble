@@ -72,7 +72,7 @@ namespace containers {
 
         descriptor_registry() = default;
 
-        explicit descriptor_registry(std::size_t universe_capacity)
+        explicit descriptor_registry(const std::size_t universe_capacity)
             : id_to_handle_(universe_capacity) {}
 
         // -------------------------------------------------------------------------
@@ -84,10 +84,25 @@ namespace containers {
             const std::uint64_t nh = d.name_hash;
             const auto cat = d.category;
 
-            // Check if already present via O(1) branch-free SparseSet
-            if (id_to_handle_.contains(id)) {
-                const descriptor_handle existing = id_to_handle_.get(id)->get();
-                if (Desc* ptr = store_.find(existing)) *ptr = std::move(d);
+            // Check if already present via O(1) single-pass SparseSet lookup
+            if (const auto res = id_to_handle_.get(id)) {
+                const descriptor_handle existing = res->get();
+                if (Desc* ptr = store_.find(existing)) {
+                    if (ptr->name_hash != nh) {
+                        name_to_handle_.erase(ptr->name_hash);
+                    }
+                    if (ptr->category != cat) {
+                        const std::size_t old_cat_idx = cat_to_index(ptr->category);
+                        if (old_cat_idx < cat_buckets_.size()) {
+                            std::erase(cat_buckets_[old_cat_idx], existing);
+                        }
+                        const std::size_t new_cat_idx = cat_to_index(cat);
+                        if (new_cat_idx >= cat_buckets_.size())
+                            cat_buckets_.resize(new_cat_idx + 1);
+                        cat_buckets_[new_cat_idx].push_back(existing);
+                    }
+                    *ptr = std::move(d);
+                }
                 name_to_handle_[nh] = existing;
                 return existing;
             }
@@ -98,31 +113,30 @@ namespace containers {
 
             // Category index: grow bucket vector if needed
             const std::size_t cat_idx = cat_to_index(cat);
-            if (cat_idx >= cat_buckets_.size()) {
+            if (cat_idx >= cat_buckets_.size())
                 cat_buckets_.resize(cat_idx + 1);
-            }
             cat_buckets_[cat_idx].push_back(h);
 
             return h;
         }
 
         // -------------------------------------------------------------------------
-        // find by stable_id
+        // find — O(1) lookup by stable_id; returns nullptr if absent or stale.
         // -------------------------------------------------------------------------
         [[nodiscard]] const Desc* find(const std::uint32_t id) const noexcept {
-            auto res = id_to_handle_.get(id);
+            const auto res = id_to_handle_.get(id);
             if (!res) return nullptr;
             return store_.find(res->get());
         }
 
         [[nodiscard]] Desc* find(const std::uint32_t id) noexcept {
-            auto res = id_to_handle_.get(id);
+            const auto res = id_to_handle_.get(id);
             if (!res) return nullptr;
             return store_.find(res->get());
         }
 
         // -------------------------------------------------------------------------
-        // find by name_hash
+        // find_by_name — O(1) lookup by name_hash; returns nullptr if absent or stale.
         // -------------------------------------------------------------------------
         [[nodiscard]] const Desc* find_by_name(const std::uint64_t name_hash) const noexcept {
             const auto it = name_to_handle_.find(name_hash);
@@ -137,7 +151,42 @@ namespace containers {
         }
 
         // -------------------------------------------------------------------------
-        // by_category — all descriptors matching a category
+        // find — O(1) lookup by descriptor_handle; returns nullptr if stale.
+        // -------------------------------------------------------------------------
+        [[nodiscard]] const Desc* find(descriptor_handle h) const noexcept {
+            return store_.find(h);
+        }
+
+        [[nodiscard]] Desc* find(descriptor_handle h) noexcept {
+            return store_.find(h);
+        }
+
+        // -------------------------------------------------------------------------
+        // contains — O(1) membership test by stable_id.
+        // -------------------------------------------------------------------------
+        [[nodiscard]] bool contains(const std::uint32_t id) const noexcept {
+            const auto res = id_to_handle_.get(id);
+            return res.has_value() && store_.contains(res->get());
+        }
+
+        // -------------------------------------------------------------------------
+        // contains — O(1) membership test by descriptor_handle.
+        // -------------------------------------------------------------------------
+        [[nodiscard]] bool contains(descriptor_handle h) const noexcept {
+            return store_.contains(h);
+        }
+
+        // -------------------------------------------------------------------------
+        // handle_for — returns the descriptor_handle for stable_id, or null handle.
+        // -------------------------------------------------------------------------
+        [[nodiscard]] descriptor_handle handle_for(const std::uint32_t id) const noexcept {
+            const auto res = id_to_handle_.get(id);
+            if (!res) return descriptor_handle{};
+            return res->get();
+        }
+
+        // -------------------------------------------------------------------------
+        // by_category — range view over all live descriptors in category c.
         // -------------------------------------------------------------------------
         [[nodiscard]] std::vector<const Desc*> by_category(category_type cat) const {
             std::vector<const Desc*> result;
@@ -168,8 +217,16 @@ namespace containers {
         [[nodiscard]] std::size_t size() const noexcept { return store_.size(); }
         [[nodiscard]] bool empty() const noexcept { return store_.empty(); }
 
-        void reserve(std::size_t cap) {
+        void clear() {
+            store_.clear();
+            id_to_handle_.clear();
+            name_to_handle_.clear();
+            cat_buckets_.clear();
+        }
+
+        void reserve(const std::size_t cap) {
             id_to_handle_.reserve(cap);
+            name_to_handle_.reserve(cap);
         }
 
     private:

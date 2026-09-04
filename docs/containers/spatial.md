@@ -151,3 +151,44 @@ int main() {
     grid.clear();
 }
 ```
+
+### 3.3 Dynamic Unified AABBTree with SIMD Quad vs Binary AVL Policy
+
+```cpp
+#include "containers/spatial/AABBTree.hpp"
+
+struct Box2D {
+    struct { float x, y; } lo, hi;
+    auto area() const noexcept { return (hi.x - lo.x) * (hi.y - lo.y); }
+    Box2D fattened(float m) const noexcept { return {{lo.x - m, lo.y - m}, {hi.x + m, hi.y + m}}; }
+    static Box2D merge(const Box2D& a, const Box2D& b) noexcept {
+        return {{std::min(a.lo.x, b.lo.x), std::min(a.lo.y, b.lo.y)},
+                {std::max(a.hi.x, b.hi.x), std::max(a.hi.y, b.hi.y)}};
+    }
+    bool overlaps(const Box2D& o) const noexcept {
+        return !(hi.x < o.lo.x || lo.x > o.lo.x || hi.y < o.lo.y || lo.y > o.hi.y);
+    }
+};
+
+// Default policy: BinaryBranchingPolicy (AVL-balanced binary tree)
+pebble::containers::AABBTree<Box2D> tree;
+
+// Explicit 4-way SIMD policy: QuadBranchingPolicy (Google Highway 4-lane SIMD ray/overlap tests)
+using QuadTree = pebble::containers::AABBTree<
+    Box2D, decltype(Box2D{}.lo), std::uint32_t, std::allocator<std::byte>,
+    pebble::containers::aabb::QuadBranchingPolicy<Box2D, decltype(Box2D{}.lo), std::uint32_t, std::allocator<std::byte>>
+>;
+QuadTree quad_tree;
+```
+
+#### Performance Trade-offs: `BinaryBranchingPolicy` vs `QuadBranchingPolicy`
+- **`BinaryBranchingPolicy`**:
+  - *Topology*: Balanced binary AVL bounding tree.
+  - *Strengths*: Exact $O(\log_2 N)$ depth balance, zero wasted child slots for sparse geometries, stable node indices with incremental in-place `update(leaf, box)`.
+  - *Best for*: Dynamic scene physics (`akruti::Scene`, `Prakriti`) where objects move and bounds mutate every frame.
+- **`QuadBranchingPolicy`**:
+  - *Topology*: 4-way wide branching node with structure-of-arrays coordinates (`min_x[4]`, `max_x[4]`, `min_y[4]`, `max_y[4]`).
+  - *Strengths*: 4-box simultaneous SIMD overlap testing and 4-way vector slab raycasting via Highway `hwy::HWY_NAMESPACE`.
+  - *Best for*: Static ray tracing, large optical sensor queries, and broadphase sweeps on AVX-2 / NEON.
+
+

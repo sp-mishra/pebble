@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <ranges>
 #include <vector>
 #include <list>
 #include <queue>
@@ -12,12 +13,10 @@
 #include <expected>
 #include <optional>
 #include <string>
-#include <ranges>
 #include <mutex>
 #include <shared_mutex>
 #include <iostream>
 #include <limits>
-#include <span>
 
 #include "containers/dynamic/SmallVector.hpp"
 #include "mem/smriti.hpp"
@@ -35,20 +34,21 @@ namespace tree_simd {
 #if defined(PEBBLE_HAS_HIGHWAY)
     // SIMD-accelerated search for node ID in an array
     // Returns index of first match or -1 if not found
-    inline int find_node_id_simd(const uint64_t* ids, size_t count, uint64_t target) {
+    template <typename T = uint64_t>
+        requires (sizeof(T) == 8 && std::is_integral_v<T> && std::is_unsigned_v<T>)
+    inline int find_node_id_simd(const T* ids, const size_t count, const T target) {
         namespace hn = hwy::HWY_NAMESPACE;
-        const hn::ScalableTag<uint64_t> d;
+        constexpr hn::ScalableTag<uint64_t> d;
         const size_t N = hn::Lanes(d);
 
         if (count == 0) return -1;
 
-        const auto target_vec = hn::Set(d, target);
+        const auto target_vec = hn::Set(d, static_cast<uint64_t>(target));
 
         size_t i = 0;
         for (; i + N <= count; i += N) {
-            const auto data = hn::LoadU(d, ids + i);
-            const auto mask = hn::Eq(data, target_vec);
-            if (!hn::AllFalse(d, mask)) {
+            const auto data = hn::LoadU(d, reinterpret_cast<const uint64_t*>(ids) + i);
+            if (const auto mask = hn::Eq(data, target_vec); !hn::AllFalse(d, mask)) {
                 const size_t lane = hn::FindFirstTrue(d, mask);
                 return static_cast<int>(i + lane);
             }
@@ -62,21 +62,23 @@ namespace tree_simd {
         return -1;
     }
 
-    // SIMD-accelerated sum for statistics computation (uses uint64_t)
-    inline uint64_t sum_simd(const uint64_t* data, size_t count) {
+    // SIMD-accelerated sum for statistics computation
+    template <typename T = uint64_t>
+        requires (sizeof(T) == 8 && std::is_integral_v<T> && std::is_unsigned_v<T>)
+    inline T sum_simd(const T* data, const size_t count) {
         namespace hn = hwy::HWY_NAMESPACE;
-        const hn::ScalableTag<uint64_t> d;
+        constexpr hn::ScalableTag<uint64_t> d;
         const size_t N = hn::Lanes(d);
 
         auto sum_vec = hn::Zero(d);
         size_t i = 0;
 
         for (; i + N <= count; i += N) {
-            const auto v = hn::LoadU(d, data + i);
+            const auto v = hn::LoadU(d, reinterpret_cast<const uint64_t*>(data) + i);
             sum_vec = hn::Add(sum_vec, v);
         }
 
-        uint64_t result = hn::ReduceSum(d, sum_vec);
+        T result = static_cast<T>(hn::ReduceSum(d, sum_vec));
 
         for (; i < count; ++i) {
             result += data[i];
@@ -85,23 +87,25 @@ namespace tree_simd {
         return result;
     }
 
-    // SIMD-accelerated max finding for tree statistics (uses uint64_t)
-    inline uint64_t max_simd(const uint64_t* data, size_t count) {
+    // SIMD-accelerated max finding for tree statistics
+    template <typename T = uint64_t>
+        requires (sizeof(T) == 8 && std::is_integral_v<T> && std::is_unsigned_v<T>)
+    inline T max_simd(const T* data, const size_t count) {
         if (count == 0) return 0;
 
         namespace hn = hwy::HWY_NAMESPACE;
         const hn::ScalableTag<uint64_t> d;
         const size_t N = hn::Lanes(d);
 
-        auto max_vec = hn::Set(d, data[0]);
+        auto max_vec = hn::Set(d, static_cast<uint64_t>(data[0]));
         size_t i = 0;
 
         for (; i + N <= count; i += N) {
-            const auto v = hn::LoadU(d, data + i);
+            const auto v = hn::LoadU(d, reinterpret_cast<const uint64_t*>(data) + i);
             max_vec = hn::Max(max_vec, v);
         }
 
-        uint64_t result = hn::ReduceMax(d, max_vec);
+        T result = static_cast<T>(hn::ReduceMax(d, max_vec));
 
         for (; i < count; ++i) {
             result = std::max(result, data[i]);
@@ -110,24 +114,30 @@ namespace tree_simd {
         return result;
     }
 #else
-    inline int find_node_id_simd(const uint64_t* ids, size_t count, uint64_t target) {
+    template <typename T = uint64_t>
+        requires (sizeof(T) == 8 && std::is_integral_v<T> && std::is_unsigned_v<T>)
+    inline int find_node_id_simd(const T* ids, size_t count, T target) {
         for (size_t i = 0; i < count; ++i) {
             if (ids[i] == target) return static_cast<int>(i);
         }
         return -1;
     }
 
-    inline uint64_t sum_simd(const uint64_t* data, size_t count) {
-        uint64_t result = 0;
+    template <typename T = uint64_t>
+        requires (sizeof(T) == 8 && std::is_integral_v<T> && std::is_unsigned_v<T>)
+    inline T sum_simd(const T* data, size_t count) {
+        T result = 0;
         for (size_t i = 0; i < count; ++i) {
             result += data[i];
         }
         return result;
     }
 
-    inline uint64_t max_simd(const uint64_t* data, size_t count) {
+    template <typename T = uint64_t>
+        requires (sizeof(T) == 8 && std::is_integral_v<T> && std::is_unsigned_v<T>)
+    inline T max_simd(const T* data, size_t count) {
         if (count == 0) return 0;
-        uint64_t result = data[0];
+        T result = data[0];
         for (size_t i = 1; i < count; ++i) {
             result = std::max(result, data[i]);
         }
@@ -136,19 +146,16 @@ namespace tree_simd {
 #endif
 
     // Convenience wrappers that accept size_t and cast internally
-    inline int find_node_id(const size_t* ids, size_t count, size_t target) {
-        static_assert(sizeof(size_t) == sizeof(uint64_t), "size_t must be 64-bit");
-        return find_node_id_simd(reinterpret_cast<const uint64_t*>(ids), count, static_cast<uint64_t>(target));
+    inline int find_node_id(const size_t* ids, const size_t count, const size_t target) {
+        return find_node_id_simd(ids, count, target);
     }
 
-    inline size_t sum(const size_t* data, size_t count) {
-        static_assert(sizeof(size_t) == sizeof(uint64_t), "size_t must be 64-bit");
-        return static_cast<size_t>(sum_simd(reinterpret_cast<const uint64_t*>(data), count));
+    inline size_t sum(const size_t* data, const size_t count) {
+        return sum_simd(data, count);
     }
 
-    inline size_t max(const size_t* data, size_t count) {
-        static_assert(sizeof(size_t) == sizeof(uint64_t), "size_t must be 64-bit");
-        return static_cast<size_t>(max_simd(reinterpret_cast<const uint64_t*>(data), count));
+    inline size_t max(const size_t* data, const size_t count) {
+        return max_simd(data, count);
     }
 } // namespace tree_simd
 
@@ -229,7 +236,7 @@ public:
         size_t node_id = 0; // Automatic unique node id
         size_t sibling_index = 0; // Index in parent's children for O(1) sibling navigation
 
-        explicit constexpr TreeNode(TreeNode* p, const size_t id, Metadata meta, T value, size_t sib_idx = 0)
+        explicit constexpr TreeNode(TreeNode* p, const size_t id, Metadata meta, T value, const size_t sib_idx = 0)
             : data(std::move(value)), metadata(std::move(meta)), parent(p), node_id(id), sibling_index(sib_idx) {}
 
         template <typename... Args>
@@ -840,7 +847,7 @@ public:
         auto& siblings = parent->children;
         const size_t idx = node_to_remove->sibling_index;
         if (idx < siblings.size() && siblings[idx].get() == node_to_remove) {
-            size_t removed = count_subtree(node_to_remove);
+            const size_t removed = count_subtree(node_to_remove);
             siblings.erase(siblings.begin() + idx);
             for (size_t i = idx; i < siblings.size(); ++i)
                 siblings[i]->sibling_index = i;
@@ -851,8 +858,8 @@ public:
             return child_ptr.get() == node_to_remove;
         });
         if (it != siblings.end()) {
-            size_t removed = count_subtree(node_to_remove);
-            size_t erased_idx = static_cast<size_t>(std::distance(siblings.begin(), it));
+            const size_t removed = count_subtree(node_to_remove);
+            const auto erased_idx = static_cast<size_t>(std::distance(siblings.begin(), it));
             siblings.erase(it);
             for (size_t i = erased_idx; i < siblings.size(); ++i)
                 siblings[i]->sibling_index = i;
@@ -878,7 +885,8 @@ public:
     // Unified find_all_if with C++23 explicit object parameter (deducing this)
     template <typename Self, typename Predicate>
     auto find_all_if(this Self&& self, Predicate predicate) {
-        using ResultNodePtr = std::conditional_t<std::is_const_v<std::remove_reference_t<Self>>, const TreeNode*, TreeNode*>;
+        using ResultNodePtr = std::conditional_t<
+            std::is_const_v<std::remove_reference_t<Self>>, const TreeNode*, TreeNode*>;
         std::vector<ResultNodePtr> results;
         for (auto&& node : self) {
             if (predicate(node)) {
@@ -994,7 +1002,7 @@ public:
         auto path_b = path_to_root(b);
 
         TreeNode* lca = nullptr;
-        size_t min_len = std::min(path_a.size(), path_b.size());
+        const size_t min_len = std::min(path_a.size(), path_b.size());
         for (size_t i = 0; i < min_len && path_a[i] == path_b[i]; ++i) {
             lca = path_a[i];
         }
@@ -1034,7 +1042,7 @@ public:
                                        [node](const auto& child) { return child.get() == node; });
                 if (it != siblings.end()) {
                     size_t split_count = count_subtree(node);
-                    size_t erased_idx = static_cast<size_t>(std::distance(siblings.begin(), it));
+                    const auto erased_idx = static_cast<size_t>(std::distance(siblings.begin(), it));
                     result.root = std::move(*it);
                     result.root->parent = nullptr;
                     siblings.erase(it);
@@ -1157,7 +1165,7 @@ public:
         return nodes() | std::views::filter([](const auto& node) { return node.is_leaf(); });
     }
 
-    auto level(size_t depth) const {
+    auto level(const size_t depth) const {
         std::vector<const TreeNode*> result;
         if (root && depth == 0) {
             result.push_back(root.get());
@@ -1207,7 +1215,7 @@ private:
     map_recursive(const TreeNode* node, F&& func) const {
         if (!node) return nullptr;
 
-        auto new_node = std::make_unique < typename NAryTree<NewT, Metadata, Container>::TreeNode > (
+        auto new_node = std::make_unique<typename NAryTree<NewT, Metadata, Container>::TreeNode>(
             nullptr, node->node_id, node->metadata, func(node->data));
 
         for (const auto& child : node->children) {
@@ -1236,12 +1244,12 @@ private:
     void analyze_recursive(const TreeNode* node, TreeStats& stats, size_t depth) const {
         if (!node) return;
 
-        stats.node_count++;
+        ++stats.node_count;
         stats.max_depth = std::max(stats.max_depth, depth);
         if (depth == 0 || stats.min_depth == 0) stats.min_depth = depth;
         else stats.min_depth = std::min(stats.min_depth, depth);
 
-        if (node->is_leaf()) stats.leaf_count++;
+        if (node->is_leaf()) ++stats.leaf_count;
         stats.max_children = std::max(stats.max_children, node->children.size());
 
         for (const auto& child : node->children) {
@@ -1249,7 +1257,8 @@ private:
         }
     }
 
-    void to_string_recursive(std::string& out, const TreeNode* node, const std::string& prefix, bool is_last) const {
+    void to_string_recursive(std::string& out, const TreeNode* node, const std::string& prefix,
+                             const bool is_last) const {
         if (!node) return;
 
         out += prefix;
@@ -1276,10 +1285,10 @@ private:
         }
     }
 
-    void serialize_json_node(std::ostream& os, const TreeNode* node, int indent) const {
+    void serialize_json_node(std::ostream& os, const TreeNode* node, const int indent) const {
         if (!node) return;
 
-        std::string spaces(indent * 2, ' ');
+        const std::string spaces(indent * 2, ' ');
         os << spaces << R"("data": ")" << node->data << "\",\n";
         os << spaces << "\"id\": " << node->node_id;
 
@@ -1296,7 +1305,7 @@ private:
         }
     }
 
-    void collect_at_depth(const TreeNode* node, size_t target_depth, size_t current_depth,
+    void collect_at_depth(const TreeNode* node, const size_t target_depth, const size_t current_depth,
                           std::vector<const TreeNode*>& result) const {
         if (!node) return;
 
@@ -1415,14 +1424,12 @@ public:
 // ScalableNAryTree — Flat LCRS Structure-of-Arrays High-Scale Tree (10M+ nodes)
 // ============================================================================
 namespace pebble::containers {
-
     using ::NAryTree;
     using ::ThreadSafeNAryTree;
 
     template <
         typename T,
-        typename Allocator = std::allocator<T>
-    >
+        typename Allocator = std::allocator<T>>
     class ScalableNAryTree {
     public:
         using NodeId = std::uint32_t;
@@ -1441,8 +1448,8 @@ namespace pebble::containers {
         };
 
     private:
-        using HeaderAlloc = typename std::allocator_traits<Allocator>::template rebind_alloc<NodeHeader>;
-        using DataAlloc = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+        using HeaderAlloc = std::allocator_traits<Allocator>::template rebind_alloc<NodeHeader>;
+        using DataAlloc = std::allocator_traits<Allocator>::template rebind_alloc<T>;
 
         std::vector<NodeHeader, HeaderAlloc> headers_;
         std::vector<T, DataAlloc> data_;
@@ -1474,7 +1481,8 @@ namespace pebble::containers {
             if (p.first_child == kNullNode) {
                 p.first_child = child_id;
                 p.last_child = child_id;
-            } else {
+            }
+            else {
                 const NodeId prev_last = p.last_child;
                 headers_[prev_last].next_sibling = child_id;
                 headers_[child_id].prev_sibling = prev_last;
@@ -1534,6 +1542,7 @@ namespace pebble::containers {
 
             pebble::containers::SmallVector<NodeId, 64> stack;
             stack.push_back(root_);
+            pebble::containers::SmallVector<NodeId, 64> reverse_buffer;
 
             while (!stack.empty()) {
                 const NodeId curr = stack.back();
@@ -1542,13 +1551,13 @@ namespace pebble::containers {
                 vis(data_[curr], headers_[curr]);
 
                 NodeId child = headers_[curr].first_child;
-                pebble::containers::SmallVector<NodeId, 32> reverse_buffer;
+                reverse_buffer.clear();
                 while (child != kNullNode) {
                     reverse_buffer.push_back(child);
                     child = headers_[child].next_sibling;
                 }
-                for (auto it = reverse_buffer.rbegin(); it != reverse_buffer.rend(); ++it) {
-                    stack.push_back(*it);
+                for (unsigned int& it : std::views::reverse(reverse_buffer)) {
+                    stack.push_back(it);
                 }
             }
         }
@@ -1577,7 +1586,7 @@ namespace pebble::containers {
                 return id;
             }
 
-            const NodeId id = static_cast<NodeId>(headers_.size());
+            const auto id = static_cast<NodeId>(headers_.size());
             headers_.emplace_back();
             data_.emplace_back(std::move(val));
             return id;
@@ -1589,9 +1598,9 @@ namespace pebble::containers {
             headers_[id].last_child = kNullNode;
             headers_[id].parent = kNullNode;
             headers_[id].prev_sibling = kNullNode;
+            data_[id] = T{};
             free_head_ = id;
             --size_;
         }
     };
-
 } // namespace pebble::containers

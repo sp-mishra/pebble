@@ -106,16 +106,17 @@ namespace containers {
         }
 
         // Erase the slot identified by h.  Bumps generation so all outstanding
-        // handles to this slot become stale.  No-op for a stale or null handle.
-        void erase(const handle_type h) noexcept {
-            if (h.is_null()) return;
+        // handles to this slot become stale. Returns true if an element was erased.
+        bool erase(const handle_type h) noexcept {
+            if (h.is_null()) return false;
             const auto raw = static_cast<std::size_t>(h.index - 1);
-            if (raw >= slots_.size()) return;
+            if (raw >= slots_.size()) return false;
             slot& s = slots_[raw];
-            if (s.generation != h.generation || !s.value) return;
+            if (s.generation != h.generation || !s.value) return false;
             s.value.reset();
             ++s.generation; // invalidate all handles with the old generation
             free_list_.push_back(h.index);
+            return true;
         }
 
         // Find a live value by handle.  Returns nullptr for null, stale, or

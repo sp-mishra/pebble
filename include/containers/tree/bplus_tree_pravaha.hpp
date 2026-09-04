@@ -20,10 +20,7 @@
 #include "bplus_tree.hpp"
 #include <pravaha/pravaha.hpp>
 #include <algorithm>
-#include <concepts>
 #include <cstddef>
-#include <functional>
-#include <iterator>
 #include <optional>
 #include <span>
 #include <thread>
@@ -35,7 +32,7 @@ namespace pebble::containers::pravaha {
     namespace detail {
         // Grain heuristic: at least leaf_grain_size leaves per task, otherwise one task per
         // hardware thread. Keeps task count bounded while honouring the caller's minimum grain.
-        [[nodiscard]] inline std::size_t chunk_for(std::size_t work, std::size_t grain) noexcept {
+        [[nodiscard]] inline std::size_t chunk_for(const std::size_t work, const std::size_t grain) noexcept {
             const std::size_t threads = std::max(1u, std::thread::hardware_concurrency());
             return std::max(grain, (work + threads - 1) / threads);
         }
@@ -44,6 +41,7 @@ namespace pebble::containers::pravaha {
         template <typename RunnerType>
         struct DrainGuard {
             RunnerType& runner;
+
             ~DrainGuard() {
                 runner.backend_ref().drain();
             }
@@ -68,7 +66,7 @@ namespace pebble::containers::pravaha {
         const K1& min_key,
         const K2& max_key,
         Fn&& fn,
-        std::size_t leaf_grain_size = 4,
+        const std::size_t leaf_grain_size = 4,
         DefaultRunner* runner = nullptr
     ) {
         if (tree.empty()) return;
@@ -76,7 +74,7 @@ namespace pebble::containers::pravaha {
         auto start_it = tree.lower_bound(min_key);
         if (start_it == tree.end()) return;
 
-        using LeafType = typename BPlusTree<Key, Value, Compare, Traits, Allocator>::LeafType;
+        using LeafType = BPlusTree<Key, Value, Compare, Traits, Allocator>::LeafType;
         struct PartitionSpan {
             const LeafType* start_leaf{nullptr};
             std::size_t max_leaves{0};
@@ -84,7 +82,8 @@ namespace pebble::containers::pravaha {
 
         const std::size_t thread_count = std::max(1u, std::thread::hardware_concurrency());
         const std::size_t est_total_leaves = (tree.size() + Traits::LeafCapacity - 1) / Traits::LeafCapacity;
-        const std::size_t chunk_limit = std::max(leaf_grain_size, (est_total_leaves + thread_count * 4 - 1) / (thread_count * 4));
+        const std::size_t chunk_limit = std::max(leaf_grain_size,
+                                                 (est_total_leaves + thread_count * 4 - 1) / (thread_count * 4));
 
         std::vector<PartitionSpan> partitions;
         partitions.reserve(thread_count * 4);
@@ -103,7 +102,7 @@ namespace pebble::containers::pravaha {
                 curr = curr->next;
                 ++step;
             }
-            partitions.push_back(PartitionSpan{p_start, step});
+            partitions.push_back(PartitionSpan{.start_leaf = p_start, .max_leaves = step});
         }
 
         if (partitions.empty()) return;
@@ -114,19 +113,19 @@ namespace pebble::containers::pravaha {
 
         for (const auto& part : partitions) {
             (void)run.submit(::pravaha::task("bplus_parallel_scan",
-                [part, &min_key, &max_key, &comp, &fn]() {
-                    const LeafType* leaf = part.start_leaf;
-                    for (std::size_t i = 0; i < part.max_leaves && leaf != nullptr; ++i) {
-                        const auto* keys = leaf->keys();
-                        const auto* vals = leaf->values();
-                        for (std::size_t j = 0; j < leaf->header.count; ++j) {
-                            if (comp(keys[j], min_key)) continue;
-                            if (comp(max_key, keys[j])) return;
-                            fn(keys[j], vals[j]);
-                        }
-                        leaf = leaf->next;
-                    }
-                }));
+                                             [part, &min_key, &max_key, &comp, &fn]() {
+                                                 const LeafType* leaf = part.start_leaf;
+                                                 for (std::size_t i = 0; i < part.max_leaves && leaf != nullptr; ++i) {
+                                                     const auto* keys = leaf->keys();
+                                                     const auto* vals = leaf->values();
+                                                     for (std::size_t j = 0; j < leaf->header.count; ++j) {
+                                                         if (comp(keys[j], min_key)) continue;
+                                                         if (comp(max_key, keys[j])) return;
+                                                         fn(keys[j], vals[j]);
+                                                     }
+                                                     leaf = leaf->next;
+                                                 }
+                                             }));
         }
     }
 
@@ -150,7 +149,7 @@ namespace pebble::containers::pravaha {
         InitT init,
         ReduceFn&& reduce_op,
         MapFn&& map_op,
-        std::size_t leaf_grain_size = 4,
+        const std::size_t leaf_grain_size = 4,
         DefaultRunner* runner = nullptr
     ) {
         if (tree.empty()) return init;
@@ -158,7 +157,7 @@ namespace pebble::containers::pravaha {
         auto start_it = tree.lower_bound(min_key);
         if (start_it == tree.end()) return init;
 
-        using LeafType = typename BPlusTree<Key, Value, Compare, Traits, Allocator>::LeafType;
+        using LeafType = BPlusTree<Key, Value, Compare, Traits, Allocator>::LeafType;
         struct PartitionSpan {
             const LeafType* start_leaf{nullptr};
             std::size_t max_leaves{0};
@@ -166,7 +165,8 @@ namespace pebble::containers::pravaha {
 
         const std::size_t thread_count = std::max(1u, std::thread::hardware_concurrency());
         const std::size_t est_total_leaves = (tree.size() + Traits::LeafCapacity - 1) / Traits::LeafCapacity;
-        const std::size_t chunk_limit = std::max(leaf_grain_size, (est_total_leaves + thread_count * 4 - 1) / (thread_count * 4));
+        const std::size_t chunk_limit = std::max(leaf_grain_size,
+                                                 (est_total_leaves + thread_count * 4 - 1) / (thread_count * 4));
 
         std::vector<PartitionSpan> partitions;
         partitions.reserve(thread_count * 4);
@@ -185,7 +185,7 @@ namespace pebble::containers::pravaha {
                 curr = curr->next;
                 ++step;
             }
-            partitions.push_back(PartitionSpan{p_start, step});
+            partitions.push_back(PartitionSpan{.start_leaf = p_start, .max_leaves = step});
         }
 
         if (partitions.empty()) return init;
@@ -193,32 +193,35 @@ namespace pebble::containers::pravaha {
         const std::size_t num_parts = partitions.size();
         std::vector<InitT> partial_results(num_parts, init);
 
-        DefaultRunner local_runner;
-        DefaultRunner& run = runner ? *runner : local_runner;
         {
+            DefaultRunner local_runner;
+            DefaultRunner& run = runner ? *runner : local_runner;
             detail::DrainGuard<DefaultRunner> drain_guard{run};
 
             for (std::size_t chunk_idx = 0; chunk_idx < num_parts; ++chunk_idx) {
                 const auto& part = partitions[chunk_idx];
                 (void)run.submit(::pravaha::task("bplus_parallel_reduce",
-                    [part, chunk_idx, &partial_results, &min_key, &max_key, &comp, &reduce_op, &map_op]() {
-                        InitT local_accum = partial_results[chunk_idx];
-                        const LeafType* leaf = part.start_leaf;
-                        for (std::size_t i = 0; i < part.max_leaves && leaf != nullptr; ++i) {
-                            const auto* keys = leaf->keys();
-                            const auto* vals = leaf->values();
-                            for (std::size_t j = 0; j < leaf->header.count; ++j) {
-                                if (comp(keys[j], min_key)) continue;
-                                if (comp(max_key, keys[j])) {
-                                    partial_results[chunk_idx] = local_accum;
-                                    return;
-                                }
-                                local_accum = reduce_op(local_accum, map_op(keys[j], vals[j]));
-                            }
-                            leaf = leaf->next;
-                        }
-                        partial_results[chunk_idx] = local_accum;
-                    }));
+                                                 [part, chunk_idx, &partial_results, &min_key, &max_key, &comp, &
+                                                     reduce_op, &map_op]() {
+                                                     InitT local_accum = partial_results[chunk_idx];
+                                                     const LeafType* leaf = part.start_leaf;
+                                                     for (std::size_t i = 0; i < part.max_leaves && leaf != nullptr; ++
+                                                          i) {
+                                                         const auto* keys = leaf->keys();
+                                                         const auto* vals = leaf->values();
+                                                         for (std::size_t j = 0; j < leaf->header.count; ++j) {
+                                                             if (comp(keys[j], min_key)) continue;
+                                                             if (comp(max_key, keys[j])) {
+                                                                 partial_results[chunk_idx] = local_accum;
+                                                                 return;
+                                                             }
+                                                             local_accum = reduce_op(
+                                                                 local_accum, map_op(keys[j], vals[j]));
+                                                         }
+                                                         leaf = leaf->next;
+                                                     }
+                                                     partial_results[chunk_idx] = local_accum;
+                                                 }));
             }
         }
 
@@ -261,10 +264,10 @@ namespace pebble::containers::pravaha {
             (void)run.submit(::pravaha::task("bplus_parallel_find",
                                              [&tree, &query_keys, &results, i, end_idx]() {
                                                  for (std::size_t j = i; j < end_idx; ++j) {
-                                                      auto it = tree.find(query_keys[j]);
-                                                      if (it != tree.end()) {
-                                                          results[j] = it->second;
-                                                      }
+                                                     auto it = tree.find(query_keys[j]);
+                                                     if (it != tree.end()) {
+                                                         results[j] = it->second;
+                                                     }
                                                  }
                                              }));
         }

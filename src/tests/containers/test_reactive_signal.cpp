@@ -96,3 +96,22 @@ TEST_CASE (
     // No dependency change -> cached value returned.
     CHECK(sum.get() == 13);
 }
+
+TEST_CASE("Signal: Re-entrant unsubscribe during notify", "[reactive][signal]") {
+    containers::reactive::Signal<int> sig(0);
+    containers::reactive::ObserverId id1 = containers::reactive::kInvalidObserver;
+    bool called2 = false;
+
+    id1 = sig.subscribe([&]() {
+        sig.unsubscribe(id1);
+    });
+
+    sig.subscribe([&]() {
+        called2 = true;
+    });
+
+    sig.set(42);
+    REQUIRE(called2);
+    REQUIRE(sig.observer_count() == 1);
+}
+

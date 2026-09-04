@@ -118,9 +118,13 @@ int main() {
 }
 ```
 
+#### Memory Preallocation Guidelines: `slot_map::reserve`
+- `slot_map::reserve(std::size_t cap)` preallocates the underlying `free_list_` index vector capacity to eliminate memory reallocations during high-frequency bulk insertion cycles.
+- The underlying `slots_` container utilizes chunked `std::deque` storage to maintain stable memory addresses across insertions.
+
 ### 3.2 `descriptor_registry` Named & Stable ID Symbol Routing
 
-`descriptor_registry` leverages a dual index (`SparseSet` for $O(1)$ cache-dense numeric lookups + hash table for string lookups):
+`descriptor_registry` leverages a single-pass dual index (`SparseSet` for $O(1)$ cache-dense numeric lookups + hash table for string lookups):
 
 ```cpp
 #include "containers/descriptor_registry.hpp"
@@ -139,7 +143,7 @@ struct TextureDesc {
 int main() {
     containers::descriptor_registry<TextureDesc> textures(1024); // Reserve universe capacity
 
-    // Register descriptor
+    // Register descriptor (single-pass lookup & in-place update)
     TextureDesc grass{.path = "/assets/grass.png"};
     containers::descriptor_handle h_grass = textures.register_desc(grass);
 
@@ -158,3 +162,4 @@ int main() {
     std::cout << "Found " << terrain_list.size() << " terrain textures.\n";
 }
 ```
+
