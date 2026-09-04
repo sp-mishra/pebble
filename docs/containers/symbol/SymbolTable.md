@@ -64,48 +64,52 @@ updated when `SymbolTable` changes.
 
 ## 2. Three-Component Model
 
-### `symbol_entry`
+### `basic_symbol_entry<Value>`
 
 Plain data; carries no ownership. `name` is a `string_view` into `InternPool` storage and is stable for the pool's
 lifetime.
 
 ```cpp
-struct symbol_entry {
+template <typename Value = void*>
+struct basic_symbol_entry {
     std::string_view name;      // stable; owned by InternPool
-    void*            address;
-    std::uint32_t    version;
-    std::uint32_t    id;        // 0 = not yet assigned by SymbolTable
+    Value            address{};
+    std::uint32_t    version{0};
+    std::uint32_t    id{0};     // 0 = not yet assigned by SymbolTable
 };
+
+using symbol_entry = basic_symbol_entry<void*>;
 ```
 
-### `SymbolTable<Mutex>`
+### `SymbolTable<Value, Mutex, Map, Vector>`
 
-Primary lookup store. Template parameter `Mutex` defaults to `std::shared_mutex`. Keys are interned `string_view`
-values — `resolve()` performs a hash lookup with no heap allocation under a shared lock.
+Primary lookup store.
+- `Value` defaults to `void*`.
+- `Mutex` defaults to `std::shared_mutex`.
+- `Map` defaults to `std::unordered_map<std::string_view, basic_symbol_entry<Value>, StringHash, StringEqual>`.
+- `Vector` defaults to `containers::SmallVector<std::string_view, 64>` (4 elements inline without heap allocation).
 
-Move and copy are both **deleted** (see [§11](#11-design-notes)).
+Keys are interned `string_view` values — `resolve()` performs a hash lookup with no heap allocation under a shared lock.
+Move operations (`SymbolTable(SymbolTable&&)` and `operator=(SymbolTable&&)`) are fully supported and `noexcept`. Copy operations remain deleted.
 
 ### `NamespaceIndex`
 
-Wraps `NAryTree<string_view, symbol_entry*>`. Splits qualified names (`"a::b::c::sym"`) on `"::"` and maintains a trie
+Wraps `NAryTree<string_view, symbol_entry*>`. Iterates namespace components on `"::"` via `DelimiterScanner` with zero heap allocation and maintains a trie
 of namespace components. Used for `enumerate()` and LCA-based `path()` queries. **Not used for the O (1) resolve path.**
 
 ---
 
-## 3. Lock Acquisition Order
+## 3. Lock Acquisition & Concurrency
 
-**SymbolTable::mtx_ must always be acquired before InternPool::mtx_.**
+String interning inside `register_symbol()` occurs outside the table's exclusive write lock. Because `InternPool` is self-synchronized,
+concurrent registrations of distinct symbols across multiple threads do not block each other during string interning.
 
-Any code path that acquires these in the reverse order risks deadlock.
-
-| Site                            | Order                          |
+| Site                            | Lock Scope                     |
 |---------------------------------|--------------------------------|
-| `register_symbol()`             | SymbolTable::mtx_ → pool::mtx_ |
-| `register_range()`              | SymbolTable::mtx_ → pool::mtx_ |
+| `register_symbol()`             | pool::intern() (shared/unique) $\to$ SymbolTable::mtx_ (unique) |
+| `register_range()`              | pre-interns $\to$ SymbolTable::mtx_ (unique) |
 | `register_symbol_locked_()`     | caller holds SymbolTable::mtx_ |
 | `resolve()`, `contains()`, etc. | SymbolTable::mtx_ (shared)     |
-
-Never call `SymbolTable` methods while holding only `InternPool::mtx_`.
 
 ---
 
@@ -137,13 +141,13 @@ static constexpr SymbolId INVALID_SYMBOL_ID{};
 ```cpp
 // Register a symbol. Returns SymbolId on success.
 [[nodiscard]] SymResult<SymbolId>
-register_symbol(std::string_view name, void* addr, std::uint32_t version = 0);
+register_symbol(std::string_view name, Value addr, std::uint32_t version = 0);
 
-// O(1) shared-lock resolve. Returns nullptr if not found.
-[[nodiscard]] void* resolve(std::string_view name) const;
+// O(1) shared-lock resolve. Returns Value{} if not found.
+[[nodiscard]] Value resolve(std::string_view name) const;
 
-// Resolve with exact version check. Returns nullptr on mismatch.
-[[nodiscard]] void* resolve_versioned(std::string_view name, std::uint32_t version) const;
+// Resolve with exact version check. Returns Value{} on mismatch.
+[[nodiscard]] Value resolve_versioned(std::string_view name, std::uint32_t version) const;
 
 // Membership test.
 [[nodiscard]] bool contains(std::string_view name) const;
@@ -154,14 +158,14 @@ register_symbol(std::string_view name, void* addr, std::uint32_t version = 0);
 // Remove symbol. Returns true if existed.
 bool unregister(std::string_view name);
 
-// Bulk insert from any input range of symbol_entry.
+// Bulk insert from any input range of symbol entries.
 // Acquires write lock once for entire range.
 template <std::ranges::input_range R>
-    requires std::same_as<std::ranges::range_value_t<R>, symbol_entry>
+    requires std::same_as<std::ranges::range_value_t<R>, entry_type>
 std::size_t register_range(R&& entries);
 
 // Copy of entry for inspection.
-[[nodiscard]] SymResult<symbol_entry> lookup_entry(std::string_view name) const;
+[[nodiscard]] SymResult<entry_type> lookup_entry(std::string_view name) const;
 ```
 
 ---

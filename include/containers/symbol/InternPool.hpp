@@ -10,23 +10,25 @@
 //
 // Stability guarantee
 // -------------------
-//   std::unordered_set<std::string> is node-based: insert() never moves
-//   existing nodes, so all previously returned string_views remain valid
-//   for the lifetime of the pool.
+//   String data is allocated in immutable bump arena slabs (smriti::pools::BumpPool)
+//   which never move. All previously returned string_views remain valid for the
+//   entire lifetime of the pool (or until clear() is called).
 //
 // Thread safety
 // -------------
-//   intern()    — exclusive write lock (only on cache miss; readers unaffected
-//                 while another thread is registering a new string)
+//   intern()    — shared read lock on cache hit; exclusive write lock only on
+//                 miss. Strings are pre-hashed before lock acquisition.
 //   contains()  — shared read lock
 //   size()      — shared read lock
 //   clear()     — exclusive write lock
-//   all()       — caller must hold the pool alive; snapshot is unlocked copy
+//   for_each()  — shared read lock with zero-copy callable visitor
+//   all()       — returns std::vector<std::string_view> snapshot under shared lock
 //
 // Usage
 //   symtab::InternPool pool;
 //   auto sv1 = pool.intern("hello");
 //   auto sv2 = pool.intern("hello");
+// ============================================================================
 #include <atomic>
 #include <cassert>
 #include <cstddef>
@@ -49,7 +51,7 @@
 
 namespace symtab {
     // ============================================================================
-    // Transparent hash/equal — lets unordered_set<string> accept string_view keys
+    // Transparent hash/equal — lets unordered_set<string_view> accept string_view keys
     // without constructing a temporary std::string.
     // ============================================================================
 
@@ -78,33 +80,43 @@ namespace symtab {
     // ============================================================================
 
     enum class InternError : std::uint8_t {
-        EmptyString, // intern("") is rejected
-        PoolCleared, // a previously returned view was used after clear()
+        EmptyString = 0,       // intern("") is rejected
+        PoolCleared = 1,       // a previously returned view was used after clear()
+        AllocationFailure = 2, // arena allocation failed (out of memory)
     };
 
     template <typename T>
     using InternResult = std::expected<T, InternError>;
 
     // ============================================================================
-    // InternPool
+    // basic_intern_pool — policy-based thread-safe string interner
     // ============================================================================
 
-    class InternPool {
+    template <
+        typename Mutex = std::shared_mutex,
+        typename Arena = smriti::pools::BumpPool<smriti::domains::SystemRAMDomain>,
+        typename Set   = std::unordered_set<std::string_view, StringHash, StringEqual>
+    >
+    class basic_intern_pool {
     public:
-        InternPool() = default;
+        using mutex_type = Mutex;
+        using arena_type = Arena;
+        using set_type   = Set;
 
-        explicit InternPool(const std::size_t initial_capacity) {
+        basic_intern_pool() = default;
+
+        explicit basic_intern_pool(const std::size_t initial_capacity) {
             store_.reserve(initial_capacity);
         }
 
-        ~InternPool() = default;
+        ~basic_intern_pool() = default;
 
-        InternPool(const InternPool&) = delete;
+        basic_intern_pool(const basic_intern_pool&) = delete;
 
-        InternPool& operator=(const InternPool&) = delete;
+        basic_intern_pool& operator=(const basic_intern_pool&) = delete;
 
         // Move ctor: lock both to prevent data races on concurrent intern() calls.
-        InternPool(InternPool&& other) noexcept {
+        basic_intern_pool(basic_intern_pool&& other) noexcept {
             std::scoped_lock lk(mtx_, other.mtx_);
             arena_ = std::move(other.arena_);
             store_ = std::move(other.store_);
@@ -113,7 +125,7 @@ namespace symtab {
             other.intern_count_.store(0, std::memory_order_relaxed);
         }
 
-        InternPool& operator=(InternPool&& other) noexcept {
+        basic_intern_pool& operator=(basic_intern_pool&& other) noexcept {
             if (this != &other) {
                 std::scoped_lock lk(mtx_, other.mtx_);
                 arena_ = std::move(other.arena_);
@@ -126,12 +138,13 @@ namespace symtab {
         }
 
         // -------------------------------------------------------------------------
-        // intern — fast path: shared read lock, pointer lookup.
+        // intern — fast path: precomputed hash, shared read lock, pointer lookup.
         // Slow path (new string): upgrades to write lock, inserts into smriti arena.
         // Returns std::unexpected(EmptyString) if s is empty.
+        // Returns std::unexpected(AllocationFailure) if arena allocation fails.
         // intern_count_ counts every intern() call (including cache hits).
         // -------------------------------------------------------------------------
-        [[nodiscard]] InternResult<std::string_view> intern(std::string_view s) {
+        [[nodiscard]] InternResult<std::string_view> intern(const std::string_view s) {
             if (s.empty()) return std::unexpected(InternError::EmptyString);
 
             ++intern_count_; // total call count, including fast-path hits
@@ -153,20 +166,19 @@ namespace symtab {
 
             void* mem = arena_.allocate(s.size() + 1, alignof(char));
             if (!mem) {
-                // Fallback: if arena exhausted, store with std::string copy
-                return std::unexpected(InternError::EmptyString);
+                return std::unexpected(InternError::AllocationFailure);
             }
             char* dest = static_cast<char*>(mem);
             std::memcpy(dest, s.data(), s.size());
             dest[s.size()] = '\0';
-            std::string_view interned_view{dest, s.size()};
+            const std::string_view interned_view{dest, s.size()};
 
             store_.insert(interned_view);
             return interned_view;
         }
 
         // intern_or_throw: asserts s is non-empty; throws std::bad_expected_access
-        // on empty string. Use only where emptiness is a programming error.
+        // on empty string or allocation failure. Use only where emptiness is a programming error.
         [[nodiscard]] std::string_view intern_or_throw(const std::string_view s) {
             return intern(s).value();
         }
@@ -200,10 +212,19 @@ namespace symtab {
             intern_count_.store(0, std::memory_order_relaxed);
         }
 
-        // Returns a snapshot copy of all interned strings. Unlocked after copy.
-        [[nodiscard]] std::vector<std::string> all() const {
+        // Visitor pattern for zero-copy inspection under read lock.
+        template <typename Fn>
+        void for_each(Fn&& fn) const {
             std::shared_lock rl(mtx_);
-            std::vector<std::string> res;
+            for (const auto sv : store_) {
+                fn(sv);
+            }
+        }
+
+        // Returns a snapshot copy of all interned string views.
+        [[nodiscard]] std::vector<std::string_view> all() const {
+            std::shared_lock rl(mtx_);
+            std::vector<std::string_view> res;
             res.reserve(store_.size());
             for (const auto& sv : store_) {
                 res.emplace_back(sv);
@@ -232,7 +253,7 @@ namespace symtab {
         [[nodiscard]] std::size_t batch_intern(std::span<const char* const> names,
                                                std::span<std::string_view> out) {
             assert(names.size() == out.size());
-            std::size_t n = names.size();
+            const std::size_t n = names.size();
             std::size_t failed = 0;
             for (std::size_t i = 0; i < n; ++i) {
                 auto r = intern(std::string_view{names[i], std::strlen(names[i])});
@@ -249,9 +270,11 @@ namespace symtab {
 #endif // SYMTAB_ENABLE_HIGHWAY
 
     private:
-        mutable std::shared_mutex mtx_;
-        smriti::pools::BumpPool<smriti::domains::SystemRAMDomain> arena_{64 * 1024};
-        std::unordered_set<std::string_view, StringHash, StringEqual> store_;
+        mutable Mutex mtx_;
+        Arena arena_{64 * 1024};
+        Set store_;
         std::atomic<std::size_t> intern_count_{0};
     };
+
+    using InternPool = basic_intern_pool<>;
 } // namespace symtab

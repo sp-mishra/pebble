@@ -10,8 +10,9 @@
 
 using namespace symtab;
 
-// compile-time: SymbolTable must not be move-constructible (item 4)
-static_assert(!std::is_move_constructible_v<SymbolTable<>>);
+// compile-time: SymbolTable is move-constructible
+static_assert(std::is_move_constructible_v<SymbolTable<>>);
+static_assert(std::is_nothrow_move_constructible_v<SymbolTable<>>);
 
 // ============================================================================
 // Helpers
@@ -899,3 +900,58 @@ TEST_CASE (
     REQUIRE(pool.size() == 0);
     REQUIRE(pool.bytes_allocated() == 0);
 }
+
+TEST_CASE("SymbolTable: move constructor and move assignment", "[SymbolTable][move]") {
+    SymbolTable<> tbl1;
+    (void)tbl1.register_symbol("sym::move1", &dummy_a);
+    (void)tbl1.register_symbol("sym::move2", &dummy_b);
+
+    REQUIRE(tbl1.size() == 2);
+    REQUIRE(tbl1.resolve("sym::move1") == &dummy_a);
+
+    SymbolTable<> tbl2(std::move(tbl1));
+    REQUIRE(tbl2.size() == 2);
+    REQUIRE(tbl2.resolve("sym::move1") == &dummy_a);
+    REQUIRE(tbl2.resolve("sym::move2") == &dummy_b);
+
+    SymbolTable<> tbl3;
+    tbl3 = std::move(tbl2);
+    REQUIRE(tbl3.size() == 2);
+    REQUIRE(tbl3.resolve("sym::move1") == &dummy_a);
+    REQUIRE(tbl3.resolve("sym::move2") == &dummy_b);
+}
+
+TEST_CASE("SymbolTable: typed symbol table with non-void* values", "[SymbolTable][typed]") {
+    SymbolTable<int> int_tbl;
+    auto r1 = int_tbl.register_symbol("val::a", 42);
+    auto r2 = int_tbl.register_symbol("val::b", 100);
+
+    REQUIRE(r1.has_value());
+    REQUIRE(r2.has_value());
+    REQUIRE(int_tbl.resolve("val::a") == 42);
+    REQUIRE(int_tbl.resolve("val::b") == 100);
+    REQUIRE(int_tbl.resolve("val::missing") == 0);
+
+    SymbolTable<std::string> str_tbl;
+    auto s1 = str_tbl.register_symbol("msg::hello", "world");
+    REQUIRE(s1.has_value());
+    REQUIRE(str_tbl.resolve("msg::hello") == "world");
+    REQUIRE(str_tbl.resolve("msg::unknown") == "");
+}
+
+TEST_CASE("InternPool: for_each visitor and all() string_views", "[InternPool][visitor]") {
+    InternPool pool;
+    (void)pool.intern("alpha");
+    (void)pool.intern("beta");
+    (void)pool.intern("gamma");
+
+    std::size_t visited = 0;
+    pool.for_each([&](std::string_view sv) {
+        if (!sv.empty()) ++visited;
+    });
+    REQUIRE(visited == 3);
+
+    auto all_views = pool.all();
+    REQUIRE(all_views.size() == 3);
+}
+

@@ -715,6 +715,14 @@ namespace containers::dynamic {
         return std::equal(std::ranges::begin(lhs), std::ranges::end(lhs), rhs.begin(), rhs.end());
     }
 
+    template <typename T, std::size_t N, typename A, typename U>
+    constexpr typename SmallVector<T, N, A>::size_type erase(SmallVector<T, N, A>& c, const U& value) {
+        auto it = std::remove(c.begin(), c.end(), value);
+        auto r = std::distance(it, c.end());
+        c.erase(it, c.end());
+        return static_cast<typename SmallVector<T, N, A>::size_type>(r);
+    }
+
     template <typename T, std::size_t N, typename A, typename Pred>
     constexpr typename SmallVector<T, N, A>::size_type erase_if(SmallVector<T, N, A>& c, Pred pred) {
         auto it = std::remove_if(c.begin(), c.end(), pred);
@@ -738,11 +746,15 @@ namespace containers::dynamic {
 namespace containers {
     using dynamic::SmallVector;
     using dynamic::auto_vector_t;
+    using dynamic::erase;
+    using dynamic::erase_if;
 } // namespace containers
 
 namespace pebble::containers {
     using ::containers::dynamic::SmallVector;
     using ::containers::dynamic::auto_vector_t;
+    using ::containers::dynamic::erase;
+    using ::containers::dynamic::erase_if;
 
     namespace dynamic {
         using namespace ::containers::dynamic;
@@ -750,6 +762,12 @@ namespace pebble::containers {
 } // namespace pebble::containers
 
 namespace std {
+    template <typename T, std::size_t N, typename A, typename U>
+    constexpr typename containers::dynamic::SmallVector<T, N, A>::size_type
+    erase(containers::dynamic::SmallVector<T, N, A>& c, const U& value) {
+        return containers::dynamic::erase(c, value);
+    }
+
     template <typename T, std::size_t N, typename A, typename Pred>
     constexpr typename containers::dynamic::SmallVector<T, N, A>::size_type
     erase_if(containers::dynamic::SmallVector<T, N, A>& c, Pred pred) {

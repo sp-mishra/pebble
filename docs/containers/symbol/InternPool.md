@@ -36,7 +36,7 @@ reducing hash and comparison cost on the resolve path.
 
 ## 2. Core Guarantee: Pointer Stability
 
-`InternPool` uses `std::unordered_set<std::string>`, which is node-based. `insert()` never relocates existing nodes.
+`InternPool` stores character bytes in immutable bump arena slabs (`smriti::pools::BumpPool<smriti::domains::SystemRAMDomain>`), which never relocate.
 Therefore:
 
 - All `string_view` values returned by `intern()` remain valid **for the entire lifetime of the pool**, or until
@@ -56,13 +56,14 @@ assert(sv1.data() == sv2.data());  // same pointer
 
 | Operation             | Lock type       | Notes                                                         |
 |-----------------------|-----------------|---------------------------------------------------------------|
-| `intern()`            | Shared → Unique | Fast path: shared read. Miss: upgrades to exclusive write.    |
-| `intern_or_throw()`   | Same as intern  | Asserts non-empty; throws `std::bad_expected_access` on empty |
+| `intern()`            | Shared → Unique | Fast path: shared read. Miss: upgrades to exclusive write. Pre-hashed outside lock. |
+| `intern_or_throw()`   | Same as intern  | Asserts non-empty; throws `std::bad_expected_access` on error |
 | `contains()`          | Shared read     | Non-mutating                                                  |
 | `size()`              | Shared read     | Non-mutating                                                  |
 | `reserve()`           | Exclusive write | Pre-sizes internal hash set                                   |
 | `clear()`             | Exclusive write | Invalidates all previously returned `string_view` values      |
-| `all()`               | Shared read     | Returns unlocked snapshot copy; safe after lock release       |
+| `for_each(fn)`        | Shared read     | Zero-copy visitor execution under shared lock                 |
+| `all()`               | Shared read     | Returns `std::vector<std::string_view>` snapshot              |
 | `intern_call_count()` | None (atomic)   | `memory_order_relaxed` read; counts every `intern()` call     |
 
 Multiple threads may call `intern()` concurrently without external synchronization.
@@ -73,8 +74,9 @@ Multiple threads may call `intern()` concurrently without external synchronizati
 
 ```cpp
 enum class InternError : std::uint8_t {
-    EmptyString, // intern("") rejected
-    PoolCleared, // reserved for future use; returned view invalidated by clear()
+    EmptyString = 0,       // intern("") rejected
+    PoolCleared = 1,       // reserved for future use; returned view invalidated by clear()
+    AllocationFailure = 2, // arena allocation failed (out of memory)
 };
 
 template <typename T>
@@ -82,24 +84,33 @@ using InternResult = std::expected<T, InternError>;
 ```
 
 `intern()` returns `std::expected<std::string_view, InternError>`. An empty string returns
-`std::unexpected(InternError::EmptyString)`.
+`std::unexpected(InternError::EmptyString)`. Out-of-memory returns `std::unexpected(InternError::AllocationFailure)`.
 
-`intern_or_throw()` calls `.value()` — throws `std::bad_expected_access<InternError>` on empty input. Use only where
-empty string is a programming error.
+`intern_or_throw()` calls `.value()` — throws `std::bad_expected_access<InternError>` on error. Use only where
+empty string or allocation failure is a programming error.
 
 ---
 
 ## 5. API Reference
 
-### Constructors
+### Template Definition & Constructors
 
 ```cpp
-InternPool();                                    // default
+template <
+    typename Mutex = std::shared_mutex,
+    typename Arena = smriti::pools::BumpPool<smriti::domains::SystemRAMDomain>,
+    typename Set   = std::unordered_set<std::string_view, StringHash, StringEqual>
+>
+class basic_intern_pool;
+
+using InternPool = basic_intern_pool<>;
+
+InternPool();                                      // default
 explicit InternPool(std::size_t initial_capacity); // pre-sizes hash set
 InternPool(const InternPool&) = delete;
 InternPool& operator=(const InternPool&) = delete;
-InternPool(InternPool&&) noexcept;               // locks both; transfers store_
-InternPool& operator=(InternPool&&) noexcept;    // same
+InternPool(InternPool&&) noexcept;                 // locks both; transfers store_ & arena_
+InternPool& operator=(InternPool&&) noexcept;      // same
 ```
 
 Move locks both source and destination under `std::scoped_lock` to prevent races with concurrent `intern()` callers.
@@ -115,7 +126,11 @@ Move locks both source and destination under `std::scoped_lock` to prevent races
 [[nodiscard]] std::size_t intern_call_count() const noexcept; // total intern() calls
 void                      reserve(std::size_t n);
 void                      clear();
-[[nodiscard]] std::vector<std::string> all() const;          // snapshot copy
+
+template <typename Fn>
+void for_each(Fn&& fn) const;                             // zero-copy visitor
+[[nodiscard]] std::vector<std::string_view> all() const;  // snapshot copy
+[[nodiscard]] std::size_t bytes_allocated() const noexcept;
 ```
 
 ### Batch Intern (Highway only)
