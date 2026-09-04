@@ -39,6 +39,11 @@ Pebble is a modern, header-only, policy-based C++23 systems library engineered f
   * Documentation: [`docs/containers/nitya.md`](docs/containers/nitya.md)
 * **Anukrama** (`include/containers/anukrama/`) — Generic static-composition versioned state: immutable MVCC chains, stable snapshots, optimistic validation, and explicit reclamation. Pluggable node-allocator (heap or Smriti arena), synchronization (global / striped / null), and snapshot-registry policies, all defaulting to zero added cost. Petika can bind durable Nitya LSNs as its commit clock without making Nitya mandatory.
   * Documentation: [`docs/containers/anukrama.md`](docs/containers/anukrama.md)
+* **Sanchaya** (`include/sanchaya/`) — Non-intrusive, object-first persistence, query planning, and data federation framework.
+  * Zero-macro, zero-virtual compile-time entity descriptors (`describe_row`, `field`, `embedded`, `relation`).
+  * Type-safe alias-aware query EDSL (`from<T>().where().group_by().select()`), three-valued logic, and generational session handles.
+  * Multi-candidate optimizer, placement cost model, and policy-composed `workspace`.
+  * Documentation: [`scratch/sanchaya/sanchaya.md`](scratch/sanchaya/sanchaya.md)
 
 ---
 

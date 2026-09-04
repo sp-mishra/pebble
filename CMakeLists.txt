@@ -514,10 +514,11 @@ target_include_directories(pebble_kalpa_lib INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_compile_features(pebble_kalpa_lib INTERFACE cxx_std_23)
 
-
-
-
-
+add_library(pebble_sanchaya_lib INTERFACE)
+add_library(pebble::sanchaya ALIAS pebble_sanchaya_lib)
+target_include_directories(pebble_sanchaya_lib INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_compile_features(pebble_sanchaya_lib INTERFACE cxx_std_23)
 
 # dependencies limited to Pebble containers; integrations remain opt-in.
 add_library(pebble_medha INTERFACE)

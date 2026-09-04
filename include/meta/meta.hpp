@@ -18,6 +18,8 @@
 #include <cstdint>
 #include <expected>
 #include <format>
+#include <memory>
+#include <optional>
 #include <source_location>
 #include <string_view>
 #include <tuple>
@@ -3429,5 +3431,194 @@ namespace meta {
         [[nodiscard]] constexpr std::size_t size() const noexcept { return count; }
         [[nodiscard]] constexpr bool empty() const noexcept { return count == 0; }
     };
+
+    // ============================================================================
+    //  SECTION 15: Member-Pointer Introspection & Member Path Traversal
+    // ============================================================================
+
+    template <class T>
+    struct member_pointer_type_traits;
+
+    // Specialization for member object pointers
+    template <class Class, class Value>
+    struct member_pointer_type_traits<Value Class::*> {
+        using owner_type = Class;
+        using value_type = Value;
+        static constexpr bool is_member_object = true;
+        static constexpr bool is_member_function = false;
+        static constexpr bool is_const = false;
+        static constexpr bool is_noexcept = false;
+    };
+
+    // Unqualified member functions
+    template <class Class, class Ret, class... Args>
+    struct member_pointer_type_traits<Ret (Class::*)(Args...)> {
+        using owner_type = Class;
+        using return_type = Ret;
+        using args_tuple = std::tuple<Args...>;
+        static constexpr bool is_member_object = false;
+        static constexpr bool is_member_function = true;
+        static constexpr bool is_const = false;
+        static constexpr bool is_noexcept = false;
+    };
+
+    // Const member functions
+    template <class Class, class Ret, class... Args>
+    struct member_pointer_type_traits<Ret (Class::*)(Args...) const> {
+        using owner_type = Class;
+        using return_type = Ret;
+        using args_tuple = std::tuple<Args...>;
+        static constexpr bool is_member_object = false;
+        static constexpr bool is_member_function = true;
+        static constexpr bool is_const = true;
+        static constexpr bool is_noexcept = false;
+    };
+
+    // Noexcept member functions
+    template <class Class, class Ret, class... Args>
+    struct member_pointer_type_traits<Ret (Class::*)(Args...) noexcept> {
+        using owner_type = Class;
+        using return_type = Ret;
+        using args_tuple = std::tuple<Args...>;
+        static constexpr bool is_member_object = false;
+        static constexpr bool is_member_function = true;
+        static constexpr bool is_const = false;
+        static constexpr bool is_noexcept = true;
+    };
+
+    // Const noexcept member functions
+    template <class Class, class Ret, class... Args>
+    struct member_pointer_type_traits<Ret (Class::*)(Args...) const noexcept> {
+        using owner_type = Class;
+        using return_type = Ret;
+        using args_tuple = std::tuple<Args...>;
+        static constexpr bool is_member_object = false;
+        static constexpr bool is_member_function = true;
+        static constexpr bool is_const = true;
+        static constexpr bool is_noexcept = true;
+    };
+
+    // Lvalue ref-qualified member functions
+    template <class Class, class Ret, class... Args>
+    struct member_pointer_type_traits<Ret (Class::*)(Args...) &> {
+        using owner_type = Class;
+        using return_type = Ret;
+        using args_tuple = std::tuple<Args...>;
+        static constexpr bool is_member_object = false;
+        static constexpr bool is_member_function = true;
+        static constexpr bool is_const = false;
+        static constexpr bool is_noexcept = false;
+    };
+
+    // Forwarding alias for NTTP member constants
+    template <auto Member>
+    struct member_pointer_traits : member_pointer_type_traits<decltype(Member)> {};
+
+    template <auto Member>
+    concept member_object_pointer = member_pointer_traits<Member>::is_member_object;
+
+    template <auto Member>
+    concept member_function_pointer = member_pointer_traits<Member>::is_member_function;
+
+    template <auto Member>
+    using member_owner_t = typename member_pointer_traits<Member>::owner_type;
+
+    template <auto Member>
+        requires member_object_pointer<Member>
+    using member_value_t = typename member_pointer_traits<Member>::value_type;
+
+    template <auto Member>
+        requires member_function_pointer<Member>
+    using member_return_t = typename member_pointer_traits<Member>::return_type;
+
+    template <class T, auto Member>
+    concept member_of = std::is_same_v<std::remove_cvref_t<T>, member_owner_t<Member>>;
+
+    // --- Path Traversal Effects & Member Path ---
+
+    enum class traversal_effect : std::uint8_t {
+        none     = 0,
+        nullable = 1 << 0,
+        optional = 1 << 1,
+        indirect = 1 << 2
+    };
+
+    [[nodiscard]] constexpr traversal_effect operator|(traversal_effect a, traversal_effect b) noexcept {
+        return static_cast<traversal_effect>(static_cast<std::uint8_t>(a) | static_cast<std::uint8_t>(b));
+    }
+
+    [[nodiscard]] constexpr bool has_effect(traversal_effect mask, traversal_effect test) noexcept {
+        return (static_cast<std::uint8_t>(mask) & static_cast<std::uint8_t>(test)) != 0;
+    }
+
+    template <class T>
+    struct path_traversal_traits {
+        using element_type = T;
+        static constexpr auto effect = traversal_effect::none;
+    };
+
+    template <class T>
+    struct path_traversal_traits<std::optional<T>> {
+        using element_type = T;
+        static constexpr auto effect = traversal_effect::optional;
+    };
+
+    template <class T>
+    struct path_traversal_traits<std::unique_ptr<T>> {
+        using element_type = T;
+        static constexpr auto effect = traversal_effect::indirect | traversal_effect::nullable;
+    };
+
+    template <class T>
+    struct path_traversal_traits<std::shared_ptr<T>> {
+        using element_type = T;
+        static constexpr auto effect = traversal_effect::indirect | traversal_effect::nullable;
+    };
+
+    template <class T>
+    struct path_traversal_traits<T*> {
+        using element_type = T;
+        static constexpr auto effect = traversal_effect::nullable | traversal_effect::indirect;
+    };
+
+    template <auto... Members>
+    struct member_path;
+
+    template <auto First>
+    struct member_path<First> {
+        static_assert(member_object_pointer<First>, "member_path elements must be member object pointers");
+        using source_type = member_owner_t<First>;
+        using result_type = member_value_t<First>;
+        static constexpr std::size_t depth = 1;
+        static constexpr auto step_effect = path_traversal_traits<result_type>::effect;
+        static constexpr auto accumulated_effects = step_effect;
+
+        static constexpr bool has_indirection = has_effect(accumulated_effects, traversal_effect::indirect);
+        static constexpr bool has_optional    = has_effect(accumulated_effects, traversal_effect::optional);
+        static constexpr bool has_nullable    = has_effect(accumulated_effects, traversal_effect::nullable);
+    };
+
+    template <auto First, auto Second, auto... Rest>
+    struct member_path<First, Second, Rest...> {
+        static_assert(member_object_pointer<First>, "member_path elements must be member object pointers");
+        using raw_val = member_value_t<First>;
+        using unwrapped_val = typename path_traversal_traits<raw_val>::element_type;
+        using next_owner = member_owner_t<Second>;
+
+        static_assert(std::is_same_v<std::remove_cvref_t<unwrapped_val>, std::remove_cvref_t<next_owner>>,
+                      "Invalid member_path: unwrapped element type does not match next member owner");
+
+        using source_type = member_owner_t<First>;
+        using result_type = typename member_path<Second, Rest...>::result_type;
+        static constexpr std::size_t depth = 2 + sizeof...(Rest);
+        static constexpr auto step_effect = path_traversal_traits<raw_val>::effect;
+        static constexpr auto accumulated_effects = step_effect | member_path<Second, Rest...>::accumulated_effects;
+
+        static constexpr bool has_indirection = has_effect(accumulated_effects, traversal_effect::indirect);
+        static constexpr bool has_optional    = has_effect(accumulated_effects, traversal_effect::optional);
+        static constexpr bool has_nullable    = has_effect(accumulated_effects, traversal_effect::nullable);
+    };
+
 } // namespace meta
+
 
