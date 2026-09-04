@@ -255,3 +255,29 @@ while (v.size() > 10) v.pop_back();
 v.shrink_to_fit();
 assert(!v.spilled());        // collapsed back to inline
 ```
+
+---
+
+## 10. `SmallBitSet` — Compact Small-Buffer Bitset
+
+> **Header:** `include/containers/dynamic/SmallBitSet.hpp`
+
+`SmallBitSet<InlineBits, Alloc>` provides an inline-first dynamic bitset designed for optimizer nullability masks, projection masks, and dependency sets.
+
+### Key Features
+- **Inline Words**: First `InlineBits` (default: 64) stored inline in a 64-bit word without heap allocation.
+- **Dynamic Spill**: Automatically spills to `Alloc` when resized beyond `InlineBits`.
+- **Fast Intrinsics**: Direct `std::popcount`, `std::countr_zero`, branchless bitwise operators (`&`, `|`, `^`, `~`).
+- **Bit Scanning**: `find_first()`, `find_next(prev)`.
+
+```cpp
+#include "containers/dynamic/SmallBitSet.hpp"
+
+containers::dynamic::SmallBitSet<64> mask(64);
+mask.set(5);
+mask.set(42);
+
+assert(mask.count() == 2);
+assert(mask.test(5));
+```
+

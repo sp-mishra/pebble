@@ -1038,3 +1038,46 @@ TEST_CASE (
     STATIC_REQUIRE(E32::max_level == 32);
 }
 
+// ============================================================================
+// § 24  Petika Capabilities & Optimizer Statistics Tests
+// ============================================================================
+
+struct DummyEntity {
+    int id{0};
+    int age{0};
+};
+
+TEST_CASE("petika: capabilities, secondary_index, and statistics descriptors", "[petika][capabilities]") {
+    petika::petika_capabilities caps{
+        .point_lookup = true,
+        .batch_get = true,
+        .ordered_range = true,
+        .prefix_scan = true,
+        .secondary_index = true
+    };
+
+    REQUIRE(caps.point_lookup);
+    REQUIRE(caps.secondary_index);
+    REQUIRE_FALSE(caps.change_feed);
+
+    petika::secondary_index<DummyEntity, &DummyEntity::age> idx{
+        .index_name = "dummy_age_idx",
+        .is_unique = false
+    };
+
+    REQUIRE(idx.index_name == "dummy_age_idx");
+    REQUIRE_FALSE(idx.is_unique);
+
+    petika::index_statistics stats{
+        .entries = 1000,
+        .distinct_keys = 800,
+        .average_object_size = 128,
+        .scan_locality = 0.95,
+        .cache_hit_rate = 0.99
+    };
+
+    REQUIRE(stats.entries == 1000);
+    REQUIRE(stats.distinct_keys == 800);
+}
+
+

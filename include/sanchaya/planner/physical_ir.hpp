@@ -35,6 +35,93 @@ namespace sanchaya::optimizer {
     // 2. Physical Execution Operators
     // ========================================================================
 
+    // --- 2.1 In-Memory Physical IR ---
+    template <class Entity>
+    struct memory_point_lookup {
+        using entity_type = Entity;
+        physical_properties properties{.target_engine = execution_engine_target::in_memory_session, .is_streamable = false};
+    };
+
+    template <class Entity>
+    struct memory_range_lookup {
+        using entity_type = Entity;
+        physical_properties properties{.target_engine = execution_engine_target::in_memory_session, .is_streamable = true};
+    };
+
+    template <class Entity>
+    struct memory_parallel_scan {
+        using entity_type = Entity;
+        physical_properties properties{.target_engine = execution_engine_target::in_memory_session, .is_streamable = true, .is_parallelizable = true};
+    };
+
+    template <class ChildOp, class Predicate>
+    struct memory_filter {
+        using child_type = ChildOp;
+        using predicate_type = Predicate;
+        ChildOp child;
+        [[no_unique_address]] Predicate predicate;
+        physical_properties properties{.target_engine = execution_engine_target::in_memory_session, .is_streamable = true};
+    };
+
+    template <class ChildOp, class... Exprs>
+    struct memory_project {
+        using child_type = ChildOp;
+        ChildOp child;
+        std::tuple<Exprs...> expressions;
+        physical_properties properties{.target_engine = execution_engine_target::in_memory_session, .is_streamable = true};
+    };
+
+    template <class LeftOp, class RightOp, class Predicate>
+    struct memory_index_nested_loop_join {
+        LeftOp left;
+        RightOp right;
+        [[no_unique_address]] Predicate predicate;
+        physical_properties properties{.target_engine = execution_engine_target::in_memory_session};
+    };
+
+    template <class LeftOp, class RightOp, class LeftKey, class RightKey>
+    struct memory_sort_merge_join {
+        LeftOp left;
+        RightOp right;
+        [[no_unique_address]] LeftKey left_key;
+        [[no_unique_address]] RightKey right_key;
+        physical_properties properties{.target_engine = execution_engine_target::in_memory_session};
+    };
+
+    template <class ChildOp, class GroupKeysTuple, class AggregatesTuple>
+    struct memory_hash_group {
+        ChildOp child;
+        GroupKeysTuple group_keys;
+        AggregatesTuple aggregates;
+        physical_properties properties{.target_engine = execution_engine_target::in_memory_session, .is_streamable = false};
+    };
+
+    template <class ChildOp, class OrderExpr>
+    struct memory_sort {
+        ChildOp child;
+        [[no_unique_address]] OrderExpr expr;
+        sort_direction direction{sort_direction::ascending};
+        physical_properties properties{.target_engine = execution_engine_target::in_memory_session, .is_streamable = false};
+    };
+
+    template <class ChildOp>
+    struct memory_distinct {
+        ChildOp child;
+        physical_properties properties{.target_engine = execution_engine_target::in_memory_session, .is_streamable = false};
+    };
+
+    template <class ChildOp>
+    struct memory_materialize {
+        ChildOp child;
+        physical_properties properties{.target_engine = execution_engine_target::in_memory_session, .is_streamable = false};
+    };
+
+    template <class ChildOp>
+    struct memory_stream {
+        ChildOp child;
+        physical_properties properties{.target_engine = execution_engine_target::in_memory_session, .is_streamable = true};
+    };
+
     /// Physical sequential/table scan
     template <class Entity, execution_engine_target Target = execution_engine_target::in_memory_session>
     struct physical_table_scan {
@@ -49,7 +136,7 @@ namespace sanchaya::optimizer {
         }
     };
 
-    /// Physical index seek (e.g. B-Tree / SkipList primary key point lookup)
+    /// Physical index seek
     template <class Entity, class KeyExpr, execution_engine_target Target = execution_engine_target::petika_kv>
     struct physical_index_seek {
         using entity_type = Entity;
@@ -183,6 +270,63 @@ namespace sanchaya::optimizer {
         }
     };
 
+    // --- 2.2 Relational Physical IR ---
+    template <class Entity>
+    struct rel_index_seek {
+        using entity_type = Entity;
+        physical_properties properties{.target_engine = execution_engine_target::sqlite_transactional, .is_streamable = false};
+    };
+
+    template <class Entity>
+    struct rel_bitmap_scan {
+        using entity_type = Entity;
+        physical_properties properties{.target_engine = execution_engine_target::sqlite_transactional, .is_streamable = true};
+    };
+
+    template <class LeftOp, class RightOp>
+    struct rel_semi_join {
+        LeftOp left;
+        RightOp right;
+        physical_properties properties{.target_engine = execution_engine_target::sqlite_transactional};
+    };
+
+    template <class LeftOp, class RightOp>
+    struct rel_anti_join {
+        LeftOp left;
+        RightOp right;
+        physical_properties properties{.target_engine = execution_engine_target::sqlite_transactional};
+    };
+
+    template <class ChildOp>
+    struct rel_hash_aggregate {
+        ChildOp child;
+        physical_properties properties{.target_engine = execution_engine_target::sqlite_transactional, .is_streamable = false};
+    };
+
+    template <class ChildOp>
+    struct rel_sort_aggregate {
+        ChildOp child;
+        physical_properties properties{.target_engine = execution_engine_target::sqlite_transactional, .is_streamable = false};
+    };
+
+    template <class Entity>
+    struct rel_insert {
+        using entity_type = Entity;
+        physical_properties properties{.target_engine = execution_engine_target::sqlite_transactional};
+    };
+
+    template <class Entity>
+    struct rel_update {
+        using entity_type = Entity;
+        physical_properties properties{.target_engine = execution_engine_target::sqlite_transactional};
+    };
+
+    template <class Entity>
+    struct rel_delete {
+        using entity_type = Entity;
+        physical_properties properties{.target_engine = execution_engine_target::sqlite_transactional};
+    };
+
     /// Direct engine-delegated federated scan for SQLite
     template <class Entity, class PredicateTuple, class ProjectTuple>
     struct physical_sqlite_federated_op {
@@ -212,6 +356,79 @@ namespace sanchaya::optimizer {
             properties.target_engine = execution_engine_target::duckdb_columnar_vectorized;
             properties.is_vectorized = true;
         }
+    };
+
+    // --- 2.3 Petika Physical IR ---
+    template <class Key>
+    struct petika_batch_get {
+        std::vector<Key> keys;
+        physical_properties properties{.target_engine = execution_engine_target::petika_kv, .is_streamable = false};
+    };
+
+    template <class KeyPrefix>
+    struct petika_prefix_scan {
+        KeyPrefix prefix;
+        physical_properties properties{.target_engine = execution_engine_target::petika_kv, .is_streamable = true};
+    };
+
+    template <class ChildOp, class Predicate>
+    struct petika_filter {
+        ChildOp child;
+        Predicate predicate;
+        physical_properties properties{.target_engine = execution_engine_target::petika_kv, .is_streamable = true};
+    };
+
+    template <class Entity>
+    struct petika_project_decode {
+        using entity_type = Entity;
+        physical_properties properties{.target_engine = execution_engine_target::petika_kv, .is_streamable = true};
+    };
+
+    template <class Key, class Value>
+    struct petika_batch_put {
+        std::vector<std::pair<Key, Value>> entries;
+        physical_properties properties{.target_engine = execution_engine_target::petika_kv};
+    };
+
+    template <class Key>
+    struct petika_batch_erase {
+        std::vector<Key> keys;
+        physical_properties properties{.target_engine = execution_engine_target::petika_kv};
+    };
+
+    struct petika_transaction {
+        physical_properties properties{.target_engine = execution_engine_target::petika_kv};
+    };
+
+    // --- 2.4 Federated & Exchange Physical IR ---
+    template <class ChildOp>
+    struct exchange_broadcast {
+        ChildOp child;
+        physical_properties properties{.target_engine = execution_engine_target::remote_federated, .is_streamable = true};
+    };
+
+    template <class ChildOp, class PartitionKey>
+    struct exchange_repartition_by_key {
+        ChildOp child;
+        PartitionKey key;
+        physical_properties properties{.target_engine = execution_engine_target::remote_federated, .is_streamable = true};
+    };
+
+    template <class Key>
+    struct exchange_batch_key_request {
+        std::vector<Key> keys;
+        physical_properties properties{.target_engine = execution_engine_target::remote_federated, .is_streamable = false};
+    };
+
+    template <class ChildOp>
+    struct exchange_row_stream {
+        ChildOp child;
+        physical_properties properties{.target_engine = execution_engine_target::remote_federated, .is_streamable = true};
+    };
+
+    struct exchange_consistency_barrier {
+        consistency_requirement requirement{consistency_requirement::strict_serializable};
+        physical_properties properties{.target_engine = execution_engine_target::remote_federated};
     };
 
     // ========================================================================
@@ -257,6 +474,10 @@ namespace sanchaya::optimizer {
     inline constexpr bool is_physical_plan_node_v = is_physical_plan_node<std::decay_t<T>>::value;
 
     template <class T>
-    concept physical_plan = is_physical_plan_node_v<T>;
+    concept physical_plan = is_physical_plan_node_v<T> || requires(T t) {
+        { t.properties } -> std::same_as<physical_properties&>;
+    };
 
 } // namespace sanchaya::optimizer
+
+

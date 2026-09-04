@@ -362,3 +362,56 @@ TEST_CASE (
     struct my_custom_tag {};
     STATIC_REQUIRE_FALSE(vakya::emit::tag_descriptor<my_custom_tag>::is_commutative);
 }
+
+// ============================================================================
+// Test 15 — Recursive Expression Inspection & Boolean Logic Policies
+// ============================================================================
+
+#include "vakya/egraph.hpp"
+
+namespace {
+    struct IsIntegralTerminal {
+        template <class T>
+        consteval bool operator()() const {
+            return std::is_integral_v<std::remove_cvref_t<T>> || std::is_same_v<T, int>;
+        }
+    };
+}
+
+TEST_CASE("vakya: all_terminals_satisfy and visit_expression", "[vakya][traversal]") {
+    auto expr = (vakya::as_expr(10) + vakya::as_expr(20)) * vakya::as_expr(30);
+
+    STATIC_REQUIRE(vakya::all_terminals_satisfy<decltype(expr)>(IsIntegralTerminal{}));
+
+    int count = 0;
+    vakya::visit_expression(expr, [&](const auto&) {
+        ++count;
+    });
+    REQUIRE(count > 0);
+}
+
+TEST_CASE("vakya: boolean logic policies", "[vakya][logic]") {
+    using L3 = vakya::sql_three_valued_logic;
+    REQUIRE(L3::logical_and(vakya::tribool_value::true_value, vakya::tribool_value::true_value) == vakya::tribool_value::true_value);
+    REQUIRE(L3::logical_and(vakya::tribool_value::true_value, vakya::tribool_value::unknown_value) == vakya::tribool_value::unknown_value);
+    REQUIRE(L3::logical_and(vakya::tribool_value::false_value, vakya::tribool_value::unknown_value) == vakya::tribool_value::false_value);
+    REQUIRE(L3::logical_not(vakya::tribool_value::unknown_value) == vakya::tribool_value::unknown_value);
+}
+
+TEST_CASE("vakya: egraph adapter interning and rules", "[vakya][egraph]") {
+    vakya::egraph_adapter::graph_t g;
+    auto expr1 = vakya::as_expr(10) + vakya::as_expr(20);
+    auto expr2 = vakya::as_expr(20) + vakya::as_expr(10);
+
+    auto id1 = vakya::egraph_adapter::intern_expression(g, expr1);
+    auto id2 = vakya::egraph_adapter::intern_expression(g, expr2);
+
+    REQUIRE(g.find(id1) != g.find(id2));
+
+    vakya::egraph_adapter::vakya_commutativity rule;
+    rule.apply(g);
+    g.rebuild();
+
+    REQUIRE(g.find(id1) == g.find(id2));
+}
+

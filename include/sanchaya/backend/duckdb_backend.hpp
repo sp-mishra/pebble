@@ -53,6 +53,74 @@ namespace sanchaya::backend {
 #endif
         }
 
+        auto execute(std::string_view sql) -> std::expected<bool, sanchaya_error> {
+#if SANCHAYA_HAS_DUCKDB
+            if (!is_open_ || !conn_) {
+                return std::unexpected(sanchaya_error{
+                    .domain = error_domain::storage,
+                    .code = 400,
+                    .message = "DuckDB instance not open"
+                });
+            }
+            auto result = conn_->Query(std::string(sql));
+            if (result->HasError()) {
+                return std::unexpected(sanchaya_error{
+                    .domain = error_domain::storage,
+                    .code = 500,
+                    .message = result->GetError()
+                });
+            }
+            return true;
+#else
+            (void)sql;
+            return std::unexpected(sanchaya_error{
+                .domain = error_domain::storage,
+                .code = 501,
+                .message = "DuckDB dependency not compiled into current target"
+            });
+#endif
+        }
+
+        template <class Callback>
+        auto execute_query(std::string_view sql, Callback&& callback) -> std::expected<std::size_t, sanchaya_error> {
+#if SANCHAYA_HAS_DUCKDB
+            if (!is_open_ || !conn_) {
+                return std::unexpected(sanchaya_error{
+                    .domain = error_domain::storage,
+                    .code = 400,
+                    .message = "DuckDB instance not open"
+                });
+            }
+            auto result = conn_->Query(std::string(sql));
+            if (result->HasError()) {
+                return std::unexpected(sanchaya_error{
+                    .domain = error_domain::storage,
+                    .code = 500,
+                    .message = result->GetError()
+                });
+            }
+            std::size_t count = result->RowCount();
+            std::size_t cols = result->ColumnCount();
+            for (std::size_t r = 0; r < count; ++r) {
+                std::vector<std::string> row_values;
+                row_values.reserve(cols);
+                for (std::size_t c = 0; c < cols; ++c) {
+                    row_values.push_back(result->GetValue(c, r).ToString());
+                }
+                callback(row_values);
+            }
+            return count;
+#else
+            (void)sql;
+            (void)callback;
+            return std::unexpected(sanchaya_error{
+                .domain = error_domain::storage,
+                .code = 501,
+                .message = "DuckDB dependency not compiled into current target"
+            });
+#endif
+        }
+
         auto query(std::string_view sql) -> std::expected<std::size_t, sanchaya_error> {
 #if SANCHAYA_HAS_DUCKDB
             if (!is_open_ || !conn_) {

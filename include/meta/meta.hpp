@@ -649,6 +649,58 @@ namespace meta {
 #endif
         }
 
+        // Extract member pointer name from compiler-specific function signature
+        template <auto MemberPtr>
+        consteval std::string_view member_name_raw() noexcept {
+#if defined(__clang__)
+            const std::string_view sv = __PRETTY_FUNCTION__;
+            const auto start = sv.find("MemberPtr = ") + 12;
+            const auto end = sv.rfind(']');
+            if (start != std::string_view::npos && end != std::string_view::npos && start < end)
+                return sv.substr(start, end - start);
+            return "unknown";
+#elif defined(__GNUC__)
+            std::string_view sv = __PRETTY_FUNCTION__;
+            auto start = sv.find("MemberPtr = ") + 12;
+            auto end = sv.find(';', start);
+            if (end == std::string_view::npos)
+                end = sv.rfind(']');
+            if (start != std::string_view::npos && end != std::string_view::npos && start < end)
+                return sv.substr(start, end - start);
+            return "unknown";
+#elif defined(_MSC_VER)
+            std::string_view sv = __FUNCSIG__;
+            auto start = sv.find("member_name_raw<") + 16;
+            auto end = sv.rfind(">(void)");
+            if (start != std::string_view::npos && end != std::string_view::npos && start < end)
+                return sv.substr(start, end - start);
+            return "unknown";
+#else
+            return "unknown";
+#endif
+        }
+
+        // Clean member pointer name: extract identifier name (e.g. &Employee::name -> name)
+        consteval std::string_view clean_member_name(std::string_view raw) noexcept {
+            while (!raw.empty() && (raw.front() == ' ' || raw.front() == '\t' || raw.front() == '&'))
+                raw.remove_prefix(1);
+            while (!raw.empty() && (raw.back() == ' ' || raw.back() == '\t' || raw.back() == ')'))
+                raw.remove_suffix(1);
+
+            const auto pos = raw.rfind("::");
+            if (pos != std::string_view::npos)
+                raw = raw.substr(pos + 2);
+
+            const auto arrow = raw.rfind("->");
+            if (arrow != std::string_view::npos)
+                raw = raw.substr(arrow + 2);
+
+            while (!raw.empty() && (raw.back() == ' ' || raw.back() == '\t'))
+                raw.remove_suffix(1);
+
+            return raw;
+        }
+
         // Clean enum name: strip scope prefix to get just the enumerator name
         consteval std::string_view clean_enum_name(std::string_view raw) noexcept {
             // Trim lightweight compiler formatting noise around pretty-function payloads.
@@ -775,6 +827,15 @@ namespace meta {
             sv.remove_prefix(5);
         return sv;
     }
+
+    // Public API for compile-time member pointer name extraction (zero macros)
+    template <auto MemberPtr>
+    consteval std::string_view member_name() noexcept {
+        return detail::compiler::clean_member_name(detail::compiler::member_name_raw<MemberPtr>());
+    }
+
+    template <auto MemberPtr>
+    inline constexpr std::string_view member_name_v = member_name<MemberPtr>();
 
     // ============================================================================
     //  SECTION 4: REFLECTION — AGGREGATE DECOMPOSITION ENGINE
@@ -3618,6 +3679,72 @@ namespace meta {
         static constexpr bool has_optional    = has_effect(accumulated_effects, traversal_effect::optional);
         static constexpr bool has_nullable    = has_effect(accumulated_effects, traversal_effect::nullable);
     };
+
+    // =========================================================================
+    // Semantic vs Synthetic Member Names & Identities
+    // =========================================================================
+
+    enum class member_name_kind : std::uint8_t {
+        synthetic,
+        semantic,
+        explicit_identity
+    };
+
+    template <auto MemberPtr>
+    struct member_identity {
+        static constexpr auto name = member_name_v<MemberPtr>;
+        static constexpr member_name_kind kind =
+            (name.starts_with("field_") || name.starts_with("member_"))
+                ? member_name_kind::synthetic
+                : member_name_kind::semantic;
+    };
+
+    // =========================================================================
+    // Descriptor Overlays
+    // =========================================================================
+
+    template <class InferredDescriptor, class... Overrides>
+    struct descriptor_overlay {
+        using base_type = InferredDescriptor;
+        using overrides_tuple = std::tuple<Overrides...>;
+
+        base_type base;
+        overrides_tuple overrides;
+
+        constexpr descriptor_overlay(base_type b, Overrides... ovs)
+            : base(std::move(b)), overrides(std::make_tuple(std::move(ovs)...)) {}
+    };
+
+    template <class Inferred, class... Overrides>
+    constexpr auto overlay(Inferred&& inferred, Overrides&&... overrides) {
+        return descriptor_overlay<std::decay_t<Inferred>, std::decay_t<Overrides>...>(
+            std::forward<Inferred>(inferred),
+            std::forward<Overrides>(overrides)...
+        );
+    }
+
+    // =========================================================================
+    // Projection Construction Utilities
+    // =========================================================================
+
+    template <class Target, class... SourceTypes>
+    concept aggregate_constructible_from = requires(SourceTypes&&... args) {
+        Target{std::forward<SourceTypes>(args)...};
+    };
+
+    template <class Target, class... SourceTypes>
+    concept constructible_from_args = std::is_constructible_v<Target, SourceTypes...>;
+
+    template <class Target, class... Fields>
+    constexpr Target build_projection(Fields&&... fields) {
+        if constexpr (constructible_from_args<Target, Fields...>) {
+            return Target(std::forward<Fields>(fields)...);
+        } else if constexpr (aggregate_constructible_from<Target, Fields...>) {
+            return Target{std::forward<Fields>(fields)...};
+        } else {
+            return Target(std::forward<Fields>(fields)...);
+        }
+    }
 
 } // namespace meta
 

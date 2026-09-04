@@ -1552,4 +1552,34 @@ namespace kosha {
 
     template <typename K, typename V>
     using TTLARCCache = TTLCache<ARCCache<K, V>>;
+
+    // =========================================================================
+    // Kosha Optimizer & Plan Caching Keys
+    // =========================================================================
+
+    struct compiled_plan_key {
+        std::uint64_t logical_plan_fingerprint{0};
+        std::uint64_t model_schema_identity{0};
+        std::uint64_t backend_catalog_version{0};
+        std::uint64_t statistics_epoch{0};
+        std::uint64_t semantic_policy_identity{0};
+
+        [[nodiscard]] constexpr bool operator==(const compiled_plan_key& other) const noexcept = default;
+    };
+
 } // namespace kosha
+
+namespace std {
+    template <>
+    struct hash<kosha::compiled_plan_key> {
+        [[nodiscard]] std::size_t operator()(const kosha::compiled_plan_key& k) const noexcept {
+            std::size_t h = std::hash<std::uint64_t>{}(k.logical_plan_fingerprint);
+            h ^= std::hash<std::uint64_t>{}(k.model_schema_identity) + 0x9e3779b9u + (h << 6) + (h >> 2);
+            h ^= std::hash<std::uint64_t>{}(k.backend_catalog_version) + 0x9e3779b9u + (h << 6) + (h >> 2);
+            h ^= std::hash<std::uint64_t>{}(k.statistics_epoch) + 0x9e3779b9u + (h << 6) + (h >> 2);
+            h ^= std::hash<std::uint64_t>{}(k.semantic_policy_identity) + 0x9e3779b9u + (h << 6) + (h >> 2);
+            return h;
+        }
+    };
+} // namespace std
+

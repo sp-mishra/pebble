@@ -32,6 +32,10 @@ namespace sanchaya {
                        slot_->value.has_value();
             }
 
+            [[nodiscard]] constexpr bool is_valid() const noexcept {
+                return is_valid(session_epoch_);
+            }
+
             [[nodiscard]] auto get(std::uint64_t current_epoch) const noexcept
                 -> std::expected<std::reference_wrapper<const Entity>, sanchaya_error>
             {
@@ -43,6 +47,14 @@ namespace sanchaya {
                     });
                 }
                 return std::cref(*slot_->value);
+            }
+
+            [[nodiscard]] const Entity* operator->() const noexcept {
+                return slot_ && slot_->value ? &(*slot_->value) : nullptr;
+            }
+
+            [[nodiscard]] const Entity& operator*() const noexcept {
+                return *slot_->value;
             }
 
         private:

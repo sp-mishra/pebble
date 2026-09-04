@@ -1389,7 +1389,11 @@ auto result = litegraph::pagerank_engine(
 | **GED**                     | `graph_edit_distance`                      | `double graph_edit_distance(g1, g2, cost_fns...)`                                 |
 | **Nadi Observability**      | `observability::NadiGraphObserver`         | `NadiGraphObserver<SinkPolicy, ClockPolicy>`                                      |
 | **Freeze to CSR**           | `freeze_to_csr`                            | `CsrGraph<...> freeze_to_csr(const Graph<...> &g)`                                |
+| **Static Graph**            | `static_graph`                             | `static_graph<MaxV, MaxE, NodeT, EdgeT>`                                           |
+| **SCC Analysis**            | `analyze_scc`                              | `scc_analysis analyze_scc(const GraphT &g)`                                       |
+| **Condensation Graph**      | `make_condensation_graph`                  | `Graph<size_t> make_condensation_graph(const GraphT &g, components)`              |
 | **Display (DOT)**           | `to_dot`                                   | `void to_dot(const Graph<...> &g, std::ostream &os)`                              |
 | **Display (ASCII)**         | `to_ascii`                                 | `void to_ascii(const Graph<...> &g, std::ostream &os, formatters...)`             |
+
 
 

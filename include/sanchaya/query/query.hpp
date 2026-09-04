@@ -43,6 +43,13 @@ namespace sanchaya {
         vakya::Expression<Expr> ||
         boolean_expression<Expr, Logic>;
 
+    template <class Expr, akshara::fixed_string Alias>
+    struct aliased_expression {
+        using vakya_terminal = void;
+        static constexpr auto alias = Alias;
+        Expr expression;
+    };
+
     template <akshara::fixed_string Alias, auto MemberPtr>
     [[nodiscard]] constexpr auto member() noexcept {
         return vakya::as_expr(aliased_member_access_descriptor<Alias, MemberPtr>{});
@@ -51,6 +58,17 @@ namespace sanchaya {
     template <auto MemberPtr>
     [[nodiscard]] constexpr auto member() noexcept {
         return vakya::as_expr(aliased_member_access_descriptor<"root", MemberPtr>{});
+    }
+
+    template <akshara::fixed_string ResultAlias>
+    struct result_field_ref {
+        using vakya_terminal = void;
+        static constexpr auto name = ResultAlias;
+    };
+
+    template <akshara::fixed_string ResultAlias>
+    [[nodiscard]] constexpr auto result() noexcept {
+        return result_field_ref<ResultAlias>{};
     }
 
     // ========================================================================
@@ -94,18 +112,47 @@ namespace sanchaya {
     template <class Plan>
     struct limit_plan {
         Plan plan;
+        std::size_t limit_count{0};
         std::size_t count{0};
+
+        constexpr limit_plan() = default;
+        constexpr explicit limit_plan(Plan p, std::size_t c = 0) noexcept
+            : plan(std::move(p)), limit_count(c), count(c) {}
     };
 
     template <class Plan>
     struct offset_plan {
         Plan plan;
+        std::size_t offset_count{0};
         std::size_t count{0};
+
+        constexpr offset_plan() = default;
+        constexpr explicit offset_plan(Plan p, std::size_t c = 0) noexcept
+            : plan(std::move(p)), offset_count(c), count(c) {}
     };
 
-    // ========================================================================
-    // 3. Query Builder Implementation
-    // ========================================================================
+    // Named projection wrapper
+    template <akshara::fixed_string Alias, class Expr>
+    struct aliased_expr_wrapper {
+        static constexpr auto name = Alias;
+        using expr_type = Expr;
+        using result_type = typename Expr::result_type;
+        Expr expr;
+    };
+
+    template <akshara::fixed_string Alias>
+    struct result_name_descriptor {
+        static constexpr auto name = Alias;
+    };
+
+    template <class Plan, akshara::fixed_string RelName, akshara::fixed_string SourceAlias, akshara::fixed_string TargetAlias>
+    struct traverse_plan {
+        Plan plan;
+        static constexpr auto relation_name = RelName;
+        static constexpr auto source_alias = SourceAlias;
+        static constexpr auto target_alias = TargetAlias;
+    };
+
     template <
         class RootEntity,
         class ActiveScope = query_scope<binding<"root", RootEntity>>,
@@ -130,6 +177,14 @@ namespace sanchaya {
             using NewPlan = filter_plan<LogicalPlan, std::decay_t<Expr>>;
             return query_builder<RootEntity, ActiveScope, NewPlan, LogicPolicy>{
                 NewPlan{std::move(plan_), std::forward<Expr>(predicate)}
+            };
+        }
+
+        template <akshara::fixed_string SourceAlias, akshara::fixed_string RelName, akshara::fixed_string TargetAlias>
+        [[nodiscard]] constexpr auto through() && {
+            using NewPlan = traverse_plan<LogicalPlan, RelName, SourceAlias, TargetAlias>;
+            return query_builder<RootEntity, ActiveScope, NewPlan, LogicPolicy>{
+                NewPlan{std::move(plan_)}
             };
         }
 
@@ -182,6 +237,10 @@ namespace sanchaya {
             return *this;
         }
 
+        [[nodiscard]] constexpr auto build_plan() const noexcept {
+            return plan_;
+        }
+
     private:
         LogicalPlan plan_{};
         consistency_requirement consistency_{consistency_requirement::eventual};
@@ -191,6 +250,12 @@ namespace sanchaya {
     template <class Entity>
     [[nodiscard]] constexpr auto from() noexcept {
         return query_builder<Entity>{};
+    }
+
+    template <class Entity, akshara::fixed_string Alias>
+    [[nodiscard]] constexpr auto from() noexcept {
+        using Scope = query_scope<binding<Alias, Entity>>;
+        return query_builder<Entity, Scope>{};
     }
 
     // Common Aggregate Helpers
@@ -241,3 +306,4 @@ namespace sanchaya {
     }
 
 } // namespace sanchaya
+

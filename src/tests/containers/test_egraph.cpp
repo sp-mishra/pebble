@@ -371,3 +371,60 @@ TEST_CASE (
     REQUIRE(g.find(a) == g.find(b));
     REQUIRE(g.class_count_live() == 2);
 }
+
+// ============================================================================
+// Test — egraph_analysis concept, applicability, and saturation_budget
+// ============================================================================
+
+struct ConstantFoldingAnalysis {
+    using data_type = std::optional<std::size_t>;
+
+    data_type make(const egraph::e_node<std::size_t, std::size_t>& node,
+                   std::span<const data_type> children) {
+        if (node.op == kLeaf) {
+            return node.payload;
+        }
+        if (node.op == kAdd && children.size() == 2 && children[0] && children[1]) {
+            return *children[0] + *children[1];
+        }
+        return std::nullopt;
+    }
+
+    bool merge(data_type& target, const data_type& other) {
+        if (!target && other) {
+            target = other;
+            return true;
+        }
+        return false;
+    }
+};
+
+static_assert(egraph::egraph_analysis<ConstantFoldingAnalysis, egraph::e_node<std::size_t, std::size_t>>);
+
+TEST_CASE("egraph: saturation_budget and stop_reason", "[egraph][budget]") {
+    TestGraph g;
+    auto a = g.add(leaf(1));
+    auto b = g.add(leaf(2));
+    (void)g.add(binop(kAdd, a, b));
+
+    egraph::saturation_budget budget{
+        .max_iterations = 5,
+        .max_enodes = 1000,
+        .max_eclasses = 500,
+        .max_time = std::chrono::milliseconds(500)
+    };
+
+    auto report = egraph::saturate(g, std::tuple<>{}, budget);
+    REQUIRE(report.saturated == true);
+    REQUIRE(report.stop_reason == egraph::saturation_stop_reason::fixpoint);
+    REQUIRE(report.hit_limit == false);
+
+    egraph::egraph_workspace workspace{};
+    workspace.reset();
+}
+
+TEST_CASE("egraph: applicability enum", "[egraph][applicability]") {
+    REQUIRE(egraph::applicability::proven != egraph::applicability::disproven);
+    REQUIRE(egraph::applicability::unknown != egraph::applicability::proven);
+}
+

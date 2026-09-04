@@ -2043,3 +2043,41 @@ TEST_CASE (
     }
 }
 #endif
+
+// ============================================================================
+// compiled_plan_key tests
+// ============================================================================
+
+TEST_CASE("kosha: compiled_plan_key hashing and equality", "[kosha][plan_cache]") {
+    kosha::compiled_plan_key k1{
+        .logical_plan_fingerprint = 100,
+        .model_schema_identity = 200,
+        .backend_catalog_version = 1,
+        .statistics_epoch = 10,
+        .semantic_policy_identity = 5
+    };
+
+    kosha::compiled_plan_key k2{
+        .logical_plan_fingerprint = 100,
+        .model_schema_identity = 200,
+        .backend_catalog_version = 1,
+        .statistics_epoch = 10,
+        .semantic_policy_identity = 5
+    };
+
+    kosha::compiled_plan_key k3{
+        .logical_plan_fingerprint = 101,
+        .model_schema_identity = 200,
+        .backend_catalog_version = 1,
+        .statistics_epoch = 10,
+        .semantic_policy_identity = 5
+    };
+
+    REQUIRE(k1 == k2);
+    REQUIRE_FALSE(k1 == k3);
+
+    std::hash<kosha::compiled_plan_key> hasher;
+    REQUIRE(hasher(k1) == hasher(k2));
+    REQUIRE(hasher(k1) != hasher(k3));
+}
+

@@ -1669,6 +1669,74 @@ namespace litegraph {
         return sccs;
     }
 
+    // =========================================================================
+    // Enhanced SCC Diagnostics & Condensation Graph
+    // =========================================================================
+
+    struct scc_analysis {
+        std::vector<std::vector<NodeId>> components;
+        std::vector<NodeId> offending_cycle;
+        bool has_self_loop{false};
+    };
+
+    template <LiteGraphModel GraphT>
+    scc_analysis analyze_scc(const GraphT& g) {
+        auto components = strongly_connected_components(g);
+        scc_analysis analysis;
+        analysis.components = std::move(components);
+
+        // Check for self-loops and offending cycles (>1 node in component)
+        for (const auto& [nid_val, node_obj] : g.nodes()) {
+            NodeId u{nid_val};
+            for (auto v : g.neighbors(u)) {
+                if (u == v) {
+                    analysis.has_self_loop = true;
+                    if (analysis.offending_cycle.empty()) {
+                        analysis.offending_cycle = {u, u};
+                    }
+                }
+            }
+        }
+
+        for (const auto& comp : analysis.components) {
+            if (comp.size() > 1 && analysis.offending_cycle.empty()) {
+                analysis.offending_cycle = comp;
+            }
+        }
+
+        return analysis;
+    }
+
+    template <LiteGraphModel GraphT>
+    Graph<std::size_t, std::monostate, Directed>
+    make_condensation_graph(const GraphT& g, const std::vector<std::vector<NodeId>>& components) {
+        Graph<std::size_t, std::monostate, Directed> condensation;
+        std::vector<std::size_t> node_to_comp(g.node_capacity(), static_cast<std::size_t>(-1));
+
+        for (std::size_t comp_idx = 0; comp_idx < components.size(); ++comp_idx) {
+            condensation.add_node(comp_idx);
+            for (auto u : components[comp_idx]) {
+                if (u.value < node_to_comp.size()) {
+                    node_to_comp[u.value] = comp_idx;
+                }
+            }
+        }
+
+        for (std::size_t comp_idx = 0; comp_idx < components.size(); ++comp_idx) {
+            for (auto u : components[comp_idx]) {
+                for (auto v : g.neighbors(u)) {
+                    if (v.value < node_to_comp.size()) {
+                        std::size_t target_comp = node_to_comp[v.value];
+                        if (target_comp != comp_idx && target_comp != static_cast<std::size_t>(-1)) {
+                            (void)condensation.add_edge(NodeId{comp_idx}, NodeId{target_comp});
+                        }
+                    }
+                }
+            }
+        }
+
+        return condensation;
+    }
 
     // ----------- Network Flow Algorithms -----------
 

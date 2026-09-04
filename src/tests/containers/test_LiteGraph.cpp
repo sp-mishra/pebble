@@ -3914,3 +3914,46 @@ TEST_CASE (
     REQUIRE(!res_nadi.ranks.empty());
 }
 
+// ============================================================================
+// static_graph, scc_analysis, and make_condensation_graph tests
+// ============================================================================
+
+TEST_CASE("[LiteGraph] static_graph fixed-capacity constexpr graph", "[LiteGraph][static_graph]") {
+    litegraph::static_graph<10, 20, int, double> sg;
+    auto n0 = sg.add_node(100);
+    auto n1 = sg.add_node(200);
+
+    REQUIRE(sg.node_count() == 2);
+    REQUIRE(sg.has_node(n0));
+    REQUIRE(sg.has_node(n1));
+    REQUIRE(sg.node_data(n0) == 100);
+    REQUIRE(sg.node_data(n1) == 200);
+
+    auto e0 = sg.add_edge(n0, n1, 1.5);
+    REQUIRE(sg.edge_count() == 1);
+    REQUIRE(sg.get_edge(e0).from == n0);
+    REQUIRE(sg.get_edge(e0).to == n1);
+    REQUIRE(sg.get_edge(e0).data == 1.5);
+}
+
+TEST_CASE("[LiteGraph] analyze_scc and make_condensation_graph", "[LiteGraph][scc_analysis]") {
+    Graph<std::string, int, Directed> g;
+    auto a = g.add_node("A");
+    auto b = g.add_node("B");
+    auto c = g.add_node("C");
+
+    // Cycle A -> B -> A, and edge B -> C
+    g.add_edge(a, b, 1);
+    g.add_edge(b, a, 1);
+    g.add_edge(b, c, 1);
+
+    auto analysis = analyze_scc(g);
+    REQUIRE(analysis.components.size() == 2);
+    REQUIRE_FALSE(analysis.offending_cycle.empty());
+
+    auto condensation = make_condensation_graph(g, analysis.components);
+    REQUIRE(condensation.node_count() == 2);
+    REQUIRE(condensation.edge_count() == 1);
+}
+
+

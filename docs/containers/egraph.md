@@ -379,11 +379,54 @@ template <class G, class... Rules>
 [[nodiscard]] saturation_report saturate(
     G& graph,
     std::tuple<Rules...> rules,
-    const saturation_limits limits = {});
+    const saturation_budget budget = {});
 ```
 
 `saturate()` wraps the graph in a merge-counting proxy to track `merges_fired` accurately. The fixpoint condition is
 `enode_count` and `class_count` both unchanged after a full rule pass + rebuild.
+
+### Saturation Budget & Stop Reason
+
+```cpp
+enum class saturation_stop_reason {
+    fixpoint,
+    iteration_limit,
+    enode_limit,
+    eclass_limit,
+    time_limit,
+    cancelled
+};
+
+struct saturation_budget {
+    std::size_t max_iterations{30};
+    std::size_t max_enodes{100'000};
+    std::size_t max_eclasses{50'000};
+    std::chrono::microseconds max_time{std::chrono::seconds(10)};
+};
+```
+
+### Analysis Hooks & Guarded Rules
+
+```cpp
+template <class Analysis, class Node>
+concept egraph_analysis = requires(
+    Analysis analysis,
+    const Node& node,
+    std::span<const typename Analysis::data_type> children,
+    typename Analysis::data_type& target,
+    const typename Analysis::data_type& other
+) {
+    typename Analysis::data_type;
+    { analysis.make(node, children) } -> std::same_as<typename Analysis::data_type>;
+    { analysis.merge(target, other) } -> std::same_as<bool>;
+};
+
+enum class applicability {
+    proven,
+    disproven,
+    unknown
+};
+```
 
 **Usage:**
 
@@ -398,12 +441,12 @@ auto rules = std::make_tuple(
 );
 
 auto report = egraph::saturate(g, rules,
-    egraph::saturation_limits{.max_iters = 20, .max_enodes = 50'000});
+    egraph::saturation_budget{.max_iterations = 20, .max_enodes = 50'000});
 
 if (report.saturated)
     // fixpoint reached
 if (report.hit_limit)
-    // stopped early — result is sound but not complete
+    // stopped early — check report.stop_reason
 ```
 
 ---

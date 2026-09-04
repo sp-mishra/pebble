@@ -480,22 +480,76 @@ namespace egraph {
     };
 
     // =============================================================================
-    // saturation_limits / saturation_report
+    // egraph_analysis concept & Analysis Hooks
     // =============================================================================
 
+    template <class Analysis, class Node>
+    concept egraph_analysis = requires(
+        Analysis analysis,
+        const Node& node,
+        std::span<const typename Analysis::data_type> children,
+        typename Analysis::data_type& target,
+        const typename Analysis::data_type& other
+    ) {
+        typename Analysis::data_type;
+        { analysis.make(node, children) } -> std::same_as<typename Analysis::data_type>;
+        { analysis.merge(target, other) } -> std::same_as<bool>;
+    };
+
+    // =============================================================================
+    // applicability — Guarded rewrite rule verification
+    // =============================================================================
+
+    enum class applicability {
+        proven,
+        disproven,
+        unknown
+    };
+
+    // =============================================================================
+    // saturation_budget / saturation_stop_reason / saturation_report
+    // =============================================================================
+
+    enum class saturation_stop_reason {
+        fixpoint,
+        iteration_limit,
+        enode_limit,
+        eclass_limit,
+        time_limit,
+        cancelled
+    };
+
+    struct saturation_budget {
+        std::size_t max_iterations{30};
+        std::size_t max_enodes{100'000};
+        std::size_t max_eclasses{50'000};
+        std::chrono::microseconds max_time{std::chrono::seconds(10)};
+    };
+
     struct saturation_limits {
-        std::size_t max_iters = 30;
-        std::size_t max_enodes = 100'000;
-        std::size_t max_eclasses = 50'000;
+        std::size_t max_iters{30};
+        std::size_t max_enodes{100'000};
+        std::size_t max_eclasses{50'000};
+        std::chrono::microseconds max_time{std::chrono::seconds(10)};
+
+        constexpr operator saturation_budget() const noexcept {
+            return saturation_budget{
+                .max_iterations = max_iters,
+                .max_enodes = max_enodes,
+                .max_eclasses = max_eclasses,
+                .max_time = max_time
+            };
+        }
     };
 
     struct saturation_report {
-        std::size_t iters;
-        std::size_t enodes;
-        std::size_t eclasses;
-        std::size_t merges_fired; // total merge() calls returning true across all iters
-        bool hit_limit;
-        bool saturated; // true iff fixpoint reached without hitting a limit
+        std::size_t iters{0};
+        std::size_t enodes{0};
+        std::size_t eclasses{0};
+        std::size_t merges_fired{0}; // total merge() calls returning true across all iters
+        bool hit_limit{false};
+        bool saturated{false}; // true iff fixpoint reached without hitting a limit
+        saturation_stop_reason stop_reason{saturation_stop_reason::fixpoint};
     };
 
     // =============================================================================
@@ -546,16 +600,43 @@ namespace egraph {
         }
     } // namespace detail
 
+    // =============================================================================
+    // egraph_workspace — reusable planning memory buffer
+    // =============================================================================
+
+    template <class Alloc = std::allocator<char>>
+    struct egraph_workspace {
+        Alloc alloc{};
+
+        constexpr egraph_workspace() = default;
+        explicit constexpr egraph_workspace(Alloc a) noexcept : alloc(a) {}
+
+        void reset() noexcept {
+            // If arena-backed, arena handles batch reset
+        }
+    };
+
     template <class G, class... Rules>
     [[nodiscard]] saturation_report saturate(
         G& graph,
         std::tuple<Rules...> rules,
-        const saturation_limits limits = {}) {
+        const saturation_budget budget = {}) {
         std::size_t iters = 0;
         std::size_t total_merges = 0;
         bool hit = false;
+        saturation_stop_reason reason = saturation_stop_reason::fixpoint;
 
-        for (; iters < limits.max_iters; ++iters) {
+        const auto start_time = std::chrono::steady_clock::now();
+
+        for (; iters < budget.max_iterations; ++iters) {
+            const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - start_time);
+            if (elapsed > budget.max_time) {
+                hit = true;
+                reason = saturation_stop_reason::time_limit;
+                break;
+            }
+
             const std::size_t nodes_before = graph.enode_count();
             const std::size_t classes_before = graph.class_count();
 
@@ -568,16 +649,29 @@ namespace egraph {
             const std::size_t nodes_after = graph.enode_count();
             const std::size_t classes_after = graph.class_count();
 
-            if (nodes_after > limits.max_enodes || classes_after > limits.max_eclasses) {
+            if (nodes_after > budget.max_enodes) {
                 hit = true;
+                reason = saturation_stop_reason::enode_limit;
+                ++iters;
+                break;
+            }
+            if (classes_after > budget.max_eclasses) {
+                hit = true;
+                reason = saturation_stop_reason::eclass_limit;
                 ++iters;
                 break;
             }
 
             if (nodes_after == nodes_before && classes_after == classes_before) {
+                reason = saturation_stop_reason::fixpoint;
                 ++iters;
                 break;
             }
+        }
+
+        if (!hit && iters >= budget.max_iterations && reason != saturation_stop_reason::fixpoint) {
+            hit = true;
+            reason = saturation_stop_reason::iteration_limit;
         }
 
         return saturation_report{
@@ -586,7 +680,8 @@ namespace egraph {
             .eclasses = graph.class_count(),
             .merges_fired = total_merges,
             .hit_limit = hit,
-            .saturated = !hit && iters < limits.max_iters,
+            .saturated = !hit && (reason == saturation_stop_reason::fixpoint),
+            .stop_reason = reason,
         };
     }
 

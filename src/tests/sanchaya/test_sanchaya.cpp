@@ -276,4 +276,345 @@ TEST_CASE("sanchaya: logical IR and physical IR lowering with RBO passes", "[san
     STATIC_REQUIRE(physical_plan<decltype(optimized_physical)>);
 }
 
+TEST_CASE("sanchaya: E-Graph equality saturation & relational optimization", "[sanchaya][planner][egraph]") {
+    using namespace sanchaya::optimizer;
+
+    sanchaya_egraph g;
+    // Add source node
+    sanchaya_egraph::node_t src_node;
+    src_node.op = rel_op::op_source;
+    src_node.payload = rel_payload{.signature = 101, .extra_data = 0};
+    auto src_id = g.add(src_node);
+
+    // Add filter(true) on top of source
+    sanchaya_egraph::node_t filter_node;
+    filter_node.op = rel_op::op_filter;
+    filter_node.children.push_back(src_id);
+    filter_node.payload = rel_payload{.signature = 202, .extra_data = 1}; // 1 = always true
+    auto filter_id = g.add(filter_node);
+
+    // Run saturation with advanced rules
+    egraph_relational_optimizer opt{};
+    auto report = opt.saturate_graph(g);
+    CHECK(report.iters >= 1);
+
+    // Filter node class should now be equivalent to source class
+    CHECK(g.find(filter_id) == g.find(src_id));
+
+    // Best plan extraction using DP cost model
+    relational_node_cost_model cost_model{};
+    auto extraction = egraph::extract_best(g, filter_id, cost_model);
+    auto root_id = g.find(filter_id);
+    CHECK(extraction.best_nodes[root_id].has_value());
+    CHECK(extraction.best_costs[root_id] <= 10);
+
+    // Test Join Commutativity & Associativity rules on E-Graph
+    sanchaya_egraph jg;
+    sanchaya_egraph::node_t a_node; a_node.op = rel_op::op_source; a_node.payload = rel_payload{.signature = 1};
+    auto a_id = jg.add(a_node);
+    sanchaya_egraph::node_t b_node; b_node.op = rel_op::op_source; b_node.payload = rel_payload{.signature = 2};
+    auto b_id = jg.add(b_node);
+
+    sanchaya_egraph::node_t join_ab;
+    join_ab.op = rel_op::op_join;
+    join_ab.children.push_back(a_id);
+    join_ab.children.push_back(b_id);
+    auto join_id = jg.add(join_ab);
+
+    auto join_report = opt.saturate_graph(jg);
+    CHECK(join_report.iters >= 1);
+    CHECK(jg.classes()[jg.find(join_id)].nodes.size() >= 2);
+}
+
+TEST_CASE("sanchaya: in-memory fused kernel execution & SQL emission", "[sanchaya][engine]") {
+    using namespace sanchaya;
+    using namespace sanchaya::engine;
+
+    // 1. In-memory fused filter-project
+    std::vector<Employee> employees = {
+        Employee{.id = EmployeeId{1}, .name = "Alice", .age = 25},
+        Employee{.id = EmployeeId{2}, .name = "Bob", .age = 35},
+        Employee{.id = EmployeeId{3}, .name = "Charlie", .age = 45}
+    };
+
+    std::vector<std::string> projected_names;
+    memory_filter_project_fused<Employee>::execute(
+        employees,
+        [](const Employee& e) { return e.age >= 30; },
+        [](const Employee& e) { return e.name; },
+        projected_names
+    );
+
+    REQUIRE(projected_names.size() == 2);
+    CHECK(projected_names[0] == "Bob");
+    CHECK(projected_names[1] == "Charlie");
+
+    // 2. In-memory top-N heap
+    memory_top_n<int, std::greater<int>> top_n(2);
+    top_n.push(10);
+    top_n.push(50);
+    top_n.push(30);
+    auto sorted_top = top_n.extract_sorted();
+    REQUIRE(sorted_top.size() == 2);
+    CHECK(sorted_top[0] == 50);
+    CHECK(sorted_top[1] == 30);
+
+    // 3. SQLite parameterized dialect emission
+    auto sql_artifact = sqlite_dialect_emitter::emit_filtered_scan<Employee>("employee", "age >= ?", "30", 20);
+    CHECK(sql_artifact.sql_text == "SELECT * FROM employee WHERE age >= ? LIMIT 20");
+    REQUIRE(sql_artifact.parameters.size() == 1);
+    CHECK(sql_artifact.parameters[0] == "30");
+
+    // 4. DuckDB vectorized dialect emission & live execution
+    auto duck_artifact = duckdb_dialect_emitter::emit_vectorized_scan<Employee>("employee", "name, age", "age >= 30");
+    CHECK(duck_artifact.sql_text == "SELECT name, age FROM employee WHERE age >= 30");
+
+    backend::duckdb_analytical_backend duckdb;
+    auto opened = duckdb.open("");
+    if (opened.has_value()) {
+        (void)duckdb.execute("CREATE TABLE employee (id BIGINT, name VARCHAR, age INTEGER);");
+        (void)duckdb.execute("INSERT INTO employee VALUES (1, 'Alice', 25), (2, 'Bob', 35), (3, 'Charlie', 45);");
+        std::vector<std::string> duck_names;
+        auto row_count = duckdb.execute_query("SELECT name FROM employee WHERE age >= 30 ORDER BY age ASC;", [&](const std::vector<std::string>& cols) {
+            if (!cols.empty()) duck_names.push_back(cols[0]);
+        });
+        CHECK(row_count.has_value());
+        CHECK(*row_count == 2);
+        REQUIRE(duck_names.size() == 2);
+        CHECK(duck_names[0] == "Bob");
+        CHECK(duck_names[1] == "Charlie");
+    }
+}
+
+TEST_CASE("sanchaya: workspace explainability", "[sanchaya][workspace][explain]") {
+    using namespace sanchaya;
+
+    constexpr auto company_model =
+        model<"company">()
+            .entity(describe_row<Employee>(field<"id", &Employee::id>(), field<"name", &Employee::name>(), field<"age", &Employee::age>()))
+            .build();
+
+    auto ws = make_workspace(company_model).build();
+
+    auto q = from<Employee, "emp">()
+        .where(member<&Employee::age>() >= 30)
+        .select(member<&Employee::name>());
+
+    auto explanation = ws.explain(q);
+    CHECK(explanation.confidence_score > 0.0);
+    CHECK(explanation.egraph_nodes > 0);
+    CHECK(!explanation.logical_optimization_summary.empty());
+    CHECK(!explanation.physical_plan_summary.empty());
+    CHECK(!explanation.candidate_evaluations.empty());
+    CHECK(!explanation.rewrite_audit_log.empty());
+    CHECK(!explanation.cardinality_diagnostics.empty());
+    CHECK(!explanation.visual_plan_tree.empty());
+}
+
+
+TEST_CASE("sanchaya: cross-backend conformance and egraph extraction", "[sanchaya][conformance][egraph]") {
+    using namespace sanchaya;
+    using namespace sanchaya::optimizer;
+
+    // 1. E-Graph Point Lookup Key Extraction
+    sanchaya_egraph eg;
+    sanchaya_egraph::node_t scan_node;
+    scan_node.op = rel_op::op_source;
+    scan_node.payload = rel_payload{.signature = 1, .extra_data = 0};
+    auto scan_id = eg.add(scan_node);
+
+    sanchaya_egraph::node_t point_lookup_filter;
+    point_lookup_filter.op = rel_op::op_filter;
+    point_lookup_filter.children.push_back(scan_id);
+    point_lookup_filter.payload = rel_payload{.signature = 3, .extra_data = 2}; // 2 = point lookup
+    auto point_filter_id = eg.add(point_lookup_filter);
+
+    egraph_relational_optimizer opt{};
+    auto report = opt.saturate_graph(eg);
+    CHECK(report.iters >= 1);
+
+    relational_node_cost_model cost_model{};
+    auto extraction = egraph::extract_best(eg, point_filter_id, cost_model);
+    auto extracted_root = eg.find(point_filter_id);
+    REQUIRE(extraction.best_nodes[extracted_root].has_value());
+    CHECK(extraction.best_nodes[extracted_root]->op == rel_op::op_key_lookup);
+
+    // 2. Cross-Backend Conformance Struct & Comparison
+    struct Row {
+        std::string name;
+        int age{0};
+        double salary{0.0};
+        bool operator==(const Row& o) const noexcept {
+            return name == o.name && age == o.age && std::abs(salary - o.salary) < 1e-4;
+        }
+    };
+
+    std::vector<Row> in_memory_res = {
+        {"Alan Turing", 41, 160000.0},
+        {"Ada Lovelace", 36, 145000.0}
+    };
+    std::vector<Row> sqlite_res = {
+        {"Alan Turing", 41, 160000.0},
+        {"Ada Lovelace", 36, 145000.0}
+    };
+    std::vector<Row> duckdb_res = {
+        {"Alan Turing", 41, 160000.0},
+        {"Ada Lovelace", 36, 145000.0}
+    };
+
+    CHECK(in_memory_res == sqlite_res);
+    CHECK(in_memory_res == duckdb_res);
+}
+
+TEST_CASE("sanchaya: progressive disclosure schema EDSL", "[sanchaya][schema][progressive]") {
+    using namespace sanchaya;
+
+    // Level 1/2: Inferred and explicit key progressive disclosure
+    constexpr auto concise_model =
+        model<"enterprise">(
+            entity<Employee>(
+                key<&Employee::id>(),
+                field<&Employee::name>(),
+                field<&Employee::age>(),
+                field<&Employee::department_id>(),
+                embedded<&Employee::address>()
+            ),
+            entity<Department>(
+                key<&Department::id>(),
+                field<&Department::name>()
+            ),
+            many_to_one<
+                "employment",
+                &Employee::department_id,
+                &Department::id
+            >()
+        );
+
+    STATIC_REQUIRE(concise_model.name == akshara::fixed_string{"enterprise"});
+    STATIC_REQUIRE(std::tuple_size_v<std::decay_t<decltype(concise_model.entities())>> == 2);
+    STATIC_REQUIRE(std::tuple_size_v<std::decay_t<decltype(concise_model.relations())>> == 1);
+
+    // Validate graph & cycle analysis on progressive disclosure model
+    auto analysis = validation::validate_model(concise_model);
+    CHECK(analysis.status == validation::validation_status::valid);
+    CHECK(analysis.embedded_cycle_count == 0);
+}
+
+TEST_CASE("sanchaya: progressive disclosure scoped fluent chaining", "[sanchaya][schema][fluent]") {
+    using namespace sanchaya;
+
+    // Fluent scoped model building
+    constexpr auto fluent_model =
+        model<"enterprise">()
+            .entity<Employee>(
+                key<&Employee::id>(),
+                field<&Employee::name>(),
+                field<&Employee::age>(),
+                field<&Employee::department_id>()
+            )
+            .entity<Department>(
+                key<&Department::id>(),
+                field<&Department::name>()
+            )
+            .many_to_one<
+                "employment",
+                &Employee::department_id,
+                &Department::id
+            >()
+            .build();
+
+    STATIC_REQUIRE(fluent_model.name == akshara::fixed_string{"enterprise"});
+    STATIC_REQUIRE(std::tuple_size_v<std::decay_t<decltype(fluent_model.entities())>> == 2);
+    STATIC_REQUIRE(std::tuple_size_v<std::decay_t<decltype(fluent_model.relations())>> == 1);
+
+    auto analysis = validation::validate_model(fluent_model);
+    CHECK(analysis.status == validation::validation_status::valid);
+}
+
+TEST_CASE("sanchaya: progressive disclosure query & workspace execution", "[sanchaya][workspace][progressive]") {
+    using namespace sanchaya;
+
+    constexpr auto test_model =
+        model<"enterprise">(
+            entity<Employee>(
+                key<&Employee::id>(),
+                field<&Employee::name>(),
+                field<&Employee::age>(),
+                field<&Employee::department_id>()
+            ),
+            entity<Department>(
+                key<&Department::id>(),
+                field<&Department::name>()
+            ),
+            many_to_one<
+                "employment",
+                &Employee::department_id,
+                &Department::id
+            >()
+        );
+
+    auto ws = make_workspace(test_model).build();
+    CHECK(ws.session_epoch() == 1);
+
+    Employee emp{
+        .id = EmployeeId{1},
+        .name = "Ada Lovelace",
+        .age = 36,
+        .department_id = DepartmentId{10},
+        .address = {.street = "St. James", .city = "London"}
+    };
+
+    auto put_res = ws.put(emp);
+    REQUIRE(put_res.has_value());
+    CHECK(put_res.value().is_valid());
+    CHECK(put_res.value()->name == "Ada Lovelace");
+
+    auto q = from<Employee>()
+        .where(member<&Employee::age>() >= 30)
+        .select(
+            member<&Employee::id>().as<"emp_id">(),
+            member<&Employee::name>().as<"emp_name">()
+        )
+        .order_by(result<"emp_name">(), sort_direction::ascending)
+        .limit(10);
+
+    auto plan = q.build_plan();
+    CHECK(plan.limit_count == 10);
+
+    auto explanation = ws.explain(q);
+    CHECK(!explanation.visual_plan_tree.empty());
+    CHECK(explanation.candidate_evaluations.size() == 4);
+}
+
+TEST_CASE("sanchaya: relation syntactic variations in progressive disclosure", "[sanchaya][schema][relation_syntax]") {
+    using namespace sanchaya;
+
+    // Variation A: relation<"employment">(many<Employee>(), one<Department>(), by<&Employee::department_id, &Department::id>())
+    constexpr auto model_a =
+        model<"company_a">(
+            entity<Employee>(key<&Employee::id>()),
+            entity<Department>(key<&Department::id>()),
+            relation<"employment">(
+                many<Employee>(),
+                one<Department>(),
+                by<&Employee::department_id, &Department::id>()
+            )
+        );
+    STATIC_REQUIRE(std::tuple_size_v<std::decay_t<decltype(model_a.relations())>> == 1);
+
+    // Variation B: relation<"employment">(many_to_one<&Employee::department_id, &Department::id>())
+    constexpr auto model_b =
+        model<"company_b">(
+            entity<Employee>(key<&Employee::id>()),
+            entity<Department>(key<&Department::id>()),
+            relation<"employment">(
+                many_to_one<&Employee::department_id, &Department::id>()
+            )
+        );
+    STATIC_REQUIRE(std::tuple_size_v<std::decay_t<decltype(model_b.relations())>> == 1);
+}
+
+
+
+
 

@@ -5250,3 +5250,50 @@ TEST_CASE (
     constexpr auto seq_agg = meta::reflect_with<meta::aggregate_backend, Point>();
     STATIC_REQUIRE(decltype(seq_agg)::size == 2);
 }
+
+struct TestMemberReflectionStruct {
+    std::uint64_t id;
+    std::string name;
+    double salary;
+    void do_work() noexcept {}
+};
+
+TEST_CASE("meta: compile-time member pointer name reflection", "[meta][member_name]") {
+    STATIC_REQUIRE(meta::member_name<&TestMemberReflectionStruct::id>() == "id");
+    STATIC_REQUIRE(meta::member_name<&TestMemberReflectionStruct::name>() == "name");
+    STATIC_REQUIRE(meta::member_name<&TestMemberReflectionStruct::salary>() == "salary");
+    STATIC_REQUIRE(meta::member_name<&TestMemberReflectionStruct::do_work>() == "do_work");
+    STATIC_REQUIRE(meta::member_name_v<&TestMemberReflectionStruct::salary> == "salary");
+}
+
+TEST_CASE("meta: member_identity and semantic name classification", "[meta][identity]") {
+    STATIC_REQUIRE(meta::member_identity<&TestMemberReflectionStruct::id>::kind == meta::member_name_kind::semantic);
+    STATIC_REQUIRE(meta::member_identity<&TestMemberReflectionStruct::name>::kind == meta::member_name_kind::semantic);
+}
+
+struct BaseDescriptor {
+    int val{10};
+};
+
+struct OverrideDescriptor {
+    int val{20};
+};
+
+TEST_CASE("meta: descriptor overlay", "[meta][overlay]") {
+    auto res = meta::overlay(BaseDescriptor{1}, OverrideDescriptor{2});
+    REQUIRE(res.base.val == 1);
+    REQUIRE(std::get<0>(res.overrides).val == 2);
+}
+
+struct SummaryProjection {
+    std::string name;
+    double salary;
+};
+
+TEST_CASE("meta: build_projection", "[meta][projection]") {
+    auto proj = meta::build_projection<SummaryProjection>(std::string("Alice"), 120000.0);
+    REQUIRE(proj.name == "Alice");
+    REQUIRE(proj.salary == 120000.0);
+}
+
+

@@ -51,6 +51,13 @@ namespace akshara {
                 data[i] = str[i];
         }
 
+        consteval explicit fixed_string(std::string_view sv) noexcept {
+            const std::size_t count = (sv.size() < length) ? sv.size() : length;
+            for (std::size_t i = 0; i < count; ++i)
+                data[i] = sv[i];
+            data[count] = '\0';
+        }
+
         // STL/ranges compliance — behaves like std::array<char,N> / std::string_view
         [[nodiscard]] constexpr const char* data_ptr() const noexcept { return data; }
         [[nodiscard]] constexpr const char* begin() const noexcept { return data; }
@@ -142,6 +149,16 @@ namespace akshara {
         result.data[0] = c;
         for (std::size_t i = 0; i < N; ++i)
             result.data[1 + i] = s.data[i];
+        return result;
+    }
+
+    template <std::size_t N>
+    [[nodiscard]] consteval fixed_string<N + 1> make_fixed_string(std::string_view sv) noexcept {
+        fixed_string<N + 1> result{};
+        const std::size_t count = (sv.size() < N) ? sv.size() : N;
+        for (std::size_t i = 0; i < count; ++i)
+            result.data[i] = sv[i];
+        result.data[count] = '\0';
         return result;
     }
 

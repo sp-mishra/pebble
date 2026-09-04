@@ -39,11 +39,13 @@ Pebble is a modern, header-only, policy-based C++23 systems library engineered f
   * Documentation: [`docs/containers/nitya.md`](docs/containers/nitya.md)
 * **Anukrama** (`include/containers/anukrama/`) — Generic static-composition versioned state: immutable MVCC chains, stable snapshots, optimistic validation, and explicit reclamation. Pluggable node-allocator (heap or Smriti arena), synchronization (global / striped / null), and snapshot-registry policies, all defaulting to zero added cost. Petika can bind durable Nitya LSNs as its commit clock without making Nitya mandatory.
   * Documentation: [`docs/containers/anukrama.md`](docs/containers/anukrama.md)
-* **Sanchaya** (`include/sanchaya/`) — Non-intrusive, object-first persistence, query planning, and data federation framework.
-  * Zero-macro, zero-virtual compile-time entity descriptors (`describe_row`, `field`, `embedded`, `relation`).
-  * Type-safe alias-aware query EDSL (`from<T>().where().group_by().select()`), three-valued logic, and generational session handles.
-  * Multi-candidate optimizer, placement cost model, and policy-composed `workspace`.
-  * Documentation: [`scratch/sanchaya/sanchaya.md`](scratch/sanchaya/sanchaya.md)
+* **Sanchaya** (`include/sanchaya/`) — Non-intrusive, object-first persistence, query compilation, and data federation framework.
+  * **Progressive Disclosure EDSL**: Variadic `model<"name">(entity<T>(key<&T::id>()), many_to_one<"rel", &T::fk, &U::pk>())` with automatic endpoint deduction, field inference via `meta::member_name`, and Level 4 escape hatch (`describe_row`).
+  * Type-safe alias-aware query EDSL (`from<T, "alias">().where().through().select().order_by().limit()`), three-valued logic, and generational session handles.
+  * Two-stage Equality Saturation (Vākya E-Graph + Sanchaya Logical E-Graph via `containers::egraph`), multidimensional placement cost model, and policy-composed `workspace`.
+  * Four divergent physical execution layers (In-memory fused/SIMD loops, Relational parameterized SQL for SQLite/DuckDB/PostgreSQL, Petika direct BTree/SkipList operations, and Exchange federation).
+  * Comprehensive explainability: visual plan execution trees, candidate placement tradeoffs, and cardinality diagnostics.
+  * Documentation: [`docs/sanchaya/sanchaya.md`](docs/sanchaya/sanchaya.md)
 
 ---
 
@@ -63,11 +65,11 @@ Pebble is a modern, header-only, policy-based C++23 systems library engineered f
 Complete module catalog & algorithm mapping available in [`docs/containers/README.md`](docs/containers/README.md).
 
 ### Graph & Tree Substrate
-* **LiteGraph** (`include/containers/graph/LiteGraph.hpp`) — Flat Structure-of-Arrays (SoA) graph with 30+ graph algorithms (Dijkstra, A*, Tarjan SCC, Brandes betweenness, Kruskal, Prim, PageRank, Edmonds-Karp max-flow, VF2 subgraph isomorphism), Google Highway SIMD sweeps, Pravaha parallel execution (`LiteGraphPravaha.hpp`), and zero-overhead NADI telemetry lifecycle hooks (`LiteGraphNadi.hpp`).
+* **LiteGraph** (`include/containers/graph/LiteGraph.hpp`) — Flat Structure-of-Arrays (SoA) graph with 30+ graph algorithms (Dijkstra, A*, Tarjan SCC, Brandes betweenness, Kruskal, Prim, PageRank, Edmonds-Karp max-flow, VF2 subgraph isomorphism), fixed-capacity constexpr `static_graph<MaxV, MaxE>`, `scc_analysis` cycle diagnostics, `make_condensation_graph`, Google Highway SIMD sweeps, Pravaha parallel execution (`LiteGraphPravaha.hpp`), and zero-overhead NADI telemetry lifecycle hooks (`LiteGraphNadi.hpp`).
   * Documentation: [`docs/containers/LiteGraph.md`](docs/containers/LiteGraph.md)
   * Tutorial: [`docs/tutorials/LiteGraph.md`](docs/tutorials/LiteGraph.md)
 * **DominatorTree** (`include/containers/graph/DominatorTree.hpp`) — Lengauer-Tarjan and Cooper-Harvey-Kennedy immediate dominator solvers over `LiteGraphModel`.
-* **egraph** (`include/containers/graph/egraph.hpp`) — Equality saturation engine: union-find (path-splitting) + Kosha hash-cons + egg-style rebuild + saturation and best-cost extraction.
+* **egraph** (`include/containers/graph/egraph.hpp`) — Equality saturation engine: union-find (path-splitting) + Kosha hash-cons + egg-style rebuild + saturation budget/stop reasons, guarded rule applicability, and best-cost extraction.
   * Documentation: [`docs/containers/egraph.md`](docs/containers/egraph.md)
 * **NAryTree & ScalableNAryTree** (`include/containers/tree/NAryTree.hpp`) — Owning n-ary tree with SIMD batch traversals and high-scale flat LCRS array Structure-of-Arrays architecture (`ScalableNAryTree`) with zero-heap SBO DFS and Smriti arena compatibility.
   * Documentation: [`docs/containers/NAryTree.md`](docs/containers/NAryTree.md)
@@ -79,7 +81,7 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 * **DisjointSet** & **union_find** (`include/containers/graph/DisjointSet.hpp`, `include/containers/union_find.hpp`) — Disjoint-set forests with union-by-rank, path compression, and path-splitting.
 
 ### Caching, Stores & Registries
-* **Kosha** (`include/containers/cache/kosha.hpp`) — High-performance cache with Robin-Hood flat hashing, multi-policy eviction (LRU, LFU, ARC, FIFO), compile-time thread-safety grading, and external engine adapters (LMDB, RocksDB, Nitya, Petika).
+* **Kosha** (`include/containers/cache/kosha.hpp`) — High-performance cache with Robin-Hood flat hashing, multi-policy eviction (LRU, LFU, ARC, FIFO), `compiled_plan_key` versioned hashing, compile-time thread-safety grading, and external engine adapters (LMDB, RocksDB, Nitya, Petika).
 * **content_store** (`include/containers/content_store.hpp`) — SHA-256 content-addressed blob store backed by Setu zero-copy access and atomic filesystem operations.
 * **descriptor_registry** & **slot_map** (`include/containers/descriptor_registry.hpp`, `include/containers/associative/slot_map.hpp`) — Generational slot map and handle registry providing stable $O(1)$ memory addresses.
 * **SparseSet** (`include/containers/associative/SparseSet.hpp`) — Briggs-Torczon dual-buffer sparse set for $O(1)$ lookup/insert/erase.
@@ -100,6 +102,7 @@ Complete module catalog & algorithm mapping available in [`docs/containers/READM
 ### Dynamic & Fixed Storage
 * **SmallVector** (`include/containers/dynamic/SmallVector.hpp`) — Small-Buffer Optimized (SBO) dynamic vector avoiding heap allocations for small sizes.
   * Documentation: [`docs/containers/SmallVector.md`](docs/containers/SmallVector.md)
+* **SmallBitSet** (`include/containers/dynamic/SmallBitSet.hpp`) — 64-bit inline-first dynamic bitset container with fast population count and dynamic spill.
 * **static_vector** (`include/containers/static/static_vector.hpp`) — Fixed-capacity inline vector that never touches the heap.
 * **Tensor & Tensor EDSL** (`include/containers/tensor/tensor.hpp`, `include/containers/tensor/tensor_edsl.hpp`) — High-performance policy-based multidimensional tensor engine with lazy expression templates (*deducing this*), C++23 multidimensional indexing, Google Highway SIMD, Apple Silicon MLX GPU acceleration, and Sūtra/Vākya-inspired symbolic EDSL with `_p`/`_t` parameter literals.
   * Documentation: [`docs/containers/tensor.md`](docs/containers/tensor.md)

@@ -825,6 +825,84 @@ namespace litegraph {
     using UndirectedGraph = Graph<std::monostate, std::monostate, Undirected>;
     using WeightedUndirectedGraph = Graph<std::monostate, double, Undirected>;
 
+    // =========================================================================
+    // static_graph — Fixed-capacity constexpr graph
+    // =========================================================================
+
+    template <
+        std::size_t MaxVertices,
+        std::size_t MaxEdges,
+        typename NodeData = std::monostate,
+        typename EdgeData = std::monostate,
+        DirectednessTag Directedness = Directed
+    >
+    class static_graph {
+    public:
+        using node_type = NodeData;
+        using edge_type = EdgeData;
+        using directed_tag = Directedness;
+
+        struct NodeEntry {
+            NodeData data{};
+            bool active{false};
+        };
+
+        struct EdgeEntry {
+            NodeId from{};
+            NodeId to{};
+            EdgeData data{};
+            bool active{false};
+        };
+
+    private:
+        std::array<NodeEntry, MaxVertices> nodes_{};
+        std::array<EdgeEntry, MaxEdges> edges_{};
+        std::size_t num_nodes_{0};
+        std::size_t num_edges_{0};
+
+    public:
+        constexpr static_graph() = default;
+
+        [[nodiscard]] constexpr std::size_t node_count() const noexcept { return num_nodes_; }
+        [[nodiscard]] constexpr std::size_t edge_count() const noexcept { return num_edges_; }
+        [[nodiscard]] constexpr std::size_t node_capacity() const noexcept { return MaxVertices; }
+        [[nodiscard]] constexpr std::size_t edge_capacity() const noexcept { return MaxEdges; }
+
+        constexpr NodeId add_node(NodeData data = {}) {
+            for (std::size_t i = 0; i < MaxVertices; ++i) {
+                if (!nodes_[i].active) {
+                    nodes_[i] = {std::move(data), true};
+                    ++num_nodes_;
+                    return NodeId{i};
+                }
+            }
+            return NodeId{};
+        }
+
+        constexpr EdgeId add_edge(NodeId from, NodeId to, EdgeData data = {}) {
+            for (std::size_t i = 0; i < MaxEdges; ++i) {
+                if (!edges_[i].active) {
+                    edges_[i] = {from, to, std::move(data), true};
+                    ++num_edges_;
+                    return EdgeId{i};
+                }
+            }
+            return EdgeId{};
+        }
+
+        [[nodiscard]] constexpr bool has_node(NodeId id) const noexcept {
+            return id.value < MaxVertices && nodes_[id.value].active;
+        }
+
+        [[nodiscard]] constexpr const NodeData& node_data(NodeId id) const {
+            return nodes_[id.value].data;
+        }
+
+        [[nodiscard]] constexpr const EdgeEntry& get_edge(EdgeId id) const {
+            return edges_[id.value];
+        }
+    };
+
     // Smriti memory integration type aliases
     template <Hashable N = std::monostate, Hashable E = std::monostate, DirectednessTag D = Directed>
     using ArenaGraph = Graph<

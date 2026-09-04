@@ -1162,3 +1162,55 @@ TEST_CASE (
     SUCCEED("equality_comparable propagates through SmallVector");
 }
 
+// ============================================================================
+// SmallBitSet tests
+// ============================================================================
+
+#include "containers/dynamic/SmallBitSet.hpp"
+
+TEST_CASE("SmallBitSet: basic inline operations", "[smallbitset]") {
+    containers::dynamic::SmallBitSet<64> bs(64);
+    REQUIRE(bs.size() == 64);
+    REQUIRE(bs.none());
+
+    bs.set(0);
+    bs.set(63);
+    REQUIRE(bs.test(0));
+    REQUIRE(bs.test(63));
+    REQUIRE_FALSE(bs.test(1));
+    REQUIRE(bs.count() == 2);
+
+    bs.reset(0);
+    REQUIRE_FALSE(bs.test(0));
+    REQUIRE(bs.count() == 1);
+
+    bs.flip();
+    REQUIRE(bs.count() == 63);
+}
+
+TEST_CASE("SmallBitSet: dynamic spill and bitwise operators", "[smallbitset][spill]") {
+    containers::dynamic::SmallBitSet<64> a(128);
+    containers::dynamic::SmallBitSet<64> b(128);
+
+    a.set(10);
+    a.set(100);
+
+    b.set(100);
+    b.set(120);
+
+    auto and_res = a & b;
+    REQUIRE(and_res.count() == 1);
+    REQUIRE(and_res.test(100));
+
+    auto or_res = a | b;
+    REQUIRE(or_res.count() == 3);
+    REQUIRE(or_res.test(10));
+    REQUIRE(or_res.test(100));
+    REQUIRE(or_res.test(120));
+
+    REQUIRE(or_res.find_first() == 10);
+    REQUIRE(or_res.find_next(10) == 100);
+    REQUIRE(or_res.find_next(100) == 120);
+}
+
+

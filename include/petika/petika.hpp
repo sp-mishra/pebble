@@ -1087,4 +1087,41 @@ namespace petika {
                               nitya::nadi_telemetry,
                               std::shared_mutex,
                               ImmediateCommitPolicy>;
+
+    // ============================================================================
+    // Petika Capabilities & Optimizer Statistics Descriptors
+    // ============================================================================
+
+    struct petika_capabilities {
+        bool point_lookup{true};
+        bool batch_get{true};
+        bool ordered_range{true};
+        bool prefix_scan{true};
+        bool lazy_range{false};
+        bool snapshot_read{false};
+        bool atomic_batch{true};
+        bool secondary_index{false};
+        bool field_selective_decode{false};
+        bool change_feed{false};
+    };
+
+    template <class Entity, auto MemberPtr>
+    struct secondary_index {
+        using entity_type = Entity;
+        using member_type = std::remove_cvref_t<decltype(std::declval<Entity>().*MemberPtr)>;
+
+        std::string index_name;
+        bool is_unique{false};
+    };
+
+    struct index_statistics {
+        std::uint64_t entries{0};
+        std::uint64_t distinct_keys{0};
+        std::uint64_t average_object_size{0};
+        double scan_locality{1.0};
+        double cache_hit_rate{0.95};
+        double bloom_filter_efficiency{0.99};
+    };
+
 } // namespace petika
+

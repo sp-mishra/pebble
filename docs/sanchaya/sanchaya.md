@@ -1,4 +1,4 @@
-# Sanchaya: Intelligent Persistent Objects and Data Federation
+# Sanchaya: Intelligent Persistent Objects and Data Federation for C++23+
 
 **Sanchaya** (`include/sanchaya/`) is Pebble's non-intrusive, object-first persistence, query compilation, and data federation framework engineered for C++23/C++26. It bridges rich C++ in-memory domain models with diverse persistence tiers (in-memory sessions, Petika key-value engines, SQLite transactional stores, and DuckDB columnar analytics engines) with **zero virtual dispatch, zero RTTI, zero macro magic, and zero heap allocation in critical paths**.
 
@@ -6,7 +6,7 @@
 
 ## 1. Architectural Overview & System Decoupling
 
-Sanchaya strictly separates concerns into four distinct layers:
+Sanchaya enforces **one unified semantic query model** and **one logical IR**. The backends diverge only after placement and federation, during physical planning:
 
 ```
                             SANCHAYA SUBSYSTEM ARCHITECTURE
@@ -24,16 +24,21 @@ Sanchaya strictly separates concerns into four distinct layers:
                                              │
   ┌──────────────────────────────────────────┴─────────────────────────────────────────────┐
   │                         QUERY EDSL & LOGICAL RELATIONAL IR                             │
-  │  from<T>().where().group_by().select().order_by().limit().offset()                      │
-  │  Logical IR: logical_source_node, logical_filter_node, logical_project_node, etc.      │
-  │  RBO Rewriter: Predicate Pushdown, Projection Pruning, Limit Pushdown                  │
+  │  from<T, "alias">().where().through().select().order_by().limit().offset()              │
+  │  Two-Stage Equality Saturation (Vākya E-Graph + Sanchaya Logical E-Graph)               │
   └──────────────────────────────────────────┬─────────────────────────────────────────────┘
                                              │
   ┌──────────────────────────────────────────┴─────────────────────────────────────────────┐
-  │                         PHYSICAL PLAN IR & PLACEMENT ENGINE                            │
-  │  Cost-Model-Guided Placement: In-Memory / Petika KV / SQLite OLTP / DuckDB OLAP        │
-  │  Physical IR: physical_table_scan, physical_index_seek, physical_filter_op, etc.        │
-  │  Execution: Typed cursors, generational session handles, CDC synchronization            │
+  │                       PLACEMENT, FEDERATION & CASCADES MEMO                            │
+  │  Multidimensional Cost Model: Latency, Memory, Network, Coordination Risk              │
+  │  Exchange Operators: broadcast, repartition_by_key, batch_key_request, row_stream       │
+  └──────────────────────────────────────────┬─────────────────────────────────────────────┘
+                                             │
+  ┌──────────────────────────────────────────┴─────────────────────────────────────────────┐
+  │                           PHYSICAL EXECUTION OPERATORS                                 │
+  │  - In-Memory Physical IR: memory_sequence_scan, memory_filter_project_fused, SIMD       │
+  │  - Relational Physical IR: rel_table_scan, rel_index_range_scan, rel_hash_join (SQL)   │
+  │  - Petika Physical IR: petika_point_get, petika_ordered_range_scan, snapshot_scan     │
   └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -41,8 +46,8 @@ Sanchaya strictly separates concerns into four distinct layers:
 
 ## 2. Core Use Cases
 
-### 2.1 Non-Intrusive In-Memory Domain Persistence
-Retain pure domain structs with no inheritance, virtual tables, or intrusive base classes:
+### 2.1 Pure Domain Objects
+Domain models remain completely pure C++ with zero framework contamination:
 ```cpp
 struct DepartmentId { std::uint64_t value; };
 struct EmployeeId   { std::uint64_t value; };
@@ -50,6 +55,7 @@ struct EmployeeId   { std::uint64_t value; };
 struct Department {
     DepartmentId id;
     std::string name;
+    bool active{true};
 };
 
 struct Employee {
@@ -79,15 +85,10 @@ Analytical queries automatically lower to DuckDB columnar projections when query
   4. Any component with $|V_{\text{SCC}}| > 1$ or a self-referencing embedded edge is diagnosed as an invalid infinite-size embedded cycle at compile/validation time.
   5. Reference edges in cycles are permitted and tagged for deferred foreign key resolution.
 
-### 3.2 Rule-Based Optimization (RBO) Passes
-- **Predicate Pushdown (`predicate_pushdown_rule`)**:
-  $$\sigma_{P}(\pi_{A}(R)) \implies \pi_{A}(\sigma_{P}(R))$$
-  Pushes filter selection operations down through projection operators to reduce intermediate tuple volume early.
-- **Projection Pruning (`projection_pruning_rule`)**:
-  $$\pi_{A}(\pi_{B}(R)) \implies \pi_{A}(R)$$
-  Collapses redundant nested projections into a single projection operator.
-- **Limit/Offset Pushdown (`limit_pushdown_rule`)**:
-  Propagates pagination constraints toward leaf scans to truncate scan volume.
+### 3.2 Two-Stage Equality Saturation Optimization
+1. **Stage 1 (Vākya E-Graph)**: Explores scalar algebraic equivalence, constant folding, and identity elimination over Vākya expression DAGs.
+2. **Stage 2 (Sanchaya Logical E-Graph)**: Explores relational algebra equivalences (join commutativity/associativity, predicate pushdown through projections/traversals, projection pruning, limit pushdown) using Pebble's `containers/graph/egraph.hpp`.
+3. **Extraction**: Bottom-up dynamic-programming extraction (`egraph::extract_best`) selects the Pareto-optimal logical subplans.
 
 ### 3.3 Multidimensional Placement Cost Model (`multidimensional_cost_model`)
 Normalized scoring across latency, peak memory, and network transfer:
@@ -113,25 +114,77 @@ Promotion executes when $\text{ExpectedPromotionBenefit} > \text{Threshold} \lan
 
 | Subsystem / Library | Location | Sanchaya Usage |
 | :--- | :--- | :--- |
-| **Meta & AST** | `include/meta/meta.hpp` | `member_pointer_traits`, member object/function introspection, multi-step `member_path` traversal. |
+| **Meta & AST** | `include/meta/meta.hpp` | `member_name`, `member_pointer_traits`, member object/function introspection, multi-step `member_path` traversal, zero-macro compile-time reflection. |
 | **Vākya** | `include/vakya/vakya.hpp` | Expression template lifting (`vakya::as_expr`) and type-safe operator composition for query predicates. |
-| **Akshara** | `include/meta/akshara.hpp` | Compile-time fixed strings (`akshara::fixed_string`) for field, table, alias, and service tags. |
+| **Akshara** | `include/meta/akshara.hpp` | Compile-time fixed strings (`akshara::fixed_string`), `make_fixed_string`, identifier tags, and NTTP literal helpers. |
+| **E-Graph** | `include/containers/graph/egraph.hpp` | Hashcons deduplication, union-find with path splitting, deferred rebuilding, and bottom-up DP extraction. |
 | **LiteGraph & TarjanSCC** | `include/containers/graph/LiteGraph.hpp` | Relational dependency modeling and cycle validation. |
 | **SmallVector** | `include/containers/dynamic/SmallVector.hpp` | Zero-heap SBO key sets, projection index lists, and graph edge buffers. |
 | **Kosha** | `include/containers/cache/kosha.hpp` | Session caching, query plan memoization, and cost statistics store. |
-| **Petika** | `include/petika/petika.hpp` | Embedded high-speed key-value persistence tier (`petika::SkipStore`). |
+| **Petika** | `include/petika/petika.hpp` | Embedded high-speed key-value persistence tier (`petika::SkipStore`, `MvccJournaledSkipEngine`, `BTreeEngine`). |
 | **SQLite & DuckDB** | `dependencies/sqlite`, `dependencies/libduckdb` | Transactional OLTP and vectorized columnar analytical engines. |
 
 ---
 
 ## 5. End-to-End Code Examples
 
-### 5.1 Compile-Time Model Declaration
+### 5.1 Compile-Time Model Declaration & Progressive Disclosure
+
+Sanchaya embraces **Progressive Disclosure**: the compiler and `meta` reflection infer field names, value types, endpoints, and default stable IDs, requiring declarations only for semantics or exceptions.
+
+#### Level 1: Fully Inferred & Conventional
 ```cpp
-#include "sanchaya/sanchaya.hpp"
+constexpr auto company_model =
+    model<"company">(
+        entity<Employee>(),
+        entity<Department>(),
+        many_to_one<"employment", &Employee::department_id, &Department::id>()
+    );
+```
 
-using namespace sanchaya;
+#### Level 2: Explicit Key Declaration (Recommended Standard)
+```cpp
+constexpr auto company_model =
+    model<"company">(
+        entity<Employee>(
+            key<&Employee::id>()
+        ),
+        entity<Department>(
+            key<&Department::id>()
+        ),
+        many_to_one<
+            "employment",
+            &Employee::department_id,
+            &Department::id
+        >()
+    );
+```
 
+#### Level 3: Selective Field & Behavior Customization
+```cpp
+constexpr auto company_model =
+    model<"company">(
+        entity<Employee>(
+            key<&Employee::id>(),
+            field<&Employee::name>(stable_id<"emp.display_name">()),
+            ignore<&Employee::transient_cache>(),
+            embedded<&Employee::address>()
+        ),
+        entity<Department>(
+            key<&Department::id>()
+        ),
+        many_to_one<
+            "employment",
+            &Employee::department_id,
+            &Department::id
+        >(
+            on_delete<restrict_delete>()
+        )
+    );
+```
+
+#### Level 4: Full Explicit Control (Escape Hatch for Legacy Schemas)
+```cpp
 constexpr auto company_model =
     model<"company">()
         .entity(
@@ -210,7 +263,59 @@ auto proj_exprs = std::make_tuple(member<&Employee::id>(), member<&Employee::nam
 logical_project_node proj{filter, proj_exprs};
 
 // 2. Adaptive Tiered Optimization (RBO Rewriting + CBO Lowering)
-adaptive_tiered_planner planner{};
+adaptive_tiered_planner<> planner{};
 auto physical_plan = planner.optimize(proj);
 static_assert(physical_plan<decltype(physical_plan)>);
 ```
+
+### 5.5 Explainability, Observability & Advanced E-Graph Equality Saturation
+```cpp
+auto explanation = ws.explain(query);
+```
+Output exposes comprehensive visual execution plan trees, candidate placement matrices, cardinality/selectivity diagnostics, and E-Graph rewrite audit logs:
+```
+Logical Optimization:
+  - Combined 2 filters into single conjunction
+  - Advanced E-Graph Rules: Join Commutativity, Join Associativity, Filter-to-IndexSeek, Projection Collapse
+  - E-Graph: 42 e-nodes, 18 live e-classes (Fixpoint reached in 2 iterations)
+
+[5.1 Selected In-Memory Physical Execution Plan]:
+Top-N Heap [salary DESC, LIMIT 3] (Pipeline Breaker)
+  └── Fused Filter-Project (Streamable)
+        Predicate: age >= 30 AND salary >= 130000
+        Output: name, age, salary
+        └── SequenceScan [Employee] (Streamable)
+
+[5.2 Multi-Engine Candidate Cost & Placement Tradeoff Matrix]:
+Engine       | Est. Latency   | Peak Memory   | I/O Cost   | Confidence   | Selected?
+-------------+----------------+---------------+------------+--------------+-----------
+InMemory     | 0.045 ms       | 128 KB        | 0          | 0.95         | ★ SELECTED
+Petika       | 0.120 ms       | 256 KB        | 0.5        | 0.90         |   candidate
+SQLite       | 0.450 ms       | 512 KB        | 2.1        | 0.88         |   candidate
+DuckDB       | 0.280 ms       | 1024 KB       | 1.2        | 0.92         |   candidate
+
+[5.3 Cardinality & Predicate Selectivity Diagnostics]:
+Relational Operator Node                               | In Rows   | Selectivity | Out Rows
+-------------------------------------------------------+-----------+-------------+----------
+logical_source_node<Employee>                          | 1000      | 100.0%      | 1000
+logical_filter_node (age >= 30 && salary >= 130000)    | 1000      | 3.0%        | 30
+logical_project_node (name, age, salary)               | 30        | 100.0%      | 30
+logical_order_node (salary DESC)                       | 30        | 100.0%      | 30
+logical_limit_node (LIMIT 3)                           | 30        | 10.0%       | 3
+```
+
+
+### 5.6 4-Engine Live Execution & Conformance Parity
+The exact same canonical query is executed live across all 4 underlying physical execution engines:
+1. **In-Memory Engine**: `sequence_scan -> fused_filter_project -> top_n`
+2. **SQLite Engine**: `index_range_scan(employee_age) -> residual_filter(salary) -> projection -> top_n`
+3. **Petika Engine**: `snapshot_scan -> fused_filter_project -> top_n`
+4. **DuckDB Engine**: `columnar_scan(name, age, salary) -> vectorized_filter -> top_n`
+
+### 5.7 Running the Standalone Example
+A complete end-to-end demo is available in `src/examples/example_sanchaya.hpp` and can be executed via the Pebble CLI:
+```bash
+./pebble sanchaya
+```
+
+

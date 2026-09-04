@@ -172,6 +172,18 @@ namespace vakya {
     template <class T>
     concept Operand = Expression<T> || Terminal<T>;
 
+    // Local structural string type so .as<"alias">() works in C++20/23 NTTP form.
+    template <std::size_t N>
+    struct alias_string {
+        char data[N]{};
+
+        consteval alias_string(const char (&src)[N]) noexcept {
+            for (std::size_t i = 0; i < N; ++i) data[i] = src[i];
+        }
+
+        constexpr bool operator==(const alias_string&) const noexcept = default;
+    };
+
     // -----------------------------
     // 5) Syntactic interface (member operators)
     //    Inject operators via explicit object parameter (C++23)
@@ -312,6 +324,46 @@ namespace vakya {
         constexpr auto operator[](this Self&& self, I&&... idx) {
             return make_node<subscript_tag>(std::forward<Self>(self), std::forward<I>(idx)...);
         }
+
+        template <auto Alias>
+        [[nodiscard]] constexpr decltype(auto) as() & noexcept {
+            return *static_cast<Derived*>(this);
+        }
+
+        template <alias_string Alias>
+        [[nodiscard]] constexpr decltype(auto) as() & noexcept {
+            return *static_cast<Derived*>(this);
+        }
+
+        template <auto Alias>
+        [[nodiscard]] constexpr decltype(auto) as() const& noexcept {
+            return *static_cast<const Derived*>(this);
+        }
+
+        template <alias_string Alias>
+        [[nodiscard]] constexpr decltype(auto) as() const& noexcept {
+            return *static_cast<const Derived*>(this);
+        }
+
+        template <auto Alias>
+        [[nodiscard]] constexpr decltype(auto) as() && noexcept {
+            return std::move(*static_cast<Derived*>(this));
+        }
+
+        template <alias_string Alias>
+        [[nodiscard]] constexpr decltype(auto) as() && noexcept {
+            return std::move(*static_cast<Derived*>(this));
+        }
+
+        template <auto Alias>
+        [[nodiscard]] constexpr decltype(auto) as() const&& noexcept {
+            return std::move(*static_cast<const Derived*>(this));
+        }
+
+        template <alias_string Alias>
+        [[nodiscard]] constexpr decltype(auto) as() const&& noexcept {
+            return std::move(*static_cast<const Derived*>(this));
+        }
     };
 
     // -----------------------------
@@ -378,6 +430,16 @@ namespace vakya {
         constexpr explicit expr(T v) : value(std::move(v)) {}
 
         constexpr operator const T&() const noexcept { return value; }
+
+        template <auto Alias>
+        [[nodiscard]] constexpr auto as() const noexcept {
+            return *this;
+        }
+
+        template <alias_string Alias>
+        [[nodiscard]] constexpr auto as() const noexcept {
+            return *this;
+        }
     };
 
     template <class T>
@@ -1778,4 +1840,161 @@ namespace vakya {
     constexpr auto operator*(L&& l, R&& r) {
         return vakya::make_node<vakya::mul_tag>(std::forward<L>(l), std::forward<R>(r));
     }
+
+    // =========================================================================
+    // Recursive Expression Inspection & Traversal
+    // =========================================================================
+
+    template <class T>
+    struct terminal_payload_type {
+        using type = std::decay_t<decltype(structural_unwrap(std::declval<T>()))>;
+    };
+
+    template <class T>
+    struct terminal_payload_type<expr<T>> {
+        using type = std::decay_t<T>;
+    };
+
+    template <class T>
+    struct terminal_payload_type<expr_ref<T>> {
+        using type = std::remove_cvref_t<T>;
+    };
+
+    template <class T>
+    using terminal_payload_type_t = typename terminal_payload_type<std::decay_t<T>>::type;
+
+    template <class Expr, class Visitor>
+    consteval bool all_terminals_satisfy(Visitor&& visitor) {
+        using Dec = std::decay_t<Expr>;
+        if constexpr (!Expression<Dec>) {
+            using Terminal = terminal_payload_type_t<Dec>;
+            if constexpr (requires(Visitor v) { v.template operator()<Terminal>(); }) {
+                return visitor.template operator()<Terminal>();
+            } else if constexpr (requires(Visitor v) { v(std::declval<Terminal>()); }) {
+                return visitor(Terminal{});
+            } else {
+                return false;
+            }
+        } else {
+            using children_t = std::remove_reference_t<decltype(std::declval<Dec&>().children)>;
+            constexpr std::size_t N = std::tuple_size_v<children_t>;
+            return []<std::size_t... I>(std::index_sequence<I...>, auto&& vis) consteval {
+                return (all_terminals_satisfy<std::tuple_element_t<I, children_t>>(vis) && ...);
+            }(std::make_index_sequence<N>{}, visitor);
+        }
+    }
+
+    template <class Expr, class Visitor>
+    constexpr void visit_expression(const Expr& expression, Visitor&& visitor) {
+        using Dec = std::decay_t<Expr>;
+        if constexpr (!Expression<Dec>) {
+            visitor(expression);
+        } else {
+            visitor(expression);
+            std::apply([&](const auto&... child) {
+                (visit_expression(child, visitor), ...);
+            }, expression.children);
+        }
+    }
+
+    // =========================================================================
+    // Boolean Logic Policies
+    // =========================================================================
+
+    enum class tribool_value : std::uint8_t {
+        false_value = 0,
+        true_value = 1,
+        unknown_value = 2
+    };
+
+    struct two_valued_logic {
+        static constexpr bool is_three_valued = false;
+
+        [[nodiscard]] static constexpr bool logical_and(bool a, bool b) noexcept { return a && b; }
+        [[nodiscard]] static constexpr bool logical_or(bool a, bool b) noexcept { return a || b; }
+        [[nodiscard]] static constexpr bool logical_not(bool a) noexcept { return !a; }
+    };
+
+    struct sql_three_valued_logic {
+        static constexpr bool is_three_valued = true;
+
+        [[nodiscard]] static constexpr tribool_value logical_and(tribool_value a, tribool_value b) noexcept {
+            if (a == tribool_value::false_value || b == tribool_value::false_value) return tribool_value::false_value;
+            if (a == tribool_value::true_value && b == tribool_value::true_value) return tribool_value::true_value;
+            return tribool_value::unknown_value;
+        }
+
+        [[nodiscard]] static constexpr tribool_value logical_or(tribool_value a, tribool_value b) noexcept {
+            if (a == tribool_value::true_value || b == tribool_value::true_value) return tribool_value::true_value;
+            if (a == tribool_value::false_value && b == tribool_value::false_value) return tribool_value::false_value;
+            return tribool_value::unknown_value;
+        }
+
+        [[nodiscard]] static constexpr tribool_value logical_not(tribool_value a) noexcept {
+            if (a == tribool_value::true_value) return tribool_value::false_value;
+            if (a == tribool_value::false_value) return tribool_value::true_value;
+            return tribool_value::unknown_value;
+        }
+    };
+
+    struct optional_propagating_logic {
+        static constexpr bool is_three_valued = false;
+
+        template <class T>
+        [[nodiscard]] static constexpr std::optional<bool> logical_and(const std::optional<T>& a, const std::optional<T>& b) noexcept {
+            if (!a || !b) return std::nullopt;
+            return static_cast<bool>(*a && *b);
+        }
+    };
+
+    // =========================================================================
+    // Expression Analysis Properties
+    // =========================================================================
+
+    enum class nullability_kind : std::uint8_t {
+        non_nullable,
+        nullable,
+        unknown
+    };
+
+    struct expression_properties {
+        std::size_t result_type_id{0};
+        nullability_kind nullability{nullability_kind::non_nullable};
+        std::uint32_t effects{0};
+
+        bool pure{true};
+        bool deterministic{true};
+        bool total{true};
+        bool foldable{false};
+        bool may_overflow{false};
+        bool may_produce_nan{false};
+    };
+
+    // =========================================================================
+    // Generic Operation Capability Descriptors
+    // =========================================================================
+
+    template <class OpTag>
+    struct operation_descriptor {
+        using tag = OpTag;
+        static constexpr std::string_view name = "operation";
+    };
+
+    struct starts_with_operation {
+        static constexpr std::uint32_t id = 0x1001;
+    };
+
+    struct ends_with_operation {
+        static constexpr std::uint32_t id = 0x1002;
+    };
+
+    struct contains_operation {
+        static constexpr std::uint32_t id = 0x1003;
+    };
+
+    struct regex_match_operation {
+        static constexpr std::uint32_t id = 0x1004;
+    };
+
 } // namespace vakya
+

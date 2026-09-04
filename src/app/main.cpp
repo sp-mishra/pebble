@@ -190,7 +190,7 @@ static void poly_verts(const SimBody& b, std::array<akruti::Vec, kPolyMax>& out,
     n = b.poly_n;
     for (int i = 0; i < n; ++i) {
         const auto& l = b.poly[i];
-        out[i] = {b.pos[0] + l.x * c - l.y * s, b.pos[1] + l.x * s + l.y * c};
+        out[i] = {b.pos[0] + l[0] * c - l[1] * s, b.pos[1] + l[0] * s + l[1] * c};
     }
 }
 
@@ -395,8 +395,8 @@ static kalpana::Path body_shape_path(const SimBody& b, float sx, float sy) {
         int n = 0;
         poly_verts(b, wv, n);
         for (int i = 0; i < n; ++i) {
-            if (i == 0) p.move_to(wv[i].x + sx, wv[i].y + sy);
-            else p.line_to(wv[i].x + sx, wv[i].y + sy);
+            if (i == 0) p.move_to(wv[i][0] + sx, wv[i][1] + sy);
+            else p.line_to(wv[i][0] + sx, wv[i][1] + sy);
         }
         p.close();
         break;
@@ -636,7 +636,7 @@ static float bounding_radius(const SimBody& b) {
     case ShapeKind::Hexagon:
     case ShapeKind::Trapezoid: {
         float m2 = 0.0f;
-        for (int i = 0; i < b.poly_n; ++i) m2 = std::max(m2, b.poly[i].x * b.poly[i].x + b.poly[i].y * b.poly[i].y);
+        for (int i = 0; i < b.poly_n; ++i) m2 = std::max(m2, b.poly[i][0] * b.poly[i][0] + b.poly[i][1] * b.poly[i][1]);
         return std::sqrt(m2) + b.corner;
     }
     default: return b.size * 1.2f;
@@ -658,8 +658,8 @@ static AkrutiShapeVar get_akruti_shape(const SimBody& b) {
     case ShapeKind::Segment: {
         const float c = std::cos(b.rot), sn = std::sin(b.rot);
         return akruti::Segment{
-            akruti::Vec{pos.x - s * c, pos.y - s * sn},
-            akruti::Vec{pos.x + s * c, pos.y + s * sn}
+            akruti::Vec{pos[0] - s * c, pos[1] - s * sn},
+            akruti::Vec{pos[0] + s * c, pos[1] + s * sn}
         };
     }
     case ShapeKind::Box:
@@ -671,8 +671,8 @@ static AkrutiShapeVar get_akruti_shape(const SimBody& b) {
         const float sn = std::sin(b.rot);
         const float cap_len = s * 0.7f;
         return akruti::Capsule{
-            akruti::Vec{pos.x - cap_len * c, pos.y - cap_len * sn},
-            akruti::Vec{pos.x + cap_len * c, pos.y + cap_len * sn},
+            akruti::Vec{pos[0] - cap_len * c, pos[1] - cap_len * sn},
+            akruti::Vec{pos[0] + cap_len * c, pos[1] + cap_len * sn},
             s * 0.6f
         };
     }
@@ -681,10 +681,10 @@ static AkrutiShapeVar get_akruti_shape(const SimBody& b) {
         const float c1 = std::cos(b.rot + 2.0943951f), s1 = std::sin(b.rot + 2.0943951f);
         const float c2 = std::cos(b.rot + 4.1887902f), s2 = std::sin(b.rot + 4.1887902f);
         // Ensure CCW winding in world space
-        akruti::Vec v0{pos.x + c * s, pos.y + sn * s};
-        akruti::Vec v1{pos.x + c1 * s, pos.y + s1 * s};
-        akruti::Vec v2{pos.x + c2 * s, pos.y + s2 * s};
-        if ((v1.x - v0.x) * (v2.y - v0.y) - (v1.y - v0.y) * (v2.x - v0.x) < 0) {
+        akruti::Vec v0{pos[0] + c * s, pos[1] + sn * s};
+        akruti::Vec v1{pos[0] + c1 * s, pos[1] + s1 * s};
+        akruti::Vec v2{pos[0] + c2 * s, pos[1] + s2 * s};
+        if ((v1[0] - v0[0]) * (v2[1] - v0[1]) - (v1[1] - v0[1]) * (v2[0] - v0[0]) < 0) {
             std::swap(v1, v2);
         }
         return akruti::Triangle{v0, v1, v2};
@@ -769,7 +769,7 @@ static akruti::Manifold test_body_collision(const SimBody& a, const SimBody& b) 
                 if (m.hit && m.depth > 0.0f) {
                     // Ensure normal is oriented from shape_a toward shape_b
                     pebble::math::vec2 delta = b.pos - a.pos;
-                    if (m.normal.x * delta[0] + m.normal.y * delta[1] < 0.0f) {
+                    if (m.normal[0] * delta[0] + m.normal[1] * delta[1] < 0.0f) {
                         m.normal = -m.normal;
                     }
                 }
@@ -834,7 +834,7 @@ static void step_sim_bodies(float dt) {
                     auto manifold = test_body_collision(a, b);
                     if (!manifold.hit || manifold.depth <= 0.0f) continue;
 
-                    pebble::math::vec2 n{manifold.normal.x, manifold.normal.y};
+                    pebble::math::vec2 n{manifold.normal[0], manifold.normal[1]};
                     float len_n = std::sqrt(n[0] * n[0] + n[1] * n[1]);
                     if (len_n > 1e-5f) {
                         n = n * (1.0f / len_n);
@@ -896,7 +896,7 @@ static void step_sim_bodies(float dt) {
                             ce.normal = n;
                             ce.depth = manifold.depth;
                             if (!manifold.points.empty()) {
-                                ce.point = pebble::math::vec2(manifold.points[0].point.x, manifold.points[0].point.y);
+                                ce.point = pebble::math::vec2(manifold.points[0].point[0], manifold.points[0].point[1]);
                             }
                             else {
                                 ce.point = (a.pos + b.pos) * 0.5f;
@@ -1024,8 +1024,8 @@ static void build_scene(kalpana::Scene& scene) {
         for (int i = 0; i <= kSamples; ++i) {
             float t = float(i) / float(kSamples);
             auto p = app.path.evaluate(t);
-            if (i == 0) curve.move_to(p.x + sx, p.y + sy);
-            else curve.line_to(p.x + sx, p.y + sy);
+            if (i == 0) curve.move_to(p[0] + sx, p[1] + sy);
+            else curve.line_to(p[0] + sx, p[1] + sy);
         }
         scene.add(kalpana::Node::shape(curve,
                                        kalpana::Paint::stroke(kalpana::Color{0.22f, 0.8f, 1.0f, 0.6f}, 2.0f)));

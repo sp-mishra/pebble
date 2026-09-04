@@ -108,6 +108,45 @@ namespace sanchaya::backend {
 #endif
         }
 
+        template <class Callback>
+        auto execute_query(std::string_view sql, Callback&& callback) -> std::expected<bool, sanchaya_error> {
+#if SANCHAYA_HAS_SQLITE
+            if (!is_open_ || db_ == nullptr) {
+                return std::unexpected(sanchaya_error{
+                    .domain = error_domain::storage,
+                    .code = 400,
+                    .message = "SQLite database not open"
+                });
+            }
+            auto bridge = [](void* data, int argc, char** argv, char** col_names) -> int {
+                auto& cb = *static_cast<std::decay_t<Callback>*>(data);
+                cb(argc, argv, col_names);
+                return 0;
+            };
+            char* err_msg = nullptr;
+            std::string sql_str(sql);
+            int rc = sqlite3_exec(db_, sql_str.c_str(), bridge, &callback, &err_msg);
+            if (rc != SQLITE_OK) {
+                sanchaya_error err{
+                    .domain = error_domain::storage,
+                    .code = static_cast<std::uint32_t>(rc),
+                    .message = err_msg ? err_msg : "SQLite query error"
+                };
+                if (err_msg) sqlite3_free(err_msg);
+                return std::unexpected(err);
+            }
+            return true;
+#else
+            (void)sql;
+            (void)callback;
+            return std::unexpected(sanchaya_error{
+                .domain = error_domain::storage,
+                .code = 501,
+                .message = "SQLite dependency not compiled into current target"
+            });
+#endif
+        }
+
         void close() noexcept {
 #if SANCHAYA_HAS_SQLITE
             if (db_ != nullptr) {
