@@ -54,8 +54,26 @@ namespace sanchaya::backend {
             : options_{.db_dir = std::move(db_dir), .segment_size = 16 * 1024 * 1024, .sync_on_write = false},
               store_(options_) {}
 
+        void set_fail_writes(bool fail) noexcept {
+            fail_writes_ = fail;
+        }
+
         auto put(const Key& key, const Value& val) -> std::expected<bool, sanchaya_error> {
-            store_.put(key, val);
+            if (fail_writes_) {
+                return std::unexpected(sanchaya_error{
+                    .domain = error_domain::storage,
+                    .code = 500,
+                    .message = "Injected Petika write failure"
+                });
+            }
+            auto res = store_.put(key, val);
+            if (!res) {
+                return std::unexpected(sanchaya_error{
+                    .domain = error_domain::storage,
+                    .code = 500,
+                    .message = "Petika put failed"
+                });
+            }
             return true;
         }
 
@@ -68,7 +86,14 @@ namespace sanchaya::backend {
         }
 
         auto erase(const Key& key) -> std::expected<bool, sanchaya_error> {
-            store_.erase(key);
+            auto res = store_.erase(key);
+            if (!res) {
+                return std::unexpected(sanchaya_error{
+                    .domain = error_domain::storage,
+                    .code = 500,
+                    .message = "Petika erase failed"
+                });
+            }
             return true;
         }
 
@@ -90,6 +115,7 @@ namespace sanchaya::backend {
     private:
         petika::PetikaOptions options_;
         petika::SkipStore<Key, Value> store_;
+        bool fail_writes_{false};
     };
 
     template <class Key = std::string, class Value = std::string>

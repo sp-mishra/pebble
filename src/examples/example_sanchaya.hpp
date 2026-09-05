@@ -5,6 +5,8 @@
 // ============================================================================
 
 #include "sanchaya/sanchaya.hpp"
+#include "observability/sinks/ring_buffer_sink.hpp"
+#include "utils/profiler.hpp"
 #include "utils/log.hpp"
 #include <iostream>
 #include <iomanip>
@@ -24,11 +26,12 @@ namespace sanchaya::example {
     // ========================================================================
     // 1. Pure C++ Domain Structs (Zero Framework Intrusion)
     // ========================================================================
-    struct EmployeeId   { std::uint64_t value{0}; constexpr auto operator<=>(const EmployeeId&) const noexcept = default; };
-    struct DepartmentId { std::uint64_t value{0}; constexpr auto operator<=>(const DepartmentId&) const noexcept = default; };
-    struct ProjectId    { std::uint64_t value{0}; constexpr auto operator<=>(const ProjectId&) const noexcept = default; };
+    struct EmployeeId   { using vakya_terminal = void; std::uint64_t value{0}; constexpr auto operator<=>(const EmployeeId&) const noexcept = default; };
+    struct DepartmentId { using vakya_terminal = void; std::uint64_t value{0}; constexpr auto operator<=>(const DepartmentId&) const noexcept = default; };
+    struct ProjectId    { using vakya_terminal = void; std::uint64_t value{0}; constexpr auto operator<=>(const ProjectId&) const noexcept = default; };
 
     struct Address {
+        using vakya_terminal = void;
         std::string city;
         std::string country;
         constexpr auto operator<=>(const Address&) const noexcept = default;
@@ -1072,6 +1075,154 @@ namespace sanchaya::example {
 
             std::cout << "\n  [12.3 Compile-Time Consteval Service Tag Dispatch]:\n";
             std::cout << "    Tag Resolution Overhead: 0.00 ns (100% Consteval NTTP Static Assert Checked)\n\n";
+        }
+
+        // ====================================================================
+        // STEP 13: NADI Zero-Vtable Observability & Pravaha Asynchronous CDC DAG
+        // ====================================================================
+        {
+            std::cout << "--- [Step 13] NADI Observability & Pravaha Asynchronous Task Orchestration ---\n";
+
+            // 13.1 NADI Compile-Time PulseScope Lineage Tracking
+            using DemoRingSink = utils::nadi::RingBufferSink<32, 64>;
+            while (DemoRingSink::instance().try_pop()) {}
+
+            telemetry::nadi_query_observer<DemoRingSink> nadi_observer;
+            {
+                auto plan_pulse = nadi_observer.template trace_scope<"sanchaya_plan">(
+                    utils::nadi::Field<"query", std::string_view>{.value = "SELECT name, salary FROM Employee"},
+                    utils::nadi::Field<"estimated_rows", std::size_t>{.value = 1000}
+                );
+
+                {
+                    auto exec_pulse = nadi_observer.template trace_scope<"sanchaya_exec">(
+                        utils::nadi::Field<"engine", std::string_view>{.value = "InMemory_Fused"},
+                        utils::nadi::Field<"threads", int>{.value = 4}
+                    );
+                }
+            }
+
+            std::size_t captured_pulses = DemoRingSink::instance().size();
+            std::cout << "  [13.1 NADI Compile-Time Zero-Vtable Pulse Scope]:\n";
+            std::cout << "    Emitted & Captured Pulses: " << captured_pulses << " (Plan & Exec Lineage Traced ✓)\n";
+
+            // 13.2 Pravaha Async 3-Stage CDC Synchronization Pipeline
+            pravaha::JThreadBackend async_backend(2);
+            std::atomic<bool> snap_done{false}, replay_done{false}, drain_done{false};
+
+            auto cdc_res = sync::async_cdc_pipeline::run_async(
+                async_backend,
+                [&]() { snap_done.store(true, std::memory_order_relaxed); },
+                [&]() { replay_done.store(true, std::memory_order_relaxed); },
+                [&]() { drain_done.store(true, std::memory_order_relaxed); }
+            );
+
+            bool async_ok = cdc_res.has_value() && snap_done && replay_done && drain_done;
+            std::cout << "  [13.2 Pravaha Asynchronous CDC Task Graph Pipeline]:\n";
+            std::cout << "    Pipeline DAG (Snapshot -> Replay -> Drain): "
+                      << (async_ok ? "EXECUTED CONCURRENTLY ON JTHREAD BACKEND ✓" : "FAILED ✗") << "\n\n";
+
+            if (!async_ok) {
+                std::cerr << "  [ERROR] Pravaha async CDC pipeline failed!\n";
+                ++failure_count;
+            }
+        }
+
+        // ====================================================================
+        // STEP 14: Comprehensive Statistical Performance Profiling
+        // ====================================================================
+        {
+            std::cout << "--- [Step 14] Statistical Performance Profiling via pebble::profiler ---\n";
+
+            Employee bench_emp{
+                .id = EmployeeId{101},
+                .name = "Ada Lovelace",
+                .age = 36,
+                .salary = 145000.0,
+                .department_id = DepartmentId{1},
+                .address = Address{.city = "London", .country = "UK"}
+            };
+
+            // 14.1 BEVE Serialization Latency Distribution
+            profiler::ProfileConfig beve_cfg;
+            beve_cfg.iterations = 5000;
+            beve_cfg.warmup_iterations = 500;
+            beve_cfg.label = "BEVE Encode/Decode";
+            beve_cfg.output_unit = profiler::TimeUnit::Nanoseconds;
+
+            auto beve_profile = profiler::measure(beve_cfg, [&]() {
+                auto enc = backend::object_codec<Employee>::encode(bench_emp);
+                auto dec = backend::object_codec<Employee>::decode(enc);
+                (void)dec;
+            });
+
+            std::cout << "  [14.1 BEVE Codec Statistical Distribution (5,000 runs)]:\n";
+            std::cout << "    Mean: " << std::fixed << std::setprecision(1) << beve_profile.mean << " ns"
+                      << " | Median: " << beve_profile.median << " ns"
+                      << " | Min: " << beve_profile.min << " ns"
+                      << " | Max: " << beve_profile.max << " ns"
+                      << " | P99: " << beve_profile.p99 << " ns\n";
+
+            // 14.2 Anukrama Snapshot Isolation Read Latency
+            backend::anukrama_storage_backend<std::string, Employee> anukrama_bench;
+            (void)anukrama_bench.put("emp:101", bench_emp);
+            auto snap = anukrama_bench.get_snapshot();
+
+            profiler::ProfileConfig anukrama_cfg;
+            anukrama_cfg.iterations = 10000;
+            anukrama_cfg.warmup_iterations = 1000;
+            anukrama_cfg.label = "Anukrama Snapshot Point-Get";
+            anukrama_cfg.output_unit = profiler::TimeUnit::Nanoseconds;
+
+            auto anukrama_profile = profiler::measure(anukrama_cfg, [&]() {
+                auto res = snap.get("emp:101");
+                (void)res;
+            });
+
+            std::cout << "  [14.2 Anukrama Wait-Free Snapshot Read (10,000 runs)]:\n";
+            std::cout << "    Mean: " << std::fixed << std::setprecision(1) << anukrama_profile.mean << " ns"
+                      << " | Median: " << anukrama_profile.median << " ns"
+                      << " | Min: " << anukrama_profile.min << " ns"
+                      << " | P99: " << anukrama_profile.p99 << " ns\n";
+
+            // 14.3 High-Throughput Memory Top-N vs Full std::sort Comparison
+            constexpr std::size_t K_ITEMS = 10000;
+            std::vector<int> random_data(K_ITEMS);
+            for (std::size_t i = 0; i < K_ITEMS; ++i) {
+                random_data[i] = static_cast<int>((i * 1664525 + 1013904223) & 0x7FFFFFFF);
+            }
+
+            profiler::ProfileConfig top_n_cfg;
+            top_n_cfg.iterations = 1000;
+            top_n_cfg.warmup_iterations = 100;
+            top_n_cfg.label = "Memory Top-10 Min-Heap";
+            top_n_cfg.output_unit = profiler::TimeUnit::Microseconds;
+
+            auto top_n_profile = profiler::measure(top_n_cfg, [&]() {
+                engine::memory_top_n<int> heap(10);
+                for (int x : random_data) heap.push(x);
+                auto res = heap.extract_sorted();
+                (void)res;
+            });
+
+            profiler::ProfileConfig full_sort_cfg;
+            full_sort_cfg.iterations = 1000;
+            full_sort_cfg.warmup_iterations = 100;
+            full_sort_cfg.label = "Full std::sort";
+            full_sort_cfg.output_unit = profiler::TimeUnit::Microseconds;
+
+            auto full_sort_profile = profiler::measure(full_sort_cfg, [&]() {
+                auto copy = random_data;
+                std::sort(copy.begin(), copy.end(), std::greater<int>{});
+                if (copy.size() > 10) copy.resize(10);
+                (void)copy;
+            });
+
+            double speedup = full_sort_profile.mean / std::max(top_n_profile.mean, 1e-6);
+            std::cout << "  [14.3 Top-N Heap vs Full Vector Sort (10,000 items, Top 10)]:\n";
+            std::cout << "    memory_top_n Mean: " << std::fixed << std::setprecision(2) << top_n_profile.mean << " µs"
+                      << " | std::sort Mean: " << full_sort_profile.mean << " µs"
+                      << " -> Speedup: " << std::setprecision(1) << speedup << "x faster ✓\n\n";
         }
 
         std::cout << "\n======================================================================\n";

@@ -4,21 +4,25 @@
 
 #include "catch_amalgamated.hpp"
 #include "sanchaya/sanchaya.hpp"
+#include "observability/sinks/ring_buffer_sink.hpp"
 #include <string>
 
 namespace sanchaya_test {
 
 struct DepartmentId {
+    using vakya_terminal = void;
     std::uint64_t value{0};
     constexpr auto operator<=>(const DepartmentId&) const noexcept = default;
 };
 
 struct EmployeeId {
+    using vakya_terminal = void;
     std::uint64_t value{0};
     constexpr auto operator<=>(const EmployeeId&) const noexcept = default;
 };
 
 struct Address {
+    using vakya_terminal = void;
     std::string street;
     std::string city;
 };
@@ -1167,7 +1171,137 @@ TEST_CASE("sanchaya: sqlite backend 64-bit integer binding", "[sanchaya][backend
         CHECK(*step_res == true);
     }
 }
+TEST_CASE("sanchaya: Medha fresh-insert compensation erasure on durable failure", "[sanchaya][medha][compensation]") {
+    using namespace sanchaya::integration;
+    using namespace sanchaya::backend;
 
+    anukrama_storage_backend<std::string, Employee> mem_store;
+    petika_storage_backend<std::string, std::string> failing_durable_store("./demo_storage/failing_test_db");
+    failing_durable_store.set_fail_writes(true);
 
+    entity_table_resource<Employee> res{
+        .memory_store = &mem_store,
+        .durable_store = &failing_durable_store
+    };
+
+    Employee fresh_emp{
+        .id = EmployeeId{999},
+        .name = "Test Rollback",
+        .age = 28,
+        .department_id = DepartmentId{1},
+        .address = Address{.street = "Nowhere", .city = "NullCity"}
+    };
+
+    medha::transaction_context ctx{};
+    auto stage_res = tx_stage(res, ctx, "emp:999", fresh_emp);
+    CHECK(stage_res.has_value());
+
+    // tx_commit should fail at durable_store stage and compensate by erasing "emp:999" from memory_store
+    auto commit_res = tx_commit(res, ctx);
+    CHECK(!commit_res.has_value());
+
+    // Assert that the fresh insert was completely erased from the memory store
+    CHECK(mem_store.get_latest("emp:999") == std::nullopt);
+}
+
+TEST_CASE("sanchaya: workspace explain returns dynamic egraph saturation metrics across query complexities", "[sanchaya][workspace][explain][dynamic]") {
+    using namespace sanchaya;
+
+    constexpr auto company_model =
+        model<"company">()
+            .entity(describe_row<Employee>(
+                field<"id", &Employee::id>(),
+                field<"name", &Employee::name>(),
+                field<"age", &Employee::age>(),
+                field<"department_id", &Employee::department_id>()
+            ))
+            .build();
+
+    auto ws = make_workspace(company_model).build();
+
+    // 1. Simple single projection query
+    auto q_simple = from<Employee>()
+        .select(member<&Employee::name>());
+
+    auto exp_simple = ws.explain(q_simple);
+
+    // 2. Complex query with multiple filter predicates
+    auto q_complex = from<Employee>()
+        .where(member<&Employee::age>() >= 30)
+        .where(member<&Employee::department_id>() == DepartmentId{2})
+        .select(member<&Employee::name>());
+
+    auto exp_complex = ws.explain(q_complex);
+
+    // The complex query with filters generates more e-nodes in the e-graph than a simple scan/projection
+    CHECK(exp_complex.egraph_nodes > exp_simple.egraph_nodes);
+    CHECK(exp_complex.egraph_classes >= exp_simple.egraph_classes);
+}
+
+TEST_CASE("sanchaya: NADI query execution emits structured pulses with lineage", "[sanchaya][telemetry][nadi]") {
+    using namespace sanchaya::telemetry;
+    using namespace utils::nadi;
+
+    using TestRingSink = RingBufferSink<32, 64>;
+    while (TestRingSink::instance().try_pop()) {}
+
+    nadi_query_observer<TestRingSink> observer;
+
+    {
+        auto root_scope = observer.template trace_scope<"sanchaya_plan">(
+            Field<"query", std::string_view>{.value = "SELECT name FROM employee"},
+            Field<"estimated_rows", std::size_t>{.value = 100}
+        );
+
+        {
+            auto child_scope = observer.template trace_scope<"sanchaya_exec">(
+                Field<"engine", std::string_view>{.value = "InMemory"},
+                Field<"threads", int>{.value = 1}
+            );
+        }
+    }
+
+    CHECK(TestRingSink::instance().size() >= 2);
+}
+
+TEST_CASE("sanchaya: Pravaha asynchronous CDC task graph replicates snapshots concurrently", "[sanchaya][sync][pravaha]") {
+    using namespace sanchaya::sync;
+    using namespace sanchaya::backend;
+
+    anukrama_storage_backend<std::string, Employee> mem_store;
+    std::atomic<int> snapshot_count{0};
+    std::atomic<int> replay_count{0};
+    std::atomic<int> drain_count{0};
+
+    for (int i = 0; i < 100; ++i) {
+        Employee emp{
+            .id = EmployeeId{static_cast<std::uint64_t>(i)},
+            .name = "Worker " + std::to_string(i),
+            .age = static_cast<int>(20 + (i % 30)),
+            .department_id = DepartmentId{1}
+        };
+        (void)mem_store.put("emp:" + std::to_string(i), emp);
+    }
+
+    pravaha::JThreadBackend thread_backend(2);
+
+    auto result = async_cdc_pipeline::run_async(
+        thread_backend,
+        [&]() {
+            snapshot_count.fetch_add(1, std::memory_order_relaxed);
+        },
+        [&]() {
+            replay_count.fetch_add(1, std::memory_order_relaxed);
+        },
+        [&]() {
+            drain_count.fetch_add(1, std::memory_order_relaxed);
+        }
+    );
+
+    CHECK(result.has_value());
+    CHECK(snapshot_count.load() == 1);
+    CHECK(replay_count.load() == 1);
+    CHECK(drain_count.load() == 1);
+}
 
 

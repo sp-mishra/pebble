@@ -47,6 +47,20 @@ namespace sanchaya::backend {
             return *res;
         }
 
+        auto erase(const Key& key) -> std::expected<std::uint64_t, sanchaya_error> {
+            auto txn = store_.begin();
+            txn.erase(key);
+            auto res = txn.commit();
+            if (!res) {
+                return std::unexpected(sanchaya_error{
+                    .domain = error_domain::concurrency,
+                    .code = 409,
+                    .message = "Anukrama MVCC conflict detected"
+                });
+            }
+            return *res;
+        }
+
         [[nodiscard]] auto get_snapshot() const noexcept {
             return store_.snapshot_at_current();
         }

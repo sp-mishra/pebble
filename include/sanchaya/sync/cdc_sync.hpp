@@ -23,6 +23,7 @@
 // ============================================================================
 
 #include "sanchaya/fwd.hpp"
+#include "pravaha/pravaha.hpp"
 #include <chrono>
 #include <cstdint>
 #include <string>
@@ -115,6 +116,33 @@ namespace sanchaya::sync {
             return (compute_expected_benefit(m) > threshold) &&
                    (m.confidence >= min_confidence) &&
                    (m.payback_period <= max_payback);
+        }
+    };
+
+    // ── Asynchronous CDC Replication Pipeline (Pravaha Integration) ───────────
+    class async_cdc_pipeline {
+    public:
+        template <class SnapshotFn, class ReplayFn, class DrainFn>
+        static auto run_async(
+            pravaha::JThreadBackend& backend,
+            SnapshotFn&& snapshot_step,
+            ReplayFn&& replay_step,
+            DrainFn&& drain_step)
+        {
+            auto expr = pravaha::seq(
+                pravaha::task("cdc_snapshot", [fn = std::forward<SnapshotFn>(snapshot_step)]() mutable {
+                    fn();
+                }),
+                pravaha::task("cdc_replay", [fn = std::forward<ReplayFn>(replay_step)]() mutable {
+                    fn();
+                }),
+                pravaha::task("cdc_drain", [fn = std::forward<DrainFn>(drain_step)]() mutable {
+                    fn();
+                })
+            );
+
+            pravaha::Runner<pravaha::JThreadBackend> runner(backend);
+            return runner.submit(std::move(expr));
         }
     };
 

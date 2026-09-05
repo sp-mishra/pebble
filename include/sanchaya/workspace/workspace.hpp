@@ -9,6 +9,7 @@
 #include "sanchaya/query/query.hpp"
 #include "sanchaya/planner/planner.hpp"
 #include "sanchaya/session/session.hpp"
+#include "observability/nadi.hpp"
 #include "containers/cache/kosha.hpp"
 #include "containers/associative/slot_map.hpp"
 #include <cstddef>
@@ -27,6 +28,16 @@ namespace sanchaya {
         struct null_query_observer {
             template <class... Args>
             constexpr void on_event(Args&&...) const noexcept {}
+        };
+
+        template <class Sink = utils::nadi::NoSink>
+        struct nadi_query_observer {
+            template <akshara::fixed_string Phase, class... Fields>
+            [[nodiscard]] auto trace_scope(Fields&&... fields) const noexcept {
+                return utils::nadi::PulseScope<Sink, Phase, std::decay_t<Fields>...>(
+                    std::forward<Fields>(fields)...
+                );
+            }
         };
     } // namespace telemetry
 
@@ -85,7 +96,8 @@ namespace sanchaya {
         inline constexpr std::size_t type_pack_index_v =
             []<std::size_t... Is>(std::index_sequence<Is...>) constexpr -> std::size_t {
                 std::size_t result = sizeof...(Ts); // sentinel: not found
-                ((std::is_same_v<T, Ts> ? (result = Is, true) : false) || ...);
+                bool found = false;
+                ((!found && std::is_same_v<T, Ts> ? (result = Is, found = true) : false), ...);
                 return result;
             }(std::make_index_sequence<sizeof...(Ts)>{});
 
@@ -306,9 +318,8 @@ namespace sanchaya {
 
 
         template <class Query>
-        [[nodiscard]] query_explanation explain(Query&&) const noexcept {
-            // explain() is illustrative: a fixed scan cardinality is used here.
-            // Precise per-query cardinality is computed by the real planner during execute().
+        [[nodiscard]] query_explanation explain(Query&& q) const noexcept {
+            // explain() delegates to the real planner & placement engine.
             static constexpr std::size_t cardinality = 1000;
 
             // Delegate placement decision to the real engine — same path as execute().
@@ -321,9 +332,15 @@ namespace sanchaya {
             const bool is_duckdb =
                 (target == optimizer::execution_engine_target::duckdb_columnar_vectorized);
 
-            // Compute actual egraph saturation metrics from egraph optimizer
+            // Compute actual egraph saturation metrics from egraph optimizer on incoming query
             optimizer::egraph_relational_optimizer eg_opt{};
-            const auto opt_result = eg_opt.optimize(optimizer::logical_source_node<void>{});
+            auto opt_result = [&]() {
+                if constexpr (requires { q.plan(); }) {
+                    return eg_opt.optimize(q.plan());
+                } else {
+                    return eg_opt.optimize(std::forward<Query>(q));
+                }
+            }();
 
             // Static string literals — zero heap allocation
             static constexpr std::string_view kSummaryInMemory =

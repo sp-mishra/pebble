@@ -310,7 +310,7 @@ namespace sanchaya::optimizer {
         egraph::e_class_id lower_to_egraph(sanchaya_egraph& g, const Plan& plan) {
             using P = std::decay_t<Plan>;
             sanchaya_egraph::node_t node;
-            if constexpr (requires { typename P::entity_type; } && !requires { plan.input; }) {
+            if constexpr (requires { typename P::entity_type; } && !requires { plan.input; } && !requires { plan.plan; }) {
                 // Base source / key lookup
                 if constexpr (requires { plan.key; }) {
                     node.op = rel_op::op_key_lookup;
@@ -319,8 +319,14 @@ namespace sanchaya::optimizer {
                     node.op = rel_op::op_source;
                     node.payload = rel_payload{.signature = 1, .extra_data = 0};
                 }
-            } else if constexpr (requires { plan.input; }) {
-                auto child_cid = lower_to_egraph(g, plan.input);
+            } else if constexpr (requires { plan.input; } || requires { plan.plan; }) {
+                auto child_cid = [&]() {
+                    if constexpr (requires { plan.input; }) {
+                        return lower_to_egraph(g, plan.input);
+                    } else {
+                        return lower_to_egraph(g, plan.plan);
+                    }
+                }();
                 node.children.push_back(child_cid);
 
                 if constexpr (requires { plan.predicate; } && !requires { plan.left; }) {

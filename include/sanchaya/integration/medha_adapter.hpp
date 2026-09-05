@@ -29,9 +29,12 @@ namespace sanchaya::integration {
             value_type value;
         };
 
+        using snapshot_type = typename backend::anukrama_storage_backend<key_type, value_type>::store_type::snapshot;
+
         struct attempt {
             medha::transaction_context* context{nullptr};
             std::vector<staged_write> writes{};
+            std::optional<snapshot_type> snapshot{};
         };
 
         mutable std::mutex mutex_{};
@@ -42,7 +45,7 @@ namespace sanchaya::integration {
                 return a.context == std::addressof(context);
             });
             if (it == attempts_.end()) {
-                attempts_.push_back({std::addressof(context), {}});
+                attempts_.push_back({std::addressof(context), {}, std::nullopt});
                 it = std::prev(attempts_.end());
             }
             return *it;
@@ -85,7 +88,11 @@ namespace sanchaya::integration {
             }
         }
         if (r.memory_store) {
-            if (auto val = r.memory_store->get_latest(key)) {
+            if (!attempt.snapshot.has_value()) {
+                attempt.snapshot.emplace(r.memory_store->get_snapshot());
+            }
+            auto val = attempt.snapshot->get(key);
+            if (val.has_value()) {
                 return *val;
             }
         }
@@ -150,6 +157,8 @@ namespace sanchaya::integration {
                     for (const auto& undo : applied_mem) {
                         if (undo.prev_val) {
                             (void)r.memory_store->put(undo.key, *undo.prev_val);
+                        } else {
+                            (void)r.memory_store->erase(undo.key);
                         }
                     }
                     return std::unexpected(medha::tx_error{
@@ -168,6 +177,8 @@ namespace sanchaya::integration {
                         for (const auto& undo : applied_mem) {
                             if (undo.prev_val) {
                                 (void)r.memory_store->put(undo.key, *undo.prev_val);
+                            } else {
+                                (void)r.memory_store->erase(undo.key);
                             }
                         }
                     }
