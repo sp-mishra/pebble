@@ -42,7 +42,7 @@ namespace sanchaya::engine {
         }
     };
 
-    template <class Item, class Compare = std::less<Item>>
+    template <class Item, class Compare = std::greater<Item>>
     class memory_top_n {
     public:
         explicit memory_top_n(std::size_t n, Compare comp = {})
@@ -54,8 +54,7 @@ namespace sanchaya::engine {
                 heap_.push_back(item);
                 std::push_heap(heap_.begin(), heap_.end(), comp_);
             } else if (comp_(item, heap_.front())) {
-                // Replace the current "worst" (front) when the new item is strictly better.
-                // With std::greater: comp_(item, front) ≡ item > front.
+                // If item beats heap_.front() according to comp_
                 std::pop_heap(heap_.begin(), heap_.end(), comp_);
                 heap_.back() = item;
                 std::push_heap(heap_.begin(), heap_.end(), comp_);
@@ -63,9 +62,9 @@ namespace sanchaya::engine {
         }
 
         [[nodiscard]] std::vector<Item> extract_sorted() {
-            // sort_heap with comp_ (e.g. std::greater) produces descending order
-            // (largest first), which is exactly what top-N callers expect.
-            std::sort_heap(heap_.begin(), heap_.end(), comp_);
+            // comp_ is std::greater (meaning root of heap is the minimum of the top-N).
+            // std::sort with comp_ (descending order) returns best-to-worst (e.g. 50, 30).
+            std::sort(heap_.begin(), heap_.end(), comp_);
             return std::move(heap_);
         }
 

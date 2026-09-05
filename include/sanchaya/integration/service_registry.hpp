@@ -35,32 +35,32 @@ namespace sanchaya::integration {
 
         template <akshara::fixed_string Tag>
         [[nodiscard]] constexpr auto& get() noexcept {
-            constexpr std::size_t idx = find_tag_index<Tag>();
+            constexpr std::size_t idx = find_service_tag_index<Tag, ServiceInstances...>();
+            static_assert(idx < sizeof...(ServiceInstances), "Requested service Tag was not found in service_registry");
             return std::get<idx>(instances_).service;
         }
 
         template <akshara::fixed_string Tag>
         [[nodiscard]] constexpr const auto& get() const noexcept {
-            constexpr std::size_t idx = find_tag_index<Tag>();
+            constexpr std::size_t idx = find_service_tag_index<Tag, ServiceInstances...>();
+            static_assert(idx < sizeof...(ServiceInstances), "Requested service Tag was not found in service_registry");
             return std::get<idx>(instances_).service;
         }
 
     private:
         std::tuple<ServiceInstances...> instances_;
 
-        template <akshara::fixed_string Tag>
-        static constexpr std::size_t find_tag_index() noexcept {
-            constexpr std::size_t n = sizeof...(ServiceInstances);
-            std::size_t found_idx = n;
-            std::size_t current = 0;
-            auto check = [&]<class I>() {
-                if (I::tag == Tag) {
-                    found_idx = current;
+        template <akshara::fixed_string TargetTag, class... Instances>
+        static consteval std::size_t find_service_tag_index() noexcept {
+            std::size_t found = sizeof...(Instances);
+            std::size_t idx = 0;
+            ([&] {
+                if constexpr (Instances::tag == TargetTag) {
+                    found = idx;
                 }
-                ++current;
-            };
-            (check.template operator()<ServiceInstances>(), ...);
-            return found_idx;
+                ++idx;
+            }(), ...);
+            return found;
         }
     };
 

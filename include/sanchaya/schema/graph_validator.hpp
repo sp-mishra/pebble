@@ -97,6 +97,15 @@ namespace sanchaya::validation {
                     using Tgt     = typename RelType::target_type;
                     using Kind    = typename RelType::relation_kind;
 
+                    static_assert(
+                        detail::tuple_type_index_v<Src, EntitiesTuple> < std::tuple_size_v<EntitiesTuple>,
+                        "Source entity of relationship not registered in model definition"
+                    );
+                    static_assert(
+                        detail::tuple_type_index_v<Tgt, EntitiesTuple> < std::tuple_size_v<EntitiesTuple>,
+                        "Target entity of relationship not registered in model definition"
+                    );
+
                     constexpr auto src_id =
                         static_cast<litegraph::NodeId>(
                             detail::tuple_type_index_v<Src, EntitiesTuple>);

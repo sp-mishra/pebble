@@ -122,7 +122,14 @@ Promotion executes when $\text{ExpectedPromotionBenefit} > \text{Threshold} \lan
 | **SmallVector** | `include/containers/dynamic/SmallVector.hpp` | Zero-heap SBO key sets, projection index lists, and graph edge buffers. |
 | **Kosha** | `include/containers/cache/kosha.hpp` | Session caching, query plan memoization, and cost statistics store. |
 | **Petika** | `include/petika/petika.hpp` | Embedded high-speed key-value persistence tier (`petika::SkipStore`, `MvccJournaledSkipEngine`, `BTreeEngine`). |
-| **SQLite & DuckDB** | `dependencies/sqlite`, `dependencies/libduckdb` | Transactional OLTP and vectorized columnar analytical engines. |
+| **Anukrama** | `include/containers/anukrama/anukrama.hpp` | Lock-free / wait-free in-memory MVCC substrate with point-in-time snapshot isolation (`anukrama::store`). |
+| **Medha** | `include/medha/medha.hpp` | Multi-store transaction coordination, OCC read/write set staging, conflict validation, and dual-store commit (Anukrama in-memory MVCC + Petika durable storage). |
+| **Glaze (BEVE)** | `dependencies/glaze` | High-performance binary encoding (`glz::BEVE`) for type-safe Petika object codec serialization with arithmetic fast paths. |
+| **SQLite & DuckDB** | `dependencies/sqlite`, `dependencies/libduckdb` | Transactional OLTP (with RAII `sqlite_statement` prepared bindings) and vectorized columnar analytical engines. |
+
+> [!NOTE]
+> Cost-based multi-engine placement currently utilizes cardinality-driven heuristics and balanced composite scores, with advanced hardware-calibrated cache-miss and network metrics under active development.
+
 
 ---
 
@@ -212,20 +219,39 @@ constexpr auto company_model =
         .build();
 ```
 
-### 5.2 Workspace Creation and Entity Lifecycle
+### 5.2 Workspace Creation, Slot Map Storage & Entity Lifecycle
+
+```
+                     WORKSPACE & SLOT MAP MEMORY LAYOUT
+
+    workspace<Model, ...>
+    ┌────────────────────────────────────────────────────────┐
+    │  - Model, Planner, Placement, CostModel, Telemetry     │
+    │  - epoch_: std::uint64_t = 1                           │
+    │  - stores_: std::unique_ptr<entity_stores_t<Model>>    │──────┐ (Pointer stability across moves)
+    └────────────────────────────────────────────────────────┘      │
+                                                                    ▼
+        std::tuple<containers::slot_map<E0, ...>, containers::slot_map<E1, ...>, ...>
+        ┌───────────────────────────────────────────────────────────────────────────┐
+        │ SmallVector-backed (4 inline slots, zero heap allocation for small sizes) │
+        │ Generational slot indexing: handle carries (store*, key, epoch)           │
+        └───────────────────────────────────────────────────────────────────────────┘
+```
+
 ```cpp
 // Instantiate zero-overhead policy-composed workspace
 auto ws = make_workspace(company_model)
     .local_auto("./company_storage")
     .build();
 
-// Put entity with generational session handle
+// Put entity with generational session handle (backed by SmallVector slot_map)
 Employee emp{.id = EmployeeId{101}, .name = "Grace Hopper", .age = 45, .department_id = DepartmentId{1}};
 auto handle_res = ws.put(emp);
 
 if (handle_res) {
     auto handle = *handle_res;
-    if (auto current = handle.get(1)) {
+    // Single-pass generation and epoch validation with zero redundant lookups
+    if (auto current = handle.get(ws.session_epoch())) {
         std::cout << "Stored: " << current->get().name << " (Age: " << current->get().age << ")\n";
     }
 }

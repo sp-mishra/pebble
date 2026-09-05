@@ -71,14 +71,15 @@ namespace sanchaya {
             [[nodiscard]] auto get(std::uint64_t current_epoch) const noexcept
                 -> std::expected<std::reference_wrapper<const Entity>, sanchaya_error>
             {
-                if (!is_valid(current_epoch)) {
+                auto* ptr = (store_ && session_epoch_ == current_epoch) ? store_->find(key_) : nullptr;
+                if (!ptr) {
                     return std::unexpected(sanchaya_error{
                         .domain  = error_domain::binding,
                         .code    = 404,
                         .message = "Stale or evicted session handle"
                     });
                 }
-                return std::cref(*store_->find(key_));
+                return std::cref(*ptr);
             }
 
             [[nodiscard]] const Entity* operator->() const noexcept {

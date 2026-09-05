@@ -13,6 +13,7 @@
 #include "containers/associative/slot_map.hpp"
 #include <cstddef>
 #include <expected>
+#include <memory>
 #include <string_view>
 #include <tuple>
 #include <vector>
@@ -87,6 +88,19 @@ namespace sanchaya {
                 ((std::is_same_v<T, Ts> ? (result = Is, true) : false) || ...);
                 return result;
             }(std::make_index_sequence<sizeof...(Ts)>{});
+
+        // Helper: apply type_pack_index_v against a Model's entity descriptor tuple
+        template <class T, class Tuple>
+        struct tuple_type_index;
+
+        template <class T, class... Ts>
+        struct tuple_type_index<T, std::tuple<Ts...>> {
+            static constexpr std::size_t value =
+                type_pack_index_v<T, typename std::decay_t<Ts>::entity_type...>;
+        };
+
+        template <class T, class Tuple>
+        inline constexpr std::size_t tuple_type_index_v = tuple_type_index<T, Tuple>::value;
 
         // ── Per-entity slot store — uses sanchaya::entity_store_t from session.hpp ──
         // Build std::tuple<entity_store_t<E0>, entity_store_t<E1>, ...> from Model entities tuple
@@ -307,6 +321,10 @@ namespace sanchaya {
             const bool is_duckdb =
                 (target == optimizer::execution_engine_target::duckdb_columnar_vectorized);
 
+            // Compute actual egraph saturation metrics from egraph optimizer
+            optimizer::egraph_relational_optimizer eg_opt{};
+            const auto opt_result = eg_opt.optimize(optimizer::logical_source_node<void>{});
+
             // Static string literals — zero heap allocation
             static constexpr std::string_view kSummaryInMemory =
                 "Eligible stores: [InMemory, Petika, SQLite, DuckDB]; Selected: InMemory";
@@ -326,8 +344,8 @@ namespace sanchaya {
             ex.placement_summary            = is_duckdb ? kSummaryDuckDB : kSummaryInMemory;
             ex.physical_plan_summary        = is_duckdb ? kPhysDuckDB : kPhysInMemory;
             ex.confidence_score             = is_duckdb ? 0.92 : 0.95;
-            ex.egraph_nodes                 = 42;  // representative estimate; real count from saturate_graph()
-            ex.egraph_classes               = 18;  // representative estimate; real count from saturate_graph()
+            ex.egraph_nodes                 = opt_result.report.enodes;
+            ex.egraph_classes               = opt_result.report.eclasses;
             ex.visual_plan_tree             = kTree;
 
             ex.candidate_evaluations = {
@@ -376,20 +394,26 @@ namespace sanchaya {
         [[no_unique_address]] Telemetry       telemetry_;
         std::uint64_t epoch_{1};
 
-        // Per-entity slot stores: one per entity type in Model, SmallVector-backed.
-        detail::entity_stores_t<Model> stores_{};
+        // Per-entity slot stores: heap-allocated in unique_ptr to guarantee stable memory addresses across workspace moves
+        std::unique_ptr<detail::entity_stores_t<Model>> stores_{std::make_unique<detail::entity_stores_t<Model>>()};
 
         // ── typed store accessor ──────────────────────────────────────────────
         // Returns the slot_map for entity type T by looking up T's index in the
         // Model entity tuple at compile time — zero RTTI, zero runtime map lookup.
         template <class T>
         auto& get_store() noexcept {
-            return std::get<sanchaya::entity_store_t<T>>(stores_);
+            using EntitiesTuple = std::decay_t<decltype(std::declval<Model>().entities())>;
+            constexpr std::size_t idx = detail::tuple_type_index_v<T, EntitiesTuple>;
+            static_assert(idx < std::tuple_size_v<EntitiesTuple>, "Entity type not registered in model");
+            return std::get<idx>(*stores_);
         }
 
         template <class T>
         const auto& get_store() const noexcept {
-            return std::get<sanchaya::entity_store_t<T>>(stores_);
+            using EntitiesTuple = std::decay_t<decltype(std::declval<Model>().entities())>;
+            constexpr std::size_t idx = detail::tuple_type_index_v<T, EntitiesTuple>;
+            static_assert(idx < std::tuple_size_v<EntitiesTuple>, "Entity type not registered in model");
+            return std::get<idx>(*stores_);
         }
     };
 

@@ -6,7 +6,7 @@
 #include "sanchaya/sanchaya.hpp"
 #include <string>
 
-namespace {
+namespace sanchaya_test {
 
 struct DepartmentId {
     std::uint64_t value{0};
@@ -51,7 +51,9 @@ private:
 static_assert(sanchaya::concepts::identity_allocator_for<employee_id_allocator, EmployeeId>);
 static_assert(sanchaya::concepts::identity_allocator_for<department_id_allocator, DepartmentId>);
 
-} // namespace
+} // namespace sanchaya_test
+
+using namespace sanchaya_test;
 
 TEST_CASE("sanchaya: compile-time schema model creation", "[sanchaya][schema]") {
     constexpr auto company_model =
@@ -744,4 +746,403 @@ TEST_CASE("sanchaya: CDC change_record buffer policies", "[sanchaya][sync][cdc]"
     static_assert(std::is_same_v<change_record<>::string_t, std::string_view>);
     static_assert(std::is_same_v<change_record_owned::string_t, std::string>);
 }
+
+TEST_CASE("sanchaya: service_registry compile-time tag dispatch", "[sanchaya][integration][registry]") {
+    using namespace sanchaya::integration;
+
+    struct DummyPlanner { int version{1}; };
+    struct DummyStats { int row_count{100}; };
+
+    auto reg = make_service_registry(
+        service_instance<"planner", DummyPlanner>{DummyPlanner{.version = 42}},
+        service_instance<"stats", DummyStats>{DummyStats{.row_count = 500}}
+    );
+
+    CHECK(reg.get<"planner">().version == 42);
+    CHECK(reg.get<"stats">().row_count == 500);
+
+    const auto& const_reg = reg;
+    CHECK(const_reg.get<"planner">().version == 42);
+}
+
+TEST_CASE("sanchaya: sqlite_storage_backend and sqlite_statement RAII", "[sanchaya][backend][sqlite]") {
+    using namespace sanchaya::backend;
+
+    sqlite_storage_backend db(":memory:");
+    if constexpr (has_sqlite_support) {
+        REQUIRE(db.is_open());
+
+        auto exec_res = db.execute("CREATE TABLE test_tbl (id INTEGER PRIMARY KEY, val REAL, name TEXT);");
+        REQUIRE(exec_res.has_value());
+
+        auto stmt_res = db.prepare("INSERT INTO test_tbl (id, val, name) VALUES (?, ?, ?);");
+        REQUIRE(stmt_res.has_value());
+        auto stmt = std::move(*stmt_res);
+        REQUIRE(stmt.valid());
+
+        CHECK(stmt.bind(1, 101).has_value());
+        CHECK(stmt.bind(2, 3.14159).has_value());
+        CHECK(stmt.bind(3, std::string_view{"Pebble"}).has_value());
+
+        auto step_res = stmt.step();
+        REQUIRE(step_res.has_value());
+        CHECK(*step_res == false); // SQLITE_DONE
+
+        // Query back
+        int count = 0;
+        double out_val = 0.0;
+        std::string out_name;
+        auto q_res = db.execute_query("SELECT id, val, name FROM test_tbl;", [&](int, char** argv, char**) {
+            count++;
+            if (argv[1]) out_val = std::stod(argv[1]);
+            if (argv[2]) out_name = argv[2];
+        });
+        REQUIRE(q_res.has_value());
+        CHECK(count == 1);
+        CHECK(std::abs(out_val - 3.14159) < 1e-4);
+        CHECK(out_name == "Pebble");
+    } else {
+        auto res = db.prepare("SELECT 1;");
+        CHECK(!res.has_value());
+        CHECK(res.error().code == 501);
+    }
+}
+
+TEST_CASE("sanchaya: petika object_codec BEVE binary serialization", "[sanchaya][backend][codec]") {
+    using namespace sanchaya::backend;
+
+    // 1. Primitive arithmetic fast path
+    int int_val = 4242;
+    auto int_encoded = object_codec<int>::encode(int_val);
+    auto int_decoded = object_codec<int>::decode(int_encoded);
+    REQUIRE(int_decoded.has_value());
+    CHECK(*int_decoded == 4242);
+
+    // 2. Struct serialization via BEVE
+    Employee emp{
+        .id = EmployeeId{101},
+        .name = "Ada Lovelace",
+        .age = 36,
+        .department_id = DepartmentId{2},
+        .address = Address{.street = "123 Engine St", .city = "London"}
+    };
+
+    auto enc = object_codec<Employee>::encode(emp);
+    CHECK(!enc.empty());
+
+    auto dec = object_codec<Employee>::decode(enc);
+    REQUIRE(dec.has_value());
+    CHECK(dec->id.value == 101);
+    CHECK(dec->name == "Ada Lovelace");
+    CHECK(dec->age == 36);
+    CHECK(dec->department_id.value == 2);
+    CHECK(dec->address.city == "London");
+}
+
+TEST_CASE("sanchaya: memory_top_n comparator ordering", "[sanchaya][engine][top_n]") {
+    using namespace sanchaya::engine;
+
+    memory_top_n<int> top3(3);
+    for (int val : {10, 50, 20, 90, 30, 80, 70}) {
+        top3.push(val);
+    }
+
+    auto sorted = top3.extract_sorted();
+    REQUIRE(sorted.size() == 3);
+    // Descending order: largest first
+    CHECK(sorted[0] == 90);
+    CHECK(sorted[1] == 80);
+    CHECK(sorted[2] == 70);
+}
+
+TEST_CASE("sanchaya: Anukrama Backend snapshot isolation guarantees historical visibility", "[sanchaya][backend][anukrama]") {
+    using namespace sanchaya::backend;
+
+    anukrama_storage_backend<std::string, int> store;
+
+    auto put1 = store.put("key1", 10);
+    REQUIRE(put1.has_value());
+
+    // Capture point-in-time snapshot
+    auto snapshot = store.get_snapshot();
+    auto snap_res1 = snapshot.get("key1");
+    REQUIRE(snap_res1.has_value());
+    CHECK(*snap_res1 == 10);
+
+    // Mutate state with new version
+    auto put2 = store.put("key1", 20);
+    REQUIRE(put2.has_value());
+
+    // Snapshot continues observing historical version (10)
+    auto snap_res2 = snapshot.get("key1");
+    REQUIRE(snap_res2.has_value());
+    CHECK(*snap_res2 == 10);
+
+    // Latest query observes new version (20)
+    CHECK(store.get_latest("key1") == std::optional<int>{20});
+}
+
+TEST_CASE("sanchaya: Medha + Sanchaya multi-store transaction resource traits", "[sanchaya][integration][medha]") {
+    using namespace sanchaya::integration;
+    using namespace sanchaya::backend;
+
+    anukrama_storage_backend<std::string, Employee> mem_store;
+    petika_storage_backend<std::string, std::string> durable_store("./demo_storage/petika_medha_test_db");
+
+    entity_table_resource<Employee> res{
+        .memory_store = &mem_store,
+        .durable_store = &durable_store
+    };
+
+    Employee emp{
+        .id = EmployeeId{1},
+        .name = "Katherine Johnson",
+        .age = 50,
+        .department_id = DepartmentId{3},
+        .address = Address{.street = "Langley", .city = "Hampton"}
+    };
+
+    (void)mem_store.put("emp:1", emp);
+
+    medha::transaction_context ctx{};
+    auto read_res = tx_read(res, ctx, "emp:1");
+    REQUIRE(read_res.has_value());
+    CHECK(read_res->name == "Katherine Johnson");
+    CHECK(read_res->age == 50);
+
+    auto stage_res = tx_stage(res, ctx, "emp:1", emp);
+    CHECK(stage_res.has_value());
+
+    auto val_res = tx_validate(res, ctx);
+    CHECK(val_res.has_value());
+
+    auto commit_res = tx_commit(res, ctx);
+    CHECK(commit_res.has_value());
+
+    tx_rollback(res, ctx);
+}
+
+TEST_CASE("sanchaya: Anukrama multi-key generational history and pruning", "[sanchaya][backend][anukrama][prune]") {
+    using namespace sanchaya::backend;
+
+    anukrama_storage_backend<std::string, std::string> store;
+
+    // Insert v1
+    (void)store.put("keyA", "v1_A");
+    (void)store.put("keyB", "v1_B");
+
+    auto snap1 = store.get_snapshot();
+
+    // Insert v2
+    (void)store.put("keyA", "v2_A");
+    (void)store.put("keyB", "v2_B");
+
+    auto snap2 = store.get_snapshot();
+
+    // Verify snapshot isolation across multiple keys
+    auto s1_a = snap1.get("keyA");
+    auto s1_b = snap1.get("keyB");
+    REQUIRE(s1_a.has_value());
+    REQUIRE(s1_b.has_value());
+    CHECK(*s1_a == "v1_A");
+    CHECK(*s1_b == "v1_B");
+
+    auto s2_a = snap2.get("keyA");
+    auto s2_b = snap2.get("keyB");
+    REQUIRE(s2_a.has_value());
+    REQUIRE(s2_b.has_value());
+    CHECK(*s2_a == "v2_A");
+    CHECK(*s2_b == "v2_B");
+
+    CHECK(store.get_latest("keyA") == std::optional<std::string>{"v2_A"});
+    CHECK(store.get_latest("keyB") == std::optional<std::string>{"v2_B"});
+
+    // Explicit history pruning
+    store.prune_history();
+
+    // Latest state remains intact after pruning
+    CHECK(store.get_latest("keyA") == std::optional<std::string>{"v2_A"});
+}
+
+TEST_CASE("sanchaya: E-Graph common subexpression elimination deduplication", "[sanchaya][planner][egraph][cse]") {
+    using namespace sanchaya::optimizer;
+
+    sanchaya_egraph eg;
+
+    // Node 1: source(1)
+    sanchaya_egraph::node_t scan1;
+    scan1.op = rel_op::op_source;
+    scan1.payload = rel_payload{.signature = 10, .extra_data = 0};
+    auto c1 = eg.add(scan1);
+
+    // Node 2: identical source(1) in a different tree branch
+    sanchaya_egraph::node_t scan2;
+    scan2.op = rel_op::op_source;
+    scan2.payload = rel_payload{.signature = 10, .extra_data = 0};
+    auto c2 = eg.add(scan2);
+
+    // Node 3 & 4: project(scan1) and project(scan2)
+    sanchaya_egraph::node_t proj1;
+    proj1.op = rel_op::op_project;
+    proj1.children.push_back(c1);
+    proj1.payload = rel_payload{.signature = 20, .extra_data = 0};
+    auto p1 = eg.add(proj1);
+
+    sanchaya_egraph::node_t proj2;
+    proj2.op = rel_op::op_project;
+    proj2.children.push_back(c2);
+    proj2.payload = rel_payload{.signature = 20, .extra_data = 0};
+    auto p2 = eg.add(proj2);
+
+    egraph_relational_optimizer opt{};
+    auto report = opt.saturate_graph(eg);
+
+    // CSE rule merges identical subgraphs
+    CHECK(eg.find(c1) == eg.find(c2));
+    CHECK(eg.find(p1) == eg.find(p2));
+    CHECK(report.iters >= 1);
+}
+
+TEST_CASE("sanchaya: sqlite_statement move assignment and state reset", "[sanchaya][backend][sqlite][raii]") {
+    using namespace sanchaya::backend;
+
+    sqlite_storage_backend db(":memory:");
+    if constexpr (has_sqlite_support) {
+        REQUIRE(db.is_open());
+        (void)db.execute("CREATE TABLE stmt_tbl (k INT, v TEXT);");
+
+        auto prep1 = db.prepare("INSERT INTO stmt_tbl VALUES (?, ?);");
+        REQUIRE(prep1.has_value());
+
+        sqlite_statement stmt1 = std::move(*prep1);
+        CHECK(stmt1.valid());
+
+        // Move assign
+        sqlite_statement stmt2;
+        CHECK(!stmt2.valid());
+        stmt2 = std::move(stmt1);
+
+        CHECK(!stmt1.valid());
+        CHECK(stmt2.valid());
+
+        CHECK(stmt2.bind(1, 42).has_value());
+        CHECK(stmt2.bind(2, std::string_view{"Test"}).has_value());
+        auto step_res = stmt2.step();
+        REQUIRE(step_res.has_value());
+
+        // Reset
+        stmt2.reset();
+        CHECK(!stmt2.valid());
+    }
+}
+
+TEST_CASE("sanchaya: workspace move stability preserves session handle validity", "[sanchaya][workspace][move]") {
+    using namespace sanchaya;
+
+    constexpr auto company_model =
+        model<"move_test_company">()
+            .entity(
+                describe_row<Employee>(
+                    field<"id", &Employee::id>(),
+                    field<"name", &Employee::name>(),
+                    field<"age", &Employee::age>()
+                )
+            )
+            .build();
+
+    // 1. Create workspace and insert entity
+    auto ws1 = make_workspace(company_model).build();
+    Employee emp{.id = EmployeeId{777}, .name = "Ada Lovelace", .age = 36};
+
+    auto h_res = ws1.put(emp);
+    REQUIRE(h_res.has_value());
+    auto handle = *h_res;
+
+    // Verify handle resolves before move
+    auto val_before = handle.get(ws1.session_epoch());
+    REQUIRE(val_before.has_value());
+    CHECK(val_before->get().name == "Ada Lovelace");
+    CHECK(val_before->get().age == 36);
+
+    // 2. Move workspace to new variable
+    auto ws2 = std::move(ws1);
+
+    // Verify handle still resolves through the moved-to workspace's stable storage
+    auto val_after = handle.get(ws2.session_epoch());
+    REQUIRE(val_after.has_value());
+    CHECK(val_after->get().name == "Ada Lovelace");
+    CHECK(val_after->get().age == 36);
+    CHECK(handle->name == "Ada Lovelace");
+
+    // Verify workspace get and erase work seamlessly on ws2
+    const Employee* ptr = ws2.get(handle);
+    REQUIRE(ptr != nullptr);
+    CHECK(ptr->name == "Ada Lovelace");
+
+    CHECK(ws2.erase(handle));
+    CHECK(!handle.is_valid());
+    CHECK(!handle.get(ws2.session_epoch()).has_value());
+}
+
+TEST_CASE("sanchaya: compile-time relational model validation", "[sanchaya][schema][validation]") {
+    using namespace sanchaya;
+
+    constexpr auto valid_model =
+        model<"valid_model">()
+            .entity(
+                describe_row<Employee>(
+                    field<"id", &Employee::id>()
+                )
+            )
+            .entity(
+                describe_row<Department>(
+                    field<"id", &Department::id>()
+                )
+            )
+            .relation<"emp_dept">(
+                many<Employee>(),
+                one<Department>(),
+                foreign_key<&Employee::department_id>(),
+                principal_key<&Department::id>(),
+                reference()
+            )
+            .build();
+
+    auto report = validation::validate_model(valid_model);
+    CHECK(report.status == validation::validation_status::valid);
+    CHECK(!report.has_reference_cycles);
+}
+
+TEST_CASE("sanchaya: memory_top_n strictly descending sort order", "[sanchaya][engine][memory][top_n]") {
+    using namespace sanchaya::engine;
+
+    memory_top_n<int> top3(3);
+    top3.push(10);
+    top3.push(50);
+    top3.push(20);
+    top3.push(40);
+    top3.push(30);
+
+    auto res = top3.extract_sorted();
+    REQUIRE(res.size() == 3);
+    CHECK(res == std::vector<int>{50, 40, 30});
+}
+
+TEST_CASE("sanchaya: medha transactional adapter staged writes and commit durability", "[sanchaya][medha][transaction]") {
+    using namespace sanchaya::integration;
+    using namespace sanchaya::backend;
+
+    anukrama_storage_backend<std::string, std::string> mem_backend;
+    entity_table_resource<std::string> resource{.memory_store = &mem_backend};
+    medha::resource_handle handle{resource, medha::resource_id{1, 1}};
+
+    medha::transaction_context ctx;
+    REQUIRE(ctx.store(handle, std::string{"emp:101"}, std::string{"Ada Lovelace"}).has_value());
+    REQUIRE(ctx.commit().has_value());
+
+    CHECK(mem_backend.get_latest("emp:101") == std::optional<std::string>{"Ada Lovelace"});
+}
+
+
+
 
