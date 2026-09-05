@@ -3,37 +3,69 @@
 // ============================================================================
 // sanchaya/session/session.hpp — Zero-Allocation Generational Handles & Sessions
 // ============================================================================
+//
+// entity_handle<T> is backed by the workspace's slot_map<T, ...> store.
+// It stores a (const store*, generational_handle<T>, epoch) triple — no raw
+// new, no raw pointer to entity_slot.  All is_valid / get / operator-> calls
+// resolve through the slot_map's generation-checked find(), which returns
+// nullptr immediately for stale or erased handles.
+// ============================================================================
 
 #include "sanchaya/fwd.hpp"
-#include <optional>
-#include <functional>
+#include "containers/associative/slot_map.hpp"
 #include <expected>
+#include <functional>
+#include <optional>
 
 namespace sanchaya {
 
+    // The concrete per-entity store type used by workspace.
+    // Defined here so session handles and workspace agree on the same type.
     template <class Entity>
-    struct entity_slot {
-        std::optional<Entity> value{std::nullopt};
-        std::uint32_t generation{0};
-    };
+    using entity_store_t = containers::slot_map<
+        Entity,
+        containers::generational_handle<Entity>,  // phantom-typed, index-based
+        std::allocator<Entity>,
+        containers::small_vector_storage<4>        // 4 inline slots, spills to heap
+    >;
 
+    // =========================================================================
+    // session_scoped_handle_policy
+    //
+    // Provides handle<Entity>, the rich session handle type:
+    //   is_valid(epoch)   — checks epoch and live generation
+    //   is_valid()        — checks live generation only (no epoch gate)
+    //   get(epoch)        — returns std::expected<cref<Entity>, sanchaya_error>
+    //   operator->()      — const Entity*  (nullptr when stale/erased)
+    //   operator*()       — const Entity&  (UB if stale — caller must check)
+    //   key()             — returns the underlying generational_handle<Entity>
+    // =========================================================================
     struct session_scoped_handle_policy {
         template <class Entity>
         class handle {
+            using store_type = entity_store_t<Entity>;
+            using key_type   = containers::generational_handle<Entity>;
+
         public:
             constexpr handle() = default;
-            constexpr handle(const entity_slot<Entity>* slot, std::uint32_t gen, std::uint64_t epoch) noexcept
-                : slot_(slot), slot_generation_(gen), session_epoch_(epoch) {}
 
+            // Constructed by workspace::put — store must outlive handle.
+            constexpr handle(const store_type* store,
+                             key_type          key,
+                             std::uint64_t     epoch) noexcept
+                : store_(store), key_(key), session_epoch_(epoch) {}
+
+            // is_valid(epoch): live generation AND epoch matches insertion epoch
             [[nodiscard]] constexpr bool is_valid(std::uint64_t current_epoch) const noexcept {
-                return slot_ != nullptr &&
+                return store_ != nullptr &&
                        session_epoch_ == current_epoch &&
-                       slot_generation_ == slot_->generation &&
-                       slot_->value.has_value();
+                       store_->find(key_) != nullptr;
             }
 
+            // is_valid(): live generation only — no epoch gate (for callers
+            // that don't track epochs, e.g. single-session scenarios)
             [[nodiscard]] constexpr bool is_valid() const noexcept {
-                return is_valid(session_epoch_);
+                return store_ != nullptr && store_->find(key_) != nullptr;
             }
 
             [[nodiscard]] auto get(std::uint64_t current_epoch) const noexcept
@@ -41,26 +73,29 @@ namespace sanchaya {
             {
                 if (!is_valid(current_epoch)) {
                     return std::unexpected(sanchaya_error{
-                        .domain = error_domain::binding,
-                        .code = 404,
+                        .domain  = error_domain::binding,
+                        .code    = 404,
                         .message = "Stale or evicted session handle"
                     });
                 }
-                return std::cref(*slot_->value);
+                return std::cref(*store_->find(key_));
             }
 
             [[nodiscard]] const Entity* operator->() const noexcept {
-                return slot_ && slot_->value ? &(*slot_->value) : nullptr;
+                return store_ ? store_->find(key_) : nullptr;
             }
 
             [[nodiscard]] const Entity& operator*() const noexcept {
-                return *slot_->value;
+                return *store_->find(key_);
             }
 
+            // Exposes the underlying slot_map key for workspace::erase / workspace::get
+            [[nodiscard]] constexpr key_type key() const noexcept { return key_; }
+
         private:
-            const entity_slot<Entity>* slot_{nullptr};
-            std::uint32_t slot_generation_{0};
-            std::uint64_t session_epoch_{0};
+            const store_type* store_{nullptr};
+            key_type          key_{};
+            std::uint64_t     session_epoch_{0};
         };
     };
 

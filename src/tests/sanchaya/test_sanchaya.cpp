@@ -613,8 +613,135 @@ TEST_CASE("sanchaya: relation syntactic variations in progressive disclosure", "
         );
     STATIC_REQUIRE(std::tuple_size_v<std::decay_t<decltype(model_b.relations())>> == 1);
 }
+// ============================================================================
+// NEW TESTS: Generational slot lifecycle & dynamic explain placement
+// ============================================================================
 
+TEST_CASE("sanchaya: workspace generational slot lifecycle", "[sanchaya][workspace][slot]") {
+    using namespace sanchaya;
 
+    constexpr auto slot_model =
+        model<"slot_test">()
+            .entity(
+                describe_row<Employee>(
+                    field<"id",  &Employee::id>(),
+                    field<"name",&Employee::name>(),
+                    field<"age", &Employee::age>()
+                )
+            )
+            .build();
 
+    auto ws = make_workspace(slot_model).build();
 
+    // 1. put succeeds; returned handle is immediately valid
+    Employee ada{.id = EmployeeId{1}, .name = "Ada", .age = 36};
+    auto put_res = ws.put(ada);
+    REQUIRE(put_res.has_value());
+
+    auto handle = *put_res;
+    REQUIRE(ws.get(handle) != nullptr);
+    CHECK(ws.get(handle)->name == "Ada");
+
+    // 2. erase bumps generation; original handle becomes stale
+    bool erased = ws.erase(handle);
+    REQUIRE(erased);
+    CHECK(ws.get(handle) == nullptr);   // stale — generation mismatch
+
+    // 3. put again reuses the freed slot; NEW handle is valid, OLD is still stale
+    Employee babbage{.id = EmployeeId{2}, .name = "Babbage", .age = 79};
+    auto put_res2 = ws.put(babbage);
+    REQUIRE(put_res2.has_value());
+
+    auto handle2 = *put_res2;
+    REQUIRE(ws.get(handle2) != nullptr);
+    CHECK(ws.get(handle2)->name == "Babbage");
+
+    // Old handle must still be stale even though the slot was recycled
+    CHECK(ws.get(handle) == nullptr);
+
+    // 4. Multiple entities live simultaneously
+    Employee turing{.id = EmployeeId{3}, .name = "Turing", .age = 41};
+    auto put_res3 = ws.put(turing);
+    REQUIRE(put_res3.has_value());
+    CHECK(ws.get(*put_res3)->name == "Turing");
+    CHECK(ws.get(handle2)->name == "Babbage"); // still alive
+}
+
+TEST_CASE("sanchaya: explain() reflects actual placement engine decision", "[sanchaya][workspace][explain][placement]") {
+    using namespace sanchaya;
+
+    constexpr auto explain_model =
+        model<"explain_test">()
+            .entity(
+                describe_row<Employee>(
+                    field<"id",  &Employee::id>(),
+                    field<"name",&Employee::name>(),
+                    field<"age", &Employee::age>()
+                )
+            )
+            .build();
+
+    auto ws = make_workspace(explain_model).build();
+
+    // Small query — limit(10) should stay InMemory
+    auto small_q = from<Employee>()
+        .where(member<&Employee::age>() >= 25)
+        .select(member<&Employee::name>())
+        .limit(10);
+
+    auto small_ex = ws.explain(small_q);
+    CHECK(!small_ex.placement_summary.empty());
+    CHECK(!small_ex.candidate_evaluations.empty());
+    CHECK(small_ex.confidence_score > 0.0);
+
+    // All four candidate stores must appear in the evaluation list
+    CHECK(small_ex.candidate_evaluations.size() == 4);
+
+    // At least one candidate must be marked selected
+    bool any_selected = false;
+    for (const auto& c : small_ex.candidate_evaluations) {
+        if (c.is_selected) { any_selected = true; break; }
+    }
+    CHECK(any_selected);
+
+    // Cardinality pipeline must be non-empty and plausible
+    CHECK(!small_ex.cardinality_diagnostics.empty());
+    CHECK(!small_ex.rewrite_audit_log.empty());
+    CHECK(!small_ex.visual_plan_tree.empty());
+    CHECK(!small_ex.logical_optimization_summary.empty());
+    CHECK(!small_ex.physical_plan_summary.empty());
+}
+
+TEST_CASE("sanchaya: CDC change_record buffer policies", "[sanchaya][sync][cdc]") {
+    using namespace sanchaya::sync;
+
+    // Default (string_view_buffer) — zero allocation
+    static constexpr std::string_view table_sv = "employee";
+    static constexpr std::string_view payload_sv = R"({"id":1,"name":"Ada"})";
+
+    change_record_view rv{
+        .sequence   = 42,
+        .op         = change_op::insert,
+        .table_name = table_sv,
+        .payload    = payload_sv
+    };
+    CHECK(rv.sequence   == 42);
+    CHECK(rv.table_name == "employee");
+    CHECK(rv.payload    == R"({"id":1,"name":"Ada"})");
+
+    // Owning copy — heap allocation, outlives source buffer
+    change_record_owned ro{
+        .sequence   = 43,
+        .op         = change_op::update,
+        .table_name = std::string(table_sv),
+        .payload    = std::string(payload_sv)
+    };
+    CHECK(ro.sequence   == 43);
+    CHECK(ro.table_name == "employee");
+    CHECK(ro.payload    == R"({"id":1,"name":"Ada"})");
+
+    // Static assertion: default template parameter is string_view_buffer
+    static_assert(std::is_same_v<change_record<>::string_t, std::string_view>);
+    static_assert(std::is_same_v<change_record_owned::string_t, std::string>);
+}
 

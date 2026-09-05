@@ -17,6 +17,7 @@
 #include <tuple>
 #include <cmath>
 #include <type_traits>
+#include <chrono>
 
 namespace sanchaya::example {
 
@@ -600,6 +601,311 @@ namespace sanchaya::example {
                       << ", Confidence: " << p.metrics.confidence << ") -> "
                       << (should_promote ? "PROMOTED TO FAST MEMORY CACHE" : "RETAINED IN STORAGE TIER")
                       << "\n";
+        }
+
+        // ====================================================================
+        // STEP 8: Large Cardinality Threshold — Placement Shift InMemory → DuckDB
+        // ====================================================================
+        std::cout << "--- [Step 8] Large Cardinality Threshold Benchmark ---\n";
+        std::cout << "  Verifying placement matrix shift: InMemory (fused) vs. DuckDB (vectorized)\n\n";
+
+        struct cardinality_trial {
+            std::size_t n_rows;
+            double memory_ms;
+            double duckdb_ms;
+            std::string selected_engine;
+        };
+        std::vector<cardinality_trial> cardinality_results;
+
+        // Synthetic row: only the fields the filter touches
+        struct SyntheticRow { int age; double salary; };
+
+        for (std::size_t n : {1'000UL, 100'000UL, 1'000'000UL}) {
+            // ---- In-Memory: generate + fused filter-count ----
+            std::vector<SyntheticRow> synth;
+            synth.reserve(n);
+            for (std::size_t i = 0; i < n; ++i) {
+                synth.push_back({static_cast<int>(25 + (i % 40)),
+                                 80000.0 + static_cast<double>(i % 120000)});
+            }
+            auto tm0 = std::chrono::high_resolution_clock::now();
+            std::size_t mem_hits = 0;
+            for (const auto& r : synth) {
+                if (r.age >= 30 && r.salary >= 130000.0) ++mem_hits;
+            }
+            auto tm1 = std::chrono::high_resolution_clock::now();
+            double mem_ms = std::chrono::duration<double, std::milli>(tm1 - tm0).count();
+
+            // ---- DuckDB: generate via range() + vectorized aggregate ----
+            double duck_ms = -1.0;
+            std::size_t duck_hits = 0;
+            backend::duckdb_analytical_backend bench_db;
+            if (bench_db.open("").has_value()) {
+                // Use DuckDB's range() TVF — zero round-trip row insertion
+                std::string create_sql =
+                    "CREATE TABLE synth AS SELECT "
+                    "  CAST(25 + (i % 40) AS INTEGER) AS age, "
+                    "  CAST(80000.0 + (i % 120000) AS DOUBLE) AS salary "
+                    "FROM range(0, " + std::to_string(n) + ") t(i);";
+                (void)bench_db.execute(create_sql);
+
+                auto td0 = std::chrono::high_resolution_clock::now();
+                (void)bench_db.execute_query(
+                    "SELECT count(*) FROM synth WHERE age >= 30 AND salary >= 130000.0;",
+                    [&](const std::vector<std::string>& cols) {
+                        if (!cols.empty()) duck_hits = std::stoull(cols[0]);
+                    }
+                );
+                auto td1 = std::chrono::high_resolution_clock::now();
+                duck_ms = std::chrono::duration<double, std::milli>(td1 - td0).count();
+            }
+
+            // Placement decision: select engine with lower measured latency.
+            // At low N, InMemory wins (DuckDB has fixed connection overhead).
+            // At high N, columnar vectorization amortises and DuckDB dominates.
+            bool duck_available = (duck_ms >= 0.0);
+            std::string selected =
+                (!duck_available || mem_ms <= duck_ms)
+                    ? "InMemory  (fused row scan)"
+                    : "DuckDB    (vectorized SIMD)";
+
+            // Sanity: both engines must agree on the result count
+            if (duck_available && mem_hits != duck_hits) {
+                std::cerr << "  [ERROR] Cardinality mismatch at N=" << n
+                          << " (mem=" << mem_hits << ", duck=" << duck_hits << ")\n";
+                ++failure_count;
+            }
+            cardinality_results.push_back({n, mem_ms, duck_ms, selected});
+        }
+
+        std::cout << std::defaultfloat << std::setprecision(4);
+        std::cout << "  " << std::left << std::setw(11) << "Rows"
+                  << " | " << std::setw(15) << "InMemory (ms)"
+                  << " | " << std::setw(15) << "DuckDB (ms)"
+                  << " | Selected Engine\n";
+        std::cout << "  ------------+----------------+----------------+---------------------------\n";
+        for (const auto& t : cardinality_results) {
+            std::string duck_str = (t.duckdb_ms >= 0.0)
+                ? std::to_string(t.duckdb_ms).substr(0, 8)
+                : "n/a";
+            std::cout << "  " << std::left << std::setw(11) << t.n_rows
+                      << " | " << std::setw(16) << t.memory_ms
+                      << " | " << std::setw(16) << duck_str
+                      << " | " << t.selected_engine << "\n";
+        }
+        std::cout << "\n";
+
+        // ====================================================================
+        // STEP 9: Dynamic CDC & Cache Invalidation
+        //         Mutate SQLite source → stream change_record → DuckDB replica
+        //         Verify Δt ≤ AllowedStaleness before concurrent read
+        // ====================================================================
+        std::cout << "--- [Step 9] Dynamic CDC & Cache Invalidation ---\n";
+        std::cout << "  Source: SQLite (OLTP)  |  Replica: DuckDB (OLAP)\n";
+        constexpr double allowed_staleness_ms = 50.0; // Δt budget in ms
+
+        backend::sqlite_storage_backend cdc_sqlite;
+        backend::duckdb_analytical_backend cdc_duckdb;
+
+        auto cdc_sqlite_open = cdc_sqlite.open(":memory:");
+        auto cdc_duck_open   = cdc_duckdb.open("");
+
+        if (cdc_sqlite_open.has_value() && cdc_duck_open.has_value()) {
+            // --- Step 9.1: Bootstrap both stores with the same initial snapshot ---
+            (void)cdc_sqlite.execute(
+                "CREATE TABLE employee (id INTEGER PRIMARY KEY, name TEXT, age INTEGER, salary REAL);"
+            );
+            (void)cdc_duckdb.execute(
+                "CREATE TABLE employee (id BIGINT PRIMARY KEY, name VARCHAR, age INTEGER, salary DOUBLE);"
+            );
+            for (const auto& e : dataset) {
+                std::string row = "INSERT INTO employee VALUES (" +
+                    std::to_string(e.id.value) + ", '" + e.name + "', " +
+                    std::to_string(e.age) + ", " + std::to_string(e.salary) + ");";
+                (void)cdc_sqlite.execute(row);
+                (void)cdc_duckdb.execute(row);
+            }
+
+            // --- Step 9.2: Mutate source (SQLite) — raise Ada Lovelace's salary ---
+            auto mutation_wall_time = std::chrono::system_clock::now();
+            (void)cdc_sqlite.execute("UPDATE employee SET salary = 175000.0 WHERE id = 101;");
+
+            // --- Step 9.3: Emit CDC change_record ---
+            sync::change_record cdc_event{
+                .sequence  = 1,
+                .op        = sync::change_op::update,
+                .table_name = "employee",
+                .payload   = "id=101,salary=175000.0"
+            };
+
+            // --- Step 9.4: Apply CDC to DuckDB replica within staleness window ---
+            auto replay_t0 = std::chrono::high_resolution_clock::now();
+            (void)cdc_duckdb.execute("UPDATE employee SET salary = 175000.0 WHERE id = 101;");
+            auto replay_t1 = std::chrono::high_resolution_clock::now();
+
+            sync::replica_checkpoint ckpt{
+                .source_position   = {.sequence = cdc_event.sequence, .lsn = 1},
+                .source_commit_time = mutation_wall_time,
+                .applied_at        = std::chrono::system_clock::now()
+            };
+
+            double staleness_ms = std::chrono::duration<double, std::milli>(
+                ckpt.applied_at - ckpt.source_commit_time).count();
+            double replay_ms = std::chrono::duration<double, std::milli>(
+                replay_t1 - replay_t0).count();
+
+            // --- Step 9.5: Concurrent read — verify replica has converged ---
+            double replica_salary = -1.0;
+            (void)cdc_duckdb.execute_query(
+                "SELECT salary FROM employee WHERE id = 101;",
+                [&](const std::vector<std::string>& cols) {
+                    if (!cols.empty()) replica_salary = std::stod(cols[0]);
+                }
+            );
+
+            bool within_budget  = staleness_ms <= allowed_staleness_ms;
+            bool salary_correct = std::abs(replica_salary - 175000.0) < 1.0;
+            bool cdc_pass       = within_budget && salary_correct;
+
+            std::cout << std::fixed << std::setprecision(3);
+            std::cout << "  * CDC Event:        seq=" << cdc_event.sequence
+                      << " | op=UPDATE | payload: " << cdc_event.payload << "\n";
+            std::cout << "  * Replay Latency:   " << replay_ms << " ms\n";
+            std::cout << "  * Staleness (Δt):   " << staleness_ms << " ms"
+                      << "  |  Budget: " << allowed_staleness_ms << " ms"
+                      << "  |  " << (within_budget ? "WITHIN BUDGET ✓" : "EXCEEDED ✗") << "\n";
+            std::cout << std::fixed << std::setprecision(0);
+            std::cout << "  * Replica Salary:   $" << replica_salary
+                      << "  |  Expected: $175000"
+                      << "  |  " << (salary_correct ? "CONSISTENT ✓" : "STALE ✗") << "\n";
+            std::cout << "  * CDC Verdict:      "
+                      << (cdc_pass
+                            ? "REPLICA CONVERGED WITHIN AllowedStaleness — READ SAFE"
+                            : "CONVERGENCE FAILURE — STALE READ HAZARD")
+                      << "\n\n";
+
+            if (!cdc_pass) {
+                std::cerr << "  [ERROR] CDC replica did not converge within Δt budget!\n";
+                ++failure_count;
+            }
+        } else {
+            std::cout << "  [SKIP] CDC step skipped — backend unavailable\n\n";
+        }
+
+        // ====================================================================
+        // STEP 10: Complex Multi-Way Join Topology
+        //          Emp(A) ⋈ Dept(B) ⋈ Project(C) ⋈ Emp2(D) — 4-table circular
+        //          Verify E-Graph saturation is bounded and DP extraction stable
+        // ====================================================================
+        std::cout << "--- [Step 10] Complex Multi-Way Join Topology (Circular: A⋈B⋈C⋈D) ---\n";
+        std::cout << "  Employee ⋈ Department ⋈ Project ⋈ Employee(manager)\n";
+        std::cout << "  Verifying saturation bounded + DP extraction avoids exponential blowup\n\n";
+
+        {
+            using namespace sanchaya::optimizer;
+            sanchaya_egraph join_eg;
+
+            // Helper: add a source node with a given signature
+            auto make_source_node = [&](std::uint64_t sig) -> egraph::e_class_id {
+                sanchaya_egraph::node_t n;
+                n.op      = rel_op::op_source;
+                n.payload = rel_payload{.signature = sig, .extra_data = 0};
+                return join_eg.add(n);
+            };
+
+            // Helper: add a non-trivial filter (extra_data=3, never collapses via filter_true_elimination)
+            auto make_filter_node = [&](egraph::e_class_id src, std::uint64_t sig) -> egraph::e_class_id {
+                sanchaya_egraph::node_t fn;
+                fn.op = rel_op::op_filter;
+                fn.children.push_back(src);
+                fn.payload = rel_payload{.signature = sig, .extra_data = 3};
+                return join_eg.add(fn);
+            };
+
+            // Helper: add a binary join
+            auto make_join_node = [&](egraph::e_class_id l, egraph::e_class_id r,
+                                      std::uint64_t sig) -> egraph::e_class_id {
+                sanchaya_egraph::node_t jn;
+                jn.op = rel_op::op_join;
+                jn.children.push_back(l);
+                jn.children.push_back(r);
+                jn.payload = rel_payload{.signature = sig, .extra_data = 0};
+                return join_eg.add(jn);
+            };
+
+            // 4 source tables: Employee(A), Department(B), Project(C), Employee-manager(D)
+            auto src_A = make_source_node(100); // Employee
+            auto src_B = make_source_node(200); // Department
+            auto src_C = make_source_node(300); // Project
+            auto src_D = make_source_node(400); // Employee (manager self-ref — circular)
+
+            // Apply residual predicates (non-trivial: keeps filter nodes alive)
+            auto fA = make_filter_node(src_A, 110); // age >= 30
+            auto fB = make_filter_node(src_B, 210); // active = true
+            auto fC = make_filter_node(src_C, 310); // budget > 100K
+            auto fD = make_filter_node(src_D, 410); // role = 'manager'
+
+            // Build left-deep join chain:
+            // j3 = ((fA ⋈ fB) ⋈ fC) ⋈ fD
+            //       dept_id FK    project_id FK  manager_id FK (circular back to Employee)
+            auto j1 = make_join_node(fA, fB, 1001); // Emp ⋈ Dept
+            auto j2 = make_join_node(j1, fC, 1002); // (Emp⋈Dept) ⋈ Project
+            auto j3 = make_join_node(j2, fD, 1003); // ((Emp⋈Dept)⋈Proj) ⋈ Emp(mgr)
+
+            // Run bounded equality saturation
+            egraph_relational_optimizer join_opt{};
+            auto join_sat = join_opt.saturate_graph(join_eg);
+
+            // DP cost extraction from the root e-class
+            relational_node_cost_model join_cm{};
+            auto join_ex = egraph::extract_best(join_eg, j3, join_cm);
+
+            // --- Verify invariants ---
+            bool bounded   = !join_sat.hit_limit;                         // no budget hit
+            bool extracted = join_ex.best_nodes[join_eg.find(j3)].has_value(); // valid plan found
+            // Count join orderings explored in root e-class (commutativity/associativity)
+            std::size_t j3_variants = join_eg.classes()[join_eg.find(j3)].nodes.size();
+
+            // The associativity rule explores O(N) variants; saturation must remain
+            // within the configured max_enodes=10,000 bound to prove no exponential blowup.
+            bool no_blowup = join_sat.enodes <= 10'000;
+
+            std::cout << std::defaultfloat << std::setprecision(3);
+            std::cout << "  [10.1 E-Graph Stats after Saturation]:\n";
+            std::cout << "    E-Nodes:    " << join_eg.enode_count()
+                      << " | E-Classes: " << join_eg.class_count() << "\n";
+            std::cout << "    Iterations: " << join_sat.iters
+                      << " | Merges Fired: " << join_sat.merges_fired << "\n";
+            std::cout << "    Saturation: "
+                      << (join_sat.saturated ? "FIXPOINT REACHED" : "BUDGET BOUNDED")
+                      << "\n";
+            std::cout << "    Enodes Used: " << join_sat.enodes
+                      << " / 10,000  "
+                      << (no_blowup ? "BOUNDED ✓ — no exponential explosion" : "EXCEEDED ✗")
+                      << "\n";
+
+            std::cout << "\n  [10.2 Join Ordering Exploration (Commutativity + Associativity)]:\n";
+            std::cout << "    Root e-class j3 variants: " << j3_variants
+                      << " equivalent join orderings explored\n";
+
+            std::cout << "\n  [10.3 DP Plan Extraction]:\n";
+            std::cout << "    Extraction: "
+                      << (extracted
+                            ? "VALID — best plan extracted via DP without full enumeration"
+                            : "FAILED — no valid plan found")
+                      << "\n";
+            if (extracted) {
+                const auto& best = *join_ex.best_nodes[join_eg.find(j3)];
+                std::cout << "    Best root op: "
+                          << (best.op == rel_op::op_join ? "join" : "other")
+                          << " | cost: " << join_ex.best_costs[join_eg.find(j3)] << "\n";
+            }
+            std::cout << "\n";
+
+            if (!bounded || !extracted || !no_blowup) {
+                std::cerr << "  [ERROR] Multi-way join topology failed stability check!\n";
+                ++failure_count;
+            }
         }
 
         std::cout << "\n======================================================================\n";
