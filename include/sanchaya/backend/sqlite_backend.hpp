@@ -64,6 +64,22 @@ namespace sanchaya::backend {
             }
         }
 
+        auto bind(int index, std::int64_t val) -> std::expected<void, sanchaya_error> {
+            if constexpr (has_sqlite_support) {
+                if (!stmt_) return std::unexpected(sanchaya_error{.domain = error_domain::storage, .code = 400, .message = "Null statement"});
+                int rc = sqlite3_bind_int64(stmt_, index, val);
+                if (rc != SQLITE_OK) return std::unexpected(sanchaya_error{.domain = error_domain::storage, .code = static_cast<std::uint32_t>(rc), .message = "Bind int64 error"});
+                return {};
+            } else {
+                (void)index; (void)val;
+                return std::unexpected(sanchaya_error{.domain = error_domain::storage, .code = 501, .message = "SQLite not supported"});
+            }
+        }
+
+        auto bind(int index, std::uint64_t val) -> std::expected<void, sanchaya_error> {
+            return bind(index, static_cast<std::int64_t>(val));
+        }
+
         auto bind(int index, double val) -> std::expected<void, sanchaya_error> {
             if constexpr (has_sqlite_support) {
                 if (!stmt_) return std::unexpected(sanchaya_error{.domain = error_domain::storage, .code = 400, .message = "Null statement"});

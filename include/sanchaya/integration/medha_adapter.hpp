@@ -135,20 +135,42 @@ namespace sanchaya::integration {
         auto it = r.find_attempt_locked(ctx);
         if (it == r.attempts_.end()) return {};
 
+        struct applied_memory_write {
+            std::string key;
+            std::optional<Entity> prev_val;
+        };
+        std::vector<applied_memory_write> applied_mem;
+
         for (const auto& staged : it->writes) {
             if (r.memory_store) {
+                auto prev = r.memory_store->get_latest(staged.key);
                 auto res = r.memory_store->put(staged.key, staged.value);
                 if (!res) {
+                    // Compensate memory writes applied so far
+                    for (const auto& undo : applied_mem) {
+                        if (undo.prev_val) {
+                            (void)r.memory_store->put(undo.key, *undo.prev_val);
+                        }
+                    }
                     return std::unexpected(medha::tx_error{
                         .status = medha::tx_status::conflict,
                         .message = "Memory store commit conflict"
                     });
                 }
+                applied_mem.push_back({staged.key, prev});
             }
             if (r.durable_store) {
                 std::string encoded = backend::object_codec<Entity>::encode(staged.value);
                 auto res = r.durable_store->put(staged.key, encoded);
                 if (!res) {
+                    // Durable store failed: compensate memory store to prevent split-brain
+                    if (r.memory_store) {
+                        for (const auto& undo : applied_mem) {
+                            if (undo.prev_val) {
+                                (void)r.memory_store->put(undo.key, *undo.prev_val);
+                            }
+                        }
+                    }
                     return std::unexpected(medha::tx_error{
                         .status = medha::tx_status::conflict,
                         .message = "Durable store commit conflict"

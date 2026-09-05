@@ -1143,6 +1143,31 @@ TEST_CASE("sanchaya: medha transactional adapter staged writes and commit durabi
     CHECK(mem_backend.get_latest("emp:101") == std::optional<std::string>{"Ada Lovelace"});
 }
 
+TEST_CASE("sanchaya: sqlite backend 64-bit integer binding", "[sanchaya][backend][sqlite][int64]") {
+    using namespace sanchaya::backend;
+
+    sqlite_storage_backend db(":memory:");
+    if constexpr (has_sqlite_support) {
+        REQUIRE(db.is_open());
+        (void)db.execute("CREATE TABLE int64_tbl (id INTEGER PRIMARY KEY, big_val INTEGER);");
+
+        auto prep = db.prepare("INSERT INTO int64_tbl (id, big_val) VALUES (?, ?);");
+        REQUIRE(prep.has_value());
+
+        std::int64_t big_num = 0x7FFFFFFFFFFFFFFFLL; // max int64
+        CHECK(prep->bind(1, 1).has_value());
+        CHECK(prep->bind(2, big_num).has_value());
+        REQUIRE(prep->step().has_value());
+        prep->reset();
+
+        auto query_prep = db.prepare("SELECT big_val FROM int64_tbl WHERE id = 1;");
+        REQUIRE(query_prep.has_value());
+        auto step_res = query_prep->step();
+        REQUIRE(step_res.has_value());
+        CHECK(*step_res == true);
+    }
+}
+
 
 
 

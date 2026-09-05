@@ -325,10 +325,10 @@ namespace sanchaya::optimizer {
 
                 if constexpr (requires { plan.predicate; } && !requires { plan.left; }) {
                     node.op = rel_op::op_filter;
-                    node.payload = rel_payload{.signature = 3, .extra_data = 0};
+                    node.payload = rel_payload{.signature = 3 ^ (static_cast<std::uint64_t>(node.children[0]) << 16), .extra_data = 0};
                 } else if constexpr (requires { plan.expressions; }) {
                     node.op = rel_op::op_project;
-                    node.payload = rel_payload{.signature = 4, .extra_data = 0};
+                    node.payload = rel_payload{.signature = 4 ^ (static_cast<std::uint64_t>(std::tuple_size_v<decltype(plan.expressions)>) << 32), .extra_data = 0};
                 } else if constexpr (requires { plan.direction; }) {
                     node.op = rel_op::op_order;
                     node.payload = rel_payload{.signature = 5, .extra_data = static_cast<std::uint32_t>(plan.direction)};
@@ -337,10 +337,10 @@ namespace sanchaya::optimizer {
                     node.payload = rel_payload{.signature = 6, .extra_data = static_cast<std::uint32_t>(plan.limit_count)};
                 } else if constexpr (requires { plan.group_keys; }) {
                     node.op = rel_op::op_group;
-                    node.payload = rel_payload{.signature = 7, .extra_data = 0};
+                    node.payload = rel_payload{.signature = 7 ^ (static_cast<std::uint64_t>(std::tuple_size_v<decltype(plan.group_keys)>) << 32), .extra_data = 0};
                 } else if constexpr (requires { plan.aggregates; }) {
                     node.op = rel_op::op_aggregate;
-                    node.payload = rel_payload{.signature = 8, .extra_data = 0};
+                    node.payload = rel_payload{.signature = 8 ^ (static_cast<std::uint64_t>(std::tuple_size_v<decltype(plan.aggregates)>) << 32), .extra_data = 0};
                 } else {
                     node.op = rel_op::op_traverse;
                     node.payload = rel_payload{.signature = 9, .extra_data = 0};
