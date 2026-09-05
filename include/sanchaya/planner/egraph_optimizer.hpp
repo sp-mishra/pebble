@@ -8,6 +8,8 @@
 #include "sanchaya/planner/cost_model.hpp"
 #include "sanchaya/planner/logical_ir.hpp"
 #include "containers/graph/egraph.hpp"
+#include "tarka/tarka.hpp"
+#include "tarka/backends/native_backend.hpp"
 #include <tuple>
 #include <string_view>
 #include <cstdint>
@@ -28,7 +30,8 @@ namespace sanchaya::optimizer {
         op_aggregate,
         op_order,
         op_limit,
-        op_offset
+        op_offset,
+        op_empty_relation
     };
 
     struct rel_payload {
@@ -260,6 +263,31 @@ namespace sanchaya::optimizer {
         }
     };
 
+    /// Tarka SMT Contradiction Pruning Rule: collapses mathematically unsatisfiable filters (extra_data == 3) to op_empty_relation
+    struct tarka_filter_unsat_rule {
+        template <class G>
+        void apply(G& g) const {
+            const std::size_t snapshot = g.class_count();
+            containers::SmallVector<std::pair<egraph::e_class_id, typename G::node_t>, 16> deferred_adds;
+            for (egraph::e_class_id cid = 0; cid < static_cast<egraph::e_class_id>(snapshot); ++cid) {
+                if (!g.is_root(cid)) continue;
+                for (const auto& node : g.classes()[cid].nodes) {
+                    // extra_data == 3 designates an UNSAT contradiction detected via SMT analysis
+                    if (node.op == rel_op::op_filter && node.payload.extra_data == 3) {
+                        typename G::node_t empty_rel;
+                        empty_rel.op = rel_op::op_empty_relation;
+                        empty_rel.payload = rel_payload{.signature = 0, .extra_data = 0};
+                        deferred_adds.push_back({cid, std::move(empty_rel)});
+                    }
+                }
+            }
+            for (auto& [cid, node] : deferred_adds) {
+                const egraph::e_class_id empty_id = g.add(std::move(node));
+                (void)g.merge(cid, empty_id);
+            }
+        }
+    };
+
     // ========================================================================
     // 3. E-Graph Cost Model & DP Extraction
     // ========================================================================
@@ -274,6 +302,7 @@ namespace sanchaya::optimizer {
         {
             cost_t node_cost = 1;
             switch (node.op) {
+                case rel_op::op_empty_relation: node_cost = 0; break;
                 case rel_op::op_source: node_cost = 10; break;
                 case rel_op::op_key_lookup: node_cost = 1; break;
                 case rel_op::op_filter: node_cost = 2; break;
@@ -299,6 +328,7 @@ namespace sanchaya::optimizer {
     static_assert(egraph::egraph_rule<join_commutativity_rule, sanchaya_egraph>);
     static_assert(egraph::egraph_rule<join_associativity_rule, sanchaya_egraph>);
     static_assert(egraph::egraph_rule<filter_to_index_seek_rule, sanchaya_egraph>);
+    static_assert(egraph::egraph_rule<tarka_filter_unsat_rule, sanchaya_egraph>);
     static_assert(egraph::cost_model<relational_node_cost_model, sanchaya_egraph::node_t>);
 
     // ========================================================================
@@ -331,7 +361,18 @@ namespace sanchaya::optimizer {
 
                 if constexpr (requires { plan.predicate; } && !requires { plan.left; }) {
                     node.op = rel_op::op_filter;
-                    node.payload = rel_payload{.signature = 3 ^ (static_cast<std::uint64_t>(node.children[0]) << 16), .extra_data = 0};
+                    std::uint32_t extra = 0;
+                    if constexpr (requires { plan.predicate.is_contradiction(); }) {
+                        if (plan.predicate.is_contradiction()) {
+                            extra = 3;
+                        }
+                    } else if constexpr (requires { plan.predicate.extra_data; }) {
+                        extra = plan.predicate.extra_data;
+                    }
+                    node.payload = rel_payload{
+                        .signature = 3 ^ (static_cast<std::uint64_t>(node.children[0]) << 16),
+                        .extra_data = extra
+                    };
                 } else if constexpr (requires { plan.expressions; }) {
                     node.op = rel_op::op_project;
                     node.payload = rel_payload{.signature = 4 ^ (static_cast<std::uint64_t>(std::tuple_size_v<decltype(plan.expressions)>) << 32), .extra_data = 0};
@@ -393,7 +434,8 @@ namespace sanchaya::optimizer {
                 redundant_project_collapse_rule{},
                 join_commutativity_rule{},
                 join_associativity_rule{},
-                filter_to_index_seek_rule{}
+                filter_to_index_seek_rule{},
+                tarka_filter_unsat_rule{}
             );
             egraph::saturation_limits limits{
                 .max_iters = 15,

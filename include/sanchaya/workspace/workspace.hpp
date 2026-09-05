@@ -25,9 +25,16 @@ namespace sanchaya {
     struct execution_context {};
 
     namespace telemetry {
+        struct null_scope {};
+
         struct null_query_observer {
             template <class... Args>
             constexpr void on_event(Args&&...) const noexcept {}
+
+            template <akshara::fixed_string Phase, class... Fields>
+            [[nodiscard]] constexpr null_scope trace_scope(Fields&&...) const noexcept {
+                return {};
+            }
         };
 
         template <class Sink = utils::nadi::NoSink>
@@ -270,11 +277,13 @@ namespace sanchaya {
         auto execute(Query&&, execution_context = {})
             -> std::expected<query_execution_result_t<Query, HandlePolicy>, sanchaya_error>
         {
+            [[maybe_unused]] auto scope = telemetry_.template trace_scope<"workspace_query_execute">();
             return query_execution_result_t<Query, HandlePolicy>{};
         }
 
         template <akshara::fixed_string Target, class Query>
         auto execute_on(Query&& q) {
+            [[maybe_unused]] auto scope = telemetry_.template trace_scope<"workspace_query_execute_on">();
             return execute(std::forward<Query>(q));
         }
 

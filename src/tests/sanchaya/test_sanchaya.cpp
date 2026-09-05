@@ -1304,4 +1304,98 @@ TEST_CASE("sanchaya: Pravaha asynchronous CDC task graph replicates snapshots co
     CHECK(drain_count.load() == 1);
 }
 
+TEST_CASE("sanchaya: Tarka SMT contradiction pruning collapses unsatisfiable filter predicates", "[sanchaya][optimizer][tarka]") {
+    using namespace sanchaya::optimizer;
+
+    tarka::Context ctx;
+    tarka::backend::native solver;
+
+    // Symbol for age
+    auto age_sym = ctx.make_symbol("age", ctx.int_sort());
+    auto lit50 = ctx.make_int(50, ctx.int_sort());
+    auto lit30 = ctx.make_int(30, ctx.int_sort());
+
+    // Build mutually exclusive predicate: (age > 50) && (age < 30)
+    auto pred_gt50 = age_sym > lit50;
+    auto pred_lt30 = age_sym < lit30;
+    auto contradiction = pred_gt50 && pred_lt30;
+
+    // Check satisfiability via Tarka native SMT solver
+    solver.assert_formula(contradiction);
+    auto sat_res = solver.check_sat();
+    REQUIRE(sat_res.has_value());
+    CHECK(*sat_res == tarka::SatResult::Unsat);
+
+    // Verify Sanchaya egraph optimizer collapses unsatisfiable predicate node
+    sanchaya_egraph g;
+    auto src_id = g.add(sanchaya_egraph::node_t{
+        .op = rel_op::op_source,
+        .children = {},
+        .payload = rel_payload{.signature = 1, .extra_data = 0}
+    });
+
+    // Mark extra_data = 3 to indicate SMT-proven contradiction
+    auto filter_id = g.add(sanchaya_egraph::node_t{
+        .op = rel_op::op_filter,
+        .children = {src_id},
+        .payload = rel_payload{.signature = 3, .extra_data = 3}
+    });
+
+    egraph_relational_optimizer eg_opt{};
+    auto report = eg_opt.saturate_graph(g);
+    (void)report;
+
+    // Check that the eclass contains op_empty_relation
+    const auto root_cid = g.find(filter_id);
+    bool found_empty_rel = false;
+    for (const auto& node : g.classes()[root_cid].nodes) {
+        if (node.op == rel_op::op_empty_relation) {
+            found_empty_rel = true;
+            break;
+        }
+    }
+    CHECK(found_empty_rel);
+
+    // Extract best plan using cost model; op_empty_relation cost is 0 vs filter cost > 0
+    relational_node_cost_model cost_mdl;
+    auto extraction = egraph::extract_best(g, root_cid, cost_mdl);
+    REQUIRE(extraction.best_nodes[root_cid].has_value());
+    CHECK(extraction.best_nodes[root_cid]->op == rel_op::op_empty_relation);
+    CHECK(extraction.best_costs[root_cid] == 0);
+}
+
+TEST_CASE("sanchaya: Pravaha asynchronous CDC pipeline with owned change records", "[sanchaya][sync][pravaha]") {
+    using namespace sanchaya::sync;
+
+    pravaha::JThreadBackend thread_backend(2);
+
+    std::vector<change_record_view> views = {
+        change_record_view{ .sequence = 1, .op = change_op::insert, .table_name = "employee", .payload = "{\"id\":1}" },
+        change_record_view{ .sequence = 2, .op = change_op::update, .table_name = "employee", .payload = "{\"id\":1,\"age\":31}" }
+    };
+
+    std::atomic<std::size_t> replayed_count{0};
+    std::atomic<bool> drain_completed{false};
+
+    auto outcome = async_cdc_pipeline::run_async_records(
+        thread_backend,
+        views,
+        [](const std::vector<change_record_owned>& records) {
+            CHECK(records.size() == 2);
+            CHECK(records[0].table_name == "employee");
+        },
+        [&](const std::vector<change_record_owned>& records) {
+            replayed_count.store(records.size(), std::memory_order_relaxed);
+            CHECK(records[1].payload == "{\"id\":1,\"age\":31}");
+        },
+        [&]() {
+            drain_completed.store(true, std::memory_order_relaxed);
+        }
+    );
+
+    CHECK(outcome.has_value());
+    CHECK(replayed_count.load() == 2);
+    CHECK(drain_completed.load() == true);
+}
+
 

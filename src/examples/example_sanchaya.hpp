@@ -1156,12 +1156,18 @@ namespace sanchaya::example {
                 (void)dec;
             });
 
+            const double beve_mean_ns = static_cast<double>(beve_profile.average_duration.count());
+            const double beve_median_ns = static_cast<double>(beve_profile.median().count());
+            const double beve_min_ns = static_cast<double>(beve_profile.min_duration.count());
+            const double beve_max_ns = static_cast<double>(beve_profile.max_duration.count());
+            const double beve_p99_ns = static_cast<double>(beve_profile.percentile(99.0).count());
+
             std::cout << "  [14.1 BEVE Codec Statistical Distribution (5,000 runs)]:\n";
-            std::cout << "    Mean: " << std::fixed << std::setprecision(1) << beve_profile.mean << " ns"
-                      << " | Median: " << beve_profile.median << " ns"
-                      << " | Min: " << beve_profile.min << " ns"
-                      << " | Max: " << beve_profile.max << " ns"
-                      << " | P99: " << beve_profile.p99 << " ns\n";
+            std::cout << "    Mean: " << std::fixed << std::setprecision(1) << beve_mean_ns << " ns"
+                      << " | Median: " << beve_median_ns << " ns"
+                      << " | Min: " << beve_min_ns << " ns"
+                      << " | Max: " << beve_max_ns << " ns"
+                      << " | P99: " << beve_p99_ns << " ns\n";
 
             // 14.2 Anukrama Snapshot Isolation Read Latency
             backend::anukrama_storage_backend<std::string, Employee> anukrama_bench;
@@ -1179,11 +1185,16 @@ namespace sanchaya::example {
                 (void)res;
             });
 
+            const double anukrama_mean_ns = static_cast<double>(anukrama_profile.average_duration.count());
+            const double anukrama_median_ns = static_cast<double>(anukrama_profile.median().count());
+            const double anukrama_min_ns = static_cast<double>(anukrama_profile.min_duration.count());
+            const double anukrama_p99_ns = static_cast<double>(anukrama_profile.percentile(99.0).count());
+
             std::cout << "  [14.2 Anukrama Wait-Free Snapshot Read (10,000 runs)]:\n";
-            std::cout << "    Mean: " << std::fixed << std::setprecision(1) << anukrama_profile.mean << " ns"
-                      << " | Median: " << anukrama_profile.median << " ns"
-                      << " | Min: " << anukrama_profile.min << " ns"
-                      << " | P99: " << anukrama_profile.p99 << " ns\n";
+            std::cout << "    Mean: " << std::fixed << std::setprecision(1) << anukrama_mean_ns << " ns"
+                      << " | Median: " << anukrama_median_ns << " ns"
+                      << " | Min: " << anukrama_min_ns << " ns"
+                      << " | P99: " << anukrama_p99_ns << " ns\n";
 
             // 14.3 High-Throughput Memory Top-N vs Full std::sort Comparison
             constexpr std::size_t K_ITEMS = 10000;
@@ -1218,10 +1229,13 @@ namespace sanchaya::example {
                 (void)copy;
             });
 
-            double speedup = full_sort_profile.mean / std::max(top_n_profile.mean, 1e-6);
+            const double top_n_mean_us = static_cast<double>(top_n_profile.average_duration.count()) / 1000.0;
+            const double full_sort_mean_us = static_cast<double>(full_sort_profile.average_duration.count()) / 1000.0;
+            const double speedup = full_sort_mean_us / std::max(top_n_mean_us, 1e-6);
+
             std::cout << "  [14.3 Top-N Heap vs Full Vector Sort (10,000 items, Top 10)]:\n";
-            std::cout << "    memory_top_n Mean: " << std::fixed << std::setprecision(2) << top_n_profile.mean << " µs"
-                      << " | std::sort Mean: " << full_sort_profile.mean << " µs"
+            std::cout << "    memory_top_n Mean: " << std::fixed << std::setprecision(2) << top_n_mean_us << " µs"
+                      << " | std::sort Mean: " << full_sort_mean_us << " µs"
                       << " -> Speedup: " << std::setprecision(1) << speedup << "x faster ✓\n\n";
         }
 

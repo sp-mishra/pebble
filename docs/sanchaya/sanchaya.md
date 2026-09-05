@@ -338,7 +338,12 @@ The exact same canonical query is executed live across all 4 underlying physical
 3. **Petika Engine**: `snapshot_scan -> fused_filter_project -> top_n`
 4. **DuckDB Engine**: `columnar_scan(name, age, salary) -> vectorized_filter -> top_n`
 
-### 5.7 Running the Standalone Example
+### 5.7 Tarka SMT Contradiction Pruning & Pravaha Async CDC Replication
+- **Tarka SMT Pruning**: Evaluates relational filter predicates during logical optimization. Conjunctions that are mathematically unsatisfiable (e.g. `age > 50 && age < 30`) collapse to `rel_op::op_empty_relation` with zero cost, eliminating dead scans across all backends.
+- **Pravaha Asynchronous CDC Pipeline**: Schedules multi-stage replication DAGs (`Snapshot` $\rightarrow$ `Replay` $\rightarrow$ `Drain`) across `pravaha::JThreadBackend` worker pools using owning record copies (`change_record_owned`) to prevent use-after-free hazards on unpinned source pages.
+- **NADI Pulse Tracing**: Telemetry observer policy (`nadi_query_observer<Sink>`) emits zero-overhead, structured lineage pulses via `utils::nadi::PulseScope` directly during `workspace::execute`.
+
+### 5.8 Running the Standalone Example
 A complete end-to-end demo is available in `src/examples/example_sanchaya.hpp` and can be executed via the Pebble CLI:
 ```bash
 ./pebble sanchaya

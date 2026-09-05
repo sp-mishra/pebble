@@ -129,12 +129,50 @@ namespace sanchaya::sync {
             ReplayFn&& replay_step,
             DrainFn&& drain_step)
         {
+            // Enforce owning copies across task/thread boundaries to avoid reading unpinned pages
             auto expr = pravaha::seq(
                 pravaha::task("cdc_snapshot", [fn = std::forward<SnapshotFn>(snapshot_step)]() mutable {
                     fn();
                 }),
                 pravaha::task("cdc_replay", [fn = std::forward<ReplayFn>(replay_step)]() mutable {
                     fn();
+                }),
+                pravaha::task("cdc_drain", [fn = std::forward<DrainFn>(drain_step)]() mutable {
+                    fn();
+                })
+            );
+
+            pravaha::Runner<pravaha::JThreadBackend> runner(backend);
+            return runner.submit(std::move(expr));
+        }
+
+        // Overload accepting an initial batch of change records and cloning them to change_record_owned
+        template <class BufferPolicy, class SnapshotFn, class ReplayFn, class DrainFn>
+        static auto run_async_records(
+            pravaha::JThreadBackend& backend,
+            const std::vector<change_record<BufferPolicy>>& input_records,
+            SnapshotFn&& snapshot_step,
+            ReplayFn&& replay_step,
+            DrainFn&& drain_step)
+        {
+            // Clone non-owning records to owning buffers before asynchronous dispatch
+            std::vector<change_record_owned> owned_records;
+            owned_records.reserve(input_records.size());
+            for (const auto& rec : input_records) {
+                owned_records.push_back(change_record_owned{
+                    .sequence = rec.sequence,
+                    .op = rec.op,
+                    .table_name = std::string(rec.table_name),
+                    .payload = std::string(rec.payload)
+                });
+            }
+
+            auto expr = pravaha::seq(
+                pravaha::task("cdc_snapshot", [fn = std::forward<SnapshotFn>(snapshot_step), records = owned_records]() mutable {
+                    fn(records);
+                }),
+                pravaha::task("cdc_replay", [fn = std::forward<ReplayFn>(replay_step), records = owned_records]() mutable {
+                    fn(records);
                 }),
                 pravaha::task("cdc_drain", [fn = std::forward<DrainFn>(drain_step)]() mutable {
                     fn();
